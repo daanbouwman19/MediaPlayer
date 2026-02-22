@@ -160,3 +160,8 @@
 
 **Learning:** Keyboard shortcuts are powerful but useless if users don't know they exist. Relying on a hidden shortcut (like `?`) to show help is an anti-pattern.
 **Action:** Added a visible "Keyboard Shortcuts" button to the media controls. This ensures users can discover the functionality without knowing the secret handshake.
+
+## 2026-02-18 - [Grid View Empty States]
+
+**Learning:** Grid views are often dead ends if empty. They should detect if the data source (e.g. albums) is missing entirely versus just the current selection being empty.
+**Action:** Implement tiered empty states in grids: 1. No Sources (CTA: Add Source), 2. No Results (CTA: Open Navigation/Clear Filter), 3. Empty Selection.

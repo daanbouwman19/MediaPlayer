@@ -61,6 +61,7 @@ describe('MediaGrid.vue', () => {
       thumbnailUrlGenerator: (path: string) =>
         `http://localhost:1234/thumb/${encodeURIComponent(path)}`,
       gridMediaFiles: [],
+      mediaDirectories: [],
     });
 
     mockPlayerState = reactive({
@@ -74,6 +75,7 @@ describe('MediaGrid.vue', () => {
     mockUIState = reactive({
       viewMode: 'grid',
       gridMediaFiles: [],
+      isSidebarVisible: true,
     });
 
     vi.clearAllMocks();
@@ -113,13 +115,28 @@ describe('MediaGrid.vue', () => {
       // We do NOT stub VirtualScroller, we test integration.
     });
 
-  it('renders "No media files found" when gridMediaFiles is empty', () => {
+  it('renders "No media files found" when gridMediaFiles is empty and has sources', async () => {
+    mockLibraryState.mediaDirectories = [{ path: '/source' }];
     const wrapper = mountGrid();
     const emptyState = wrapper.find('[role="status"]');
     expect(emptyState.exists()).toBe(true);
     expect(emptyState.attributes('aria-live')).toBe('polite');
     expect(wrapper.text()).toContain('No media files found');
-    expect(wrapper.text()).toContain('Try selecting a different album');
+    expect(wrapper.text()).toContain('Choose from the sidebar to begin');
+  });
+
+  it('renders "No Media Sources" when no sources configured', async () => {
+    mockLibraryState.mediaDirectories = [];
+    const wrapper = mountGrid();
+    expect(wrapper.text()).toContain('No Media Sources');
+    expect(wrapper.text()).toContain('Add Media Source');
+  });
+
+  it('renders "Open Library" when sidebar is hidden and no files', async () => {
+    mockLibraryState.mediaDirectories = [{ path: '/source' }];
+    mockUIState.isSidebarVisible = false;
+    const wrapper = mountGrid();
+    expect(wrapper.text()).toContain('Open Library');
   });
 
   it('renders grid items when gridMediaFiles has items', async () => {

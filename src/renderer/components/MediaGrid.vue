@@ -26,11 +26,37 @@
         role="status"
         aria-live="polite"
       >
-        <div class="mb-4 p-4 rounded-full bg-gray-800">
-          <PlaylistIcon class="w-12 h-12 opacity-50" aria-hidden="true" />
-        </div>
-        <p class="text-lg font-medium">No media files found</p>
-        <p class="text-sm">Try selecting a different album</p>
+        <template v-if="mediaDirectories.length === 0">
+          <div class="mb-4 p-4 rounded-full bg-indigo-500/10 text-indigo-400">
+            <PlaylistIcon class="w-12 h-12" aria-hidden="true" />
+          </div>
+          <h2 class="text-xl font-bold text-white mb-2">No Media Sources</h2>
+          <p class="text-gray-400 mb-6 max-w-xs text-center text-sm">
+            Add a folder to start building your library.
+          </p>
+          <button
+            class="px-6 py-3 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition-colors flex items-center gap-2"
+            @click="openSourcesModal"
+          >
+            Add Media Source
+          </button>
+        </template>
+        <template v-else>
+          <div class="mb-4 p-4 rounded-full bg-gray-800">
+            <PlaylistIcon class="w-12 h-12 opacity-50" aria-hidden="true" />
+          </div>
+          <p class="text-lg font-medium text-gray-300">No media files found</p>
+
+          <button
+            v-if="!isSidebarVisible"
+            class="mt-4 px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-indigo-300 hover:text-white transition-colors flex items-center gap-2 text-sm font-medium border border-white/10"
+            @click="openSidebar"
+          >
+            <MenuIcon class="w-4 h-4" aria-hidden="true" />
+            Open Library
+          </button>
+          <p v-else class="text-sm mt-2">Choose from the sidebar to begin</p>
+        </template>
       </div>
 
       <VirtualScroller
@@ -88,6 +114,7 @@ import type { MediaFile } from '../../core/types';
 import MediaGridItem from './MediaGridItem.vue';
 import VirtualScroller from './VirtualScroller.vue';
 import PlaylistIcon from './icons/PlaylistIcon.vue';
+import MenuIcon from './icons/MenuIcon.vue';
 import {
   GRID_BREAKPOINT_SM,
   GRID_BREAKPOINT_LG,
@@ -103,7 +130,18 @@ const {
   videoExtensionsSet,
   mediaUrlGenerator,
   thumbnailUrlGenerator,
+  mediaDirectories,
 } = libraryStore;
+
+const { isSidebarVisible, isSourcesModalVisible } = uiStore;
+
+const openSourcesModal = () => {
+  isSourcesModalVisible.value = true;
+};
+
+const openSidebar = () => {
+  isSidebarVisible.value = true;
+};
 
 // Reactive reference to the full list from state
 const allMediaFiles = computed(() => uiStore.state.gridMediaFiles);

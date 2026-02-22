@@ -40,6 +40,7 @@ describe('MediaGrid.vue (Virtual Scrolling)', () => {
       videoExtensionsSet: new Set(['.mp4']),
       mediaUrlGenerator: (path: string) => `url://${path}`,
       thumbnailUrlGenerator: (path: string) => `thumb://${path}`,
+      mediaDirectories: [{ path: '/test' }],
     });
 
     mockPlayerState = reactive({
