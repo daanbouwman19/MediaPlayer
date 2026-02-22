@@ -96,12 +96,14 @@ describe('MediaAnalyzer DoS Protection', () => {
     // Item MAX_QUEUE_SIZE+1 (i=51): Should be rejected because Queue size is 50.
 
     for (let i = 0; i < MAX_QUEUE_SIZE + 2; i++) {
-        promises.push(analyzer.generateHeatmap(`file-${i}.mp4`, 10).catch(e => e));
+      promises.push(
+        analyzer.generateHeatmap(`file-${i}.mp4`, 10).catch((e) => e),
+      );
     }
 
     // Wait for microtasks
     for (let i = 0; i < 10; i++) {
-        await new Promise(resolve => process.nextTick(resolve));
+      await new Promise((resolve) => process.nextTick(resolve));
     }
 
     // Check the last promise
