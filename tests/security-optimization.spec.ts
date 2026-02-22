@@ -12,8 +12,8 @@ vi.mock('fs/promises', async (importOriginal) => {
   return {
     ...actual,
     default: {
-        ...actual,
-        realpath: vi.fn(),
+      ...actual,
+      realpath: vi.fn(),
     },
     realpath: vi.fn(),
   };
@@ -65,7 +65,9 @@ describe('authorizeFilePath Optimization', () => {
     const filePath = '/outside/photo.jpg';
 
     vi.mocked(isFileInLibrary).mockResolvedValue(false);
-    vi.mocked(getMediaDirectories).mockResolvedValue([{ path: '/media' }] as any);
+    vi.mocked(getMediaDirectories).mockResolvedValue([
+      { path: '/media' },
+    ] as any);
 
     // fs.realpath will be called by standard check logic
     // We mock it to succeed for the directory check, and then for the file check
