@@ -285,7 +285,7 @@ describe('Palette Accessibility Improvements', () => {
         await wrapper.vm.$nextTick();
 
         // Ensure propagation
-        await vi.advanceTimersByTimeAsync(50);
+// ^ Should typically be handled by @update:video-element
 
         // Ensure MediaDisplay sees the element (it should via normal flow, but let's be safe)
         // (wrapper.vm as any).handleVideoElementUpdate(videoEl);
