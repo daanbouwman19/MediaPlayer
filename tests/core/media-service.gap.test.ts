@@ -88,10 +88,18 @@ describe('Media Service Final Gap Fill', () => {
     ];
 
     vi.mocked(repo.getCachedAlbums).mockResolvedValue(deepAlbums as any);
-    vi.mocked(repo.getAllMediaViewCounts).mockResolvedValue({ '/1.mp4': 10 });
-    vi.mocked(repo.getAllMetadataStats).mockResolvedValue({
-      '/1.mp4': { duration: 100 },
-    });
+    vi.mocked(repo.getAllMetadataAndStats).mockResolvedValue([
+      {
+        file_path: '/1.mp4',
+        file_path_hash: 'hash',
+        view_count: 10,
+        duration: 100,
+        rating: null,
+        created_at: null,
+        size: null,
+        last_viewed: null,
+      },
+    ]);
 
     const result = await service.getAlbumsWithViewCounts();
 

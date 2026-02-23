@@ -352,15 +352,13 @@ export function initDatabase(dbPath: string): WorkerResult {
         v.last_viewed
       FROM media_metadata m
       LEFT JOIN media_views v ON m.file_path_hash = v.file_path_hash
+      WHERE m.file_path IS NOT NULL
     `);
 
     // Optimized batch statements
     const placeholders = Array(SQL_BATCH_SIZE).fill('?').join(',');
     statements.getMediaViewCountsBatch = db.prepare(
       `SELECT file_path, view_count FROM media_views WHERE file_path IN (${placeholders})`,
-    );
-    statements.getAllMediaViewCounts = db.prepare(
-      `SELECT file_path, view_count FROM media_views`,
     );
     statements.getMetadataBatch = db.prepare(
       `SELECT
@@ -383,15 +381,6 @@ export function initDatabase(dbPath: string): WorkerResult {
         rating,
         extraction_status as status,
         watched_segments as watchedSegments
-       FROM media_metadata WHERE file_path IS NOT NULL`,
-    );
-
-    // Optimized query for album enrichment (skips heavy JSON/text fields)
-    statements.getAllMetadataStats = db.prepare(
-      `SELECT
-        file_path as filePath,
-        duration,
-        rating
        FROM media_metadata WHERE file_path IS NOT NULL`,
     );
 
@@ -587,27 +576,6 @@ export function getAllMetadata(): WorkerResult {
     }
 
     return { success: true, data: metadataMap };
-  } catch (error: unknown) {
-    return { success: false, error: (error as Error).message };
-  }
-}
-
-/**
- * Retrieves metadata stats (duration, rating) for all files.
- * Optimized for album enrichment to avoid fetching unused heavy columns.
- */
-export function getAllMetadataStats(): WorkerResult {
-  if (!db) return { success: false, error: 'Database not initialized' };
-  try {
-    const rows = statements.getAllMetadataStats.all() as {
-      filePath: string;
-      duration?: number;
-      rating?: number;
-    }[];
-
-    // Bolt Optimization: Return raw rows to avoid blocking worker with heavy reduce
-    // The transformation to a map will handle by the consumer.
-    return { success: true, data: rows };
   } catch (error: unknown) {
     return { success: false, error: (error as Error).message };
   }
@@ -845,6 +813,13 @@ export function getSetting(key: string): WorkerResult {
 export function executeSmartPlaylist(criteriaJson?: string): WorkerResult {
   if (!db) return { success: false, error: 'Database not initialized' };
   try {
+    // Bolt Optimization: Use cached prepared statement for empty criteria
+    // This avoids recompiling the SQL statement for the default "view all" case
+    if (!criteriaJson || criteriaJson === '{}') {
+      const rows = statements.executeSmartPlaylist.all();
+      return { success: true, data: rows };
+    }
+
     let sql = `
       SELECT
         m.file_path_hash,
@@ -934,31 +909,6 @@ export async function recordMediaView(filePath: string): Promise<WorkerResult> {
     return { success: true };
   } catch (error: unknown) {
     console.error(`[worker] Error recording view for ${filePath}:`, error);
-    return { success: false, error: (error as Error).message };
-  }
-}
-
-/**
- * Gets view counts for all files.
- * @returns The result including the view count map.
- */
-export function getAllMediaViewCounts(): WorkerResult {
-  if (!db) return { success: false, error: 'Database not initialized' };
-
-  try {
-    const rows = statements.getAllMediaViewCounts.all() as {
-      file_path: string;
-      view_count: number;
-    }[];
-
-    const viewCountsMap: { [key: string]: number } = {};
-    for (const row of rows) {
-      viewCountsMap[row.file_path] = row.view_count;
-    }
-
-    return { success: true, data: viewCountsMap };
-  } catch (error: unknown) {
-    console.error('[worker] Error fetching all view counts:', error);
     return { success: false, error: (error as Error).message };
   }
 }
@@ -1235,9 +1185,6 @@ if (parentPort) {
         case 'recordMediaView':
           result = await recordMediaView(payload.filePath);
           break;
-        case 'getAllMediaViewCounts':
-          result = getAllMediaViewCounts();
-          break;
         case 'getMediaViewCounts':
           result = await getMediaViewCounts(payload.filePaths);
           break;
@@ -1283,9 +1230,6 @@ if (parentPort) {
           break;
         case 'getAllMetadata':
           result = getAllMetadata();
-          break;
-        case 'getAllMetadataStats':
-          result = getAllMetadataStats();
           break;
         case 'getAllMetadataVerification':
           result = getAllMetadataVerification();
