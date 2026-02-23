@@ -49,6 +49,7 @@ vi.mock('fs/promises', () => ({
 vi.mock('../../../src/core/security', () => ({
   isSensitiveDirectory: vi.fn(),
   isRestrictedPath: vi.fn(),
+  clearAuthCache: vi.fn(),
 }));
 
 describe('system-controller security', () => {

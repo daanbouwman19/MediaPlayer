@@ -35,7 +35,7 @@ describe('Local Server', () => {
     // Mock getMediaDirectories to return the process's current working directory
     // This allows tests to serve files from the test environment
     (getMediaDirectories as unknown as Mock).mockResolvedValue([
-      { path: process.cwd() },
+      { path: process.cwd(), isActive: true },
     ]);
   });
 
@@ -417,7 +417,7 @@ describe('Local Server', () => {
 
       // Restore mock for subsequent tests
       (getMediaDirectories as unknown as Mock).mockResolvedValue([
-        { path: process.cwd() },
+        { path: process.cwd(), isActive: true },
       ]);
     });
   });

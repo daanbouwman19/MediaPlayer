@@ -17,7 +17,11 @@ import { getServerPort } from '../local-server';
 import { openMediaInVlc } from '../../core/vlc-player';
 import { listDirectory } from '../../core/file-system';
 import { handleIpc } from '../utils/ipc-helper';
-import { isSensitiveDirectory, isRestrictedPath } from '../../core/security';
+import {
+  clearAuthCache,
+  isSensitiveDirectory,
+  isRestrictedPath,
+} from '../../core/security';
 
 export function registerSystemHandlers() {
   handleIpc(
@@ -41,6 +45,7 @@ export function registerSystemHandlers() {
           }
 
           await addMediaDirectory({ path: resolvedPath, type: 'local' });
+          clearAuthCache();
           return resolvedPath;
         } catch (e) {
           console.error('Failed to add directory by path', e);
@@ -55,6 +60,7 @@ export function registerSystemHandlers() {
     IPC_CHANNELS.REMOVE_MEDIA_DIRECTORY,
     async (_event: IpcMainInvokeEvent, directoryPath: string) => {
       await removeMediaDirectory(directoryPath);
+      clearAuthCache();
     },
   );
 
@@ -65,6 +71,7 @@ export function registerSystemHandlers() {
       { directoryPath, isActive }: { directoryPath: string; isActive: boolean },
     ) => {
       await setDirectoryActiveState(directoryPath, isActive);
+      clearAuthCache();
     },
   );
 

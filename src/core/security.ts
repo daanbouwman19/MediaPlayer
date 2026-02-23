@@ -148,7 +148,9 @@ export async function authorizeFilePath(
   }
 
   const dirs = mediaDirectories || (await getMediaDirectories());
-  const allowedPaths = dirs.map((d) => d.path);
+  const allowedPaths = dirs
+    .filter((d) => d.isActive)
+    .map((d) => d.path);
 
   let result: AuthorizationResult;
 

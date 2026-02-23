@@ -158,3 +158,9 @@
 **Vulnerability:** Google OAuth tokens were stored in plain text in the `media-library.db` database. If an attacker gained access to the database file (e.g. via backup or local access), they could steal the refresh tokens and access the user's Google Drive data.
 **Learning:** Sensitive credentials should never be stored in plain text, even in local databases. In shared environments (like Electron + Node Server), relying on OS-specific secure storage (Keychain) is difficult. A robust fallback (like application-level encryption with a generated key) is better than plain text.
 **Prevention:** Implemented AES-256-GCM encryption for token storage. The master key is either provided via environment variable or generated securely and stored in a restricted `master.key` file, which is explicitly blocked from application file access APIs.
+
+## 2026-02-20 - Disabled Media Directory Access Bypass
+
+**Vulnerability:** Files in media directories that were disabled (isActive=false) remained accessible via the API because `authorizeFilePath` did not check the `isActive` flag. Additionally, the authorization cache was not invalidated when directory settings changed, allowing continued access to removed or disabled directories for the duration of the cache TTL.
+**Learning:** Access control logic must actively filter based on all state flags (like `isActive`). Furthermore, when security-critical configuration (like allowed paths) changes, dependent caches (like `authCache`) must be immediately invalidated to prevent race conditions or "time-of-check to time-of-use" (TOCTOU) windows.
+**Prevention:** Updated `authorizeFilePath` in `src/core/security.ts` to filter allowed directories by `isActive`. Implemented cache invalidation (`clearAuthCache`) in all handlers that modify media directory configuration (add/remove/update) in both `src/server/routes/system.routes.ts` and `src/main/ipc/system-controller.ts`.

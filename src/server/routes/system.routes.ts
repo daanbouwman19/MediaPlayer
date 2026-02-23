@@ -22,6 +22,7 @@ import {
 } from '../../core/database.ts';
 import { listDirectory } from '../../core/file-system.ts';
 import {
+  clearAuthCache,
   isRestrictedPath,
   isSensitiveDirectory,
   validateInput,
@@ -159,6 +160,7 @@ export function createSystemRoutes(limiters: RateLimiters) {
       }
 
       await addMediaDirectory(resolvedPath);
+      clearAuthCache();
       res.json(resolvedPath);
     }),
   );
@@ -179,6 +181,7 @@ export function createSystemRoutes(limiters: RateLimiters) {
         throw new AppError(400, inputResult.message || 'Invalid path');
       }
       await removeMediaDirectory(dirPath);
+      clearAuthCache();
       res.sendStatus(200);
     }),
   );
@@ -199,6 +202,7 @@ export function createSystemRoutes(limiters: RateLimiters) {
         throw new AppError(400, inputResult.message || 'Invalid path');
       }
       await setDirectoryActiveState(dirPath, isActive);
+      clearAuthCache();
       res.sendStatus(200);
     }),
   );
