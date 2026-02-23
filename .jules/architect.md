@@ -123,3 +123,9 @@
 **Smell:** `media-analyzer.ts` contained a "God Method" `executeHeatmapGeneration` that mixed high-level orchestration with low-level details like FFmpeg argument construction, process spawning, and output parsing.
 **Insight:** Breaking down complex operations into distinct phases (Preparation, Execution, Parsing) significantly improves readability and makes each part easier to test and reason about in isolation.
 **Prevention:** When a method exceeds 50 lines and handles multiple levels of abstraction (e.g., business logic + shell commands), extract the lower-level details into private helper methods.
+
+## 2026-02-21 - Extracting Background Task Trigger
+
+**Smell:** `media-service.ts` contained a "Fire and Forget" background task logic nested inside the main `scanDiskForAlbumsAndCache` flow.
+**Insight:** Mixing main flow logic with background task initiation (including error handling and async execution) obscures the primary purpose of the function and makes it harder to follow.
+**Prevention:** When a function triggers a side effect that runs in the background (like metadata extraction), extract the setup and trigger logic into a dedicated private method.
