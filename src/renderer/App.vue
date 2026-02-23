@@ -69,6 +69,24 @@
 
           <button
             class="icon-button p-2 rounded-full hover:bg-white/10 transition-colors pointer-events-auto"
+            :aria-label="
+              viewMode === 'player'
+                ? 'Switch to Grid View'
+                : 'Switch to Player View'
+            "
+            :title="
+              viewMode === 'player'
+                ? 'Switch to Grid View'
+                : 'Switch to Player View'
+            "
+            @click="viewMode = viewMode === 'player' ? 'grid' : 'player'"
+          >
+            <GridIcon v-if="viewMode === 'player'" class="w-6 h-6 text-white" />
+            <PlayIcon v-else class="w-6 h-6 text-white" />
+          </button>
+
+          <button
+            class="icon-button p-2 rounded-full hover:bg-white/10 transition-colors pointer-events-auto"
             aria-label="Keyboard Shortcuts"
             title="Keyboard Shortcuts"
             @click="isShortcutsModalOpen = true"
@@ -122,6 +140,8 @@ import ToastContainer from './components/ToastContainer.vue';
 import LoadingMask from './components/LoadingMask.vue';
 import MenuIcon from './components/icons/MenuIcon.vue';
 import HelpIcon from './components/icons/HelpIcon.vue';
+import GridIcon from './components/icons/GridIcon.vue';
+import PlayIcon from './components/icons/PlayIcon.vue';
 import { useLibraryStore } from './composables/useLibraryStore';
 import { usePlayerStore } from './composables/usePlayerStore';
 import { useUIStore } from './composables/useUIStore';
