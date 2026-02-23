@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
 import VirtualScroller from '../../../src/renderer/components/VirtualScroller.vue';
 
@@ -22,11 +22,16 @@ describe('VirtualScroller.vue', () => {
   const containerHeight = 200;
 
   beforeEach(() => {
+    vi.useFakeTimers();
     // Generate 100 items
     items = Array.from({ length: 100 }, (_, i) => ({
       id: i,
       name: `Item ${i}`,
     }));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('renders visible items correctly', async () => {
@@ -106,7 +111,7 @@ describe('VirtualScroller.vue', () => {
     // Or we can just wait.
 
     // Wait for next tick/raf
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    vi.advanceTimersByTime(50);
     await wrapper.vm.$nextTick();
 
     // Recalculate:

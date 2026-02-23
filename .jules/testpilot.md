@@ -107,3 +107,9 @@ Implemented a callback-based interception mechanism for the `postMessage` mock. 
 **Discovery:** `tests/renderer/utils/timeUtils.test.ts` was using multiple `it` blocks with repetitive `expect` calls for simple input/output pairs. This made it harder to see coverage gaps and added boilerplate.
 
 **Strategy:** Refactored to use `it.each` (table-driven tests). This clearly separates test data from logic, makes it trivial to add new edge cases (like `NaN` or `Infinity`), and ensures each case is reported as a distinct test result.
+
+## 2026-02-23 - Deterministic Animation Frame Testing
+
+**Discovery:** `tests/renderer/components/VirtualScroller.test.ts` was relying on `setTimeout(50)` to wait for `requestAnimationFrame`, introducing a 50ms delay per test and potential flakiness on slow machines.
+
+**Strategy:** Replaced `setTimeout` with Vitest's `vi.useFakeTimers()` and `vi.advanceTimersByTime(50)`. Vitest automatically mocks `requestAnimationFrame`, allowing precise and instant control over animation frame callbacks, making the test deterministic and faster.
