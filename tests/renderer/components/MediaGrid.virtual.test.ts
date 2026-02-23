@@ -40,6 +40,7 @@ describe('MediaGrid.vue (Virtual Scrolling)', () => {
       videoExtensionsSet: new Set(['.mp4']),
       mediaUrlGenerator: (path: string) => `url://${path}`,
       thumbnailUrlGenerator: (path: string) => `thumb://${path}`,
+      mediaDirectories: [],
     });
 
     mockPlayerState = reactive({
@@ -53,6 +54,8 @@ describe('MediaGrid.vue (Virtual Scrolling)', () => {
     mockUIState = reactive({
       gridMediaFiles: [],
       viewMode: 'grid',
+      isSidebarVisible: true,
+      isSourcesModalVisible: false,
     });
 
     (useLibraryStore as any).mockReturnValue({
@@ -79,6 +82,7 @@ describe('MediaGrid.vue (Virtual Scrolling)', () => {
   });
 
   it('renders "No media files" when list is empty', async () => {
+    mockLibraryState.mediaDirectories = [{ path: '/tmp' }];
     const wrapper = mount(MediaGrid);
 
     await flushPromises();

@@ -29,8 +29,29 @@
         <div class="mb-4 p-4 rounded-full bg-gray-800">
           <PlaylistIcon class="w-12 h-12 opacity-50" aria-hidden="true" />
         </div>
-        <p class="text-lg font-medium">No media files found</p>
-        <p class="text-sm">Try selecting a different album</p>
+        <template v-if="mediaDirectories.length === 0">
+          <p class="text-lg font-medium text-gray-300">
+            No media sources found
+          </p>
+          <button
+            class="mt-4 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors font-medium text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-gray-900"
+            @click="openSourcesModal"
+          >
+            Add Media Source
+          </button>
+        </template>
+        <template v-else>
+          <p class="text-lg font-medium text-gray-300">No media files found</p>
+          <button
+            v-if="!isSidebarVisible"
+            class="mt-4 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors font-medium text-sm flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 focus:ring-offset-gray-900"
+            @click="isSidebarVisible = true"
+          >
+            <MenuIcon class="w-4 h-4" aria-hidden="true" />
+            Open Library
+          </button>
+          <p v-else class="text-sm mt-2">Try selecting a different album</p>
+        </template>
       </div>
 
       <VirtualScroller
@@ -88,6 +109,7 @@ import type { MediaFile } from '../../core/types';
 import MediaGridItem from './MediaGridItem.vue';
 import VirtualScroller from './VirtualScroller.vue';
 import PlaylistIcon from './icons/PlaylistIcon.vue';
+import MenuIcon from './icons/MenuIcon.vue';
 import {
   GRID_BREAKPOINT_SM,
   GRID_BREAKPOINT_LG,
@@ -103,7 +125,14 @@ const {
   videoExtensionsSet,
   mediaUrlGenerator,
   thumbnailUrlGenerator,
+  mediaDirectories,
 } = libraryStore;
+
+const { isSidebarVisible, isSourcesModalVisible } = uiStore;
+
+const openSourcesModal = () => {
+  isSourcesModalVisible.value = true;
+};
 
 // Reactive reference to the full list from state
 const allMediaFiles = computed(() => uiStore.state.gridMediaFiles);

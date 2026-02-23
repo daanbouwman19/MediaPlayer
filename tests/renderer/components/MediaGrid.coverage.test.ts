@@ -47,6 +47,7 @@ describe('MediaGrid.vue Coverage', () => {
       videoExtensionsSet: new Set(['.mp4', '.mkv']),
       mediaUrlGenerator: (path: string) => `url://${path}`,
       thumbnailUrlGenerator: (path: string) => `thumb://${path}`,
+      mediaDirectories: [],
     });
 
     mockPlayerState = reactive({
@@ -60,6 +61,8 @@ describe('MediaGrid.vue Coverage', () => {
     mockUIState = reactive({
       viewMode: 'grid',
       gridMediaFiles: [],
+      isSidebarVisible: true,
+      isSourcesModalVisible: false,
     });
 
     (useLibraryStore as Mock).mockReturnValue({

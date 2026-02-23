@@ -60,6 +60,7 @@ describe('MediaGrid.vue', () => {
         `http://localhost:1234/${encodeURIComponent(path)}`,
       thumbnailUrlGenerator: (path: string) =>
         `http://localhost:1234/thumb/${encodeURIComponent(path)}`,
+      mediaDirectories: [],
       gridMediaFiles: [],
     });
 
@@ -74,6 +75,8 @@ describe('MediaGrid.vue', () => {
     mockUIState = reactive({
       viewMode: 'grid',
       gridMediaFiles: [],
+      isSidebarVisible: true,
+      isSourcesModalVisible: false,
     });
 
     vi.clearAllMocks();
@@ -113,13 +116,33 @@ describe('MediaGrid.vue', () => {
       // We do NOT stub VirtualScroller, we test integration.
     });
 
-  it('renders "No media files found" when gridMediaFiles is empty', () => {
+  it('renders "No media sources found" when mediaDirectories is empty', () => {
+    mockLibraryState.mediaDirectories = [];
     const wrapper = mountGrid();
     const emptyState = wrapper.find('[role="status"]');
     expect(emptyState.exists()).toBe(true);
     expect(emptyState.attributes('aria-live')).toBe('polite');
+    expect(wrapper.text()).toContain('No media sources found');
+    expect(wrapper.text()).toContain('Add Media Source');
+  });
+
+  it('renders "No media files found" when mediaDirectories has items but gridMediaFiles is empty', async () => {
+    mockLibraryState.mediaDirectories = [{ path: '/tmp' }];
+    const wrapper = mountGrid();
+    await wrapper.vm.$nextTick();
+    const emptyState = wrapper.find('[role="status"]');
+    expect(emptyState.exists()).toBe(true);
     expect(wrapper.text()).toContain('No media files found');
+    // Sidebar is visible by default in mock
     expect(wrapper.text()).toContain('Try selecting a different album');
+  });
+
+  it('renders "Open Library" when sidebar is hidden and no media files', async () => {
+    mockLibraryState.mediaDirectories = [{ path: '/tmp' }];
+    mockUIState.isSidebarVisible = false;
+    const wrapper = mountGrid();
+    await wrapper.vm.$nextTick();
+    expect(wrapper.text()).toContain('Open Library');
   });
 
   it('renders grid items when gridMediaFiles has items', async () => {
