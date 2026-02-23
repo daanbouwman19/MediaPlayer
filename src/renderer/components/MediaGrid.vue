@@ -35,7 +35,7 @@
             Add a folder to start building your library.
           </p>
           <button
-            class="px-6 py-3 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition-colors flex items-center gap-2"
+            class="px-6 py-3 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition-colors"
             @click="openSourcesModal"
           >
             Add Media Source
