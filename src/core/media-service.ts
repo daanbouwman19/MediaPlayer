@@ -179,38 +179,45 @@ export class MediaService {
 
     // Trigger metadata extraction in background if ffmpegPath is provided
     if (ffmpegPath && albums && albums.length > 0) {
-      const allFilePaths = collectAllFilePaths(albums);
-
-      (async () => {
-        try {
-          // Bolt Optimization: Filter paths that are already "success" in DB
-          // to avoid fetching ALL metadata or processing known files.
-          const pathsToProcess =
-            await this.mediaRepo.filterProcessingNeeded(allFilePaths);
-
-          const pending = await this.mediaRepo.getPendingMetadata();
-          const uniquePaths = new Set(pending);
-          for (const p of pathsToProcess) {
-            uniquePaths.add(p);
-          }
-
-          await this.extractAndSaveMetadata(
-            Array.from(uniquePaths),
-            ffmpegPath,
-            {
-              forceCheck: false,
-            },
-          );
-        } catch (e) {
-          console.error(
-            '[media-service] Background metadata extraction failed:',
-            e,
-          );
-        }
-      })();
+      this.triggerBackgroundMetadataExtraction(albums, ffmpegPath);
     }
 
     return albums || [];
+  }
+
+  /**
+   * Triggers the metadata extraction process in the background.
+   * This is a fire-and-forget operation.
+   */
+  private triggerBackgroundMetadataExtraction(
+    albums: Album[],
+    ffmpegPath: string,
+  ): void {
+    const allFilePaths = collectAllFilePaths(albums);
+
+    (async () => {
+      try {
+        // Bolt Optimization: Filter paths that are already "success" in DB
+        // to avoid fetching ALL metadata or processing known files.
+        const pathsToProcess =
+          await this.mediaRepo.filterProcessingNeeded(allFilePaths);
+
+        const pending = await this.mediaRepo.getPendingMetadata();
+        const uniquePaths = new Set(pending);
+        for (const p of pathsToProcess) {
+          uniquePaths.add(p);
+        }
+
+        await this.extractAndSaveMetadata(Array.from(uniquePaths), ffmpegPath, {
+          forceCheck: false,
+        });
+      } catch (e) {
+        console.error(
+          '[media-service] Background metadata extraction failed:',
+          e,
+        );
+      }
+    })();
   }
 
   /**
