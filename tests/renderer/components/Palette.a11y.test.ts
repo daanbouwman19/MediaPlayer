@@ -1,3 +1,4 @@
+// Accessibility tests for Palette components
 import {
   describe,
   it,
