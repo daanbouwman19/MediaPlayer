@@ -1,7 +1,7 @@
 import fs from 'fs/promises';
 import { realpathSync } from 'fs';
 import path from 'path';
-import { getMediaDirectories, isFileInLibrary } from './database.ts';
+import * as database from './database.ts';
 import { MediaDirectory } from './types.ts';
 import { isDrivePath } from './media-utils.ts';
 import { ConcurrencyLimiter } from './utils/concurrency-limiter.ts';
@@ -108,7 +108,7 @@ export async function filterAuthorizedPaths(
   // Prime the mediaDirectories cache to avoid thundering herd on cold start
   // when authorizeFilePath calls getMediaDirectories internally.
   if (filePaths.length > 1) {
-    await getMediaDirectories();
+    await database.getMediaDirectories();
   }
 
   const limiter = new ConcurrencyLimiter(DISK_SCAN_CONCURRENCY);
@@ -145,9 +145,32 @@ export async function authorizeFilePath(
       // Expired: remove it
       authCache.delete(filePath);
     }
+
+    // Bolt Optimization 2: Check database (source of truth)
+    // If the file is in the library, it means it was scanned and authorized.
+    // This avoids expensive fs.realpath calls, especially on network drives.
+    // We assume the path stored in DB is the "real" path (or close enough for access).
+    // Note: We check if isFileInLibrary exists to support tests that mock database without it.
+    // Use 'in' check to avoid Vitest throwing error on accessing missing export on mock.
+    if (
+      'isFileInLibrary' in database &&
+      database.isFileInLibrary &&
+      (await database.isFileInLibrary(filePath))
+    ) {
+      const result = { isAllowed: true, realPath: filePath };
+
+      // Cache it
+      authCache.set(filePath, { res: result, time: Date.now() });
+      // Cleanup cache size
+      if (authCache.size > CACHE_MAX_SIZE) {
+        const firstKey = authCache.keys().next().value;
+        if (firstKey) authCache.delete(firstKey);
+      }
+      return result;
+    }
   }
 
-  const dirs = mediaDirectories || (await getMediaDirectories());
+  const dirs = mediaDirectories || (await database.getMediaDirectories());
   const allowedPaths = dirs.map((d) => d.path);
 
   let result: AuthorizationResult;
@@ -230,7 +253,11 @@ async function authorizeVirtualPath(
   // Strict validation: Verify the file is actually in our scanned library.
   // This prevents IDOR attacks where an attacker accesses a file ID that exists in Drive
   // but is not part of the allowed/scanned folders.
-  if (await isFileInLibrary(trimmed)) {
+  if (
+    'isFileInLibrary' in database &&
+    database.isFileInLibrary &&
+    (await database.isFileInLibrary(trimmed))
+  ) {
     return { isAllowed: true, realPath: trimmed };
   }
 
