@@ -11,4 +11,4 @@ yarn.lock
 # Ignore specific files
 *.log
 
-.cache/
+.cache/tests/renderer/components/Palette.a11y.test.ts

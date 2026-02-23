@@ -126,59 +126,58 @@ describe('Palette Accessibility Improvements', () => {
       isSourcesModalVisible: true,
       isControlsVisible: true,
       isSidebarVisible: false,
-    });
+    })(useLibraryStore as Mock)
+      .mockReturnValue({
+        state: mockLibraryState,
+        ...toRefs(mockLibraryState),
+        // Functions usually returned by store?
+        // Based on other tests, we just mock logic.
+        // SourcesModal usually calls `libraryStore.addMediaDirectory` etc.
+        // I should verify if tests call these.
+        // Tests below check `remove-button` labels, but don't seem to trigger actions that require store methods
+        // except `toggleAlbumSelection` which is from slideshow mock? No, likely from store in new design?
+        // AlbumTree might use store actions.
+        // But for now let's just use state as `useAppState` did.
+      })
+      (usePlayerStore as Mock)
+      .mockReturnValue({
+        state: mockPlayerState,
+        ...toRefs(mockPlayerState),
+        resetState: vi.fn(),
+      })
+      (useUIStore as Mock)
+      .mockReturnValue({
+        state: mockUIState,
+        ...toRefs(mockUIState),
+        initializeApp: vi.fn(),
+      })
+      (useSlideshow as Mock)
+      .mockReturnValue({
+        setFilter: vi.fn(),
+        prevMedia: vi.fn(),
+        nextMedia: vi.fn(),
+        toggleTimer: vi.fn(),
+        reapplyFilter: vi.fn(),
+        navigateMedia: vi.fn(),
+        toggleSlideshowTimer: vi.fn(),
+        pauseSlideshowTimer: vi.fn(),
+        resumeSlideshowTimer: vi.fn(),
+        toggleAlbumSelection: vi.fn(),
+        startSlideshow: vi.fn(),
+        startIndividualAlbumSlideshow: vi.fn(),
+        pickAndDisplayNextMediaItem: vi.fn(),
+        filterMedia: vi.fn(),
+        selectWeightedRandom: vi.fn(),
+        stopSlideshow: vi.fn(),
+      });
 
-    (useLibraryStore as Mock).mockReturnValue({
-      state: mockLibraryState,
-      ...toRefs(mockLibraryState),
-      // Functions usually returned by store?
-      // Based on other tests, we just mock logic.
-      // SourcesModal usually calls `libraryStore.addMediaDirectory` etc.
-      // I should verify if tests call these.
-      // Tests below check `remove-button` labels, but don't seem to trigger actions that require store methods
-      // except `toggleAlbumSelection` which is from slideshow mock? No, likely from store in new design?
-      // AlbumTree might use store actions.
-      // But for now let's just use state as `useAppState` did.
-    });
-
-    (usePlayerStore as Mock).mockReturnValue({
-      state: mockPlayerState,
-      ...toRefs(mockPlayerState),
-      resetState: vi.fn(),
-    });
-
-    (useUIStore as Mock).mockReturnValue({
-      state: mockUIState,
-      ...toRefs(mockUIState),
-      initializeApp: vi.fn(),
-    });
-
-    (useSlideshow as Mock).mockReturnValue({
-      setFilter: vi.fn(),
-      prevMedia: vi.fn(),
-      nextMedia: vi.fn(),
-      toggleTimer: vi.fn(),
-      reapplyFilter: vi.fn(),
-      navigateMedia: vi.fn(),
-      toggleSlideshowTimer: vi.fn(),
-      pauseSlideshowTimer: vi.fn(),
-      resumeSlideshowTimer: vi.fn(),
-      toggleAlbumSelection: vi.fn(),
-      startSlideshow: vi.fn(),
-      startIndividualAlbumSlideshow: vi.fn(),
-      pickAndDisplayNextMediaItem: vi.fn(),
-      filterMedia: vi.fn(),
-      selectWeightedRandom: vi.fn(),
-      stopSlideshow: vi.fn(),
-    });
-
-    vi.clearAllMocks();
-
-    (api.loadFileAsDataURL as Mock).mockResolvedValue({
-      type: 'http-url',
-      url: 'http://localhost/test.jpg',
-    });
-    (api.getVideoStreamUrlGenerator as Mock).mockResolvedValue(() => '');
+    vi.clearAllMocks()
+    (api.loadFileAsDataURL as Mock)
+      .mockResolvedValue({
+        type: 'http-url',
+        url: 'http://localhost/test.jpg',
+      })(api.getVideoStreamUrlGenerator as Mock)
+      .mockResolvedValue(() => '');
   });
 
   describe('MediaDisplay.vue', () => {
@@ -275,27 +274,27 @@ describe('Palette Accessibility Improvements', () => {
           currentTimeVal = v;
         },
         configurable: true,
-      });
-
-      // Update internal state to match video time
-      (wrapper.vm as any).savedCurrentTime = 10;
+      })(
+        // Update internal state to match video time
+        wrapper.vm as any,
+      ).savedCurrentTime = 10;
       await wrapper.vm.$nextTick();
 
       // Ensure propagation
       await new Promise((resolve) => setTimeout(resolve, 50));
 
       // Ensure MediaDisplay sees the element (it should via normal flow, but let's be safe)
-      // (wrapper.vm as any).handleVideoElementUpdate(videoEl);
+      // (wrapper.vm as any).handleVideoElementUpdate(videoEl)
       // ^ Should typically be handled by @update:video-element
 
       const progressBar = wrapper.find('[data-testid="video-progress-bar"]');
 
       // Right arrow - forward 5s
       await progressBar.trigger('keydown', { key: 'ArrowRight' });
-      expect(currentTimeVal).toBe(15);
-
-      // Simulate time update
-      (wrapper.vm as any).savedCurrentTime = 15;
+      expect(currentTimeVal).toBe(15)(
+        // Simulate time update
+        wrapper.vm as any,
+      ).savedCurrentTime = 15;
       await wrapper.vm.$nextTick();
 
       // Left arrow - backward 5s
@@ -303,15 +302,13 @@ describe('Palette Accessibility Improvements', () => {
       expect(currentTimeVal).toBe(10); // Back to 10
 
       // Boundary check - min
-      currentTimeVal = 2;
-      (wrapper.vm as any).savedCurrentTime = 2; // Sync state needed for ProgressBar to know start point
+      currentTimeVal = 2(wrapper.vm as any).savedCurrentTime = 2; // Sync state needed for ProgressBar to know start point
       await wrapper.vm.$nextTick();
       await progressBar.trigger('keydown', { key: 'ArrowLeft' });
       expect(currentTimeVal).toBe(0); // Clamped to 0
 
       // Boundary check - max
-      currentTimeVal = 98;
-      (wrapper.vm as any).savedCurrentTime = 98;
+      currentTimeVal = 98(wrapper.vm as any).savedCurrentTime = 98;
       await wrapper.vm.$nextTick();
       await progressBar.trigger('keydown', { key: 'ArrowRight' });
       expect(currentTimeVal).toBe(100); // Clamped to 100
