@@ -2,6 +2,7 @@ import { spawn } from 'child_process';
 import ffmpegStatic from 'ffmpeg-static';
 import { getFFmpegStreams, runFFmpeg } from '../utils/ffmpeg-utils';
 import { createMediaSource } from '../media-source.ts';
+import { MAX_QUEUE_SIZE } from '../constants.ts';
 import fs from 'fs/promises';
 import path from 'path';
 import crypto from 'crypto';
@@ -16,7 +17,6 @@ const DEFAULT_HEATMAP_POINTS = 100;
 const MIN_HEATMAP_POINTS = 1;
 const MAX_HEATMAP_POINTS = 1000;
 const ANALYZER_TIMEOUT_MS = 2 * 60 * 1000;
-const MAX_QUEUE_SIZE = 50;
 
 export class MediaAnalyzer {
   private static instance: MediaAnalyzer;
@@ -95,7 +95,6 @@ export class MediaAnalyzer {
 
     // [SECURITY] Enforce queue limit to prevent DoS
     if (this.jobQueue.length >= MAX_QUEUE_SIZE) {
-      this.activeJobs.delete(filePath);
       throw new Error('Server busy: Heatmap queue full');
     }
 

@@ -387,4 +387,11 @@ export {
   GRID_BREAKPOINT_XL,
   WORKER_SCAN_TIMEOUT_MS,
   MAX_PATH_LENGTH,
+  MAX_QUEUE_SIZE,
 };
+
+/**
+ * Maximum size of the MediaAnalyzer job queue.
+ * Limits the number of pending heatmap generation requests to prevent DoS.
+ */
+const MAX_QUEUE_SIZE = 50;
