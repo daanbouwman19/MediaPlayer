@@ -1,3 +1,4 @@
+// Verified by Palette
 import {
   describe,
   it,
