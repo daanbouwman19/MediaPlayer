@@ -46,7 +46,7 @@ vi.mock('@/api', () => ({
   },
 }));
 
-describe('Palette Accessibility Improvements (CI Fix)', () => {
+describe('Palette Accessibility Improvements', () => {
   let mockLibraryState: any;
   let mockPlayerState: any;
   let mockUIState: any;
