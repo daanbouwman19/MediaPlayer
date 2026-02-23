@@ -20,6 +20,7 @@ import {
   WORKER_SCAN_TIMEOUT_MS,
 } from './constants.ts';
 import { isDrivePath } from './media-utils.ts';
+import type { MediaLibraryItem } from './types.ts';
 
 /**
  * Collects all file paths from an album tree iteratively.
@@ -55,8 +56,7 @@ function collectAllFilePaths(albums: Album[]): string[] {
  */
 function enrichAlbumsWithStats(
   albums: Album[],
-  viewCountsMap: { [path: string]: number },
-  metadataMap: { [path: string]: MediaMetadata },
+  statsMap: Map<string, MediaLibraryItem>,
 ): Album[] {
   const stack: Album[] = [...albums];
 
@@ -66,12 +66,19 @@ function enrichAlbumsWithStats(
 
     // Mutate textures in-place
     for (const texture of album.textures) {
-      const metadata = metadataMap[texture.path];
+      const stats = statsMap.get(texture.path);
+      // Map SQL nulls to undefined/0 as appropriate
+      // Note: stats.rating can be null
       const rating =
-        metadata?.rating !== undefined ? metadata.rating : texture.rating;
+        stats?.rating !== undefined && stats.rating !== null
+          ? stats.rating
+          : texture.rating;
 
-      texture.viewCount = viewCountsMap[texture.path] || 0;
-      texture.duration = metadata?.duration;
+      texture.viewCount = stats?.view_count || 0;
+      texture.duration =
+        stats?.duration !== undefined && stats.duration !== null
+          ? stats.duration
+          : undefined;
       texture.rating = rating;
     }
 
@@ -246,12 +253,16 @@ export class MediaService {
       return [];
     }
 
-    const [viewCountsMap, metadataMap] = await Promise.all([
-      this.mediaRepo.getAllMediaViewCounts(),
-      this.mediaRepo.getAllMetadataStats(),
-    ]);
+    const items = await this.mediaRepo.getAllMetadataAndStats();
+    // Bolt Optimization: Create map for O(1) lookup
+    const statsMap = new Map<string, MediaLibraryItem>();
+    for (const item of items) {
+      if (item.file_path) {
+        statsMap.set(item.file_path, item);
+      }
+    }
 
-    return enrichAlbumsWithStats(albums, viewCountsMap, metadataMap);
+    return enrichAlbumsWithStats(albums, statsMap);
   }
 
   /**
@@ -264,12 +275,16 @@ export class MediaService {
       return [];
     }
 
-    const [viewCountsMap, metadataMap] = await Promise.all([
-      this.mediaRepo.getAllMediaViewCounts(),
-      this.mediaRepo.getAllMetadataStats(),
-    ]);
+    const items = await this.mediaRepo.getAllMetadataAndStats();
+    // Bolt Optimization: Create map for O(1) lookup
+    const statsMap = new Map<string, MediaLibraryItem>();
+    for (const item of items) {
+      if (item.file_path) {
+        statsMap.set(item.file_path, item);
+      }
+    }
 
-    return enrichAlbumsWithStats(albums, viewCountsMap, metadataMap);
+    return enrichAlbumsWithStats(albums, statsMap);
   }
   /**
    * Extracts metadata for a list of files and saves it to the database.

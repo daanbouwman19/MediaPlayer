@@ -18,7 +18,6 @@ import {
   getSetting,
   recordMediaView,
   getMediaViewCounts,
-  getAllMediaViewCounts,
   addMediaDirectory,
   getMediaDirectories,
   removeMediaDirectory,
@@ -326,21 +325,6 @@ describe('database.ts coverage', () => {
       new Error('Fail'),
     );
     const result = await getMediaViewCounts(['/path']);
-    expect(result).toEqual({});
-  });
-
-  it('getAllMediaViewCounts sends correct message', async () => {
-    await getAllMediaViewCounts();
-    expect(mocks.WorkerClientInstance.sendMessage).toHaveBeenCalledWith(
-      'getAllMediaViewCounts',
-    );
-  });
-
-  it('getAllMediaViewCounts handles error', async () => {
-    mocks.WorkerClientInstance.sendMessage.mockRejectedValueOnce(
-      new Error('Fail'),
-    );
-    const result = await getAllMediaViewCounts();
     expect(result).toEqual({});
   });
 

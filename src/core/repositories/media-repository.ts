@@ -3,9 +3,8 @@
  */
 import {
   cacheAlbums,
-  getAllMediaViewCounts,
   getAllMetadata,
-  getAllMetadataStats,
+  getAllMetadataAndStats,
   getAllMetadataVerification,
   getCachedAlbums,
   getMediaDirectories,
@@ -30,16 +29,12 @@ export class MediaRepository {
     return getCachedAlbums();
   }
 
-  async getAllMediaViewCounts() {
-    return getAllMediaViewCounts();
-  }
-
   async getAllMetadata() {
     return getAllMetadata();
   }
 
-  async getAllMetadataStats() {
-    return getAllMetadataStats();
+  async getAllMetadataAndStats() {
+    return getAllMetadataAndStats();
   }
 
   async getAllMetadataVerification() {

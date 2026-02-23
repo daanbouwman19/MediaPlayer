@@ -14,8 +14,6 @@ import {
   closeDatabase,
   upsertMetadata,
   getMetadata,
-  recordMediaView,
-  getAllMediaViewCounts,
   getAllMetadata,
   bulkUpsertMetadata,
 } from '../../src/core/database-worker';
@@ -386,15 +384,6 @@ describe('Database Worker Combined Tests', () => {
       closeDatabase();
     });
 
-    it('getAllMediaViewCounts returns correct counts', async () => {
-      await recordMediaView('/vid1.mp4');
-      await recordMediaView('/vid1.mp4');
-
-      const result = getAllMediaViewCounts();
-      expect(result.success).toBe(true);
-      expect((result.data as any)['/vid1.mp4']).toBe(2);
-    });
-
     it('getAllMetadata returns correct metadata', async () => {
       await upsertMetadata({ filePath: '/vid1.mp4', duration: 100 });
       const result = getAllMetadata();
@@ -404,7 +393,6 @@ describe('Database Worker Combined Tests', () => {
 
     it('handles uninitialized DB for getAll functions', () => {
       closeDatabase();
-      expect(getAllMediaViewCounts().success).toBe(false);
       expect(getAllMetadata().success).toBe(false);
     });
   });
@@ -496,13 +484,6 @@ describe('Database Worker Combined Tests', () => {
       await sendMessage('init', { dbPath });
     });
 
-    it('should handle getAllMediaViewCounts message', async () => {
-      await sendMessage('recordMediaView', { filePath: '/v.mp4' });
-      const result = await sendMessage('getAllMediaViewCounts', {});
-      expect(result.success).toBe(true);
-      expect((result.data as any)['/v.mp4']).toBe(1);
-    });
-
     it('should handle cacheAlbums and getCachedAlbums messages', async () => {
       const albums = [{ id: '1', name: 'Test' }];
       await sendMessage('cacheAlbums', { cacheKey: 'k', albums });
@@ -547,12 +528,6 @@ describe('Database Worker Combined Tests', () => {
       const res = await sendMessage('getAllMetadata', {});
       expect(res.success).toBe(true);
       expect((res.data as any)['/m.mp4']).toBeDefined();
-    });
-
-    it('should handle getAllMetadataStats message', async () => {
-      const res = await sendMessage('getAllMetadataStats', {});
-      expect(res.success).toBe(true);
-      expect(Array.isArray(res.data)).toBe(true);
     });
 
     it('should handle getAllMetadataVerification message', async () => {

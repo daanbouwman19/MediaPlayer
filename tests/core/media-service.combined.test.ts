@@ -20,9 +20,8 @@ vi.mock('../../src/core/database', () => ({
   getMediaDirectories: vi.fn(),
   cacheAlbums: vi.fn(),
   getCachedAlbums: vi.fn(),
-  getAllMediaViewCounts: vi.fn(),
+  getAllMetadataAndStats: vi.fn(),
   getAllMetadata: vi.fn(),
-  getAllMetadataStats: vi.fn(),
   getAllMetadataVerification: vi.fn(),
   getPendingMetadata: vi.fn(),
   bulkUpsertMetadata: vi.fn(),
@@ -147,7 +146,7 @@ describe('MediaService Combined Tests', () => {
     // Default DB Mocks
     vi.mocked(database.getMetadata).mockResolvedValue({});
     vi.mocked(database.getAllMetadata).mockResolvedValue({});
-    vi.mocked(database.getAllMetadataStats).mockResolvedValue({});
+    vi.mocked(database.getAllMetadataAndStats).mockResolvedValue([]);
     vi.mocked(database.getAllMetadataVerification).mockResolvedValue({});
     vi.mocked(database.getCachedAlbums).mockResolvedValue([]);
     vi.mocked(database.getPendingMetadata).mockResolvedValue([]);
@@ -351,12 +350,18 @@ describe('MediaService Combined Tests', () => {
         ],
       };
 
-      vi.mocked(database.getAllMediaViewCounts).mockResolvedValue({
-        '/video.mp4': 5,
-      });
-      vi.mocked(database.getAllMetadataStats).mockResolvedValue({
-        '/video.mp4': { duration: 120, rating: 4 },
-      });
+      vi.mocked(database.getAllMetadataAndStats).mockResolvedValue([
+        {
+          file_path: '/video.mp4',
+          file_path_hash: 'hash',
+          view_count: 5,
+          duration: 120,
+          rating: 4,
+          created_at: null,
+          size: null,
+          last_viewed: null,
+        },
+      ]);
 
       const result = await mockWorkerReply(
         () => getAlbumsWithViewCountsAfterScan(),
@@ -391,12 +396,18 @@ describe('MediaService Combined Tests', () => {
       };
 
       vi.mocked(database.getCachedAlbums).mockResolvedValue([rootAlbum] as any);
-      vi.mocked(database.getAllMediaViewCounts).mockResolvedValue({
-        '/child/file.mp4': 42,
-      });
-      vi.mocked(database.getAllMetadataStats).mockResolvedValue({
-        '/child/file.mp4': { duration: 120 } as any,
-      });
+      vi.mocked(database.getAllMetadataAndStats).mockResolvedValue([
+        {
+          file_path: '/child/file.mp4',
+          file_path_hash: 'hash',
+          view_count: 42,
+          duration: 120,
+          rating: null,
+          created_at: null,
+          size: null,
+          last_viewed: null,
+        },
+      ]);
 
       const result = await getAlbumsWithViewCounts();
 

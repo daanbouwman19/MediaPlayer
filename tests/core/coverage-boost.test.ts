@@ -271,8 +271,7 @@ describe('Coverage Boost - MediaService', () => {
       getSetting: vi.fn(),
       getCachedAlbums: vi.fn(),
       cacheAlbums: vi.fn(),
-      getAllMediaViewCounts: vi.fn(),
-      getAllMetadataStats: vi.fn(),
+      getAllMetadataAndStats: vi.fn(),
       filterProcessingNeeded: vi.fn(),
       getPendingMetadata: vi.fn(),
       getAllMetadataVerification: vi.fn(),
@@ -322,14 +321,20 @@ describe('Coverage Boost - MediaService', () => {
     ];
 
     repoMock.getCachedAlbums.mockResolvedValue(albums);
-    repoMock.getAllMediaViewCounts.mockResolvedValue({
-      '/1.jpg': 5,
-      '/2.jpg': 10,
-    });
-    repoMock.getAllMetadataStats.mockResolvedValue({
-      '/1.jpg': { rating: 5, duration: 10 },
-      '/2.jpg': { rating: 4, duration: 20 },
-    });
+    repoMock.getAllMetadataAndStats.mockResolvedValue([
+      {
+        file_path: '/1.jpg',
+        view_count: 5,
+        rating: 5,
+        duration: 10,
+      },
+      {
+        file_path: '/2.jpg',
+        view_count: 10,
+        rating: 4,
+        duration: 20,
+      },
+    ]);
 
     const result = await service.getAlbumsWithViewCounts();
 

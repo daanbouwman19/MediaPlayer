@@ -102,55 +102,6 @@ async function getMediaViewCounts(
 }
 
 /**
- * Retrieves metadata stats (duration, rating) for all files.
- * Optimized for album enrichment.
- */
-async function getAllMetadataStats(): Promise<{
-  [path: string]: MediaMetadata;
-}> {
-  try {
-    const rows = await getClient().sendMessage<
-      { filePath: string; duration?: number; rating?: number }[]
-    >('getAllMetadataStats');
-
-    // Bolt Optimization: Transform array to map here to relieve worker
-    // Using reduce as requested for functional style
-    return rows.reduce(
-      (acc, row) => {
-        if (row.filePath) {
-          acc[row.filePath] = {
-            duration: row.duration,
-            rating: row.rating,
-          };
-        }
-        return acc;
-      },
-      {} as { [path: string]: MediaMetadata },
-    );
-  } catch (error) {
-    safeError('[database.js] Error getting all metadata stats:', error);
-    return {};
-  }
-}
-
-/**
- * Retrieves view counts for all media files.
- * @returns A promise that resolves to a map of file paths to their view counts. Returns an empty object on error.
- */
-async function getAllMediaViewCounts(): Promise<{
-  [filePath: string]: number;
-}> {
-  try {
-    return await getClient().sendMessage<{ [filePath: string]: number }>(
-      'getAllMediaViewCounts',
-    );
-  } catch (error) {
-    safeError('[database.js] Error fetching all view counts:', error);
-    return {};
-  }
-}
-
-/**
  * Caches the list of albums (file index) into the database.
  * @param albums - The array of album objects to cache.
  * @returns A promise that resolves when the albums are cached. Errors are logged but not re-thrown.
@@ -602,7 +553,6 @@ export {
   closeDatabase,
   recordMediaView,
   getMediaViewCounts,
-  getAllMediaViewCounts,
   cacheAlbums,
   getCachedAlbums,
   addMediaDirectory,
@@ -615,7 +565,6 @@ export {
   setRating,
   getMetadata,
   getAllMetadata,
-  getAllMetadataStats,
   getAllMetadataVerification,
   createSmartPlaylist,
   getSmartPlaylists,
