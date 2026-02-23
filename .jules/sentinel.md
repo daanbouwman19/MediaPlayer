@@ -159,7 +159,7 @@
 **Learning:** Sensitive credentials should never be stored in plain text, even in local databases. In shared environments (like Electron + Node Server), relying on OS-specific secure storage (Keychain) is difficult. A robust fallback (like application-level encryption with a generated key) is better than plain text.
 **Prevention:** Implemented AES-256-GCM encryption for token storage. The master key is either provided via environment variable or generated securely and stored in a restricted `master.key` file, which is explicitly blocked from application file access APIs.
 
-## 2026-02-20 - Unbounded Heatmap Queue DoS Protection
+## 2026-02-22 - Unbounded Heatmap Queue DoS Protection
 
 **Vulnerability:** The `MediaAnalyzer` service, used for generating video heatmaps, maintained an unbounded job queue. By sending a large number of unique requests to `/api/video/heatmap`, an attacker could fill the queue with thousands of pending jobs. Since each job spawns an FFmpeg process and processes sequentially, this could lead to resource exhaustion (memory for closures) and a persistent denial of service for legitimate users (jobs stuck in queue for hours).
 **Learning:** Asynchronous job queues for heavy operations must always be bounded. "One job at a time" concurrency control is insufficient if the backlog can grow indefinitely. Rate limiting at the API layer (e.g., 3000 req/min) might still be too loose for expensive operations (like 5-minute FFmpeg jobs).
