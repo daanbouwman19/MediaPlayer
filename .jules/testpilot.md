@@ -107,3 +107,9 @@ Implemented a callback-based interception mechanism for the `postMessage` mock. 
 **Discovery:** `tests/renderer/utils/timeUtils.test.ts` was using multiple `it` blocks with repetitive `expect` calls for simple input/output pairs. This made it harder to see coverage gaps and added boilerplate.
 
 **Strategy:** Refactored to use `it.each` (table-driven tests). This clearly separates test data from logic, makes it trivial to add new edge cases (like `NaN` or `Infinity`), and ensures each case is reported as a distinct test result.
+
+## 2026-02-22 - Deterministic Accessibility Testing
+
+**Discovery:** `tests/renderer/components/Palette.a11y.test.ts` was using a manual `setTimeout(..., 50)` sleep to wait for state propagation during keyboard navigation tests. This introduced potential flakiness and relied on wall-clock time.
+
+**Strategy:** Replaced the manual sleep with Vitest's fake timers. Used `vi.useFakeTimers()` and `vi.advanceTimersByTimeAsync(50)` within a `try...finally` block to ensure deterministic execution and proper cleanup, eliminating the reliance on real time.

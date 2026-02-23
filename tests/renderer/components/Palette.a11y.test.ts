@@ -250,71 +250,77 @@ describe('Palette Accessibility Improvements', () => {
     });
 
     it('should handle keyboard navigation on progress bar', async () => {
-      // Setup video media with a specific duration
-      mockPlayerState.currentMediaItem = {
-        name: 'video.mp4',
-        path: '/video.mp4',
-      };
-      const wrapper = mount(MediaDisplay);
-      await wrapper.vm.$nextTick();
-      await wrapper.vm.$nextTick(); // Wait for video player mount
+      // Use fake timers to eliminate flaky sleeps
+      vi.useFakeTimers();
+      try {
+        // Setup video media with a specific duration
+        mockPlayerState.currentMediaItem = {
+          name: 'video.mp4',
+          path: '/video.mp4',
+        };
+        const wrapper = mount(MediaDisplay);
+        await wrapper.vm.$nextTick();
+        await wrapper.vm.$nextTick(); // Wait for video player mount
 
-      const videoWrapper = wrapper.find('video');
-      expect(videoWrapper.exists()).toBe(true);
-      const videoEl = videoWrapper.element as HTMLVideoElement;
+        const videoWrapper = wrapper.find('video');
+        expect(videoWrapper.exists()).toBe(true);
+        const videoEl = videoWrapper.element as HTMLVideoElement;
 
-      // Mock duration and currentTime on the real element
-      let currentTimeVal = 10;
-      Object.defineProperty(videoEl, 'duration', {
-        value: 100,
-        writable: true,
-      });
-      Object.defineProperty(videoEl, 'currentTime', {
-        get: () => currentTimeVal,
-        set: (v) => {
-          currentTimeVal = v;
-        },
-        configurable: true,
-      });
+        // Mock duration and currentTime on the real element
+        let currentTimeVal = 10;
+        Object.defineProperty(videoEl, 'duration', {
+          value: 100,
+          writable: true,
+        });
+        Object.defineProperty(videoEl, 'currentTime', {
+          get: () => currentTimeVal,
+          set: (v) => {
+            currentTimeVal = v;
+          },
+          configurable: true,
+        });
 
-      // Update internal state to match video time
-      (wrapper.vm as any).savedCurrentTime = 10;
-      await wrapper.vm.$nextTick();
+        // Update internal state to match video time
+        (wrapper.vm as any).savedCurrentTime = 10;
+        await wrapper.vm.$nextTick();
 
-      // Ensure propagation
-      await new Promise((resolve) => setTimeout(resolve, 50));
+        // Ensure propagation
+// ^ Should typically be handled by @update:video-element
 
-      // Ensure MediaDisplay sees the element (it should via normal flow, but let's be safe)
-      // (wrapper.vm as any).handleVideoElementUpdate(videoEl);
-      // ^ Should typically be handled by @update:video-element
+        // Ensure MediaDisplay sees the element (it should via normal flow, but let's be safe)
+        // (wrapper.vm as any).handleVideoElementUpdate(videoEl);
+        // ^ Should typically be handled by @update:video-element
 
-      const progressBar = wrapper.find('[data-testid="video-progress-bar"]');
+        const progressBar = wrapper.find('[data-testid="video-progress-bar"]');
 
-      // Right arrow - forward 5s
-      await progressBar.trigger('keydown', { key: 'ArrowRight' });
-      expect(currentTimeVal).toBe(15);
+        // Right arrow - forward 5s
+        await progressBar.trigger('keydown', { key: 'ArrowRight' });
+        expect(currentTimeVal).toBe(15);
 
-      // Simulate time update
-      (wrapper.vm as any).savedCurrentTime = 15;
-      await wrapper.vm.$nextTick();
+        // Simulate time update
+        (wrapper.vm as any).savedCurrentTime = 15;
+        await wrapper.vm.$nextTick();
 
-      // Left arrow - backward 5s
-      await progressBar.trigger('keydown', { key: 'ArrowLeft' });
-      expect(currentTimeVal).toBe(10); // Back to 10
+        // Left arrow - backward 5s
+        await progressBar.trigger('keydown', { key: 'ArrowLeft' });
+        expect(currentTimeVal).toBe(10); // Back to 10
 
-      // Boundary check - min
-      currentTimeVal = 2;
-      (wrapper.vm as any).savedCurrentTime = 2; // Sync state needed for ProgressBar to know start point
-      await wrapper.vm.$nextTick();
-      await progressBar.trigger('keydown', { key: 'ArrowLeft' });
-      expect(currentTimeVal).toBe(0); // Clamped to 0
+        // Boundary check - min
+        currentTimeVal = 2;
+        (wrapper.vm as any).savedCurrentTime = 2; // Sync state needed for ProgressBar to know start point
+        await wrapper.vm.$nextTick();
+        await progressBar.trigger('keydown', { key: 'ArrowLeft' });
+        expect(currentTimeVal).toBe(0); // Clamped to 0
 
-      // Boundary check - max
-      currentTimeVal = 98;
-      (wrapper.vm as any).savedCurrentTime = 98;
-      await wrapper.vm.$nextTick();
-      await progressBar.trigger('keydown', { key: 'ArrowRight' });
-      expect(currentTimeVal).toBe(100); // Clamped to 100
+        // Boundary check - max
+        currentTimeVal = 98;
+        (wrapper.vm as any).savedCurrentTime = 98;
+        await wrapper.vm.$nextTick();
+        await progressBar.trigger('keydown', { key: 'ArrowRight' });
+        expect(currentTimeVal).toBe(100); // Clamped to 100
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 
