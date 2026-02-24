@@ -113,3 +113,9 @@ Implemented a callback-based interception mechanism for the `postMessage` mock. 
 **Discovery:** `tests/renderer/components/Palette.a11y.test.ts` was using a manual `setTimeout(..., 50)` sleep to wait for state propagation during keyboard navigation tests. This introduced potential flakiness and relied on wall-clock time.
 
 **Strategy:** Replaced the manual sleep with Vitest's fake timers. Used `vi.useFakeTimers()` and `vi.advanceTimersByTimeAsync(50)` within a `try...finally` block to ensure deterministic execution and proper cleanup, eliminating the reliance on real time.
+
+## 2026-03-01 - Deterministic Scroll Testing with Fake Timers
+
+**Discovery:** `tests/renderer/components/VirtualScroller.test.ts` relied on a real-time `setTimeout(..., 50)` to wait for scroll throttling via `requestAnimationFrame`, making the test slower and potentially flaky.
+
+**Strategy:** Enabled Vitest's `vi.useFakeTimers({ toFake: ['setTimeout', 'requestAnimationFrame'] })` and replaced the manual wait with `vi.advanceTimersByTimeAsync(50)`. This allows precise control over the animation frame loop and makes the test deterministic.
