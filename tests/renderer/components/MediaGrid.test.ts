@@ -61,6 +61,7 @@ describe('MediaGrid.vue', () => {
       thumbnailUrlGenerator: (path: string) =>
         `http://localhost:1234/thumb/${encodeURIComponent(path)}`,
       gridMediaFiles: [],
+      mediaDirectories: [{ path: '/test', id: 1 }],
     });
 
     mockPlayerState = reactive({
@@ -74,6 +75,7 @@ describe('MediaGrid.vue', () => {
     mockUIState = reactive({
       viewMode: 'grid',
       gridMediaFiles: [],
+      isSidebarVisible: true,
     });
 
     vi.clearAllMocks();

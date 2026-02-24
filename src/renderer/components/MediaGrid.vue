@@ -29,8 +29,35 @@
         <div class="mb-4 p-4 rounded-full bg-gray-800">
           <PlaylistIcon class="w-12 h-12 opacity-50" aria-hidden="true" />
         </div>
-        <p class="text-lg font-medium">No media files found</p>
-        <p class="text-sm">Try selecting a different album</p>
+
+        <template v-if="mediaDirectories.length === 0">
+          <p class="text-lg font-medium">No media sources configured</p>
+          <p class="text-sm mb-4 text-center max-w-xs">
+            Add a folder to start building your library
+          </p>
+          <button
+            class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition-colors flex items-center gap-2 font-medium"
+            @click="openSourcesModal"
+          >
+            Add Media Source
+          </button>
+        </template>
+
+        <template v-else>
+          <p class="text-lg font-medium">No media files found</p>
+          <div v-if="!uiStore.state.isSidebarVisible" class="mt-4">
+            <button
+              class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors flex items-center gap-2"
+              @click="uiStore.state.isSidebarVisible = true"
+            >
+              <MenuIcon class="w-4 h-4" />
+              Open Library
+            </button>
+          </div>
+          <p v-else class="text-sm">
+            Try selecting a different album from the sidebar
+          </p>
+        </template>
       </div>
 
       <VirtualScroller
@@ -88,6 +115,7 @@ import type { MediaFile } from '../../core/types';
 import MediaGridItem from './MediaGridItem.vue';
 import VirtualScroller from './VirtualScroller.vue';
 import PlaylistIcon from './icons/PlaylistIcon.vue';
+import MenuIcon from './icons/MenuIcon.vue';
 import {
   GRID_BREAKPOINT_SM,
   GRID_BREAKPOINT_LG,
@@ -103,10 +131,15 @@ const {
   videoExtensionsSet,
   mediaUrlGenerator,
   thumbnailUrlGenerator,
+  mediaDirectories,
 } = libraryStore;
 
 // Reactive reference to the full list from state
 const allMediaFiles = computed(() => uiStore.state.gridMediaFiles);
+
+const openSourcesModal = () => {
+  uiStore.state.isSourcesModalVisible = true;
+};
 
 // Extend Record<string, unknown> to satisfy VirtualScroller props
 interface GridRow extends Record<string, unknown> {
