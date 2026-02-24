@@ -287,6 +287,56 @@ export class MediaService {
     return enrichAlbumsWithStats(albums, statsMap);
   }
   /**
+   * Internal helper to process metadata for a single file.
+   * Returns metadata object if processing occurred, or null if skipped.
+   */
+  private async _processFileMetadata(
+    filePath: string,
+    ffmpegPath: string,
+    existing?: MediaMetadata,
+  ): Promise<MediaMetadata | null> {
+    try {
+      if (isDrivePath(filePath)) {
+        return null;
+      }
+
+      const stats = await fs.stat(filePath);
+
+      if (
+        existing &&
+        existing.status === 'success' &&
+        existing.size === stats.size &&
+        existing.createdAt === stats.birthtime.toISOString()
+      ) {
+        return null;
+      }
+
+      const metadata: MediaMetadata = {
+        size: stats.size,
+        createdAt: stats.birthtime.toISOString(),
+        status: 'processing',
+      };
+
+      const ext = path.extname(filePath).toLowerCase();
+      if (SUPPORTED_VIDEO_EXTENSIONS_SET.has(ext)) {
+        const result = await getVideoDuration(filePath, ffmpegPath);
+        if (result && 'duration' in result) {
+          metadata.duration = result.duration;
+        }
+      }
+
+      metadata.status = 'success';
+      return metadata;
+    } catch (error) {
+      console.warn(
+        `[media-service] Error extracting metadata for ${filePath}:`,
+        error,
+      );
+      return { status: 'failed' };
+    }
+  }
+
+  /**
    * Extracts metadata for a list of files and saves it to the database.
    * This is intended to be run in the background.
    */
@@ -335,50 +385,14 @@ export class MediaService {
       }
 
       queue.add(async () => {
-        try {
-          if (isDrivePath(filePath)) {
-            return;
-          }
+        const metadata = await this._processFileMetadata(
+          filePath,
+          ffmpegPath,
+          existingMetadataMap[filePath],
+        );
 
-          const stats = await fs.stat(filePath);
-
-          const existing = existingMetadataMap[filePath];
-          if (
-            existing &&
-            existing.status === 'success' &&
-            existing.size === stats.size &&
-            existing.createdAt === stats.birthtime.toISOString()
-          ) {
-            return;
-          }
-
-          const metadata: MediaMetadata = {
-            size: stats.size,
-            createdAt: stats.birthtime.toISOString(),
-            status: 'processing',
-          };
-
-          const ext = path.extname(filePath).toLowerCase();
-          if (SUPPORTED_VIDEO_EXTENSIONS_SET.has(ext)) {
-            const result = await getVideoDuration(filePath, ffmpegPath);
-            if (result && 'duration' in result) {
-              metadata.duration = result.duration;
-            }
-          }
-
-          metadata.status = 'success';
-
+        if (metadata) {
           pendingUpdates.push({ filePath, ...metadata });
-
-          if (pendingUpdates.length >= METADATA_BATCH_SIZE) {
-            await flush();
-          }
-        } catch (error) {
-          console.warn(
-            `[media-service] Error extracting metadata for ${filePath}:`,
-            error,
-          );
-          pendingUpdates.push({ filePath, status: 'failed' });
           if (pendingUpdates.length >= METADATA_BATCH_SIZE) {
             await flush();
           }
