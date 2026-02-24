@@ -12,6 +12,7 @@ import { api } from '../../../src/renderer/api';
 
 const mocks = vi.hoisted(() => ({
   mockToggleAlbumSelection: vi.fn(),
+  mockSetBatchAlbumSelection: vi.fn(),
   mockStartSlideshow: vi.fn(),
   mockStartIndividualAlbumSlideshow: vi.fn(),
   mockStartHistorySlideshow: vi.fn(),
@@ -22,6 +23,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('../../../src/renderer/composables/useSlideshow', () => ({
   useSlideshow: () => ({
     toggleAlbumSelection: mocks.mockToggleAlbumSelection,
+    setBatchAlbumSelection: mocks.mockSetBatchAlbumSelection,
     startSlideshow: mocks.mockStartSlideshow,
     startIndividualAlbumSlideshow: mocks.mockStartIndividualAlbumSlideshow,
     startHistorySlideshow: mocks.mockStartHistorySlideshow,
@@ -217,9 +219,8 @@ describe('AlbumsList.vue', () => {
     });
     await wrapper.vm.$nextTick();
 
-    expect(mocks.mockToggleAlbumSelection).toHaveBeenCalledWith('Album1', true);
-    expect(mocks.mockToggleAlbumSelection).toHaveBeenCalledWith(
-      'SubAlbum1',
+    expect(mocks.mockSetBatchAlbumSelection).toHaveBeenCalledWith(
+      expect.arrayContaining(['Album1', 'SubAlbum1']),
       true,
     );
   });
@@ -239,12 +240,8 @@ describe('AlbumsList.vue', () => {
     });
     await wrapper.vm.$nextTick();
 
-    expect(mocks.mockToggleAlbumSelection).toHaveBeenCalledWith(
-      'Album1',
-      false,
-    );
-    expect(mocks.mockToggleAlbumSelection).toHaveBeenCalledWith(
-      'SubAlbum1',
+    expect(mocks.mockSetBatchAlbumSelection).toHaveBeenCalledWith(
+      expect.arrayContaining(['Album1', 'SubAlbum1']),
       false,
     );
   });

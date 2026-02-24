@@ -1,11 +1,4 @@
-import {
-  describe,
-  it,
-  expect,
-  vi,
-  beforeEach,
-  type Mock,
-} from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 
 import { reactive, computed } from 'vue';
 import { useSlideshow } from '@/composables/useSlideshow';
@@ -78,7 +71,11 @@ describe('useSlideshow - setBatchAlbumSelection', () => {
     const ids = ['1', '2', '3'];
 
     // Initial state
-    mockLibraryState.albumsSelectedForSlideshow = { '1': false, '2': false, '3': false };
+    mockLibraryState.albumsSelectedForSlideshow = {
+      '1': false,
+      '2': false,
+      '3': false,
+    };
     const originalRef = mockLibraryState.albumsSelectedForSlideshow;
 
     setBatchAlbumSelection(ids, true);
@@ -96,7 +93,7 @@ describe('useSlideshow - setBatchAlbumSelection', () => {
     const ids = Array.from({ length: 51 }, (_, i) => `id-${i}`);
 
     // Initial state
-    mockLibraryState.albumsSelectedForSlideshow = { 'existing': true };
+    mockLibraryState.albumsSelectedForSlideshow = { existing: true };
     const originalRef = mockLibraryState.albumsSelectedForSlideshow;
 
     setBatchAlbumSelection(ids, true);
@@ -113,7 +110,11 @@ describe('useSlideshow - setBatchAlbumSelection', () => {
     const { setBatchAlbumSelection } = useSlideshow();
     const ids = ['1', '2'];
 
-    mockLibraryState.albumsSelectedForSlideshow = { '1': true, '2': true, '3': true };
+    mockLibraryState.albumsSelectedForSlideshow = {
+      '1': true,
+      '2': true,
+      '3': true,
+    };
 
     setBatchAlbumSelection(ids, false);
 

@@ -97,3 +97,8 @@
 
 **Learning:** When updating a large number of properties (e.g., >50) in a reactive object that many components depend on (like album selection state), in-place mutation triggers individual reactivity updates for each property, causing significant performance degradation (O(N) re-renders).
 **Action:** Use a hybrid approach: for small batches, mutate in-place to avoid the overhead of object cloning. For large batches, clone the object, apply updates, and replace the state property. This triggers a single reactivity update for the watcher/computed properties, significantly improving performance for bulk actions.
+
+## 2026-03-01 - [Reactivity Batching vs In-Place Mutation]
+
+**Learning:** When updating a large number of properties (e.g., >50) in a reactive object that many components depend on (like album selection state), in-place mutation triggers individual reactivity updates for each property, causing significant performance degradation (O(N) re-renders).
+**Action:** Use a hybrid approach: for small batches, mutate in-place to avoid the overhead of object cloning. For large batches, clone the object, apply updates, and replace the state property. This triggers a single reactivity update for the watcher/computed properties, significantly improving performance for bulk actions.
