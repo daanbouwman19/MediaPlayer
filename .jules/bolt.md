@@ -92,3 +92,8 @@
 
 **Learning:** Using `loading="lazy"` on images inside a virtual scroller (which already manages visibility by mounting/unmounting) causes double-buffering. The browser waits until the image is strictly in the viewport (or very close) to load it, defeating the purpose of the scroller's buffer zone which is meant to preload items just outside the viewport.
 **Action:** Remove `loading="lazy"` from images within `VirtualScroller` item components to ensure they load eagerly when mounted in the buffer, providing smoother scrolling.
+
+## 2026-03-01 - [Reactivity Batching vs In-Place Mutation]
+
+**Learning:** When updating a large number of properties (e.g., >50) in a reactive object that many components depend on (like album selection state), in-place mutation triggers individual reactivity updates for each property, causing significant performance degradation (O(N) re-renders).
+**Action:** Use a hybrid approach: for small batches, mutate in-place to avoid the overhead of object cloning. For large batches, clone the object, apply updates, and replace the state property. This triggers a single reactivity update for the watcher/computed properties, significantly improving performance for bulk actions.

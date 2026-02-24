@@ -520,9 +520,7 @@ const handleToggleSelection = ({
       (id) => !albumsSelectedForSlideshow.value[id],
     );
 
-    for (const id of ids) {
-      slideshow.toggleAlbumSelection(id, newSelectionState);
-    }
+    slideshow.setBatchAlbumSelection(ids, newSelectionState);
   } else {
     // Single mode: Toggle only this album
     const current = albumsSelectedForSlideshow.value[album.id];
