@@ -12,6 +12,7 @@ import {
   WINDOWS_RESTRICTED_ROOT_PATHS,
   MAX_PATH_LENGTH,
   DISK_SCAN_CONCURRENCY,
+  ALL_SUPPORTED_EXTENSIONS_SET,
 } from './constants.ts';
 
 export interface AuthorizationResult {
@@ -351,6 +352,25 @@ export async function validatePathAgainstDir(
           message: 'Access to sensitive file denied',
         };
       }
+
+      // [SECURITY] Enforce supported extensions for files not in the library.
+      // This prevents downloading arbitrary files (e.g. source code, secrets) from authorized directories.
+      // Note: authorizeFilePath is primarily for file access. Directories (no extension) will be blocked,
+      // which is generally desired for file serving endpoints.
+      const ext = path.extname(candidateRealPath).toLowerCase();
+      if (!ALL_SUPPORTED_EXTENSIONS_SET.has(ext)) {
+        // Allow directories if needed? Currently authorizeFilePath is for files.
+        // If we need to support directory authorization, we should check fs.stat,
+        // but that adds overhead. For now, strict file extension check is safer.
+        console.warn(
+          `[Security] Access denied to unsupported file type: ${candidateRealPath}`,
+        );
+        return {
+          isAllowed: false,
+          message: 'Access to unsupported file type denied',
+        };
+      }
+
       return { isAllowed: true, realPath: candidateRealPath };
     }
   } catch (error) {

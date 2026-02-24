@@ -62,11 +62,11 @@ describe('authorizeFilePath Extension Security', () => {
     }
   });
 
-  it('should allow SSH public keys', async () => {
+  it('should block SSH public keys (unsupported extension)', async () => {
     const keys = ['id_rsa.pub', 'id_dsa.pub', 'id_ecdsa.pub', 'id_ed25519.pub'];
     for (const key of keys) {
       const res = await authorizeFilePath(`/allowed/${key}`);
-      expect(res.isAllowed, `Failed to allow ${key}`).toBe(true);
+      expect(res.isAllowed, `Failed to block ${key}`).toBe(false);
     }
   });
 
