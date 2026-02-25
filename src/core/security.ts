@@ -12,6 +12,7 @@ import {
   WINDOWS_RESTRICTED_ROOT_PATHS,
   MAX_PATH_LENGTH,
   DISK_SCAN_CONCURRENCY,
+  ALL_SUPPORTED_EXTENSIONS_SET,
 } from './constants.ts';
 
 export interface AuthorizationResult {
@@ -351,6 +352,22 @@ export async function validatePathAgainstDir(
           message: 'Access to sensitive file denied',
         };
       }
+
+      // [SECURITY] Strict extension check for non-library files.
+      // Even if the file is in an allowed directory, we must ensure it is a supported media file.
+      // This prevents authorized downloading of sensitive text/config files (e.g. passwords.txt)
+      // that might reside in a media folder.
+      const ext = path.extname(candidateRealPath).toLowerCase();
+      if (!ALL_SUPPORTED_EXTENSIONS_SET.has(ext)) {
+        console.warn(
+          `[Security] Access denied to unsupported file type: ${candidateRealPath}`,
+        );
+        return {
+          isAllowed: false,
+          message: 'Access denied (unsupported file type)',
+        };
+      }
+
       return { isAllowed: true, realPath: candidateRealPath };
     }
   } catch (error) {

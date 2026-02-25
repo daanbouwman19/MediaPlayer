@@ -178,7 +178,7 @@ describe('Local Server', () => {
       if (!fs.existsSync(testDir)) {
         fs.mkdirSync(testDir, { recursive: true });
       }
-      testFilePath = path.join(testDir, 'test-file.txt');
+      testFilePath = path.join(testDir, 'test-file.mp4');
       const testContent = 'Hello, World!';
       fs.writeFileSync(testFilePath, testContent);
 
@@ -207,7 +207,7 @@ describe('Local Server', () => {
 
       expect(response.statusCode).toBe(200);
       expect(response.data).toBe(testContent);
-      expect(response.headers['content-type']).toContain('text/plain');
+      expect(response.headers['content-type']).toContain('video/mp4');
     });
 
     it('should return 403 for non-existent file (security)', async () => {
@@ -216,7 +216,7 @@ describe('Local Server', () => {
 
       const response: any = await new Promise((resolve, reject) => {
         const req = http.get(
-          `http://127.0.0.1:${port}/nonexistent-file.txt`,
+          `http://127.0.0.1:${port}/nonexistent-file.mp4`,
           (res) => {
             let data = '';
             res.on('data', (chunk) => (data += chunk));
@@ -237,7 +237,7 @@ describe('Local Server', () => {
       if (!fs.existsSync(testDir)) {
         fs.mkdirSync(testDir, { recursive: true });
       }
-      testFilePath = path.join(testDir, 'test-range.txt');
+      testFilePath = path.join(testDir, 'test-range.mp4');
       const testContent = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
       fs.writeFileSync(testFilePath, testContent);
 
@@ -275,7 +275,7 @@ describe('Local Server', () => {
       if (!fs.existsSync(testDir)) {
         fs.mkdirSync(testDir, { recursive: true });
       }
-      testFilePath = path.join(testDir, 'test-invalid-range.txt');
+      testFilePath = path.join(testDir, 'test-invalid-range.mp4');
       fs.writeFileSync(testFilePath, 'Content');
 
       await startServer();

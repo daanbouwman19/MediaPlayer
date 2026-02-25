@@ -158,3 +158,9 @@
 **Vulnerability:** Google OAuth tokens were stored in plain text in the `media-library.db` database. If an attacker gained access to the database file (e.g. via backup or local access), they could steal the refresh tokens and access the user's Google Drive data.
 **Learning:** Sensitive credentials should never be stored in plain text, even in local databases. In shared environments (like Electron + Node Server), relying on OS-specific secure storage (Keychain) is difficult. A robust fallback (like application-level encryption with a generated key) is better than plain text.
 **Prevention:** Implemented AES-256-GCM encryption for token storage. The master key is either provided via environment variable or generated securely and stored in a restricted `master.key` file, which is explicitly blocked from application file access APIs.
+
+## 2026-02-20 - Arbitrary File Read via Directory Authorization
+
+**Vulnerability:** The application authorized access to ANY file located within a user-added "Media Directory". While sensitive system files were blocked, users could add directories containing other sensitive non-media files (e.g., `passwords.txt`, source code) and then download them via the `/api/serve` endpoint, bypassing the intended limitation to media files.
+**Learning:** Directory-based authorization is insufficient for applications that only intend to serve specific content types. A "Media Player" should not become a generic "File Server" for everything in a folder. Access controls must be specific to the resource type being accessed.
+**Prevention:** Updated `authorizeFilePath` to strictly enforce an extension allowlist (`ALL_SUPPORTED_EXTENSIONS_SET`). This ensures that only supported media files can be downloaded, even if they reside in an authorized directory.
