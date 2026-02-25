@@ -88,7 +88,6 @@ describe('Media Service Final Gap Fill', () => {
     ];
 
     vi.mocked(repo.getCachedAlbums).mockResolvedValue(deepAlbums as any);
-    // @ts-expect-error - Mocking a method that might not be inferred correctly by vitest types yet
     vi.mocked(repo.getAlbumStats).mockResolvedValue([
       {
         file_path: '/1.mp4',
