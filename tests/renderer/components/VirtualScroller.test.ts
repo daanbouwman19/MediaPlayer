@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
 import VirtualScroller from '../../../src/renderer/components/VirtualScroller.vue';
 
@@ -27,6 +27,16 @@ describe('VirtualScroller.vue', () => {
       id: i,
       name: `Item ${i}`,
     }));
+
+    // Mock requestAnimationFrame to be synchronous
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb) => {
+      cb(0);
+      return 0;
+    });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it('renders visible items correctly', async () => {
@@ -106,7 +116,7 @@ describe('VirtualScroller.vue', () => {
     // Or we can just wait.
 
     // Wait for next tick/raf
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    // Mocked requestAnimationFrame runs synchronously, so just wait for Vue reactivity
     await wrapper.vm.$nextTick();
 
     // Recalculate:
