@@ -123,3 +123,9 @@
 **Smell:** `media-analyzer.ts` contained a "God Method" `executeHeatmapGeneration` that mixed high-level orchestration with low-level details like FFmpeg argument construction, process spawning, and output parsing.
 **Insight:** Breaking down complex operations into distinct phases (Preparation, Execution, Parsing) significantly improves readability and makes each part easier to test and reason about in isolation.
 **Prevention:** When a method exceeds 50 lines and handles multiple levels of abstraction (e.g., business logic + shell commands), extract the lower-level details into private helper methods.
+
+## 2026-02-21 - Extracting Metadata Processing Logic
+
+**Smell:** `extractAndSaveMetadata` in `media-service.ts` had a deep loop containing complex logic for validation, file system checks, and database updates, making it hard to read and test.
+**Insight:** Extracting the processing of a single item into a private helper (`_processFileMetadata`) separates the iteration mechanism (queue management) from the business logic (metadata extraction), clarifying both.
+**Prevention:** When a loop body grows beyond 10 lines or contains multiple conditional branches, extract the item processing logic into a separate function.
