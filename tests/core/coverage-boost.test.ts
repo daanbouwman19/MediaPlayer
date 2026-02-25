@@ -277,6 +277,7 @@ describe('Coverage Boost - MediaService', () => {
       getAllMetadataVerification: vi.fn(),
       getMetadata: vi.fn(),
       bulkUpsertMetadata: vi.fn(),
+      getAlbumStats: vi.fn(),
     };
     service = new MediaService(repoMock);
     // Reset MockWorkerClient
@@ -321,7 +322,7 @@ describe('Coverage Boost - MediaService', () => {
     ];
 
     repoMock.getCachedAlbums.mockResolvedValue(albums);
-    repoMock.getAllMetadataAndStats.mockResolvedValue([
+    repoMock.getAlbumStats.mockResolvedValue([
       {
         file_path: '/1.jpg',
         view_count: 5,

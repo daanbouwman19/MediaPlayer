@@ -20,7 +20,7 @@ import {
   WORKER_SCAN_TIMEOUT_MS,
 } from './constants.ts';
 import { isDrivePath } from './media-utils.ts';
-import type { MediaLibraryItem } from './types.ts';
+import type { MediaLibraryStats } from './types.ts';
 
 /**
  * Collects all file paths from an album tree iteratively.
@@ -56,7 +56,7 @@ function collectAllFilePaths(albums: Album[]): string[] {
  */
 function enrichAlbumsWithStats(
   albums: Album[],
-  statsMap: Map<string, MediaLibraryItem>,
+  statsMap: Map<string, MediaLibraryStats>,
 ): Album[] {
   const stack: Album[] = [...albums];
 
@@ -253,9 +253,9 @@ export class MediaService {
       return [];
     }
 
-    const items = await this.mediaRepo.getAllMetadataAndStats();
+    const items = await this.mediaRepo.getAlbumStats();
     // Bolt Optimization: Create map for O(1) lookup
-    const statsMap = new Map<string, MediaLibraryItem>();
+    const statsMap = new Map<string, MediaLibraryStats>();
     for (const item of items) {
       if (item.file_path) {
         statsMap.set(item.file_path, item);
@@ -275,9 +275,9 @@ export class MediaService {
       return [];
     }
 
-    const items = await this.mediaRepo.getAllMetadataAndStats();
+    const items = await this.mediaRepo.getAlbumStats();
     // Bolt Optimization: Create map for O(1) lookup
-    const statsMap = new Map<string, MediaLibraryItem>();
+    const statsMap = new Map<string, MediaLibraryStats>();
     for (const item of items) {
       if (item.file_path) {
         statsMap.set(item.file_path, item);

@@ -56,6 +56,13 @@ export interface MediaLibraryItem {
   watched_segments?: string | null;
 }
 
+export interface MediaLibraryStats {
+  file_path: string;
+  duration: number | null;
+  rating: number | null;
+  view_count: number;
+}
+
 export type IpcResult<T = unknown> =
   | { success: true; data: T }
   | { success: false; error: string };

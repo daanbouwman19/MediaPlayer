@@ -21,6 +21,7 @@ vi.mock('../../src/core/database', () => ({
   cacheAlbums: vi.fn(),
   getCachedAlbums: vi.fn(),
   getAllMetadataAndStats: vi.fn(),
+  getAlbumStats: vi.fn(),
   getAllMetadata: vi.fn(),
   getAllMetadataVerification: vi.fn(),
   getPendingMetadata: vi.fn(),
@@ -147,6 +148,7 @@ describe('MediaService Combined Tests', () => {
     vi.mocked(database.getMetadata).mockResolvedValue({});
     vi.mocked(database.getAllMetadata).mockResolvedValue({});
     vi.mocked(database.getAllMetadataAndStats).mockResolvedValue([]);
+    vi.mocked(database.getAlbumStats).mockResolvedValue([]);
     vi.mocked(database.getAllMetadataVerification).mockResolvedValue({});
     vi.mocked(database.getCachedAlbums).mockResolvedValue([]);
     vi.mocked(database.getPendingMetadata).mockResolvedValue([]);
@@ -350,16 +352,12 @@ describe('MediaService Combined Tests', () => {
         ],
       };
 
-      vi.mocked(database.getAllMetadataAndStats).mockResolvedValue([
+      vi.mocked(database.getAlbumStats).mockResolvedValue([
         {
           file_path: '/video.mp4',
-          file_path_hash: 'hash',
           view_count: 5,
           duration: 120,
           rating: 4,
-          created_at: null,
-          size: null,
-          last_viewed: null,
         },
       ]);
 
@@ -396,16 +394,12 @@ describe('MediaService Combined Tests', () => {
       };
 
       vi.mocked(database.getCachedAlbums).mockResolvedValue([rootAlbum] as any);
-      vi.mocked(database.getAllMetadataAndStats).mockResolvedValue([
+      vi.mocked(database.getAlbumStats).mockResolvedValue([
         {
           file_path: '/child/file.mp4',
-          file_path_hash: 'hash',
           view_count: 42,
           duration: 120,
           rating: null,
-          created_at: null,
-          size: null,
-          last_viewed: null,
         },
       ]);
 

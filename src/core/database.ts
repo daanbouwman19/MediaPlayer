@@ -12,6 +12,7 @@ import type {
   SmartPlaylist,
   MediaMetadata,
   MediaLibraryItem,
+  MediaLibraryStats,
 } from './types.ts';
 import { WorkerClient } from './worker-client.ts';
 
@@ -548,6 +549,18 @@ async function getAllMetadataAndStats(): Promise<MediaLibraryItem[]> {
   }
 }
 
+/**
+ * Gets minimal stats (duration, rating, view_count) for album enrichment.
+ */
+async function getAlbumStats(): Promise<MediaLibraryStats[]> {
+  try {
+    return await getClient().sendMessage<MediaLibraryStats[]>('getAlbumStats');
+  } catch (error) {
+    safeError('[database.js] Error getting album stats:', error);
+    return [];
+  }
+}
+
 export {
   initDatabase,
   closeDatabase,
@@ -575,6 +588,7 @@ export {
   getSetting,
   executeSmartPlaylist,
   getAllMetadataAndStats,
+  getAlbumStats,
   getPendingMetadata,
   getRecentlyPlayed,
   filterProcessingNeeded,

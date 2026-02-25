@@ -403,6 +403,18 @@ export function initDatabase(dbPath: string): WorkerResult {
       `SELECT file_path, file_path_hash FROM media_metadata WHERE file_path IN (${placeholders})`,
     );
 
+    // Optimized stats query for album enrichment (skips heavy columns)
+    statements.getAlbumStats = db.prepare(`
+      SELECT
+        m.file_path,
+        m.duration,
+        m.rating,
+        COALESCE(v.view_count, 0) as view_count
+      FROM media_metadata m
+      LEFT JOIN media_views v ON m.file_path_hash = v.file_path_hash
+      WHERE m.file_path IS NOT NULL
+    `);
+
     console.log('[worker] SQLite database initialized at:', dbPath);
     return { success: true };
   } catch (error: unknown) {
@@ -701,6 +713,19 @@ export async function getMetadata(filePaths: string[]): Promise<WorkerResult> {
     }
 
     return { success: true, data: metadataMap };
+  } catch (error: unknown) {
+    return { success: false, error: (error as Error).message };
+  }
+}
+
+/**
+ * Retrieves minimal stats for all media files (for album enrichment).
+ */
+export function getAlbumStats(): WorkerResult {
+  if (!db) return { success: false, error: 'Database not initialized' };
+  try {
+    const rows = statements.getAlbumStats.all();
+    return { success: true, data: rows };
   } catch (error: unknown) {
     return { success: false, error: (error as Error).message };
   }
@@ -1233,6 +1258,9 @@ if (parentPort) {
           break;
         case 'getAllMetadataVerification':
           result = getAllMetadataVerification();
+          break;
+        case 'getAlbumStats':
+          result = getAlbumStats();
           break;
         case 'getMetadata':
           result = await getMetadata(payload.filePaths);
