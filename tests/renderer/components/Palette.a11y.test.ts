@@ -14,6 +14,7 @@ import MediaDisplay from '@/components/MediaDisplay.vue';
 
 import SourcesModal from '@/components/SourcesModal.vue';
 import AlbumTree from '@/components/AlbumTree.vue';
+import SmartPlaylistModal from '@/components/SmartPlaylistModal.vue';
 import { useLibraryStore } from '@/composables/useLibraryStore';
 import { usePlayerStore } from '@/composables/usePlayerStore';
 import { useUIStore } from '@/composables/useUIStore';
@@ -124,6 +125,7 @@ describe('Palette Accessibility Improvements', () => {
     mockUIState = reactive({
       mediaFilter: 'All',
       isSourcesModalVisible: true,
+      isSmartPlaylistModalVisible: true,
       isControlsVisible: true,
       isSidebarVisible: false,
     });
@@ -477,6 +479,35 @@ describe('Palette Accessibility Improvements', () => {
       expect(stars[0].attributes('aria-label')).toBe('Rate 1 star');
       expect(stars[1].attributes('aria-label')).toBe('Rate 2 stars');
       expect(stars[4].attributes('aria-label')).toBe('Rate 5 stars');
+    });
+  });
+
+  describe('SmartPlaylistModal.vue', () => {
+    it('inputs should have helper text and aria-describedby', async () => {
+      // Ensure the modal is visible in store state (already set in beforeEach but good to be explicit)
+      mockUIState.isSmartPlaylistModalVisible = true;
+
+      const wrapper = mount(SmartPlaylistModal);
+      await wrapper.vm.$nextTick();
+
+      // Helper function to verify input-description linkage
+      const verifyInputDescription = (inputId: string, descId: string) => {
+        const input = wrapper.find(`input[id="${inputId}"]`);
+        expect(input.exists()).toBe(true);
+        expect(input.attributes('aria-describedby')).toBe(descId);
+
+        const desc = wrapper.find(`p[id="${descId}"]`);
+        expect(desc.exists()).toBe(true);
+        // Verify visual style class
+        expect(desc.classes()).toContain('text-gray-500');
+        expect(desc.classes()).toContain('text-xs');
+      };
+
+      // Verify all 4 inputs with helper text
+      verifyInputDescription('min-duration', 'min-duration-desc');
+      verifyInputDescription('min-days-untouched', 'days-untouched-desc');
+      verifyInputDescription('min-views', 'min-views-desc');
+      verifyInputDescription('max-views', 'max-views-desc');
     });
   });
 });
