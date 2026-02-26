@@ -91,9 +91,6 @@
       "node_modules/ffmpeg-static/**/*"
     ]
   },
-  "overrides": {
-    "minimatch": "^10.2.1"
-  },
   "dependencies": {
     "better-sqlite3": "^12.6.2",
     "cors": "^2.8.6",
@@ -149,5 +146,10 @@
     "vue": "^3.5.28",
     "vue-tsc": "^3.2.5",
     "wait-on": "^9.0.4"
+  },
+  "overrides": {
+    "@vue/test-utils": {
+      "minimatch": "^9.0.8"
+    }
   }
 }
