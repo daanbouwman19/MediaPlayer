@@ -143,8 +143,7 @@ export async function authorizeFilePath(
   const inputResult = validateInput(filePath);
   if (inputResult) return inputResult;
 
-  const dirs = mediaDirectories || (await database.getMediaDirectories());
-  const allowedPaths = dirs.map((d) => d.path);
+  // Only fetch media directories once per call it is needed. Wait until cache is checked.
 
   if (!mediaDirectories) {
     const cached = authCache.get(filePath);
@@ -163,6 +162,9 @@ export async function authorizeFilePath(
       (await database.isFileInLibrary(filePath))
     ) {
       if (!isDrivePath(filePath)) {
+        const dirs = mediaDirectories || (await database.getMediaDirectories());
+        const allowedPaths = dirs.map((d) => d.path);
+
         const localResult = await authorizeLocalPath(filePath, allowedPaths);
         if (localResult) {
           const result: AuthorizationResult = localResult;
@@ -173,6 +175,9 @@ export async function authorizeFilePath(
       }
     }
   }
+
+  const dirs = mediaDirectories || (await database.getMediaDirectories());
+  const allowedPaths = dirs.map((d) => d.path);
 
   let result: AuthorizationResult;
 
