@@ -26,6 +26,20 @@ const authCache = new Map<string, { res: AuthorizationResult; time: number }>();
 const CACHE_TTL_MS = 5000;
 const CACHE_MAX_SIZE = 2000;
 
+function cacheAuthResult(filePath: string, result: AuthorizationResult) {
+  // Maintain LRU-like behavior: re-insert if exists to update order
+  if (authCache.has(filePath)) {
+    authCache.delete(filePath);
+  }
+  authCache.set(filePath, { res: result, time: Date.now() });
+
+  // Simple cleanup to prevent unbounded growth (evict oldest)
+  if (authCache.size > CACHE_MAX_SIZE) {
+    const firstKey = authCache.keys().next().value;
+    if (firstKey) authCache.delete(firstKey);
+  }
+}
+
 export function clearAuthCache() {
   authCache.clear();
 }
@@ -105,8 +119,6 @@ export async function loadSecurityConfig(configPath: string): Promise<void> {
 export async function filterAuthorizedPaths(
   filePaths: string[],
 ): Promise<string[]> {
-  // Prime the mediaDirectories cache to avoid thundering herd on cold start
-  // when authorizeFilePath calls getMediaDirectories internally.
   if (filePaths.length > 1) {
     await database.getMediaDirectories();
   }
@@ -116,7 +128,6 @@ export async function filterAuthorizedPaths(
   const results = await Promise.all(
     filePaths.map((p) =>
       limiter.run(async () => {
-        // Bolt Optimization: Removed mediaDirectories argument to enable caching in authorizeFilePath
         const auth = await authorizeFilePath(p);
         return auth.isAllowed ? (auth.realPath ?? p) : null;
       }),
@@ -132,61 +143,36 @@ export async function authorizeFilePath(
   const inputResult = validateInput(filePath);
   if (inputResult) return inputResult;
 
-  // Bolt Optimization: Check cache if using default media directories
+  const dirs = mediaDirectories || (await database.getMediaDirectories());
+  const allowedPaths = dirs.map((d) => d.path);
+
   if (!mediaDirectories) {
     const cached = authCache.get(filePath);
     if (cached) {
       if (Date.now() - cached.time < CACHE_TTL_MS) {
-        // LRU: Refresh position (delete and re-insert)
         authCache.delete(filePath);
         authCache.set(filePath, cached);
         return cached.res;
       }
-      // Expired: remove it
       authCache.delete(filePath);
     }
 
-    // Bolt Optimization 2: Check database (source of truth)
-    // If the file is in the library, it means it was scanned and authorized.
-    // This avoids expensive fs.realpath calls, especially on network drives.
-    // We assume the path stored in DB is the "real" path (or close enough for access).
-    // Note: We check if isFileInLibrary exists to support tests that mock database without it.
-    // Use 'in' check to avoid Vitest throwing error on accessing missing export on mock.
     if (
       'isFileInLibrary' in database &&
       database.isFileInLibrary &&
       (await database.isFileInLibrary(filePath))
     ) {
-      // Fast path: the file is known to be in the media library.
-      // However, we still must derive a validated, normalized real path
-      // using the same logic as the general local-authorization flow.
-      const dirs = mediaDirectories || (await database.getMediaDirectories());
-      const allowedPaths = dirs.map((d) => d.path);
-
       if (!isDrivePath(filePath)) {
         const localResult = await authorizeLocalPath(filePath, allowedPaths);
         if (localResult) {
           const result: AuthorizationResult = localResult;
 
-          // Cache it
-          authCache.set(filePath, { res: result, time: Date.now() });
-          // Cleanup cache size
-          if (authCache.size > CACHE_MAX_SIZE) {
-            const firstKey = authCache.keys().next().value;
-            if (firstKey) authCache.delete(firstKey);
-          }
+          cacheAuthResult(filePath, result);
           return result;
         }
-        // If local authorization fails despite being in the library, fall through to the
-        // generic logic below, which will log and deny access as appropriate.
       }
-      // For Drive paths we intentionally do not short-circuit here; they will be
-      // handled by authorizeVirtualPath in the shared flow below.
     }
   }
-
-  const dirs = mediaDirectories || (await database.getMediaDirectories());
-  const allowedPaths = dirs.map((d) => d.path);
 
   let result: AuthorizationResult;
 
@@ -213,17 +199,7 @@ export async function authorizeFilePath(
 
   // Bolt Optimization: Cache result
   if (!mediaDirectories) {
-    // Maintain LRU-like behavior: re-insert if exists to update order
-    if (authCache.has(filePath)) {
-      authCache.delete(filePath);
-    }
-    authCache.set(filePath, { res: result, time: Date.now() });
-
-    // Simple cleanup to prevent unbounded growth (evict oldest)
-    if (authCache.size > CACHE_MAX_SIZE) {
-      const firstKey = authCache.keys().next().value;
-      if (firstKey) authCache.delete(firstKey);
-    }
+    cacheAuthResult(filePath, result);
   }
 
   return result;
@@ -343,8 +319,6 @@ export async function validatePathAgainstDir(
   try {
     const allowedRootReal = await fs.realpath(path.resolve(allowedDir));
 
-    // Always resolve candidate paths relative to the allowed root so that
-    // the final real path can be strictly contained within this root.
     const candidateResolved = path.resolve(allowedRootReal, safePath);
     const candidateRealPath = await fs.realpath(candidateResolved);
 

@@ -33,7 +33,11 @@ const mockRealpath = (mockImpl: (p: any) => Promise<string>) => {
 
 const setupRealpathMock = (allowedDir: string, resolvedFile: string) => {
   mockRealpath(async (p: any) => {
-    if (typeof p === 'string' && (p === allowedDir || p.includes(allowedDir) && !p.endsWith(resolvedFile.split('/').pop()!))) {
+    if (
+      typeof p === 'string' &&
+      (p === allowedDir ||
+        (p.includes(allowedDir) && !p.endsWith(resolvedFile.split('/').pop()!)))
+    ) {
       return allowedDir;
     }
     return resolvedFile;
