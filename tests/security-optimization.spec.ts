@@ -23,33 +23,63 @@ import { authorizeFilePath, clearAuthCache } from '../src/core/security.ts';
 import { isFileInLibrary, getMediaDirectories } from '../src/core/database.ts';
 import * as fs from 'fs/promises';
 
+// Helper for boilerplate fs.realpath mocking
+const mockRealpath = (mockImpl: (p: any) => Promise<string>) => {
+  if ((fs as any).default && (fs as any).default.realpath) {
+    vi.mocked((fs as any).default.realpath).mockImplementation(mockImpl);
+  }
+  vi.mocked(fs.realpath).mockImplementation(mockImpl);
+};
+
+const setupRealpathMock = (allowedDir: string, resolvedFile: string) => {
+  mockRealpath(async (p: any) => {
+    if (
+      typeof p === 'string' &&
+      (p === allowedDir ||
+        (p.includes(allowedDir) && !p.endsWith(resolvedFile.split('/').pop()!)))
+    ) {
+      return allowedDir;
+    }
+    return resolvedFile;
+  });
+};
+
 describe('authorizeFilePath Optimization', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     clearAuthCache();
   });
 
-  it('should return allowed immediately if file is in library', async () => {
+  it('should verify file is in allowed directories even if in library', async () => {
     const filePath = '/library/photo.jpg';
 
     // Mock isFileInLibrary to return true
     vi.mocked(isFileInLibrary).mockResolvedValue(true);
+    vi.mocked(getMediaDirectories).mockResolvedValue([
+      { path: '/library' },
+    ] as any);
+
+    setupRealpathMock('/library', '/library/photo.jpg');
 
     const result = await authorizeFilePath(filePath);
 
     expect(result.isAllowed).toBe(true);
-    expect(result.realPath).toBe(filePath);
+    expect(result.realPath).toBe('/library/photo.jpg');
     expect(isFileInLibrary).toHaveBeenCalledWith(filePath);
 
-    // Should NOT call getMediaDirectories or fs.realpath (optimization!)
-    expect(getMediaDirectories).not.toHaveBeenCalled();
-    expect(fs.realpath).not.toHaveBeenCalled();
+    // Should call getMediaDirectories to verify local paths
+    expect(getMediaDirectories).toHaveBeenCalled();
   });
 
   it('should check cache on subsequent calls', async () => {
     const filePath = '/library/photo.jpg';
 
     vi.mocked(isFileInLibrary).mockResolvedValue(true);
+    vi.mocked(getMediaDirectories).mockResolvedValue([
+      { path: '/library' },
+    ] as any);
+
+    setupRealpathMock('/library', '/library/photo.jpg');
 
     // First call
     await authorizeFilePath(filePath);
@@ -69,12 +99,7 @@ describe('authorizeFilePath Optimization', () => {
       { path: '/media' },
     ] as any);
 
-    // fs.realpath will be called by standard check logic
-    // We mock it to succeed for the directory check, and then for the file check
-    vi.mocked(fs.realpath).mockImplementation(async (p: any) => {
-      if (typeof p === 'string' && p.includes('/media')) return '/media'; // Resolve allowed dir
-      return '/outside/real_photo.jpg'; // Resolve file
-    });
+    setupRealpathMock('/media', '/outside/real_photo.jpg');
 
     const result = await authorizeFilePath(filePath);
 
