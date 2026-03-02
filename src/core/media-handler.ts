@@ -389,13 +389,14 @@ export async function serveStaticFile(
   filePath: string,
 ) {
   try {
+    // getAuthorizedPath performs full access validation and returns a normalized, real path.
     const authorizedPath = await getAuthorizedPath(res, filePath);
     if (!authorizedPath) return;
 
     // If local file, use res.sendFile for optimizing range/seeking
     if (!isDrivePath(authorizedPath)) {
-      // [SECURITY] Explicitly re-validate/sanitize local path to prevent traversal
-      // Although validateFileAccess calls this, CodeQL requires this explicit check before sendFile.
+      // [SECURITY] Explicitly re-validate/sanitize local path to prevent traversal.
+      // This is a defense-in-depth check; it must not weaken the guarantees from getAuthorizedPath.
       const auth = await authorizeFilePath(authorizedPath);
       if (!auth.isAllowed || !auth.realPath) {
         // Return 403 explicitly here to match previous behavior and satisfy tests
@@ -408,7 +409,7 @@ export async function serveStaticFile(
         return;
       }
 
-      // Use the fully validated absolute path directly to avoid exposing arbitrary paths
+      // Use the fully validated absolute path returned by authorization.
       return res.sendFile(auth.realPath);
     }
 

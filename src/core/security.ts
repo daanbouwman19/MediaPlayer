@@ -157,16 +157,31 @@ export async function authorizeFilePath(
       database.isFileInLibrary &&
       (await database.isFileInLibrary(filePath))
     ) {
-      const result = { isAllowed: true, realPath: filePath };
+      // Fast path: the file is known to be in the media library.
+      // However, we still must derive a validated, normalized real path
+      // using the same logic as the general local-authorization flow.
+      const dirs = mediaDirectories || (await database.getMediaDirectories());
+      const allowedPaths = dirs.map((d) => d.path);
 
-      // Cache it
-      authCache.set(filePath, { res: result, time: Date.now() });
-      // Cleanup cache size
-      if (authCache.size > CACHE_MAX_SIZE) {
-        const firstKey = authCache.keys().next().value;
-        if (firstKey) authCache.delete(firstKey);
+      if (!isDrivePath(filePath)) {
+        const localResult = await authorizeLocalPath(filePath, allowedPaths);
+        if (localResult) {
+          const result: AuthorizationResult = localResult;
+
+          // Cache it
+          authCache.set(filePath, { res: result, time: Date.now() });
+          // Cleanup cache size
+          if (authCache.size > CACHE_MAX_SIZE) {
+            const firstKey = authCache.keys().next().value;
+            if (firstKey) authCache.delete(firstKey);
+          }
+          return result;
+        }
+        // If local authorization fails despite being in the library, fall through to the
+        // generic logic below, which will log and deny access as appropriate.
       }
-      return result;
+      // For Drive paths we intentionally do not short-circuit here; they will be
+      // handled by authorizeVirtualPath in the shared flow below.
     }
   }
 
