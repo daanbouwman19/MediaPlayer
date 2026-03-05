@@ -7,6 +7,8 @@ import {
   generateSessionToken,
 } from '../../src/server/middleware/global-password';
 
+import cookieParser from 'cookie-parser';
+
 const mockLimiters = {
   authLimiter: (_req: any, _res: any, next: any) => next(),
   apiLimiter: (_req: any, _res: any, next: any) => next(),
@@ -19,6 +21,7 @@ describe('Global Password Auth Routes & Middleware', () => {
   beforeEach(() => {
     app = express();
     app.use(express.json());
+    app.use(cookieParser());
     app.use(globalPasswordMiddleware);
     app.use(createAuthRoutes(mockLimiters));
 
@@ -43,6 +46,14 @@ describe('Global Password Auth Routes & Middleware', () => {
     expect(res.status).toBe(200);
   });
 
+  it('middleware allows access to static assets routes when locked', async () => {
+    process.env.GLOBAL_PASSWORD = 'test';
+    const res = await request(app).get('/assets/main.css');
+    // Note: since the test app doesn't implement a 404 handler or the asset route
+    // express will just return 404 naturally. We just ensure it isn't returning 401.
+    expect(res.status).not.toBe(401);
+  });
+
   it('middleware returns 401 for protected routes without cookie', async () => {
     process.env.GLOBAL_PASSWORD = 'test';
     const res = await request(app).get('/api/protected');
@@ -50,18 +61,9 @@ describe('Global Password Auth Routes & Middleware', () => {
     expect(res.body.isLocked).toBe(true);
   });
 
-  it('middleware returns 401 for protected routes with invalid cookie format', async () => {
-    process.env.GLOBAL_PASSWORD = 'test';
-    const res = await request(app)
-      .get('/api/protected')
-      .set('Cookie', 'media_session=invalidhex');
-    expect(res.status).toBe(401);
-    expect(res.body.isLocked).toBe(true);
-  });
-
   it('middleware returns 401 for protected routes with incorrect session token', async () => {
     process.env.GLOBAL_PASSWORD = 'test';
-    const wrongToken = generateSessionToken('wrong');
+    const wrongToken = 'wrong-invalid-token-format-or-not-in-set';
     const res = await request(app)
       .get('/api/protected')
       .set('Cookie', `media_session=${wrongToken}`);
@@ -70,7 +72,7 @@ describe('Global Password Auth Routes & Middleware', () => {
 
   it('middleware allows access to protected routes with correct session token', async () => {
     process.env.GLOBAL_PASSWORD = 'test';
-    const validToken = generateSessionToken('test');
+    const validToken = generateSessionToken();
     const res = await request(app)
       .get('/api/protected')
       .set('Cookie', `media_session=${validToken}`);
@@ -94,7 +96,7 @@ describe('Global Password Auth Routes & Middleware', () => {
 
   it('lock-status returns authenticated when bad cookie is present', async () => {
     process.env.GLOBAL_PASSWORD = 'test';
-    const wrongToken = generateSessionToken('wrong');
+    const wrongToken = 'invalidcookie';
     const res = await request(app)
       .get('/api/auth/lock-status')
       .set('Cookie', `media_session=${wrongToken}`);
@@ -104,7 +106,7 @@ describe('Global Password Auth Routes & Middleware', () => {
 
   it('lock-status returns authenticated when correct cookie is present', async () => {
     process.env.GLOBAL_PASSWORD = 'test';
-    const validToken = generateSessionToken('test');
+    const validToken = generateSessionToken();
     const res = await request(app)
       .get('/api/auth/lock-status')
       .set('Cookie', `media_session=${validToken}`);
@@ -157,9 +159,9 @@ describe('Global Password Auth Routes & Middleware', () => {
     expect(res.body.error).toBe('Invalid password');
   });
 
-  it('parseCookies coverage: handles multiple cookies correctly', async () => {
+  it('cookie-parser coverage: handles multiple cookies correctly', async () => {
     process.env.GLOBAL_PASSWORD = 'test';
-    const validToken = generateSessionToken('test');
+    const validToken = generateSessionToken();
     const res = await request(app)
       .get('/api/auth/lock-status')
       .set('Cookie', `other=123; media_session=${validToken}; final=abc`);
@@ -167,7 +169,7 @@ describe('Global Password Auth Routes & Middleware', () => {
     expect(res.body).toEqual({ enabled: true, isAuthenticated: true });
   });
 
-  it('parseCookies coverage: handles missing cookie header gracefully', async () => {
+  it('cookie-parser coverage: handles missing cookie header gracefully', async () => {
     // Already covered by tests that don't send a cookie, but explicit check
     process.env.GLOBAL_PASSWORD = 'test';
     const res = await request(app).get('/api/auth/lock-status');

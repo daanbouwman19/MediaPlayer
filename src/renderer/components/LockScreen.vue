@@ -52,7 +52,6 @@ import LockIcon from './icons/LockIcon.vue';
 import { useAuthStore } from '../composables/useAuthStore';
 import { useLibraryStore } from '../composables/useLibraryStore';
 
-const emit = defineEmits(['unlocked']);
 const authStore = useAuthStore();
 const libraryStore = useLibraryStore();
 const { unlock } = authStore;
@@ -72,7 +71,6 @@ const handleUnlock = async () => {
     if (success) {
       // Reload initial data after successful unlock
       await libraryStore.loadInitialData();
-      emit('unlocked');
     } else {
       error.value = 'Invalid password. Please try again.';
       password.value = '';

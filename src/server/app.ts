@@ -4,6 +4,7 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -96,6 +97,8 @@ export async function createApp() {
   app.use(express.json({ limit: '10mb' }));
 
   app.get('/favicon.ico', (_req, res) => res.status(204).end());
+
+  app.use(cookieParser());
 
   const limiters = createRateLimiters();
 

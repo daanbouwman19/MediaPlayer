@@ -2,27 +2,24 @@ import { Request, Response, NextFunction } from 'express';
 import crypto from 'crypto';
 
 /**
- * Manually parse cookies from the request header.
+ * Store active, randomized session tokens.
  */
-function parseCookies(cookieHeader?: string): Record<string, string> {
-  const cookies: Record<string, string> = {};
-  if (!cookieHeader) return cookies;
+const activeSessions = new Set<string>();
 
-  cookieHeader.split(';').forEach((cookie) => {
-    const [name, ...rest] = cookie.split('=');
-    const value = rest.join('=');
-    if (name && value) {
-      cookies[name.trim()] = value.trim();
-    }
-  });
-  return cookies;
+/**
+ * Helper to validate if a session token is active.
+ */
+export function isValidSession(token: string): boolean {
+  return activeSessions.has(token);
 }
 
 /**
- * Helper to derive a stable, fixed-length key for timing-safe comparison.
+ * Generate a cryptographically secure random session token.
  */
-function deriveToken(input: string): Buffer {
-  return crypto.createHash('sha256').update(input).digest();
+export function generateSessionToken(): string {
+  const token = crypto.randomBytes(32).toString('hex');
+  activeSessions.add(token);
+  return token;
 }
 
 /**
@@ -44,36 +41,19 @@ export function globalPasswordMiddleware(
     '/api/auth/lock-status',
     '/api/auth/google-drive/start',
     '/auth/google/callback',
+    '/',
+    '/index.html',
+    '/favicon.ico',
   ];
-  if (bypassRoutes.includes(req.path)) {
+  if (bypassRoutes.includes(req.path) || req.path.startsWith('/assets/')) {
     return next();
   }
 
-  const cookies = parseCookies(req.headers.cookie);
-  const sessionToken = cookies['media_session'];
+  const sessionToken = req.cookies?.['media_session'];
 
-  if (!sessionToken) {
+  if (!sessionToken || !isValidSession(sessionToken)) {
     return res.status(401).json({ error: 'Locked', isLocked: true });
   }
 
-  try {
-    const sessionBuffer = Buffer.from(sessionToken, 'hex');
-    const expectedBuffer = deriveToken(globalPassword);
-
-    // timingSafeEqual requires buffers of the same length
-    if (
-      sessionBuffer.length === expectedBuffer.length &&
-      crypto.timingSafeEqual(sessionBuffer, expectedBuffer)
-    ) {
-      return next();
-    }
-  } catch {
-    // Fall through to error
-  }
-
-  return res.status(401).json({ error: 'Locked', isLocked: true });
-}
-
-export function generateSessionToken(password: string): string {
-  return deriveToken(password).toString('hex');
+  return next();
 }

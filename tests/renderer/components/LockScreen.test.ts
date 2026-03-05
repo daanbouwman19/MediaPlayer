@@ -42,7 +42,6 @@ describe('LockScreen.vue', () => {
 
     expect(mockUnlock).toHaveBeenCalledWith('correct-password');
     expect(mockLoadInitialData).toHaveBeenCalled();
-    expect(wrapper.emitted('unlocked')).toBeTruthy();
   });
 
   it('handles failed unlock and shows error message', async () => {
@@ -56,7 +55,6 @@ describe('LockScreen.vue', () => {
 
     expect(mockUnlock).toHaveBeenCalledWith('wrong-password');
     expect(mockLoadInitialData).not.toHaveBeenCalled();
-    expect(wrapper.emitted('unlocked')).toBeFalsy();
 
     const errorMsg = wrapper.find('.text-red-400');
     expect(errorMsg.exists()).toBe(true);

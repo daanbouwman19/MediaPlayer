@@ -13,7 +13,10 @@ import {
 import { getGoogleAuthSuccessPage } from '../auth-views.ts';
 import type { RateLimiters } from '../middleware/rate-limiters.ts';
 import { asyncHandler } from '../middleware/async-handler.ts';
-import { generateSessionToken } from '../middleware/global-password.ts';
+import {
+  generateSessionToken,
+  isValidSession,
+} from '../middleware/global-password.ts';
 
 export function createAuthRoutes(limiters: RateLimiters) {
   const router = Router();
@@ -29,29 +32,9 @@ export function createAuthRoutes(limiters: RateLimiters) {
 
       let isAuthenticated = false;
       if (isLocked) {
-        const cookies: Record<string, string> = {};
-        if (req.headers.cookie) {
-          req.headers.cookie.split(';').forEach((cookie) => {
-            const [name, ...rest] = cookie.split('=');
-            if (name && rest.length) {
-              cookies[name.trim()] = rest.join('=').trim();
-            }
-          });
-        }
-        const sessionToken = cookies['media_session'];
-        if (sessionToken) {
-          try {
-            const sessionBuffer = Buffer.from(sessionToken, 'hex');
-            const expectedBuffer = Buffer.from(
-              generateSessionToken(globalPassword!),
-              'hex',
-            );
-            isAuthenticated =
-              sessionBuffer.length === expectedBuffer.length &&
-              crypto.timingSafeEqual(sessionBuffer, expectedBuffer);
-          } catch {
-            // Invalid token format
-          }
+        const sessionToken = req.cookies?.['media_session'];
+        if (sessionToken && isValidSession(sessionToken)) {
+          isAuthenticated = true;
         }
       }
 
@@ -76,17 +59,14 @@ export function createAuthRoutes(limiters: RateLimiters) {
         return res.json({ success: true });
       }
 
-      // Timing-safe comparison of the raw password input
+      // Timing-safe comparison using scrypt to protect against brute-force and timing attacks
       if (typeof password === 'string') {
-        // We hash both to ensure they are the same length for timingSafeEqual
-        const inputHash = crypto.createHash('sha256').update(password).digest();
-        const targetHash = crypto
-          .createHash('sha256')
-          .update(globalPassword)
-          .digest();
+        const salt = crypto.randomBytes(16);
+        const inputHash = crypto.scryptSync(password, salt, 32);
+        const targetHash = crypto.scryptSync(globalPassword, salt, 32);
 
         if (crypto.timingSafeEqual(inputHash, targetHash)) {
-          const token = generateSessionToken(globalPassword);
+          const token = generateSessionToken();
           res.cookie('media_session', token, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
