@@ -23,6 +23,7 @@ import { MediaHandler } from '../core/media-handler.ts';
 import { WorkerFactory } from '../core/worker-factory.ts';
 import { createRateLimiters } from './middleware/rate-limiters.ts';
 import { basicAuthMiddleware } from './middleware/basic-auth.ts';
+import { globalPasswordMiddleware } from './middleware/global-password.ts';
 import { noCacheMiddleware } from './middleware/no-cache.ts';
 import { errorHandler } from './middleware/error-handler.ts';
 import { createAlbumRoutes } from './routes/album.routes.ts';
@@ -102,6 +103,7 @@ export async function createApp() {
   // Use a specific limiter that skips successful requests to avoid blocking legitimate traffic
   app.use(limiters.basicAuthLimiter);
   app.use(basicAuthMiddleware);
+  app.use(globalPasswordMiddleware);
 
   // Apply no-cache middleware to API routes to prevent sensitive data leakage
   app.use('/api', noCacheMiddleware);

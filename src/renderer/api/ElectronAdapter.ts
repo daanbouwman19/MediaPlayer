@@ -21,6 +21,15 @@ export class ElectronAdapter implements IMediaBackend {
     throw new Error(result.error);
   }
 
+  // Global Password Lock (Not used in Electron)
+  async getLockStatus(): Promise<AuthStatus> {
+    return { enabled: false, isAuthenticated: true };
+  }
+
+  async unlock(_password: string): Promise<boolean> {
+    return true;
+  }
+
   async loadFileAsDataURL(filePath: string): Promise<LoadResult> {
     return this.invoke(this.bridge.loadFileAsDataURL(filePath));
   }
