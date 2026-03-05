@@ -5,7 +5,9 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
+import cookieSession from 'cookie-session';
 import helmet from 'helmet';
+import { csrf } from 'lusca';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs/promises';
@@ -100,10 +102,18 @@ export async function createApp() {
 
   app.use(cookieParser());
 
+  app.use(
+    cookieSession({
+      name: 'session',
+      keys: [process.env.GLOBAL_PASSWORD || 'media-player-secret'],
+      maxAge: 24 * 60 * 60 * 1000, // 24 hours
+    }),
+  );
+
+  app.use(csrf());
+
   const limiters = createRateLimiters();
 
-  // Address Comment 2811709152: Apply authLimiter to Basic Auth to prevent brute-force
-  // Use a specific limiter that skips successful requests to avoid blocking legitimate traffic
   app.use(limiters.basicAuthLimiter);
   app.use(basicAuthMiddleware);
   app.use(globalPasswordMiddleware);
