@@ -2,6 +2,7 @@
  * @file Auth routes.
  */
 import { Router } from 'express';
+import crypto from 'crypto';
 import { AppError } from '../../core/errors.ts';
 import { escapeHtml } from '../../core/security.ts';
 import { getQueryParam } from '../../core/utils/http-utils.ts';
@@ -15,6 +16,64 @@ import { asyncHandler } from '../middleware/async-handler.ts';
 
 export function createAuthRoutes(limiters: RateLimiters) {
   const router = Router();
+
+  /**
+   * Check if the global password lock is enabled and current session status.
+   */
+  router.get(
+    '/api/auth/lock-status',
+    asyncHandler(async (req, res) => {
+      const globalPassword = process.env.GLOBAL_PASSWORD;
+      const isLocked = !!globalPassword;
+
+      let isAuthenticated = false;
+      if (isLocked) {
+        if (req.session?.isAuthenticated) {
+          isAuthenticated = true;
+        }
+      }
+
+      res.json({
+        enabled: isLocked,
+        isAuthenticated: !isLocked || isAuthenticated,
+      });
+    }),
+  );
+
+  /**
+   * Unlock the app with the global password.
+   */
+  router.post(
+    '/api/auth/unlock',
+    limiters.authLimiter,
+    asyncHandler(async (req, res) => {
+      const { password } = req.body;
+      const globalPassword = process.env.GLOBAL_PASSWORD;
+
+      if (!globalPassword) {
+        return res.json({ success: true });
+      }
+
+      // Timing-safe comparison using scrypt to protect against brute-force and timing attacks
+      // Note: We use the same random salt for both because the "stored" password is in memory,
+      // not in a database. This prevents timing attacks on the length/content of the password
+      // while making brute-force more expensive than simple string comparison.
+      if (typeof password === 'string') {
+        const salt = crypto.randomBytes(16);
+        const inputHash = crypto.scryptSync(password, salt, 32);
+        const targetHash = crypto.scryptSync(globalPassword, salt, 32);
+
+        if (crypto.timingSafeEqual(inputHash, targetHash)) {
+          if (req.session) {
+            req.session.isAuthenticated = true;
+          }
+          return res.json({ success: true });
+        }
+      }
+
+      return res.status(401).json({ error: 'Invalid password' });
+    }),
+  );
 
   router.get(
     '/api/auth/google-drive/start',

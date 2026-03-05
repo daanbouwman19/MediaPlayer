@@ -1,4 +1,4 @@
-import { IMediaBackend, LoadResult } from './types';
+import { IMediaBackend, LoadResult, AuthStatus } from './types';
 import type {
   Album,
   MediaDirectory,
@@ -19,6 +19,15 @@ export class ElectronAdapter implements IMediaBackend {
       return result.data;
     }
     throw new Error(result.error);
+  }
+
+  // Global Password Lock (Not used in Electron)
+  async getLockStatus(): Promise<AuthStatus> {
+    return { enabled: false, isAuthenticated: true };
+  }
+
+  async unlock(): Promise<boolean> {
+    return true;
   }
 
   async loadFileAsDataURL(filePath: string): Promise<LoadResult> {

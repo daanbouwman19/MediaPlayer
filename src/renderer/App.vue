@@ -101,6 +101,7 @@
     />
     <ToastContainer />
     <LoadingMask v-if="isScanning" />
+    <LockScreen v-if="isAuthInitialized && isLocked" />
   </div>
 </template>
 
@@ -120,21 +121,25 @@ import SmartPlaylistModal from './components/SmartPlaylistModal.vue';
 import KeyboardShortcutsModal from './components/KeyboardShortcutsModal.vue';
 import ToastContainer from './components/ToastContainer.vue';
 import LoadingMask from './components/LoadingMask.vue';
+import LockScreen from './components/LockScreen.vue';
 import MenuIcon from './components/icons/MenuIcon.vue';
 import HelpIcon from './components/icons/HelpIcon.vue';
 import { useLibraryStore } from './composables/useLibraryStore';
 import { usePlayerStore } from './composables/usePlayerStore';
 import { useUIStore } from './composables/useUIStore';
+import { useAuthStore } from './composables/useAuthStore';
 import { useSlideshow } from './composables/useSlideshow';
 import { CONTROLS_HIDE_TIMEOUT_MS } from '../core/constants';
 
 const libraryStore = useLibraryStore();
 const uiStore = useUIStore();
 const playerStore = usePlayerStore(); // Call the store to get the instance
+const authStore = useAuthStore();
 const { isScanning } = libraryStore;
 const { viewMode, playlistToEdit, isControlsVisible, isSidebarVisible } =
   uiStore;
 const { currentMediaItem, isSlideshowActive, mainVideoElement } = playerStore; // Destructure from the instance
+const { isLocked, isInitialized: isAuthInitialized } = authStore;
 const initializeApp = libraryStore.loadInitialData;
 const { navigateMedia, toggleSlideshowTimer } = useSlideshow();
 
@@ -219,7 +224,10 @@ const handleKeydown = (event: KeyboardEvent) => {
 
 // On component mount, initialize the app and add the keyboard event listener
 onMounted(async () => {
-  await initializeApp();
+  await authStore.checkLockStatus();
+  if (!isLocked.value) {
+    await initializeApp();
+  }
   document.addEventListener('keydown', handleKeydown);
 });
 

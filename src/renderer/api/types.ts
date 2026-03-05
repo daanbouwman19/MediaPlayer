@@ -14,7 +14,16 @@ export interface LoadResult {
   message?: string;
 }
 
+export interface AuthStatus {
+  enabled: boolean;
+  isAuthenticated: boolean;
+}
+
 export interface IMediaBackend {
+  // Global Password Lock
+  getLockStatus(): Promise<AuthStatus>;
+  unlock(password: string): Promise<boolean>;
+
   loadFileAsDataURL(filePath: string): Promise<LoadResult>;
   recordMediaView(filePath: string): Promise<void>;
   getMediaViewCounts(

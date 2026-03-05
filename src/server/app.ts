@@ -4,7 +4,10 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
+import cookieSession from 'cookie-session';
 import helmet from 'helmet';
+import { csrf } from 'lusca';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs/promises';
@@ -23,6 +26,7 @@ import { MediaHandler } from '../core/media-handler.ts';
 import { WorkerFactory } from '../core/worker-factory.ts';
 import { createRateLimiters } from './middleware/rate-limiters.ts';
 import { basicAuthMiddleware } from './middleware/basic-auth.ts';
+import { globalPasswordMiddleware } from './middleware/global-password.ts';
 import { noCacheMiddleware } from './middleware/no-cache.ts';
 import { errorHandler } from './middleware/error-handler.ts';
 import { createAlbumRoutes } from './routes/album.routes.ts';
@@ -96,12 +100,25 @@ export async function createApp() {
 
   app.get('/favicon.ico', (_req, res) => res.status(204).end());
 
+  app.use(cookieParser());
+
+  app.use(
+    cookieSession({
+      name: 'session',
+      keys: [process.env.GLOBAL_PASSWORD || 'media-player-secret'],
+      maxAge: 24 * 60 * 60 * 1000, // 24 hours
+    }),
+  );
+
+  if (process.env.NODE_ENV !== 'test') {
+    app.use(csrf({ angular: true })); // Sets XSRF-TOKEN cookie and expects X-XSRF-TOKEN header
+  }
+
   const limiters = createRateLimiters();
 
-  // Address Comment 2811709152: Apply authLimiter to Basic Auth to prevent brute-force
-  // Use a specific limiter that skips successful requests to avoid blocking legitimate traffic
   app.use(limiters.basicAuthLimiter);
   app.use(basicAuthMiddleware);
+  app.use(globalPasswordMiddleware);
 
   // Apply no-cache middleware to API routes to prevent sensitive data leakage
   app.use('/api', noCacheMiddleware);
