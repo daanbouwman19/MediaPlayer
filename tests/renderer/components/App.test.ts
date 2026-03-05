@@ -6,12 +6,14 @@ import { useSlideshow } from '@/composables/useSlideshow';
 import { useLibraryStore } from '@/composables/useLibraryStore';
 import { usePlayerStore } from '@/composables/usePlayerStore';
 import { useUIStore } from '@/composables/useUIStore';
+import { useAuthStore } from '@/composables/useAuthStore';
 
 // Mock the composables
 vi.mock('@/composables/useSlideshow');
 vi.mock('@/composables/useLibraryStore');
 vi.mock('@/composables/usePlayerStore');
 vi.mock('@/composables/useUIStore');
+vi.mock('@/composables/useAuthStore');
 
 // Mock the child components
 vi.mock('@/components/AlbumsList.vue', () => ({
@@ -101,6 +103,12 @@ describe('App.vue', () => {
     (useUIStore as Mock).mockReturnValue({
       state: mockUIState,
       ...toRefs(mockUIState),
+    });
+
+    (useAuthStore as Mock).mockReturnValue({
+      isLocked: computed(() => false),
+      isInitialized: computed(() => true),
+      checkLockStatus: vi.fn().mockResolvedValue(undefined),
     });
 
     (useSlideshow as Mock).mockReturnValue({

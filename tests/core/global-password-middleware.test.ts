@@ -5,7 +5,10 @@ import { Request, Response } from 'express';
 describe('globalPasswordMiddleware', () => {
   it('should allow request if GLOBAL_PASSWORD is not set', () => {
     const req = { path: '/api/media', headers: {} } as Request;
-    const res = { status: vi.fn().mockReturnThis(), json: vi.fn() } as unknown as Response;
+    const res = {
+      status: vi.fn().mockReturnThis(),
+      json: vi.fn(),
+    } as unknown as Response;
     const next = vi.fn();
 
     process.env.GLOBAL_PASSWORD = '';
@@ -16,9 +19,9 @@ describe('globalPasswordMiddleware', () => {
 
   it('should block request if locked and no cookie provided', () => {
     const req = { path: '/api/media', headers: {} } as Request;
-    const res = { 
-      status: vi.fn().mockReturnThis(), 
-      json: vi.fn() 
+    const res = {
+      status: vi.fn().mockReturnThis(),
+      json: vi.fn(),
     } as unknown as Response;
     const next = vi.fn();
 

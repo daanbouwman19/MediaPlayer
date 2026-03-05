@@ -67,7 +67,7 @@ export function globalPasswordMiddleware(
     ) {
       return next();
     }
-  } catch (e) {
+  } catch {
     // Fall through to error
   }
 

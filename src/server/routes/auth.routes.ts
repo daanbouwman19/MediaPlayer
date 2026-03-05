@@ -79,10 +79,7 @@ export function createAuthRoutes(limiters: RateLimiters) {
       // Timing-safe comparison of the raw password input
       if (typeof password === 'string') {
         // We hash both to ensure they are the same length for timingSafeEqual
-        const inputHash = crypto
-          .createHash('sha256')
-          .update(password)
-          .digest();
+        const inputHash = crypto.createHash('sha256').update(password).digest();
         const targetHash = crypto
           .createHash('sha256')
           .update(globalPassword)

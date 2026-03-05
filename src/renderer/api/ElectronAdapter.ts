@@ -1,4 +1,4 @@
-import { IMediaBackend, LoadResult } from './types';
+import { IMediaBackend, LoadResult, AuthStatus } from './types';
 import type {
   Album,
   MediaDirectory,
@@ -26,7 +26,7 @@ export class ElectronAdapter implements IMediaBackend {
     return { enabled: false, isAuthenticated: true };
   }
 
-  async unlock(_password: string): Promise<boolean> {
+  async unlock(): Promise<boolean> {
     return true;
   }
 

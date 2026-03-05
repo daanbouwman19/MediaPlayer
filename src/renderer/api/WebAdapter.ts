@@ -1,4 +1,4 @@
-import { IMediaBackend, LoadResult } from './types';
+import { IMediaBackend, LoadResult, AuthStatus } from './types';
 import type {
   Album,
   MediaDirectory,
