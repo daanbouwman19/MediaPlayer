@@ -60,14 +60,31 @@ export function createAuthRoutes(limiters: RateLimiters) {
       // while making brute-force more expensive than simple string comparison.
       if (typeof password === 'string') {
         const salt = crypto.randomBytes(16);
-        const inputHash = crypto.scryptSync(password, salt, 32);
-        const targetHash = crypto.scryptSync(globalPassword, salt, 32);
 
-        if (crypto.timingSafeEqual(inputHash, targetHash)) {
-          if (req.session) {
-            req.session.isAuthenticated = true;
+        try {
+          const scryptAsync = (pwd: string, slt: Buffer, keylen: number) =>
+            new Promise<Buffer>((resolve, reject) => {
+              crypto.scrypt(pwd, slt, keylen, (err, derivedKey) => {
+                if (err) reject(err);
+                else resolve(derivedKey);
+              });
+            });
+
+          const [inputHash, targetHash] = await Promise.all([
+            scryptAsync(password, salt, 32),
+            scryptAsync(globalPassword, salt, 32),
+          ]);
+
+          if (crypto.timingSafeEqual(inputHash, targetHash)) {
+            if (req.session) {
+              req.session.isAuthenticated = true;
+            }
+            return res.json({ success: true });
           }
-          return res.json({ success: true });
+        } catch (e) {
+          return res
+            .status(500)
+            .json({ error: 'Internal server error during authentication' });
         }
       }
 

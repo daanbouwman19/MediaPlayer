@@ -7,7 +7,7 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import cookieSession from 'cookie-session';
 import helmet from 'helmet';
-import { csrf } from 'lusca';
+import lusca from 'lusca';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs/promises';
@@ -102,16 +102,24 @@ export async function createApp() {
 
   app.use(cookieParser());
 
+  const sessionSecret = process.env.SESSION_SECRET;
+  if (!isDev && !sessionSecret) {
+    console.error(
+      'FATAL: SESSION_SECRET environment variable is required in production.',
+    );
+    process.exit(1);
+  }
+
   app.use(
     cookieSession({
       name: 'session',
-      keys: [process.env.GLOBAL_PASSWORD || 'media-player-secret'],
+      keys: [sessionSecret || 'media-player-dev-secret-do-not-use-in-prod'],
       maxAge: 24 * 60 * 60 * 1000, // 24 hours
     }),
   );
 
   if (process.env.NODE_ENV !== 'test') {
-    app.use(csrf({ angular: true })); // Sets XSRF-TOKEN cookie and expects X-XSRF-TOKEN header
+    app.use(lusca.csrf({ angular: true })); // Sets XSRF-TOKEN cookie and expects X-XSRF-TOKEN header
   }
 
   const limiters = createRateLimiters();

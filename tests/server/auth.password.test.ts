@@ -84,9 +84,7 @@ describe('Global Password Auth Routes & Middleware', () => {
     expect(loginRes.status).toBe(200);
     const cookies = loginRes.headers['set-cookie'];
 
-    const res = await request(app)
-      .get('/api/protected')
-      .set('Cookie', cookies);
+    const res = await request(app).get('/api/protected').set('Cookie', cookies);
     expect(res.status).toBe(200);
   });
 
@@ -182,7 +180,9 @@ describe('Global Password Auth Routes & Middleware', () => {
       .send({ password: 'test' });
 
     // Pass both session and session.sig cookies
-    const cookies = loginRes.headers['set-cookie'].map((c: string) => c.split(';')[0]).join('; ');
+    const cookies = loginRes.headers['set-cookie']
+      .map((c: string) => c.split(';')[0])
+      .join('; ');
     const res = await request(app)
       .get('/api/auth/lock-status')
       .set('Cookie', `other=123; ${cookies}; final=abc`);
