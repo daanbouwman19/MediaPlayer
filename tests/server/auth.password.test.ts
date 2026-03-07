@@ -180,9 +180,11 @@ describe('Global Password Auth Routes & Middleware', () => {
       .send({ password: 'test' });
 
     // Pass both session and session.sig cookies
-    const cookies = loginRes.headers['set-cookie']
-      .map((c: string) => c.split(';')[0])
-      .join('; ');
+    const setCookies = loginRes.headers['set-cookie'] as any;
+    const cookiesArray: string[] = Array.isArray(setCookies)
+      ? setCookies
+      : [setCookies];
+    const cookies = cookiesArray.map((c: string) => c.split(';')[0]).join('; ');
     const res = await request(app)
       .get('/api/auth/lock-status')
       .set('Cookie', `other=123; ${cookies}; final=abc`);

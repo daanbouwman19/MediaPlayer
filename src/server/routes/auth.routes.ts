@@ -81,7 +81,7 @@ export function createAuthRoutes(limiters: RateLimiters) {
             }
             return res.json({ success: true });
           }
-        } catch (e) {
+        } catch {
           return res
             .status(500)
             .json({ error: 'Internal server error during authentication' });

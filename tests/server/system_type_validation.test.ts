@@ -67,4 +67,51 @@ describe('System Routes Type Validation', () => {
       expect(response.status).toBe(400);
     });
   });
+
+  describe('Smart Playlists Validation', () => {
+    it('POST /api/smart-playlists should return 400 for missing criteria', async () => {
+      const response = await request(app)
+        .post('/api/smart-playlists')
+        .send({ name: 'My List' });
+      expect(response.status).toBe(400);
+    });
+
+    it('PUT /api/smart-playlists/:id should return 400 for invalid id', async () => {
+      const response = await request(app)
+        .put('/api/smart-playlists/abc')
+        .send({ name: 'Updated List', criteria: 'c' });
+      expect(response.status).toBe(400);
+    });
+
+    it('DELETE /api/smart-playlists/:id should return 400 for invalid id', async () => {
+      const response = await request(app).delete('/api/smart-playlists/abc');
+      expect(response.status).toBe(400);
+    });
+  });
+
+  describe('File System Validation', () => {
+    it('GET /api/fs/ls should return 400 for missing path', async () => {
+      const response = await request(app).get('/api/fs/ls');
+      expect(response.status).toBe(400);
+    });
+
+    it('GET /api/fs/parent should return 400 for missing path', async () => {
+      const response = await request(app).get('/api/fs/parent');
+      expect(response.status).toBe(400);
+    });
+  });
+
+  describe('Google Drive Validation', () => {
+    it('POST /api/sources/google-drive should return 400 for missing folderId', async () => {
+      const response = await request(app)
+        .post('/api/sources/google-drive')
+        .send({});
+      expect(response.status).toBe(400);
+    });
+
+    it('GET /api/drive/parent should return 400 for missing folderId', async () => {
+      const response = await request(app).get('/api/drive/parent');
+      expect(response.status).toBe(400);
+    });
+  });
 });

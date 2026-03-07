@@ -140,6 +140,7 @@ describe('Server app additional coverage', () => {
   it('serves index.html in production mode', async () => {
     process.env.NODE_ENV = 'production';
     process.env.VITEST = 'true';
+    process.env.SESSION_SECRET = 'test-secret';
 
     const clientDir = path.join(process.cwd(), 'src', 'client');
     const indexPath = path.join(clientDir, 'index.html');

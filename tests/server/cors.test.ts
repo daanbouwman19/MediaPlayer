@@ -69,9 +69,11 @@ describe('Server CORS', () => {
 
   // Save original env
   const originalEnv = process.env.NODE_ENV;
+  const originalSessionSecret = process.env.SESSION_SECRET;
 
   afterEach(() => {
     process.env.NODE_ENV = originalEnv;
+    process.env.SESSION_SECRET = originalSessionSecret;
     vi.clearAllMocks();
   });
 
@@ -114,6 +116,7 @@ describe('Server CORS', () => {
   describe('Production Environment', () => {
     beforeEach(async () => {
       process.env.NODE_ENV = 'production'; // isDev = false
+      process.env.SESSION_SECRET = 'test-secret';
 
       vi.mocked(security.authorizeFilePath).mockResolvedValue({
         isAllowed: true,

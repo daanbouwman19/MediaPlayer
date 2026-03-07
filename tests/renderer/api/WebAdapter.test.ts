@@ -257,5 +257,155 @@ describe('WebAdapter', () => {
       const url = await adapter.getHlsUrl('/path/to/video.mp4');
       expect(url).toBe('/api/hls/master.m3u8?file=%2Fpath%2Fto%2Fvideo.mp4');
     });
+
+    it('request handles XSRF token from cookies', async () => {
+      Object.defineProperty(document, 'cookie', {
+        writable: true,
+        value: 'XSRF-TOKEN=test-token-123; other=cookie',
+      });
+      fetchMock.mockResolvedValue({
+        ok: true,
+        headers: { get: () => 'application/json' },
+        json: () => Promise.resolve({}),
+      });
+      const adapter = new WebAdapter();
+      await adapter.addMediaDirectory('/path');
+
+      const options = fetchMock.mock.calls[0][1];
+      expect(options.headers.get('X-XSRF-TOKEN')).toBe('test-token-123');
+
+      // Cleanup
+      Object.defineProperty(document, 'cookie', {
+        writable: true,
+        value: '',
+      });
+    });
+
+    it('request handles 401 Unauthorized via reload', async () => {
+      const reloadSpy = vi.fn();
+      Object.defineProperty(window, 'location', {
+        value: { reload: reloadSpy },
+        writable: true,
+      });
+
+      fetchMock.mockResolvedValue({
+        ok: false,
+        status: 401,
+      });
+
+      const adapter = new WebAdapter();
+      await expect(adapter.addMediaDirectory('/path')).rejects.toThrow(
+        'Unauthorized',
+      );
+      expect(reloadSpy).toHaveBeenCalled();
+    });
+
+    it('unlock method returns success boolean', async () => {
+      fetchMock.mockResolvedValue({
+        ok: true,
+        headers: { get: () => 'application/json' },
+        json: () => Promise.resolve({ success: true }),
+      });
+      const adapter = new WebAdapter();
+      const res = await adapter.unlock('password');
+      expect(res).toBe(true);
+    });
+
+    it('getHeatmapProgress catches and returns null on error', async () => {
+      fetchMock.mockRejectedValue(new Error('Network error'));
+      const adapter = new WebAdapter();
+      const res = await adapter.getHeatmapProgress('/file');
+      expect(res).toBeNull();
+    });
+
+    it('getHeatmapProgress returns progress value', async () => {
+      fetchMock.mockResolvedValue({
+        ok: true,
+        headers: { get: () => 'application/json' },
+        json: () => Promise.resolve({ progress: 50 }),
+      });
+      const adapter = new WebAdapter();
+      const res = await adapter.getHeatmapProgress('/file');
+      expect(res).toBe(50);
+    });
+
+    it('executeSmartPlaylist falls back to all metadata', async () => {
+      fetchMock.mockResolvedValue({
+        ok: true,
+        headers: { get: () => 'application/json' },
+        json: () => Promise.resolve([{ id: 1 }]),
+      });
+      const consoleWarnSpy = vi
+        .spyOn(console, 'warn')
+        .mockImplementation(() => {});
+      const adapter = new WebAdapter();
+      const res = await adapter.executeSmartPlaylist('criteria');
+      expect(res).toEqual([{ id: 1 }]);
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        'WebAdapter: executeSmartPlaylist not fully implemented, returning all metadata.',
+      );
+      consoleWarnSpy.mockRestore();
+    });
+
+    it('updateWatchedSegments acts as empty void', async () => {
+      const adapter = new WebAdapter();
+      const res = await adapter.updateWatchedSegments('/path', '{}');
+      expect(res).toBeUndefined();
+    });
+
+    it('getLockStatus makes correct request', async () => {
+      fetchMock.mockResolvedValue({
+        ok: true,
+        headers: { get: () => 'application/json' },
+        json: () => Promise.resolve({ locked: true, hasPassword: true }),
+      });
+      const adapter = new WebAdapter();
+      const res = await adapter.getLockStatus();
+      expect(res).toEqual({ locked: true, hasPassword: true });
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/auth/lock-status',
+        expect.anything(),
+      );
+    });
+
+    it('getHeatmap fetches heatmap data correctly', async () => {
+      fetchMock.mockResolvedValue({
+        ok: true,
+        headers: { get: () => 'application/json' },
+        json: () => Promise.resolve({ data: [1, 2, 3] }),
+      });
+      const adapter = new WebAdapter();
+      const res = await adapter.getHeatmap('/file', 50);
+      expect(res).toEqual({ data: [1, 2, 3] });
+      expect(fetchMock.mock.calls[0][0]).toContain('points=50');
+    });
+
+    it('reindexMediaLibrary performs POST request', async () => {
+      fetchMock.mockResolvedValue({
+        ok: true,
+        headers: { get: () => 'application/json' },
+        json: () => Promise.resolve([{ id: 1 }]),
+      });
+      const adapter = new WebAdapter();
+      const res = await adapter.reindexMediaLibrary();
+      expect(res).toEqual([{ id: 1 }]);
+      expect(fetchMock.mock.calls[0][1].method).toBe('POST');
+    });
+
+    it('setDirectoryActiveState sends PUT request', async () => {
+      fetchMock.mockResolvedValue({
+        ok: true,
+        headers: { get: () => 'application/json' },
+        json: () => Promise.resolve({}),
+      });
+      const adapter = new WebAdapter();
+      await adapter.setDirectoryActiveState('/path', false);
+      const options = fetchMock.mock.calls[0][1];
+      expect(options.method).toBe('PUT');
+      expect(JSON.parse(options.body)).toEqual({
+        directoryPath: '/path',
+        isActive: false,
+      });
+    });
   });
 });

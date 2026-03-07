@@ -50,6 +50,7 @@ vi.mock('../../src/core/database', () => ({
 
 vi.mock('../../src/core/security', () => ({
   authorizeFilePath: vi.fn(),
+  filterAuthorizedPaths: vi.fn(),
 }));
 
 vi.mock('../../src/core/media-handler', () => ({
@@ -65,8 +66,8 @@ vi.mock('../../src/core/media-source', () => ({
 
 const createLimiter =
   () =>
-  (_req: express.Request, _res: express.Response, next: express.NextFunction) =>
-    next();
+    (_req: express.Request, _res: express.Response, next: express.NextFunction) =>
+      next();
 
 const createTestApp = (ffmpegPath: string | null): TestAppResult => {
   const app = express();
@@ -92,6 +93,16 @@ const createTestApp = (ffmpegPath: string | null): TestAppResult => {
     }),
   );
   app.use(errorHandler);
+
+  app.use(
+    (
+      err: any,
+      _req: express.Request,
+      res: express.Response
+    ) => {
+      res.status(500).send(err.message || 'Internal Server Error Fallback');
+    },
+  );
 
   return { app, mediaHandler: handler, transcodeState };
 };
@@ -134,8 +145,8 @@ describe('Media routes additional coverage', () => {
   });
 
   it('GET /api/stream cleans up on transcode errors', async () => {
-    vi.mocked(mediaHandler.serveTranscodedStream).mockRejectedValue(
-      new Error('Transcode failed'),
+    vi.mocked(mediaHandler.serveTranscodedStream).mockImplementation(() =>
+      Promise.reject(new Error('Transcode failed')),
     );
     const { app, transcodeState } = createTestApp('ffmpeg');
 
@@ -185,5 +196,112 @@ describe('Media routes additional coverage', () => {
       '/file.mp4',
       'segment-1.ts',
     );
+  });
+  it('POST /api/media/views returns 400 for invalid body', async () => {
+    const { app } = createTestApp('ffmpeg');
+    const res = await request(app)
+      .post('/api/media/views')
+      .send({ filePaths: 'not-an-array' });
+    expect(res.status).toBe(400);
+  });
+
+  it('POST /api/media/views returns 400 when exceeding batch limit', async () => {
+    const { app } = createTestApp('ffmpeg');
+    const filePaths = Array(2000).fill('/path.mp4');
+    const res = await request(app).post('/api/media/views').send({ filePaths });
+    expect(res.status).toBe(400);
+    expect(res.text).toContain('Batch size exceeds limit');
+  });
+
+  it('POST /api/media/views returns counts on success', async () => {
+    vi.mocked(security.filterAuthorizedPaths).mockResolvedValue(['/file.mp4']);
+    vi.mocked(database.getMediaViewCounts).mockResolvedValue({
+      '/file.mp4': 5,
+    });
+    const { app } = createTestApp('ffmpeg');
+    const res = await request(app)
+      .post('/api/media/views')
+      .send({ filePaths: ['/file.mp4'] });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ '/file.mp4': 5 });
+  });
+
+  it('POST /api/media/rate returns 400 for invalid rating', async () => {
+    const { app } = createTestApp('ffmpeg');
+    const res = await request(app)
+      .post('/api/media/rate')
+      .send({ filePath: '/file.mp4', rating: '5' }); // string instead of number
+    expect(res.status).toBe(400);
+  });
+
+  it('POST /api/media/metadata returns 400 for missing metadata', async () => {
+    const { app } = createTestApp('ffmpeg');
+    const res = await request(app)
+      .post('/api/media/metadata')
+      .send({ filePath: '/file.mp4' }); // missing metadata
+    expect(res.status).toBe(400);
+  });
+
+  it('POST /api/media/metadata/batch returns 400 for invalid array', async () => {
+    const { app } = createTestApp('ffmpeg');
+    const res = await request(app)
+      .post('/api/media/metadata/batch')
+      .send({ filePaths: [123] });
+    expect(res.status).toBe(400);
+  });
+
+  it('GET /api/stream returns 403 on Access denied from validateFileAccess', async () => {
+    vi.mocked(mediaHandler.validateFileAccess).mockResolvedValue({
+      success: false,
+      statusCode: 403,
+      error: 'Access denied',
+    });
+    const { app } = createTestApp('ffmpeg');
+    const res = await request(app)
+      .get('/api/stream')
+      .query({ file: '/blocked.mp4' });
+    expect(res.status).toBe(403);
+    expect(res.text).toBe('Access denied');
+  });
+
+  it('GET /api/serve handles success correctly', async () => {
+    vi.mocked(mediaHandler.serveRawStream).mockImplementation(
+      (_req, res: any) => {
+        res.status(200).send('ok');
+        return Promise.resolve();
+      },
+    );
+    const { app } = createTestApp('ffmpeg');
+    const res = await request(app)
+      .get('/api/serve')
+      .query({ path: '/file.mp4' });
+    expect(res.status).toBe(200);
+    expect(mediaHandler.serveRawStream).toHaveBeenCalled();
+  });
+
+  it('GET /api/serve handles validation failure', async () => {
+    vi.mocked(mediaHandler.validateFileAccess).mockResolvedValue({
+      success: false,
+      statusCode: 404,
+      error: 'Not found',
+    });
+    const { app } = createTestApp('ffmpeg');
+    const res = await request(app)
+      .get('/api/serve')
+      .query({ path: '/bad.mp4' });
+    expect(res.status).toBe(404);
+    expect(res.text).toBe('Not found');
+  });
+
+  it('GET /api/serve handles general exceptions with 500', async () => {
+    vi.mocked(mediaSource.createMediaSource).mockImplementation(() => {
+      throw new Error('Some random error');
+    });
+    const { app } = createTestApp('ffmpeg');
+    const res = await request(app)
+      .get('/api/serve')
+      .query({ path: '/file.mp4' });
+    expect(res.status).toBe(500);
+    expect(res.text).toBe('Serve error');
   });
 });
