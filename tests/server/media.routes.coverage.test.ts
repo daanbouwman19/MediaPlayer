@@ -66,8 +66,8 @@ vi.mock('../../src/core/media-source', () => ({
 
 const createLimiter =
   () =>
-    (_req: express.Request, _res: express.Response, next: express.NextFunction) =>
-      next();
+  (_req: express.Request, _res: express.Response, next: express.NextFunction) =>
+    next();
 
 const createTestApp = (ffmpegPath: string | null): TestAppResult => {
   const app = express();
@@ -94,15 +94,9 @@ const createTestApp = (ffmpegPath: string | null): TestAppResult => {
   );
   app.use(errorHandler);
 
-  app.use(
-    (
-      err: any,
-      _req: express.Request,
-      res: express.Response
-    ) => {
-      res.status(500).send(err.message || 'Internal Server Error Fallback');
-    },
-  );
+  app.use((err: any, _req: express.Request, res: express.Response) => {
+    res.status(500).send(err.message || 'Internal Server Error Fallback');
+  });
 
   return { app, mediaHandler: handler, transcodeState };
 };
