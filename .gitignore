@@ -19,3 +19,6 @@ certs/
 verification/
 *.log
 master.key
+
+.gemini/
+gha-creds-*.json

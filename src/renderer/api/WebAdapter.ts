@@ -1,4 +1,4 @@
-import { IMediaBackend, LoadResult } from './types';
+import { IMediaBackend, LoadResult, AuthStatus } from './types';
 import type {
   Album,
   MediaDirectory,
@@ -10,6 +10,18 @@ import type {
 import type { FileSystemEntry } from '../../core/file-system';
 
 export class WebAdapter implements IMediaBackend {
+  async getLockStatus(): Promise<AuthStatus> {
+    return this.request<AuthStatus>('/api/auth/lock-status');
+  }
+
+  async unlock(password: string): Promise<boolean> {
+    const res = await this.request<{ success: boolean }>('/api/auth/unlock', {
+      method: 'POST',
+      body: JSON.stringify({ password }),
+    });
+    return res.success;
+  }
+
   private async request<T>(
     url: string,
     options?: RequestInit & { responseType?: 'json' | 'text' },
@@ -23,12 +35,29 @@ export class WebAdapter implements IMediaBackend {
       if (!headers.has('Content-Type')) {
         headers.set('Content-Type', 'application/json');
       }
+
+      // Add CSRF token for mutating requests if present in cookies
+      const xsrfToken = document.cookie
+        .split(';')
+        .map((c) => c.trim())
+        .find((row) => row.startsWith('XSRF-TOKEN='))
+        ?.split('=')[1];
+      if (xsrfToken) {
+        headers.set('X-XSRF-TOKEN', decodeURIComponent(xsrfToken));
+      }
     }
 
     const res = await fetch(url, {
       ...options,
       headers,
     });
+
+    if (res.status === 401 && !url.includes('/api/auth/unlock')) {
+      // If we get a 401, the session might have expired or been locked
+      // Reloading the page will trigger the AuthStore check on mount
+      window.location.reload();
+      throw new Error('Unauthorized');
+    }
 
     if (!res.ok) {
       let errorMessage = res.statusText;

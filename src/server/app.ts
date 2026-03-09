@@ -4,7 +4,10 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
+import cookieSession from 'cookie-session';
 import helmet from 'helmet';
+import lusca from 'lusca';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs/promises';
@@ -23,6 +26,7 @@ import { MediaHandler } from '../core/media-handler.ts';
 import { WorkerFactory } from '../core/worker-factory.ts';
 import { createRateLimiters } from './middleware/rate-limiters.ts';
 import { basicAuthMiddleware } from './middleware/basic-auth.ts';
+import { globalPasswordMiddleware } from './middleware/global-password.ts';
 import { noCacheMiddleware } from './middleware/no-cache.ts';
 import { errorHandler } from './middleware/error-handler.ts';
 import { createAlbumRoutes } from './routes/album.routes.ts';
@@ -96,12 +100,33 @@ export async function createApp() {
 
   app.get('/favicon.ico', (_req, res) => res.status(204).end());
 
+  app.use(cookieParser());
+
+  const sessionSecret = process.env.SESSION_SECRET;
+  if (!isDev && !sessionSecret) {
+    console.error(
+      'FATAL: SESSION_SECRET environment variable is required in production.',
+    );
+    process.exit(1);
+  }
+
+  app.use(
+    cookieSession({
+      name: 'session',
+      keys: [sessionSecret || 'media-player-dev-secret-do-not-use-in-prod'],
+      maxAge: 24 * 60 * 60 * 1000, // 24 hours
+    }),
+  );
+
+  if (process.env.NODE_ENV !== 'test') {
+    app.use(lusca.csrf({ angular: true })); // Sets XSRF-TOKEN cookie and expects X-XSRF-TOKEN header
+  }
+
   const limiters = createRateLimiters();
 
-  // Address Comment 2811709152: Apply authLimiter to Basic Auth to prevent brute-force
-  // Use a specific limiter that skips successful requests to avoid blocking legitimate traffic
   app.use(limiters.basicAuthLimiter);
   app.use(basicAuthMiddleware);
+  app.use(globalPasswordMiddleware);
 
   // Apply no-cache middleware to API routes to prevent sensitive data leakage
   app.use('/api', noCacheMiddleware);

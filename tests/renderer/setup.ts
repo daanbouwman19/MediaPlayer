@@ -1,5 +1,7 @@
 import { vi } from 'vitest';
 
+process.env.GLOBAL_PASSWORD = '';
+
 /**
  * Global setup for renderer tests.
  */

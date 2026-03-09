@@ -1,21 +1,27 @@
 import { vi, describe, it, expect, beforeEach } from 'vitest';
+import path from 'path';
 
 // Mock dependencies
+const mocks = vi.hoisted(() => {
+  return {
+    isFileInLibrary: vi.fn(),
+    getMediaDirectories: vi.fn().mockResolvedValue([]),
+    realpath: vi.fn(),
+  };
+});
+
 vi.mock('../src/core/database.ts', () => ({
-  isFileInLibrary: vi.fn(),
-  getMediaDirectories: vi.fn().mockResolvedValue([]),
+  isFileInLibrary: mocks.isFileInLibrary,
+  getMediaDirectories: mocks.getMediaDirectories,
 }));
 
 // Mock fs/promises
-vi.mock('fs/promises', async (importOriginal) => {
-  const actual = await importOriginal<any>();
+vi.mock('fs/promises', () => {
   return {
-    ...actual,
     default: {
-      ...actual,
-      realpath: vi.fn(),
+      realpath: mocks.realpath,
     },
-    realpath: vi.fn(),
+    realpath: mocks.realpath,
   };
 });
 
@@ -33,14 +39,15 @@ const mockRealpath = (mockImpl: (p: any) => Promise<string>) => {
 
 const setupRealpathMock = (allowedDir: string, resolvedFile: string) => {
   mockRealpath(async (p: any) => {
-    if (
-      typeof p === 'string' &&
-      (p === allowedDir ||
-        (p.includes(allowedDir) && !p.endsWith(resolvedFile.split('/').pop()!)))
-    ) {
-      return allowedDir;
+    const filename = resolvedFile.split('/').pop()!;
+    // If the path contains the filename, OR if it's the requested filePath,
+    // we return the expected resolved file string.
+    if (String(p).includes(filename) || String(p).includes('photo.jpg')) {
+      return path.resolve(resolvedFile);
     }
-    return resolvedFile;
+
+    // Otherwise return the expected directory string natively resolved
+    return path.resolve(allowedDir);
   });
 };
 
@@ -64,7 +71,7 @@ describe('authorizeFilePath Optimization', () => {
     const result = await authorizeFilePath(filePath);
 
     expect(result.isAllowed).toBe(true);
-    expect(result.realPath).toBe('/library/photo.jpg');
+    expect(result.realPath).toBe(path.resolve('/library/photo.jpg'));
     expect(isFileInLibrary).toHaveBeenCalledWith(filePath);
 
     // Should call getMediaDirectories to verify local paths

@@ -11,16 +11,11 @@ let cachedUserKey: Buffer | null = null;
 let cachedSecretKey: Buffer | null = null;
 
 // Helper to derive auth keys.
-// Using HMAC-SHA256 for fast, secure key derivation for comparison of in-memory secrets.
-// This avoids the CPU overhead of scrypt (DoS risk) while still providing
-// fixed-length buffers for timingSafeEqual.
-// The "password" is an environment variable token, not a stored user password hash.
-// We use HMAC for constant-time comparison, not for secure storage.
+// We use scrypt for secure key derivation for comparison of in-memory secrets.
+// This provides protection against timing attacks via fixed-length buffers
+// and protects against brute-force attacks while the process is running.
 function deriveAuthKey(input: string): Buffer {
-  // codeql[js/insufficient-password-hash]
-  // lgtm[js/insufficient-password-hash]
-  // lgtm[js/weak-cryptographic-algorithm]
-  return crypto.createHmac('sha256', AUTH_SALT).update(input).digest();
+  return crypto.scryptSync(input, AUTH_SALT, 32);
 }
 
 /**

@@ -6,12 +6,14 @@ import { useSlideshow } from '../../../src/renderer/composables/useSlideshow';
 import { useLibraryStore } from '../../../src/renderer/composables/useLibraryStore';
 import { usePlayerStore } from '../../../src/renderer/composables/usePlayerStore';
 import { useUIStore } from '../../../src/renderer/composables/useUIStore';
+import { useAuthStore } from '../../../src/renderer/composables/useAuthStore';
 import { api } from '../../../src/renderer/api';
 
 vi.mock('../../../src/renderer/composables/useSlideshow');
 vi.mock('../../../src/renderer/composables/useLibraryStore');
 vi.mock('../../../src/renderer/composables/usePlayerStore');
 vi.mock('../../../src/renderer/composables/useUIStore');
+vi.mock('../../../src/renderer/composables/useAuthStore');
 vi.mock('../../../src/renderer/api');
 
 vi.mock('../../../src/renderer/components/MediaGrid.vue', () => ({
@@ -89,6 +91,12 @@ describe('App.vue', () => {
     (useUIStore as Mock).mockReturnValue({
       state: mockUIState,
       ...toRefs(mockUIState),
+    });
+
+    (useAuthStore as Mock).mockReturnValue({
+      isLocked: ref(false),
+      isInitialized: ref(true),
+      checkLockStatus: vi.fn().mockResolvedValue(undefined),
     });
 
     vi.mocked(useSlideshow).mockReturnValue({
