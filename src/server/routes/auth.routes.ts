@@ -81,7 +81,8 @@ export function createAuthRoutes(limiters: RateLimiters) {
             }
             return res.json({ success: true });
           }
-        } catch {
+        } catch (err) {
+          console.error('Authentication error during password validation:', err);
           return res
             .status(500)
             .json({ error: 'Internal server error during authentication' });

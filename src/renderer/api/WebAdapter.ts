@@ -38,7 +38,8 @@ export class WebAdapter implements IMediaBackend {
 
       // Add CSRF token for mutating requests if present in cookies
       const xsrfToken = document.cookie
-        .split('; ')
+        .split(';')
+        .map((c) => c.trim())
         .find((row) => row.startsWith('XSRF-TOKEN='))
         ?.split('=')[1];
       if (xsrfToken) {
