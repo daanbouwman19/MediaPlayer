@@ -154,9 +154,6 @@
     "wait-on": "^9.0.4"
   },
   "overrides": {
-    "@vue/test-utils": {
-      "minimatch": "^9.0.8"
-    },
     "@tailwindcss/vite": {
       "vite": "^8.0.0"
     },
