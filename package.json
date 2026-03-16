@@ -128,7 +128,7 @@
     "concurrently": "^9.2.1",
     "cross-env": "^10.1.0",
     "electron": "^41.0.2",
-    "electron-builder": "^26.8.1",
+    "electron-builder": "^26.8.2",
     "electron-vite": "^5.0.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-vue": "^10.8.0",
@@ -156,6 +156,12 @@
   "overrides": {
     "@vue/test-utils": {
       "minimatch": "^9.0.8"
+    },
+    "@tailwindcss/vite": {
+      "vite": "^8.0.0"
+    },
+    "electron-vite": {
+      "vite": "^8.0.0"
     }
   }
 }
