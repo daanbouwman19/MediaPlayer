@@ -364,9 +364,9 @@ describe('useSlideshow', () => {
       const { navigateMedia } = useSlideshow();
       mockPlayerState.slideshowTimerId = 123 as any;
       const clearIntervalSpy = vi.spyOn(global, 'clearInterval');
-      
+
       await navigateMedia(-1);
-      
+
       expect(clearIntervalSpy).toHaveBeenCalledWith(123);
       expect(mockPlayerState.slideshowTimerId).toBeNull();
       clearIntervalSpy.mockRestore();
@@ -405,25 +405,25 @@ describe('useSlideshow', () => {
       const { navigateMedia } = useSlideshow();
       mockPlayerState.isTimerRunning = true;
       mockPlayerState.playFullVideo = true;
-      
+
       // Setup: move from item 1 to item 2 (which is a video)
       mockPlayerState.displayedMediaFiles = [
         { path: 'image.jpg', name: 'image.jpg' },
-        { path: 'video.mp4', name: 'video.mp4' }
+        { path: 'video.mp4', name: 'video.mp4' },
       ];
       mockPlayerState.currentMediaIndex = 0;
       mockLibraryState.supportedExtensions.videos = ['.mp4'];
       mockLibraryState.supportedExtensions.images = ['.jpg'];
-      
+
       const setIntervalSpy = vi.spyOn(global, 'setInterval');
 
       await navigateMedia(1);
 
-      // It should have cleared the old timer (via navigateMedia start), 
+      // It should have cleared the old timer (via navigateMedia start),
       // and NOT started a new one (via displayMedia) because it's a video and playFullVideo is true.
       expect(mockPlayerState.slideshowTimerId).toBeNull();
       expect(setIntervalSpy).not.toHaveBeenCalled();
-      
+
       setIntervalSpy.mockRestore();
     });
   });

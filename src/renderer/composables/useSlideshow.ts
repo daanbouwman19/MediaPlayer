@@ -28,6 +28,16 @@ export function useSlideshow() {
   const { stopSlideshow } = playerStore;
 
   /**
+   * Clears any existing slideshow timer interval.
+   */
+  const clearSlideshowTimer = () => {
+    if (playerStore.state.slideshowTimerId) {
+      clearInterval(playerStore.state.slideshowTimerId);
+      playerStore.state.slideshowTimerId = null;
+    }
+  };
+
+  /**
    * Filters a list of media files based on the current filter setting in the global state.
    * @param mediaFiles - The array of media files to filter.
    * @returns The filtered array of media files.
@@ -166,10 +176,7 @@ export function useSlideshow() {
 
     // Clear the interval immediately to prevent race conditions with the timer
     // from the previous media item during the async navigation process.
-    if (playerStore.state.slideshowTimerId) {
-      clearInterval(playerStore.state.slideshowTimerId);
-      playerStore.state.slideshowTimerId = null;
-    }
+    clearSlideshowTimer();
 
     if (direction > 0) {
       // Next
@@ -203,9 +210,7 @@ export function useSlideshow() {
    * Resumes the slideshow timer.
    */
   const resumeSlideshowTimer = () => {
-    if (playerStore.state.slideshowTimerId) {
-      clearInterval(playerStore.state.slideshowTimerId);
-    }
+    clearSlideshowTimer();
     playerStore.state.isTimerRunning = true;
     playerStore.state.timerProgress = 100;
 
@@ -219,8 +224,7 @@ export function useSlideshow() {
       playerStore.state.timerProgress = progress;
 
       if (progress <= 0) {
-        if (playerStore.state.slideshowTimerId)
-          clearInterval(playerStore.state.slideshowTimerId);
+        clearSlideshowTimer();
         navigateMedia(1);
       }
     }, interval);
@@ -230,10 +234,7 @@ export function useSlideshow() {
    * Pauses the slideshow timer.
    */
   const pauseSlideshowTimer = () => {
-    if (playerStore.state.slideshowTimerId) {
-      clearInterval(playerStore.state.slideshowTimerId);
-      playerStore.state.slideshowTimerId = null;
-    }
+    clearSlideshowTimer();
     playerStore.state.isTimerRunning = false;
   };
 

@@ -466,18 +466,18 @@ describe('MediaDisplay Combined Tests', () => {
       await flushPromises();
 
       const videoPlayer = wrapper.findComponent(VideoPlayer);
-      
+
       // Force loading state to true
       (wrapper.vm as any).isLoading = true;
-      
+
       await videoPlayer.vm.$emit('ended');
-      
+
       expect(slideshowMock.navigateMedia).not.toHaveBeenCalled();
 
       // Now set loading to false
       (wrapper.vm as any).isLoading = false;
       await videoPlayer.vm.$emit('ended');
-      
+
       expect(slideshowMock.navigateMedia).toHaveBeenCalledWith(1);
     });
 
