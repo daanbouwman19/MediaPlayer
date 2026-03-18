@@ -83,7 +83,14 @@ export function useSlideshow() {
         await api.recordMediaView(mediaItem.path);
       }
       if (playerStore.state.isTimerRunning) {
-        resumeSlideshowTimer();
+        const ext = getCachedExtension(mediaItem);
+        const isVideo = videoExtensionsSet.value.has(ext);
+        // If it's a video and we are in "play full video" mode,
+        // don't start/resume the slideshow timer yet.
+        // MediaDisplay will handle the transition once the video ends via handleVideoEnded.
+        if (!(isVideo && playerStore.state.playFullVideo)) {
+          resumeSlideshowTimer();
+        }
       }
     } catch (error) {
       console.error('Error recording media view:', error);
@@ -156,6 +163,13 @@ export function useSlideshow() {
    */
   const navigateMedia = async (direction: number) => {
     if (!playerStore.state.isSlideshowActive) return;
+
+    // Clear the interval immediately to prevent race conditions with the timer
+    // from the previous media item during the async navigation process.
+    if (playerStore.state.slideshowTimerId) {
+      clearInterval(playerStore.state.slideshowTimerId);
+      playerStore.state.slideshowTimerId = null;
+    }
 
     if (direction > 0) {
       // Next

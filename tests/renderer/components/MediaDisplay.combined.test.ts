@@ -459,6 +459,28 @@ describe('MediaDisplay Combined Tests', () => {
       expect(slideshowMock.resumeSlideshowTimer).toHaveBeenCalled();
     });
 
+    it('handleVideoEnded should NOT navigate if isLoading is true', async () => {
+      mockPlayerState.currentMediaItem = { name: 't.mp4', path: '/t.mp4' };
+      mockPlayerState.playFullVideo = true;
+      const wrapper = mount(MediaDisplay);
+      await flushPromises();
+
+      const videoPlayer = wrapper.findComponent(VideoPlayer);
+      
+      // Force loading state to true
+      (wrapper.vm as any).isLoading = true;
+      
+      await videoPlayer.vm.$emit('ended');
+      
+      expect(slideshowMock.navigateMedia).not.toHaveBeenCalled();
+
+      // Now set loading to false
+      (wrapper.vm as any).isLoading = false;
+      await videoPlayer.vm.$emit('ended');
+      
+      expect(slideshowMock.navigateMedia).toHaveBeenCalledWith(1);
+    });
+
     it('covers handleMediaError in transcoding mode', async () => {
       mockPlayerState.currentMediaItem = { name: 't.mp4', path: '/t.mp4' };
       const wrapper = mount(MediaDisplay);
