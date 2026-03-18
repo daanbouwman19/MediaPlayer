@@ -360,6 +360,18 @@ describe('useSlideshow', () => {
       expect(mockPlayerState.currentMediaItem.path).toBe('item1');
     });
 
+    it('should clear the slideshow timer immediately when navigating', async () => {
+      const { navigateMedia } = useSlideshow();
+      mockPlayerState.slideshowTimerId = 123 as any;
+      const clearIntervalSpy = vi.spyOn(global, 'clearInterval');
+
+      await navigateMedia(-1);
+
+      expect(clearIntervalSpy).toHaveBeenCalledWith(123);
+      expect(mockPlayerState.slideshowTimerId).toBeNull();
+      clearIntervalSpy.mockRestore();
+    });
+
     it('should not navigate backward past the beginning', async () => {
       mockPlayerState.currentMediaIndex = 0;
       const { navigateMedia } = useSlideshow();
@@ -387,6 +399,32 @@ describe('useSlideshow', () => {
       expect(mockPlayerState.displayedMediaFiles.length).toBe(4);
       expect(mockPlayerState.currentMediaIndex).toBe(3);
       expect(mockPlayerState.currentMediaItem.path).toBe('newItem');
+    });
+
+    it('should NOT resume the timer if navigating to a video and playFullVideo is true', async () => {
+      const { navigateMedia } = useSlideshow();
+      mockPlayerState.isTimerRunning = true;
+      mockPlayerState.playFullVideo = true;
+
+      // Setup: move from item 1 to item 2 (which is a video)
+      mockPlayerState.displayedMediaFiles = [
+        { path: 'image.jpg', name: 'image.jpg' },
+        { path: 'video.mp4', name: 'video.mp4' },
+      ];
+      mockPlayerState.currentMediaIndex = 0;
+      mockLibraryState.supportedExtensions.videos = ['.mp4'];
+      mockLibraryState.supportedExtensions.images = ['.jpg'];
+
+      const setIntervalSpy = vi.spyOn(global, 'setInterval');
+
+      await navigateMedia(1);
+
+      // It should have cleared the old timer (via navigateMedia start),
+      // and NOT started a new one (via displayMedia) because it's a video and playFullVideo is true.
+      expect(mockPlayerState.slideshowTimerId).toBeNull();
+      expect(setIntervalSpy).not.toHaveBeenCalled();
+
+      setIntervalSpy.mockRestore();
     });
   });
 

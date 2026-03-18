@@ -867,7 +867,8 @@ const toggleMute = () => {
  * Handles the end of video playback.
  */
 const handleVideoEnded = () => {
-  if (playFullVideo.value) {
+  // Only navigate if we are not already loading another media
+  if (playFullVideo.value && !isLoading.value) {
     navigateMedia(1);
   }
 };
