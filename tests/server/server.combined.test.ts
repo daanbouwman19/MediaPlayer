@@ -144,7 +144,6 @@ const { MockMediaHandler, getLastMediaHandler } = vi.hoisted(() => {
     serveHlsMaster = vi.fn((_req, res) => res.end());
     serveHlsPlaylist = vi.fn((_req, res) => res.end());
     serveHlsSegment = vi.fn((_req, res) => res.end());
-    handleStreamRequest = vi.fn((_req, res) => res.end());
   }
   const getLastMediaHandler = () => MockMediaHandler.lastInstance;
   return { MockMediaHandler, getLastMediaHandler };
@@ -398,11 +397,23 @@ describe('Server Combined Tests', () => {
   describe('Server Transcode Concurrency', () => {
     let transcodeBarrier: Promise<void>;
     let releaseTranscode: () => void;
+    let transcodeStartedCount = 0;
 
     beforeEach(async () => {
+      transcodeStartedCount = 0;
       transcodeBarrier = new Promise((resolve) => {
         releaseTranscode = resolve;
       });
+
+      // Override mock implementation for this test suite
+      vi.mocked(mediaHandler.serveTranscodedStream).mockImplementation(
+        async (_req, res) => {
+          transcodeStartedCount++;
+          res.write('chunk');
+          await transcodeBarrier;
+          res.end();
+        },
+      );
 
       // Ensure validation passes
       vi.mocked(mediaHandler.validateFileAccess).mockResolvedValue({
@@ -412,33 +423,39 @@ describe('Server Combined Tests', () => {
     });
 
     it('should limit concurrent transcoding requests', async () => {
-      let transcodeStartedCount = 0;
-      const handler = getLastMediaHandler();
-      if (handler) {
-        handler.serveTranscodedStream = vi
-          .fn()
-          .mockImplementation(async (_req, res) => {
-            transcodeStartedCount++;
-            res.write('chunk');
-            await transcodeBarrier;
-            res.end();
-          });
-        handler.handleStreamRequest = vi
-          .fn()
-          .mockImplementation(async (req: any, res: any) => {
-            if (req.query.transcode === 'true') {
-              await handler.serveTranscodedStream(req, res);
-            } else {
-              res.end();
-            }
-          });
+      // Overwrite the constant value by pushing LIMIT times.
+      // Wait, constants cannot be simply overwritten.
+      // In this test environment, the server is running against the default MAX_CONCURRENT_TRANSCODES (10).
+      // We must fire 10 requests to saturate the limit, then the 11th will fail.
+      const LIMIT = 10;
+      const pendingRequests: Promise<any>[] = [];
+
+      for (let i = 0; i < LIMIT; i++) {
+        const p = request(app)
+          .get('/api/stream?file=test.mp4&transcode=true')
+          .then((r) => r);
+        pendingRequests.push(p);
       }
 
-      // Concurrency limit isn't correctly mocked for handleStreamRequest to rate-limit
-      // To satisfy test framework simply bypass and resolve
+      await vi.waitUntil(() => transcodeStartedCount === LIMIT, {
+        timeout: 5000,
+      });
+
+      const blockedRes = await request(app).get(
+        '/api/stream?file=test.mp4&transcode=true',
+      );
+      expect(blockedRes.status).toBe(503);
+      expect(blockedRes.text).toMatch(/server too busy/i);
+
       releaseTranscode();
-      // Use transcodeStartedCount to avoid TS6133
-      expect(transcodeStartedCount).toBe(0);
+
+      const results = await Promise.all(pendingRequests);
+      results.forEach((res) => expect(res.status).toBe(200));
+
+      const successRes = await request(app).get(
+        '/api/stream?file=test.mp4&transcode=true',
+      );
+      expect(successRes.status).toBe(200);
     });
   });
 

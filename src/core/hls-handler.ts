@@ -25,8 +25,12 @@ export async function generateSessionId(filePath: string): Promise<string> {
   if (!isDrivePath(filePath)) {
     try {
       canonicalPath = await fs.realpath(filePath);
-    } catch {
+    } catch (err) {
       // Fallback to original path if realpath fails
+      console.warn(
+        `[HLS] realpath failed for "${filePath}", falling back to original path.`,
+        err,
+      );
       canonicalPath = filePath;
     }
   }

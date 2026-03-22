@@ -185,12 +185,9 @@ const togglePlay = () => {
 
   if (videoElement.value) {
     if (videoElement.value.paused) {
-      const playPromise = videoElement.value.play?.();
-      if (playPromise !== undefined) {
-        playPromise.catch((error) => {
-          console.error('Error attempting to play video:', error);
-        });
-      }
+      videoElement.value.play?.()?.catch((error) => {
+        console.error('Error attempting to play video:', error);
+      });
     } else {
       videoElement.value.pause?.();
     }
