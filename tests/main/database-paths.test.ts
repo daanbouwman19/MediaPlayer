@@ -1,5 +1,18 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
+// Mock electron at top level to ensure it's available
+const mockElectron = vi.hoisted(() => ({
+  app: {
+    getPath: vi.fn().mockReturnValue('/user/data'),
+    getAppPath: vi.fn().mockReturnValue('/app/asar'),
+    isPackaged: false,
+  },
+}));
+
+vi.mock('electron', () => ({
+  app: mockElectron.app,
+}));
+
 // Mock core database to intercept calls and avoid side effects
 vi.mock('../../src/core/database', () => ({
   initDatabase: vi.fn(),
@@ -18,18 +31,11 @@ describe('Main Process Database Initialization Paths', () => {
   afterEach(() => {
     process.env.NODE_ENV = originalEnv;
     process.env.VITEST = originalVitest;
-    vi.doUnmock('electron');
   });
 
   it('should use correct worker path when packaged', async () => {
-    // Mock electron with isPackaged = true
-    vi.doMock('electron', () => ({
-      app: {
-        getPath: () => '/user/data',
-        getAppPath: () => '/app/asar',
-        isPackaged: true,
-      },
-    }));
+    // Set mock behavior for this test
+    mockElectron.app.isPackaged = true;
 
     // Import module under test
     const { initDatabase } = await import('../../src/main/database');
@@ -45,13 +51,8 @@ describe('Main Process Database Initialization Paths', () => {
   });
 
   it('should use correct worker URL in development', async () => {
-    // Mock electron with isPackaged = false
-    vi.doMock('electron', () => ({
-      app: {
-        getPath: () => '/user/data',
-        isPackaged: false,
-      },
-    }));
+    // Set mock behavior for this test
+    mockElectron.app.isPackaged = false;
 
     // Mock environment to look like development
     process.env.NODE_ENV = 'development';
@@ -71,13 +72,8 @@ describe('Main Process Database Initialization Paths', () => {
   });
 
   it('should use correct worker path in test environment', async () => {
-    // Mock electron with isPackaged = false
-    vi.doMock('electron', () => ({
-      app: {
-        getPath: () => '/user/data',
-        isPackaged: false,
-      },
-    }));
+    // Set mock behavior for this test
+    mockElectron.app.isPackaged = false;
 
     // Mock environment to look like test
     process.env.NODE_ENV = 'test';
