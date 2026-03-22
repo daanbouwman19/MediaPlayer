@@ -467,7 +467,7 @@ describe('Security Config Loading', () => {
       await import('../../src/core/security');
     // We need to import fs AFTER resetModules to ensure we're mocking the right instance if resetModules is used
     const fsMock = await import('fs/promises');
-    vi.mocked(fsMock.readFile).mockResolvedValue(mockConfig as any);
+    vi.mocked(fsMock.readFile).mockResolvedValue(mockConfig);
 
     await loadSecurityConfig('/path/to/config.json');
 
@@ -491,7 +491,7 @@ describe('Security Config Loading', () => {
   it('warns and throws on invalid JSON or read error', async () => {
     const { loadSecurityConfig } = await import('../../src/core/security');
     const fsMock = await import('fs/promises');
-    vi.mocked(fsMock.readFile).mockResolvedValue('{ invalid json ' as any);
+    vi.mocked(fsMock.readFile).mockResolvedValue('{ invalid json ');
 
     await expect(loadSecurityConfig('/bad/config.json')).rejects.toThrow();
 
