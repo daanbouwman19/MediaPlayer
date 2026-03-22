@@ -9,7 +9,11 @@ dotenv.config();
 import { app, BrowserWindow } from 'electron';
 import log from 'electron-log/main.js';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import fs from 'fs/promises';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 log.initialize();
 
