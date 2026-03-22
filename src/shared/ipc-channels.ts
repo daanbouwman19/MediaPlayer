@@ -5,6 +5,7 @@ export const IPC_CHANNELS = {
   GET_VIDEO_METADATA: 'get-video-metadata',
   GET_HEATMAP: 'get-heatmap',
   GET_HEATMAP_PROGRESS: 'get-heatmap-progress',
+  GET_HLS_STATUS: 'get-hls-status',
   GET_ALBUMS_WITH_VIEW_COUNTS: 'get-albums-with-view-counts',
   ADD_MEDIA_DIRECTORY: 'add-media-directory',
   REMOVE_MEDIA_DIRECTORY: 'remove-media-directory',

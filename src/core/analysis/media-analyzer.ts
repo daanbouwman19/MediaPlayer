@@ -60,6 +60,16 @@ export class MediaAnalyzer {
     filePath: string,
     points: number = DEFAULT_HEATMAP_POINTS,
   ): Promise<HeatmapData> {
+    const disableHeatmaps = process.env.DISABLE_HEATMAPS === 'true';
+    if (disableHeatmaps) {
+      const safePoints = this.sanitizePoints(points);
+      return {
+        audio: new Array(safePoints).fill(-90),
+        motion: new Array(safePoints).fill(0),
+        points: safePoints,
+      };
+    }
+
     const existingJob = this.activeJobs.get(filePath);
     if (existingJob) {
       // Return existing promise if already queued or running

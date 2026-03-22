@@ -2,7 +2,7 @@ import fs from 'fs/promises';
 import { realpathSync } from 'fs';
 import path from 'path';
 import * as database from './database.ts';
-import { MediaDirectory } from './types.ts';
+import type { MediaDirectory } from './types.ts';
 import { isDrivePath } from './media-utils.ts';
 import { ConcurrencyLimiter } from './utils/concurrency-limiter.ts';
 import {

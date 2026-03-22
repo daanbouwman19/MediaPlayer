@@ -16,6 +16,11 @@ interface HlsSession {
   playlistPath: string;
   processExited?: boolean;
   exitCode?: number | null;
+  progress: {
+    currentTime: number; // in seconds
+    duration: number; // in seconds
+    percent: number;
+  };
 }
 
 const SESSION_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes inactivity timeout
@@ -55,6 +60,15 @@ export class HlsManager {
 
   setCacheDir(dir: string) {
     this.cacheDir = dir;
+  }
+
+  /**
+   * Returns the progress of an HLS session.
+   */
+  getSessionProgress(sessionId: string) {
+    const session = this.sessions.get(sessionId);
+    if (!session) return null;
+    return session.progress;
   }
 
   async ensureSession(sessionId: string, filePath: string): Promise<void> {
@@ -98,6 +112,61 @@ export class HlsManager {
     console.log(`[HLS] Starting session ${sessionId} for ${filePath}`);
     const proc = spawn(ffmpegStatic, args);
 
+    const session: HlsSession = {
+      process: proc,
+      lastAccess: Date.now(),
+      outputDir,
+      playlistPath,
+      progress: {
+        currentTime: 0,
+        duration: 0,
+        percent: 0,
+      },
+    };
+    this.sessions.set(sessionId, session);
+
+    // Track progress from stderr
+    let stderrBuffer = '';
+    proc.stderr.on('data', (data) => {
+      const str = data.toString();
+      stderrBuffer += str;
+
+      const lines = stderrBuffer.split(/[\r\n]+/);
+      stderrBuffer = lines.pop() || '';
+
+      for (const line of lines) {
+        // Parse Duration
+        if (session.progress.duration === 0) {
+          const durMatch = line.match(/Duration: (\d+):(\d+):(\d+)\.(\d+)/);
+          if (durMatch) {
+            const h = parseInt(durMatch[1], 10);
+            const m = parseInt(durMatch[2], 10);
+            const s = parseInt(durMatch[3], 10);
+            session.progress.duration = h * 3600 + m * 60 + s;
+          }
+        }
+
+        // Parse current time
+        const timeMatch = line.match(/time=(\d+):(\d+):(\d+)\.(\d+)/);
+        if (timeMatch) {
+          const h = parseInt(timeMatch[1], 10);
+          const m = parseInt(timeMatch[2], 10);
+          const s = parseInt(timeMatch[3], 10);
+          session.progress.currentTime = h * 3600 + m * 60 + s;
+
+          if (session.progress.duration > 0) {
+            session.progress.percent = Math.min(
+              100,
+              Math.round(
+                (session.progress.currentTime / session.progress.duration) *
+                  100,
+              ),
+            );
+          }
+        }
+      }
+    });
+
     // Handle errors
     proc.on('error', (err) => {
       console.error(`[HLS] Session ${sessionId} error:`, err);
@@ -109,21 +178,19 @@ export class HlsManager {
         console.error(`[HLS] Session ${sessionId} exited with code ${code}`);
       }
 
-      const session = this.sessions.get(sessionId);
       if (session) {
-        // Explicitly drop process reference to help GC, but keep session metadata
         session.process = null;
-        // Also store the exit state for waitForPlaylist to see
         session.processExited = true;
         session.exitCode = code;
-      }
-    });
 
-    this.sessions.set(sessionId, {
-      process: proc,
-      lastAccess: Date.now(),
-      outputDir,
-      playlistPath,
+        // If it finished successfully, set progress to 100%
+        if (code === 0) {
+          session.progress.percent = 100;
+          if (session.progress.duration > 0) {
+            session.progress.currentTime = session.progress.duration;
+          }
+        }
+      }
     });
 
     // Wait for playlist to be created?

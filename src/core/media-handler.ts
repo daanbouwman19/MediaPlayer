@@ -9,9 +9,10 @@ import helmet from 'helmet';
 import { spawn } from 'child_process';
 import { createInterface } from 'readline';
 import path from 'path';
+import crypto from 'crypto';
 import { createMediaSource } from './media-source.ts';
 
-import { IMediaSource } from './media-source-types.ts';
+import type { IMediaSource } from './media-source-types.ts';
 import { isDrivePath, normalizeFilePath } from './media-utils.ts';
 import { getTranscodeArgs, getFFmpegDuration } from './utils/ffmpeg-utils.ts';
 import { parseHttpRange, getQueryParam } from './utils/http-utils.ts';
@@ -27,6 +28,7 @@ import {
   serveHlsPlaylist,
   serveHlsSegment,
 } from './hls-handler.ts';
+import { HlsManager } from './hls-manager.ts';
 import {
   DATA_URL_THRESHOLD_BYTES,
   RATE_LIMIT_FILE_WINDOW_MS,
@@ -88,6 +90,10 @@ export class MediaHandler {
     segmentName: string,
   ) {
     return serveHlsSegment(req, res, filePath, segmentName);
+  }
+
+  async serveHlsStatus(req: Request, res: Response, filePath: string) {
+    return serveHlsStatus(req, res, filePath);
   }
 
   async serveStaticFile(req: Request, res: Response, filePath: string) {
@@ -328,6 +334,24 @@ export async function serveTranscodedStream(
 }
 
 export { serveHlsMaster, serveHlsPlaylist, serveHlsSegment };
+
+/**
+ * Serves the progress of HLS transcoding.
+ */
+export async function serveHlsStatus(
+  _req: Request,
+  res: Response,
+  filePath: string,
+) {
+  const authorizedPath = await getAuthorizedPath(res, filePath);
+  if (!authorizedPath) return;
+
+  const sessionId = crypto.createHash('md5').update(authorizedPath).digest('hex');
+  const hlsManager = HlsManager.getInstance();
+  const progress = hlsManager.getSessionProgress(sessionId);
+
+  res.json({ progress: progress || null });
+}
 
 /**
  * Serves the Heatmap data for a media file.

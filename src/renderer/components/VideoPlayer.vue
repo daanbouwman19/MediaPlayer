@@ -93,10 +93,34 @@ const initHls = () => {
 
   if (props.src.includes('.m3u8')) {
     if (Hls.isSupported()) {
-      const hlsInstance = new Hls();
+      const hlsInstance = new Hls({
+        // Bolt Optimization: Increase internal buffer to reduce stalls
+        maxBufferLength: 30,
+        maxMaxBufferLength: 60,
+      });
       hls.value = hlsInstance;
+
+      // Explicitly clear src to prevent native browser behavior
+      if (videoElement.value) {
+        videoElement.value.src = '';
+      }
+
       hlsInstance.loadSource(props.src);
-      hlsInstance.attachMedia(videoElement.value);
+      hlsInstance.attachMedia(videoElement.value!);
+
+      hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
+        console.log('[VideoPlayer] HLS Manifest parsed, attempting play');
+        videoElement.value
+          ?.play()
+          .catch((err) =>
+            console.warn('[VideoPlayer] Autoplay blocked or failed:', err),
+          );
+      });
+
+      hlsInstance.on(Hls.Events.LEVEL_LOADED, (_event, data) => {
+        console.log('[VideoPlayer] HLS Level loaded:', data.details.live ? 'live' : 'vod');
+      });
+
       hlsInstance.on(Hls.Events.ERROR, (_event, data) => {
         if (data.fatal) {
           console.error('HLS Fatal Error:', data);

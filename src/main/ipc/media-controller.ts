@@ -1,4 +1,5 @@
 import { IpcMainInvokeEvent } from 'electron';
+import crypto from 'crypto';
 import { IPC_CHANNELS } from '../../shared/ipc-channels';
 import {
   validatePathAccess,
@@ -22,6 +23,7 @@ import {
 } from '../../core/media-service';
 import { isDrivePath, getDriveId } from '../../core/media-utils';
 import { MediaAnalyzer } from '../../core/analysis/media-analyzer';
+import { HlsManager } from '../../core/hls-manager';
 import { getServerPort } from '../local-server';
 import { handleIpc } from '../utils/ipc-helper';
 
@@ -173,4 +175,15 @@ export function registerMediaHandlers() {
       }
     },
   );
+
+  handleIpc(IPC_CHANNELS.GET_HLS_STATUS, async (_event, filePath: string) => {
+    try {
+      await validatePathAccess(filePath);
+      const sessionId = crypto.createHash('md5').update(filePath).digest('hex');
+      return HlsManager.getInstance().getSessionProgress(sessionId);
+    } catch (err) {
+      console.error('[MediaController] Error getting HLS status:', err);
+      return null;
+    }
+  });
 }

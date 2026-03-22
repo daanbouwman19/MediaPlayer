@@ -1,5 +1,6 @@
 import { Response } from 'express';
-import { authorizeFilePath, AuthorizationResult } from './security.ts';
+import { authorizeFilePath } from './security.ts';
+import type { AuthorizationResult } from './security.ts';
 
 export type FileAccessResult =
   | { success: true; path: string }
