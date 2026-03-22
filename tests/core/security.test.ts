@@ -461,9 +461,10 @@ describe('Security Config Loading', () => {
     const mockConfig = JSON.stringify({
       sensitiveSubdirectories: ['custom_secret'],
     });
-    
+
     // We need to import security AFTER resetModules to get fresh state
-    const { loadSecurityConfig, isRestrictedPath } = await import('../../src/core/security');
+    const { loadSecurityConfig, isRestrictedPath } =
+      await import('../../src/core/security');
     // We need to import fs AFTER resetModules to ensure we're mocking the right instance if resetModules is used
     const fsMock = await import('fs/promises');
     vi.mocked(fsMock.readFile).mockResolvedValue(mockConfig as any);
@@ -477,7 +478,7 @@ describe('Security Config Loading', () => {
   it('ignores missing config file (ENOENT)', async () => {
     const error: any = new Error('File not found');
     error.code = 'ENOENT';
-    
+
     const { loadSecurityConfig } = await import('../../src/core/security');
     const fsMock = await import('fs/promises');
     vi.mocked(fsMock.readFile).mockRejectedValue(error);
