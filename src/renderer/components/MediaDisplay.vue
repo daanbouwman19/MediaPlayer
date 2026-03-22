@@ -347,6 +347,7 @@ const startTranscodingProgressPoll = (filePath: string) => {
         }
         if (status.percent >= 100) {
           isTranscodingLoading.value = false;
+          isBuffering.value = false;
           stopTranscodingProgressPoll();
         }
       }
@@ -489,8 +490,7 @@ const tryTranscoding = async (startTime = 0, requestId?: number) => {
 
   // We are "transcoding" in the backend, but for the frontend player (HLS),
   // it behaves like a native stream (seekable).
-  // So isTranscodingMode = false prevents manual seek triggers in VideoPlayer.
-  isTranscodingMode.value = false;
+  isTranscodingMode.value = true;
   isTranscodingLoading.value = true;
   error.value = null;
 

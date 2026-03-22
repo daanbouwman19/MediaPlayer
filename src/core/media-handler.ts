@@ -346,7 +346,10 @@ export async function serveHlsStatus(
   const authorizedPath = await getAuthorizedPath(res, filePath);
   if (!authorizedPath) return;
 
-  const sessionId = crypto.createHash('md5').update(authorizedPath).digest('hex');
+  const sessionId = crypto
+    .createHash('md5')
+    .update(authorizedPath)
+    .digest('hex');
   const hlsManager = HlsManager.getInstance();
   const progress = hlsManager.getSessionProgress(sessionId);
 

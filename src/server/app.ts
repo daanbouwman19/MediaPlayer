@@ -129,7 +129,7 @@ export async function createApp() {
     app.use(
       lusca.csrf({
         angular: true,
-        whitelist: ['/api/auth/unlock'],
+        allowlist: ['/api/auth/unlock'],
       }),
     ); // Sets XSRF-TOKEN cookie and expects X-XSRF-TOKEN header
   }

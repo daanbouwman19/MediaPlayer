@@ -153,7 +153,11 @@ export class ElectronAdapter implements IMediaBackend {
 
   async getHlsStatus(
     filePath: string,
-  ): Promise<{ currentTime: number; duration: number; percent: number } | null> {
+  ): Promise<{
+    currentTime: number;
+    duration: number;
+    percent: number;
+  } | null> {
     return this.invoke(this.bridge.getHlsStatus(filePath));
   }
 

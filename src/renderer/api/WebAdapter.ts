@@ -191,9 +191,17 @@ export class WebAdapter implements IMediaBackend {
 
   async getHlsStatus(
     filePath: string,
-  ): Promise<{ currentTime: number; duration: number; percent: number } | null> {
+  ): Promise<{
+    currentTime: number;
+    duration: number;
+    percent: number;
+  } | null> {
     const data = await this.request<{
-      progress: { currentTime: number; duration: number; percent: number } | null;
+      progress: {
+        currentTime: number;
+        duration: number;
+        percent: number;
+      } | null;
     }>(`/api/hls/status?file=${encodeURIComponent(filePath)}`);
     return data.progress;
   }

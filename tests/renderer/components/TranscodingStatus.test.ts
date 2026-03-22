@@ -11,6 +11,7 @@ describe('TranscodingStatus.vue', () => {
         isBuffering: false,
         transcodedDuration: 0,
         currentTranscodeStartTime: 0,
+        progress: null,
       },
     });
     expect(wrapper.html()).toBe('<!--v-if-->');
@@ -24,6 +25,7 @@ describe('TranscodingStatus.vue', () => {
         isBuffering: false,
         transcodedDuration: 0,
         currentTranscodeStartTime: 0,
+        progress: null,
       },
     });
     expect(wrapper.text()).toContain('Loading media...');
@@ -37,6 +39,7 @@ describe('TranscodingStatus.vue', () => {
         isBuffering: false,
         transcodedDuration: 100,
         currentTranscodeStartTime: 25,
+        progress: 25,
       },
     });
     expect(wrapper.text()).toContain('Transcoding...');
@@ -51,6 +54,7 @@ describe('TranscodingStatus.vue', () => {
         isBuffering: true,
         transcodedDuration: 0,
         currentTranscodeStartTime: 0,
+        progress: null,
       },
     });
     expect(wrapper.text()).toContain('Buffering...');

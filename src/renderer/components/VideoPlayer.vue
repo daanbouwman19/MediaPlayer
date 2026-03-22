@@ -97,6 +97,9 @@ const initHls = () => {
         // Bolt Optimization: Increase internal buffer to reduce stalls
         maxBufferLength: 30,
         maxMaxBufferLength: 60,
+        debug: true,
+        // Use initialTime if provided for HLS start position
+        startPosition: props.initialTime && props.initialTime > 0 ? props.initialTime : -1,
       });
       hls.value = hlsInstance;
 
@@ -118,7 +121,10 @@ const initHls = () => {
       });
 
       hlsInstance.on(Hls.Events.LEVEL_LOADED, (_event, data) => {
-        console.log('[VideoPlayer] HLS Level loaded:', data.details.live ? 'live' : 'vod');
+        console.log(
+          '[VideoPlayer] HLS Level loaded:',
+          data.details.live ? 'live' : 'vod',
+        );
       });
 
       hlsInstance.on(Hls.Events.ERROR, (_event, data) => {
