@@ -216,7 +216,9 @@ describe('Server entry coverage', () => {
     vi.resetModules();
     process.argv[1] = '';
 
-    vi.unmock('../../src/server/main.ts');
+    vi.doMock('../../src/server/main.ts', async (importOriginal) => {
+      return await importOriginal();
+    });
 
     const { shouldAutoBootstrap } = await import('../../src/server/main.ts');
 
@@ -227,7 +229,9 @@ describe('Server entry coverage', () => {
     vi.resetModules();
     process.argv[1] = path.resolve(process.cwd(), 'src', 'server', 'main.ts');
 
-    vi.unmock('../../src/server/main.ts');
+    vi.doMock('../../src/server/main.ts', async (importOriginal) => {
+      return await importOriginal();
+    });
 
     const { shouldAutoBootstrap } = await import('../../src/server/main.ts');
 

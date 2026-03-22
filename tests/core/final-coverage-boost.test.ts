@@ -164,6 +164,16 @@ vi.mock('../../src/core/media-utils', async (importOriginal) => {
   };
 });
 
+// 10. Mock media-analyzer
+vi.mock('../../src/core/analysis/media-analyzer', () => ({
+  MediaAnalyzer: {
+    getInstance: () => ({
+      generateHeatmap: vi.fn().mockRejectedValue(new Error('Heatmap Fail')),
+      setCacheDir: vi.fn(),
+    }),
+  },
+}));
+
 // Import modules
 import * as dbWorker from '../../src/core/database-worker';
 import * as mediaService from '../../src/core/media-service';
@@ -576,17 +586,6 @@ describe('Final Coverage Boost', () => {
         path: '/local.mp4',
       });
       mockHandleAccessCheck.mockReturnValue(false);
-      // Mock MediaAnalyzer
-      vi.mock('../../src/core/analysis/media-analyzer', () => ({
-        MediaAnalyzer: {
-          getInstance: () => ({
-            generateHeatmap: vi
-              .fn()
-              .mockRejectedValue(new Error('Heatmap Fail')),
-            setCacheDir: vi.fn(),
-          }),
-        },
-      }));
 
       const req = { query: { file: '/local.mp4' } } as any;
       const res = {

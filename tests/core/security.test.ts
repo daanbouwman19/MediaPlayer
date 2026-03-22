@@ -450,15 +450,24 @@ describe('Path Restriction Security', () => {
 describe('Security Config Loading', () => {
   const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
+  async function getReadFileMock() {
+    const fsMock = (await import('fs/promises')) as any;
+    return fsMock.default?.readFile || fsMock.readFile;
+  }
+
   beforeEach(() => {
     vi.clearAllMocks();
     vi.resetModules();
-    vi.doMock('fs/promises', () => ({
-      default: {
+    vi.doMock('fs/promises', () => {
+      const mock = {
         realpath: vi.fn(),
         readFile: vi.fn(),
-      },
-    }));
+      };
+      return {
+        ...mock,
+        default: mock,
+      };
+    });
   });
 
   afterEach(() => {
@@ -469,8 +478,8 @@ describe('Security Config Loading', () => {
     const mockConfig = JSON.stringify({
       sensitiveSubdirectories: ['custom_secret'],
     });
-    const fsMock = await import('fs/promises');
-    vi.mocked(fsMock.default.readFile).mockResolvedValue(mockConfig);
+    const readFile = await getReadFileMock();
+    vi.mocked(readFile).mockResolvedValue(mockConfig);
 
     const { loadSecurityConfig: loadConfig, isRestrictedPath: checkPath } =
       await import('../../src/core/security');
@@ -484,8 +493,8 @@ describe('Security Config Loading', () => {
   it('ignores missing config file (ENOENT)', async () => {
     const error: any = new Error('File not found');
     error.code = 'ENOENT';
-    const fsMock = await import('fs/promises');
-    vi.mocked(fsMock.default.readFile).mockRejectedValue(error);
+    const readFile = await getReadFileMock();
+    vi.mocked(readFile).mockRejectedValue(error);
 
     const { loadSecurityConfig: loadConfig } =
       await import('../../src/core/security');
@@ -495,9 +504,8 @@ describe('Security Config Loading', () => {
   });
 
   it('warns and throws on invalid JSON or read error', async () => {
-    // Re-import fs to get the fresh mock instance after resetModules
-    const fsMock = await import('fs/promises');
-    vi.mocked(fsMock.default.readFile).mockResolvedValue('{ invalid json ');
+    const readFile = await getReadFileMock();
+    vi.mocked(readFile).mockResolvedValue('{ invalid json ');
 
     const { loadSecurityConfig: loadConfig } =
       await import('../../src/core/security');
