@@ -3,14 +3,12 @@ import { HlsManager } from '../../src/core/hls-manager.ts';
 import { MAX_CONCURRENT_TRANSCODES } from '../../src/core/constants.ts';
 import EventEmitter from 'events';
 
-const { mockSpawn, mockFsMkdir, mockFsAccess, mockFsRm, mockFsReadFile } =
-  vi.hoisted(() => ({
-    mockSpawn: vi.fn(),
-    mockFsMkdir: vi.fn(),
-    mockFsAccess: vi.fn(),
-    mockFsRm: vi.fn(),
-    mockFsReadFile: vi.fn(),
-  }));
+const { mockSpawn, mockFsMkdir, mockFsRm, mockFsStat } = vi.hoisted(() => ({
+  mockSpawn: vi.fn(),
+  mockFsMkdir: vi.fn(),
+  mockFsRm: vi.fn(),
+  mockFsStat: vi.fn(),
+}));
 
 vi.mock('child_process', () => ({
   spawn: mockSpawn,
@@ -20,15 +18,14 @@ vi.mock('child_process', () => ({
 vi.mock('fs/promises', () => ({
   default: {
     mkdir: mockFsMkdir,
-    access: mockFsAccess,
     rm: mockFsRm,
-    readFile: mockFsReadFile,
+    stat: mockFsStat,
+    readdir: vi.fn().mockResolvedValue([]),
   },
   mkdir: mockFsMkdir,
-  access: mockFsAccess,
   rm: mockFsRm,
-  readFile: mockFsReadFile,
-  constants: { F_OK: 0 },
+  stat: mockFsStat,
+  readdir: vi.fn().mockResolvedValue([]),
 }));
 
 vi.mock('ffmpeg-static', () => ({
@@ -42,26 +39,22 @@ vi.mock('../../src/core/media-source.ts', () => ({
 import { createMediaSource } from '../../src/core/media-source.ts';
 
 describe('HlsManager DOS Protection', () => {
-  const CACHE_DIR = '/tmp/hls';
+  const CACHE_DIR = '/tmp/hls-dos';
   let hlsManager: HlsManager;
 
   beforeEach(() => {
     vi.clearAllMocks();
     vi.useFakeTimers();
-    // Singleton management
     hlsManager = HlsManager.getInstance();
     hlsManager.setCacheDir(CACHE_DIR);
 
-    // Clear sessions
-    if (hlsManager) {
-      hlsManager.stopCleanupInterval();
-      if ((hlsManager as any).sessions) {
-        (hlsManager as any).sessions.clear();
-      }
-    }
+    // Reset internal state
+    (hlsManager as any).sessions.clear();
+    (hlsManager as any).pendingSessions.clear();
+    hlsManager.stopCleanupInterval();
 
     // Default fs behavior
-    mockFsAccess.mockResolvedValue(undefined); // File exists
+    mockFsStat.mockResolvedValue({ size: 100, isDirectory: () => true } as any);
     mockFsMkdir.mockResolvedValue(undefined);
     mockFsRm.mockResolvedValue(undefined);
 
@@ -70,6 +63,7 @@ describe('HlsManager DOS Protection', () => {
       getStream: vi.fn(),
       getMimeType: vi.fn(),
       getSize: vi.fn(),
+      getType: () => 'local',
     }));
   });
 
@@ -80,11 +74,9 @@ describe('HlsManager DOS Protection', () => {
   it('enforces max concurrent sessions limit (DOS PREVENTION)', async () => {
     const limit = MAX_CONCURRENT_TRANSCODES;
 
-    // Mock successful process spawn
     mockSpawn.mockImplementation(() => {
       const mockProcess = new EventEmitter() as any;
       mockProcess.kill = vi.fn();
-      mockProcess.stdout = new EventEmitter();
       mockProcess.stderr = new EventEmitter();
       mockProcess.exitCode = null;
       mockProcess.killed = false;
@@ -92,9 +84,16 @@ describe('HlsManager DOS Protection', () => {
     });
 
     // 1. Fill the slots up to the limit
+    const promises = [];
     for (let i = 0; i < limit; i++) {
-      await hlsManager.ensureSession(`session-${i}`, `/path/file-${i}.mp4`);
+      promises.push(
+        hlsManager.ensureSession(`session-${i}`, `/path/file-${i}.mp4`),
+      );
     }
+
+    // Advance timers so they all can finish waitForPlaylist
+    await vi.advanceTimersByTimeAsync(500);
+    await Promise.all(promises);
 
     expect(mockSpawn).toHaveBeenCalledTimes(limit);
 
