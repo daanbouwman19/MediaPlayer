@@ -9,7 +9,6 @@ import helmet from 'helmet';
 import { spawn } from 'child_process';
 import { createInterface } from 'readline';
 import path from 'path';
-import crypto from 'crypto';
 import { createMediaSource } from './media-source.ts';
 
 import type { IMediaSource } from './media-source-types.ts';
@@ -27,6 +26,7 @@ import {
   serveHlsMaster,
   serveHlsPlaylist,
   serveHlsSegment,
+  generateSessionId,
 } from './hls-handler.ts';
 import { HlsManager } from './hls-manager.ts';
 import {
@@ -346,10 +346,7 @@ export async function serveHlsStatus(
   const authorizedPath = await getAuthorizedPath(res, filePath);
   if (!authorizedPath) return;
 
-  const sessionId = crypto
-    .createHash('md5')
-    .update(authorizedPath)
-    .digest('hex');
+  const sessionId = await generateSessionId(authorizedPath);
   const hlsManager = HlsManager.getInstance();
   const progress = hlsManager.getSessionProgress(sessionId);
 

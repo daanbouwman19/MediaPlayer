@@ -1,5 +1,4 @@
 import { IpcMainInvokeEvent } from 'electron';
-import crypto from 'crypto';
 import { IPC_CHANNELS } from '../../shared/ipc-channels';
 import {
   validatePathAccess,
@@ -178,8 +177,9 @@ export function registerMediaHandlers() {
 
   handleIpc(IPC_CHANNELS.GET_HLS_STATUS, async (_event, filePath: string) => {
     try {
+      const { generateSessionId } = await import('../../core/hls-handler');
       await validatePathAccess(filePath);
-      const sessionId = crypto.createHash('md5').update(filePath).digest('hex');
+      const sessionId = await generateSessionId(filePath);
       return HlsManager.getInstance().getSessionProgress(sessionId);
     } catch (err) {
       console.error('[MediaController] Error getting HLS status:', err);

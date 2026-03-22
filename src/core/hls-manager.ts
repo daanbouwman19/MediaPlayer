@@ -141,7 +141,7 @@ export class HlsManager {
           if (durMatch) {
             const h = parseInt(durMatch[1], 10);
             const m = parseInt(durMatch[2], 10);
-            const s = parseInt(durMatch[3], 10);
+            const s = parseFloat(`${durMatch[3]}.${durMatch[4]}`);
             session.progress.duration = h * 3600 + m * 60 + s;
           }
         }
@@ -151,7 +151,7 @@ export class HlsManager {
         if (timeMatch) {
           const h = parseInt(timeMatch[1], 10);
           const m = parseInt(timeMatch[2], 10);
-          const s = parseInt(timeMatch[3], 10);
+          const s = parseFloat(`${timeMatch[3]}.${timeMatch[4]}`);
           session.progress.currentTime = h * 3600 + m * 60 + s;
 
           if (session.progress.duration > 0) {

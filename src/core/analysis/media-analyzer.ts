@@ -60,9 +60,9 @@ export class MediaAnalyzer {
     filePath: string,
     points: number = DEFAULT_HEATMAP_POINTS,
   ): Promise<HeatmapData> {
+    const safePoints = this.sanitizePoints(points);
     const disableHeatmaps = process.env.DISABLE_HEATMAPS === 'true';
     if (disableHeatmaps) {
-      const safePoints = this.sanitizePoints(points);
       return {
         audio: new Array(safePoints).fill(-90),
         motion: new Array(safePoints).fill(0),
@@ -92,7 +92,10 @@ export class MediaAnalyzer {
 
     const work = async () => {
       try {
-        const result = await this.executeHeatmapGeneration(filePath, points);
+        const result = await this.executeHeatmapGeneration(
+          filePath,
+          safePoints,
+        );
         deferredResolve!(result);
       } catch (e) {
         deferredReject!(e);
@@ -203,7 +206,7 @@ export class MediaAnalyzer {
             if (durMatch) {
               const h = parseInt(durMatch[1], 10);
               const m = parseInt(durMatch[2], 10);
-              const s = parseInt(durMatch[3], 10);
+              const s = parseFloat(`${durMatch[3]}.${durMatch[4]}`);
               durationSec = h * 3600 + m * 60 + s;
             }
           }
@@ -214,7 +217,7 @@ export class MediaAnalyzer {
             if (timeMatch) {
               const h = parseInt(timeMatch[1], 10);
               const m = parseInt(timeMatch[2], 10);
-              const s = parseInt(timeMatch[3], 10);
+              const s = parseFloat(`${timeMatch[3]}.${timeMatch[4]}`);
               const currentSec = h * 3600 + m * 60 + s;
               const progress = Math.min(
                 100,
@@ -298,7 +301,7 @@ export class MediaAnalyzer {
     filePath: string,
     points: number,
   ): Promise<HeatmapData> {
-    const safePoints = this.sanitizePoints(points);
+    const safePoints = points;
     if (!ffmpegStatic) {
       throw new Error('FFmpeg not found');
     }

@@ -99,7 +99,8 @@ const initHls = () => {
         maxMaxBufferLength: 60,
         debug: true,
         // Use initialTime if provided for HLS start position
-        startPosition: props.initialTime && props.initialTime > 0 ? props.initialTime : -1,
+        startPosition:
+          props.initialTime && props.initialTime > 0 ? props.initialTime : -1,
       });
       hls.value = hlsInstance;
 
@@ -184,9 +185,12 @@ const togglePlay = () => {
 
   if (videoElement.value) {
     if (videoElement.value.paused) {
-      videoElement.value.play?.()?.catch((error) => {
-        console.error('Error attempting to play video:', error);
-      });
+      const playPromise = videoElement.value.play?.();
+      if (playPromise !== undefined) {
+        playPromise.catch((error) => {
+          console.error('Error attempting to play video:', error);
+        });
+      }
     } else {
       videoElement.value.pause?.();
     }

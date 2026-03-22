@@ -151,9 +151,7 @@ export class ElectronAdapter implements IMediaBackend {
     return `http://localhost:${port}/api/hls/master.m3u8?file=${encodeURIComponent(filePath)}`;
   }
 
-  async getHlsStatus(
-    filePath: string,
-  ): Promise<{
+  async getHlsStatus(filePath: string): Promise<{
     currentTime: number;
     duration: number;
     percent: number;

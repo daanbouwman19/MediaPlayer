@@ -189,9 +189,7 @@ export class WebAdapter implements IMediaBackend {
     return `/api/hls/master.m3u8?file=${encodeURIComponent(filePath)}`;
   }
 
-  async getHlsStatus(
-    filePath: string,
-  ): Promise<{
+  async getHlsStatus(filePath: string): Promise<{
     currentTime: number;
     duration: number;
     percent: number;

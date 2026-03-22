@@ -15,11 +15,22 @@ import { getQueryParam } from './utils/http-utils.ts';
 const HLS_BANDWIDTH = 2000000;
 const HLS_RESOLUTION = '1280x720';
 
+import { isDrivePath } from './media-utils.ts';
+
 /**
  * Generates a session ID based on the file path.
  */
-function generateSessionId(filePath: string): string {
-  return crypto.createHash('md5').update(filePath).digest('hex');
+export async function generateSessionId(filePath: string): Promise<string> {
+  let canonicalPath = filePath;
+  if (!isDrivePath(filePath)) {
+    try {
+      canonicalPath = await fs.realpath(filePath);
+    } catch {
+      // Fallback to original path if realpath fails
+      canonicalPath = filePath;
+    }
+  }
+  return crypto.createHash('md5').update(canonicalPath).digest('hex');
 }
 
 /**
@@ -54,7 +65,7 @@ export async function serveHlsPlaylist(
   const authorizedPath = await getAuthorizedPath(res, filePath);
   if (!authorizedPath) return;
 
-  const sessionId = generateSessionId(authorizedPath);
+  const sessionId = await generateSessionId(authorizedPath);
 
   try {
     const hlsManager = HlsManager.getInstance();
@@ -85,8 +96,8 @@ export async function serveHlsPlaylist(
 
     // Keep session alive
     hlsManager.touchSession(sessionId);
-  } catch (e) {
-    console.error('[HLS] Playlist error:', e);
+  } catch (err) {
+    console.error('[HLS] Playlist error:', err);
     res.status(500).send('HLS Generation failed');
   }
 }
@@ -109,7 +120,7 @@ export async function serveHlsSegment(
     return;
   }
 
-  const sessionId = generateSessionId(authorizedPath);
+  const sessionId = await generateSessionId(authorizedPath);
   const hlsManager = HlsManager.getInstance();
   const sessionDir = hlsManager.getSessionDir(sessionId);
 

@@ -116,6 +116,12 @@ describe('HlsManager', () => {
 
     const mockProcess = new EventEmitter() as any;
     mockProcess.kill = vi.fn();
+    mockProcess.stdout = new EventEmitter();
+    mockProcess.stderr = new EventEmitter();
+    mockProcess.stderr.on = vi.fn((event, callback) => {
+      mockProcess.stderr.addListener(event, callback);
+      return mockProcess.stderr;
+    });
     mockProcess.exitCode = null;
     mockProcess.killed = false;
     mockSpawn.mockReturnValue(mockProcess);
@@ -137,6 +143,12 @@ describe('HlsManager', () => {
 
     const mockProcess = new EventEmitter() as any;
     mockProcess.kill = vi.fn();
+    mockProcess.stdout = new EventEmitter();
+    mockProcess.stderr = new EventEmitter();
+    mockProcess.stderr.on = vi.fn((event, callback) => {
+      mockProcess.stderr.addListener(event, callback);
+      return mockProcess.stderr;
+    });
     mockProcess.exitCode = null;
     mockProcess.killed = false;
     mockSpawn.mockReturnValue(mockProcess);
@@ -159,6 +171,12 @@ describe('HlsManager', () => {
 
     const mockProcess = new EventEmitter() as any;
     mockProcess.kill = vi.fn();
+    mockProcess.stdout = new EventEmitter();
+    mockProcess.stderr = new EventEmitter();
+    mockProcess.stderr.on = vi.fn((event, callback) => {
+      mockProcess.stderr.addListener(event, callback);
+      return mockProcess.stderr;
+    });
     mockProcess.exitCode = null;
     mockProcess.killed = false;
     mockSpawn.mockReturnValue(mockProcess);
@@ -274,6 +292,12 @@ describe('HlsManager', () => {
     const sessionId = 'killed';
     const mockProcess = new EventEmitter() as any;
     mockProcess.kill = vi.fn();
+    mockProcess.stdout = new EventEmitter();
+    mockProcess.stderr = new EventEmitter();
+    mockProcess.stderr.on = vi.fn((event, callback) => {
+      mockProcess.stderr.addListener(event, callback);
+      return mockProcess.stderr;
+    });
     mockProcess.exitCode = null;
     mockFsAccess.mockResolvedValue(undefined);
     mockProcess.killed = false;
@@ -290,6 +314,12 @@ describe('HlsManager', () => {
     const sessionId = 'cleanup-error';
     const mockProcess = new EventEmitter() as any;
     mockProcess.kill = vi.fn();
+    mockProcess.stdout = new EventEmitter();
+    mockProcess.stderr = new EventEmitter();
+    mockProcess.stderr.on = vi.fn((event, callback) => {
+      mockProcess.stderr.addListener(event, callback);
+      return mockProcess.stderr;
+    });
     mockProcess.exitCode = null;
     mockProcess.killed = false;
     mockSpawn.mockReturnValue(mockProcess);
@@ -314,6 +344,12 @@ describe('HlsManager', () => {
     const sessionId = 'exists';
     const mockProcess = new EventEmitter() as any;
     mockProcess.kill = vi.fn();
+    mockProcess.stdout = new EventEmitter();
+    mockProcess.stderr = new EventEmitter();
+    mockProcess.stderr.on = vi.fn((event, callback) => {
+      mockProcess.stderr.addListener(event, callback);
+      return mockProcess.stderr;
+    });
     mockProcess.exitCode = null;
     mockProcess.killed = false;
     mockSpawn.mockReturnValue(mockProcess);
