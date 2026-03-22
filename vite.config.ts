@@ -34,7 +34,7 @@ export default defineConfig(({ mode }) => {
             'dotenv',
           ],
         },
-        minify: 'terser',
+        minify: 'esbuild',
         sourcemap: 'hidden',
       },
     };

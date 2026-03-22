@@ -13,11 +13,13 @@ import * as database from '../../src/core/database';
 import { MAX_PATH_LENGTH } from '../../src/core/constants';
 
 vi.mock('fs/promises', () => {
+  const mock = {
+    realpath: vi.fn(async (p) => p),
+    readFile: vi.fn(),
+  };
   return {
-    default: {
-      realpath: vi.fn(async (p) => p), // Default to returning the path itself
-      readFile: vi.fn(),
-    },
+    ...mock,
+    default: mock,
   };
 });
 vi.mock('../../src/core/database');
@@ -450,66 +452,48 @@ describe('Path Restriction Security', () => {
 describe('Security Config Loading', () => {
   const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-  async function getReadFileMock() {
-    const fsMock = (await import('fs/promises')) as any;
-    return fsMock.default?.readFile || fsMock.readFile;
-  }
-
   beforeEach(() => {
     vi.clearAllMocks();
     vi.resetModules();
-    vi.doMock('fs/promises', () => {
-      const mock = {
-        realpath: vi.fn(),
-        readFile: vi.fn(),
-      };
-      return {
-        ...mock,
-        default: mock,
-      };
-    });
-  });
-
-  afterEach(() => {
-    vi.doUnmock('fs/promises');
   });
 
   it('loads custom sensitive directories from a valid config file', async () => {
     const mockConfig = JSON.stringify({
       sensitiveSubdirectories: ['custom_secret'],
     });
-    const readFile = await getReadFileMock();
-    vi.mocked(readFile).mockResolvedValue(mockConfig);
 
-    const { loadSecurityConfig: loadConfig, isRestrictedPath: checkPath } =
+    // We need to import security AFTER resetModules to get fresh state
+    const { loadSecurityConfig, isRestrictedPath } =
       await import('../../src/core/security');
+    // We need to import fs AFTER resetModules to ensure we're mocking the right instance if resetModules is used
+    const fsMock = await import('fs/promises');
+    vi.mocked(fsMock.readFile).mockResolvedValue(mockConfig);
 
-    await loadConfig('/path/to/config.json');
+    await loadSecurityConfig('/path/to/config.json');
 
     Object.defineProperty(process, 'platform', { value: 'linux' });
-    expect(checkPath('/home/user/custom_secret')).toBe(true);
+    expect(isRestrictedPath('/home/user/custom_secret')).toBe(true);
   });
 
   it('ignores missing config file (ENOENT)', async () => {
     const error: any = new Error('File not found');
     error.code = 'ENOENT';
-    const readFile = await getReadFileMock();
-    vi.mocked(readFile).mockRejectedValue(error);
 
-    const { loadSecurityConfig: loadConfig } =
-      await import('../../src/core/security');
-    await loadConfig('/missing/config.json');
+    const { loadSecurityConfig } = await import('../../src/core/security');
+    const fsMock = await import('fs/promises');
+    vi.mocked(fsMock.readFile).mockRejectedValue(error);
+
+    await loadSecurityConfig('/missing/config.json');
 
     expect(consoleWarnSpy).not.toHaveBeenCalled();
   });
 
   it('warns and throws on invalid JSON or read error', async () => {
-    const readFile = await getReadFileMock();
-    vi.mocked(readFile).mockResolvedValue('{ invalid json ');
+    const { loadSecurityConfig } = await import('../../src/core/security');
+    const fsMock = await import('fs/promises');
+    vi.mocked(fsMock.readFile).mockResolvedValue('{ invalid json ');
 
-    const { loadSecurityConfig: loadConfig } =
-      await import('../../src/core/security');
-    await expect(loadConfig('/bad/config.json')).rejects.toThrow();
+    await expect(loadSecurityConfig('/bad/config.json')).rejects.toThrow();
 
     expect(consoleWarnSpy).toHaveBeenCalled();
   });
