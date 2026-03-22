@@ -152,5 +152,10 @@
     "vue": "^3.5.30",
     "vue-tsc": "^3.2.5",
     "wait-on": "^9.0.4"
+  },
+  "overrides": {
+    "electron-vite": {
+      "vite": "$vite"
+    }
   }
 }
