@@ -34,7 +34,11 @@ export function getOAuth2Client(): OAuth2Client {
     oauth2Client = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
 
     // [PERSISTENCE] Automatically save tokens whenever they are refreshed
-    oauth2Client.on('tokens', (tokens) => {
+    const tokenEventsClient = oauth2Client as OAuth2Client & {
+      on?: (event: 'tokens', listener: (tokens: Credentials) => void) => void;
+    };
+
+    tokenEventsClient.on?.('tokens', (tokens) => {
       if (oauth2Client) {
         // Merge tokens into current credentials to ensure we don't lose existing ones
         oauth2Client.setCredentials({
@@ -42,7 +46,10 @@ export function getOAuth2Client(): OAuth2Client {
           ...tokens,
         });
         saveCredentials(oauth2Client).catch((err) => {
-          console.error('[GoogleAuth] Failed to auto-save refreshed tokens:', err);
+          console.error(
+            '[GoogleAuth] Failed to auto-save refreshed tokens:',
+            err,
+          );
         });
       }
     });
@@ -58,10 +65,12 @@ export async function loadSavedCredentialsIfExist(): Promise<boolean> {
     }
 
     // Attempt to decrypt. If it fails (legacy plaintext), it returns original content.
-    // If original content is valid JSON, JSON.parse will succeed.
+    // If it looks like encrypted data but decryption fails (wrong key), it returns null.
     const decrypted = decrypt(content);
     if (!decrypted) {
-      console.warn('[GoogleAuth] Failed to decrypt saved credentials. A re-authorization may be required.');
+      console.warn(
+        '[GoogleAuth] Failed to decrypt saved credentials. A re-authorization may be required.',
+      );
       return false;
     }
     const credentials = JSON.parse(decrypted);

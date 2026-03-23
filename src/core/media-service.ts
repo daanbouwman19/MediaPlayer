@@ -21,6 +21,7 @@ import {
 } from './constants.ts';
 import { isDrivePath } from './media-utils.ts';
 import type { MediaLibraryItem } from './types.ts';
+import { decrypt } from './utils/encryption.ts';
 
 /**
  * Collects all file paths from an album tree iteratively.
@@ -108,7 +109,10 @@ export class MediaService {
   private async getGoogleTokens(): Promise<unknown> {
     try {
       const tokenString = await this.mediaRepo.getSetting('google_tokens');
-      return tokenString ? JSON.parse(tokenString) : null;
+      if (!tokenString) return null;
+      const decrypted = decrypt(tokenString);
+      if (!decrypted) return null;
+      return JSON.parse(decrypted);
     } catch (e) {
       console.warn(
         '[media-service] Failed to fetch google tokens for worker:',

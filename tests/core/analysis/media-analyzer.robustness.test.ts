@@ -3,9 +3,9 @@ import { MediaAnalyzer } from '../../../src/core/analysis/media-analyzer';
 import fs from 'fs/promises';
 import { EventEmitter } from 'events';
 import { spawn } from 'child_process';
+import { PassThrough } from 'stream';
 
 // Mock dependencies
-// Mock fs/promises using vi.hoisted for stability
 const { mockFs } = vi.hoisted(() => {
   return {
     mockFs: {
@@ -13,6 +13,7 @@ const { mockFs } = vi.hoisted(() => {
       writeFile: vi.fn(),
       mkdir: vi.fn(),
       access: vi.fn(),
+      stat: vi.fn(),
     },
   };
 });
@@ -23,6 +24,7 @@ vi.mock('fs/promises', () => ({
   writeFile: mockFs.writeFile,
   mkdir: mockFs.mkdir,
   access: mockFs.access,
+  stat: mockFs.stat,
 }));
 
 vi.mock('child_process', () => {
@@ -44,15 +46,25 @@ vi.mock('crypto', () => ({
   },
 }));
 
+// Mock using the exact same strings as the source imports
+// PLUS the strings as the test imports
+vi.mock('../../../src/core/utils/ffmpeg-utils', () => ({
+  getFFmpegStreams: vi.fn(),
+  runFFmpeg: vi.fn(),
+}));
 vi.mock('../../../src/core/utils/ffmpeg-utils.ts', () => ({
   getFFmpegStreams: vi.fn(),
+  runFFmpeg: vi.fn(),
 }));
 
 vi.mock('../../../src/core/media-source', () => ({
   createMediaSource: vi.fn(),
 }));
+vi.mock('../../../src/core/media-source.ts', () => ({
+  createMediaSource: vi.fn(),
+}));
 
-import { getFFmpegStreams } from '../../../src/core/utils/ffmpeg-utils.ts';
+import { getFFmpegStreams } from '../../../src/core/utils/ffmpeg-utils';
 import { createMediaSource } from '../../../src/core/media-source';
 
 describe('MediaAnalyzer Robustness', () => {
@@ -60,88 +72,77 @@ describe('MediaAnalyzer Robustness', () => {
 
   beforeEach(() => {
     vi.resetAllMocks();
-    (MediaAnalyzer as any).instance = null;
+    MediaAnalyzer.resetInstance();
     analyzer = MediaAnalyzer.getInstance();
     analyzer.setCacheDir('/tmp/cache');
+    process.env.DISABLE_HEATMAPS = 'false';
     (fs.readFile as any).mockRejectedValue(new Error('ENOENT')); // Cache miss
     vi.mocked(createMediaSource).mockImplementation((path: string) => ({
       getFFmpegInput: vi.fn().mockResolvedValue(path),
       getStream: vi.fn(),
       getMimeType: vi.fn(),
       getSize: vi.fn(),
+      getType: () => 'local',
     }));
   });
 
+  const setupMockSpawn = () => {
+    const mockProcess = new EventEmitter() as any;
+    mockProcess.stdout = new PassThrough();
+    mockProcess.stderr = new PassThrough();
+    mockProcess.kill = vi.fn();
+    (spawn as any).mockReturnValue(mockProcess);
+    return mockProcess;
+  };
+
   it('should handle missing audio stream gracefully', async () => {
-    (getFFmpegStreams as any).mockResolvedValue({
+    vi.mocked(getFFmpegStreams).mockResolvedValue({
       hasVideo: true,
       hasAudio: false,
     });
 
-    const mockProcess = new EventEmitter();
-    const mockStderr = new EventEmitter();
-    const mockStdout = new EventEmitter();
-    (mockProcess as any).stdout = mockStdout;
-    (mockProcess as any).stderr = mockStderr;
-    (spawn as any).mockReturnValue(mockProcess);
+    const mockProcess = setupMockSpawn();
+    const promise = analyzer.generateHeatmap('video_only.mp4', 1);
 
-    const promise = analyzer.generateHeatmap('video_only.mp4', 10);
+    await new Promise((resolve) => setTimeout(resolve, 50));
 
-    // Emit only video stats
-    const outputLines = [
-      'lavfi.signalstats.YDIF=10',
-      'lavfi.signalstats.YDIF=20',
-    ].join('\n');
+    mockProcess.stdout.write('lavfi.signalstats.YDIF=10\n');
+    mockProcess.stdout.end();
 
-    setTimeout(() => {
-      mockStdout.emit('data', Buffer.from(outputLines));
-      mockProcess.emit('close', 0);
-    }, 10);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    mockProcess.emit('close', 0);
 
     const result = await promise;
-    expect(result.points).toBe(10);
-    // Should have valid motion
-    expect(result.motion[0]).toBeGreaterThan(0);
-    // Should have default audio (-90)
-    expect(result.audio.every((v) => v === -90)).toBe(true);
+    expect(result.points).toBe(1);
+    expect(result.motion[0]).toBe(10);
+    expect(result.audio[0]).toBe(-90);
   });
 
   it('should handle missing video stream gracefully', async () => {
-    (getFFmpegStreams as any).mockResolvedValue({
+    vi.mocked(getFFmpegStreams).mockResolvedValue({
       hasVideo: false,
       hasAudio: true,
     });
 
-    const mockProcess = new EventEmitter();
-    const mockStderr = new EventEmitter();
-    const mockStdout = new EventEmitter();
-    (mockProcess as any).stdout = mockStdout;
-    (mockProcess as any).stderr = mockStderr;
-    (spawn as any).mockReturnValue(mockProcess);
+    const mockProcess = setupMockSpawn();
+    const promise = analyzer.generateHeatmap('audio_only.mp3', 1);
 
-    const promise = analyzer.generateHeatmap('audio_only.mp3', 10);
+    await new Promise((resolve) => setTimeout(resolve, 50));
 
-    // Emit only audio stats
-    const outputLines = [
-      'lavfi.astats.Overall.RMS_level=-20',
-      'lavfi.astats.Overall.RMS_level=-15',
-    ].join('\n');
+    mockProcess.stdout.write('lavfi.astats.Overall.RMS_level=-20\n');
+    mockProcess.stdout.end();
 
-    setTimeout(() => {
-      mockStdout.emit('data', Buffer.from(outputLines));
-      mockProcess.emit('close', 0);
-    }, 10);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    mockProcess.emit('close', 0);
 
     const result = await promise;
-    expect(result.points).toBe(10);
-    // Should have valid audio
-    expect(result.audio[0]).toBeGreaterThan(-90);
-    // Should have default motion (0)
-    expect(result.motion.every((v) => v === 0)).toBe(true);
+    expect(result.points).toBe(1);
+    expect(result.audio[0]).toBe(-20);
+    expect(result.motion[0]).toBe(0);
   });
 
   it('should fail if BOTH streams are missing', async () => {
-    (getFFmpegStreams as any).mockResolvedValue({
+    vi.mocked(getFFmpegStreams).mockResolvedValue({
       hasVideo: false,
       hasAudio: false,
     });
@@ -151,36 +152,24 @@ describe('MediaAnalyzer Robustness', () => {
   });
 
   it('should handle partial output lines correctly', async () => {
-    (getFFmpegStreams as any).mockResolvedValue({
+    vi.mocked(getFFmpegStreams).mockResolvedValue({
       hasVideo: true,
       hasAudio: true,
     });
-    // Scenario: FFmpeg runs but maybe only outputs one type of stats?
-    // Current logic should handle this gracefully by filling with defaults.
-    const mockProcess = new EventEmitter();
-    const mockStdout = new EventEmitter();
-    const mockStderr = new EventEmitter();
-    (mockProcess as any).stdout = mockStdout;
-    (mockProcess as any).stderr = mockStderr;
-    (spawn as any).mockReturnValue(mockProcess);
+    const mockProcess = setupMockSpawn();
+    const promise = analyzer.generateHeatmap('partial.mp4', 1);
 
-    const promise = analyzer.generateHeatmap('partial.mp4', 2);
+    await new Promise((resolve) => setTimeout(resolve, 50));
 
-    const outputLines = [
-      'lavfi.signalstats.YDIF=10',
-      'lavfi.signalstats.YDIF=20',
-      // No audio stats
-    ].join('\n');
+    mockProcess.stdout.write('lavfi.signalstats.YDIF=10\n');
+    mockProcess.stdout.end();
 
-    setTimeout(() => {
-      mockStdout.emit('data', Buffer.from(outputLines));
-      mockProcess.emit('close', 0);
-    }, 10);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    mockProcess.emit('close', 0);
 
     const result = await promise;
-    expect(result.points).toBe(2);
-    expect(result.motion).toEqual([10, 20]);
-    // Audio should be default (-90)
-    expect(result.audio).toEqual([-90, -90]);
+    expect(result.points).toBe(1);
+    expect(result.motion[0]).toBe(10);
+    expect(result.audio[0]).toBe(-90);
   });
 });

@@ -8,8 +8,9 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
   reporter: 'html',
   use: {
-    baseURL: 'http://localhost:5173',
+    baseURL: 'https://localhost:5173',
     trace: 'on-first-retry',
+    ignoreHTTPSErrors: true,
   },
   projects: [
     {
@@ -23,10 +24,11 @@ export default defineConfig({
   ],
   webServer: {
     command: 'npm run dev:all',
-    url: 'http://localhost:5173',
+    url: 'https://localhost:5173',
     reuseExistingServer: !process.env.CI,
     stdout: 'pipe',
     stderr: 'pipe',
     timeout: 120 * 1000,
+    ignoreHTTPSErrors: true,
   },
 });

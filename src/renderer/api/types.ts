@@ -50,6 +50,9 @@ export interface IMediaBackend {
     (filePath: string, startTime?: number) => string
   >;
   getHlsUrl(filePath: string): Promise<string>;
+  getHlsStatus(
+    filePath: string,
+  ): Promise<{ currentTime: number; duration: number; percent: number } | null>;
   getVideoMetadata(filePath: string): Promise<{ duration: number }>;
   getHeatmap(filePath: string, points?: number): Promise<HeatmapData>;
   getHeatmapProgress(filePath: string): Promise<number | null>; // Returns 0-100 or null if no job

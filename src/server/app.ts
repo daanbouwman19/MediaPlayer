@@ -97,8 +97,13 @@ export async function createApp() {
 
   const corsOptions = {
     origin: isDev
-      ? process.env.VITE_DEV_SERVER_URL || 'http://localhost:5173'
+      ? [
+          process.env.VITE_DEV_SERVER_URL || 'http://localhost:5173',
+          'https://localhost:5173',
+          'https://127.0.0.1:5173',
+        ]
       : false,
+    credentials: true,
   };
   app.use(cors(corsOptions));
   app.use(express.json({ limit: '10mb' }));
@@ -120,16 +125,28 @@ export async function createApp() {
       name: 'session',
       keys: [sessionSecret || 'media-player-dev-secret-do-not-use-in-prod'],
       maxAge: 24 * 60 * 60 * 1000, // 24 hours
+      secure: true, // Require HTTPS for session cookies
+      sameSite: 'lax',
     }),
   );
 
   if (process.env.NODE_ENV !== 'test') {
-    app.use(lusca.csrf({ angular: true })); // Sets XSRF-TOKEN cookie and expects X-XSRF-TOKEN header
+    app.use(
+      lusca.csrf({
+        angular: true,
+        allowlist: ['/api/auth/unlock'],
+      }),
+    ); // Sets XSRF-TOKEN cookie and expects X-XSRF-TOKEN header
   }
 
   const limiters = createRateLimiters();
 
-  app.use(limiters.basicAuthLimiter);
+  const sysUser = process.env.SYSTEM_USER;
+  const sysSecret = process.env.SYSTEM_PASSWORD;
+  if (sysUser && sysSecret) {
+    app.use(limiters.basicAuthLimiter);
+  }
+
   app.use(basicAuthMiddleware);
   app.use(globalPasswordMiddleware);
 

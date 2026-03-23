@@ -298,7 +298,7 @@ const RATE_LIMIT_FS_READ_MAX_REQUESTS = 60;
  * Maximum number of concurrent transcoding streams allowed.
  * Used to prevent CPU exhaustion (DoS).
  */
-const MAX_CONCURRENT_TRANSCODES = 3;
+const MAX_CONCURRENT_TRANSCODES = 10;
 
 /**
  * Maximum number of items allowed in a batch API request.

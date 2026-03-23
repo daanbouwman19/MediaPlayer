@@ -423,7 +423,11 @@ describe('Server Combined Tests', () => {
     });
 
     it('should limit concurrent transcoding requests', async () => {
-      const LIMIT = 3;
+      // Overwrite the constant value by pushing LIMIT times.
+      // Wait, constants cannot be simply overwritten.
+      // In this test environment, the server is running against the default MAX_CONCURRENT_TRANSCODES (10).
+      // We must fire 10 requests to saturate the limit, then the 11th will fail.
+      const LIMIT = 10;
       const pendingRequests: Promise<any>[] = [];
 
       for (let i = 0; i < LIMIT; i++) {
@@ -433,7 +437,9 @@ describe('Server Combined Tests', () => {
         pendingRequests.push(p);
       }
 
-      await vi.waitUntil(() => transcodeStartedCount === LIMIT);
+      await vi.waitUntil(() => transcodeStartedCount === LIMIT, {
+        timeout: 5000,
+      });
 
       const blockedRes = await request(app).get(
         '/api/stream?file=test.mp4&transcode=true',

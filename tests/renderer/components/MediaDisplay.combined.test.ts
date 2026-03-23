@@ -118,6 +118,7 @@ vi.mock('@/api', () => ({
     getVideoStreamUrlGenerator: vi.fn(),
     getHlsUrl: vi.fn(),
     getVideoMetadata: vi.fn(),
+    getHlsStatus: vi.fn(),
     setRating: vi.fn(),
     openInVlc: vi.fn(),
     updateWatchedSegments: vi.fn(),
@@ -1002,6 +1003,47 @@ describe('MediaDisplay Combined Tests', () => {
       await controls.vm.$emit('scrub-start');
       await controls.vm.$emit('scrub-end');
       // Mostly ensuring no error throw, as implementation logic is commented out in component
+    });
+
+    it('polls transcoding progress and updates state', async () => {
+      vi.useFakeTimers();
+      mockPlayerState.currentMediaItem = { name: 'vid.mp4', path: '/vid.mp4' };
+      const wrapper = mount(MediaDisplay);
+      await flushPromises();
+
+      (api.getHlsUrl as Mock).mockResolvedValue('/api/hls/master.m3u8');
+      const getHlsStatusSpy = vi.spyOn(api, 'getHlsStatus').mockResolvedValue({
+        percent: 50,
+        duration: 120,
+        currentTime: 60,
+      });
+
+      // Trigger transcoding to start polling
+      (wrapper.vm as any).tryTranscoding(0);
+      await flushPromises();
+
+      // Advance timers by 1 second to trigger the first poll
+      await vi.advanceTimersByTimeAsync(1000);
+      await flushPromises();
+
+      expect(getHlsStatusSpy).toHaveBeenCalled();
+      expect((wrapper.vm as any).transcodingProgress).toBe(50);
+      expect((wrapper.vm as any).transcodedDuration).toBe(120);
+
+      // Simulate completion
+      getHlsStatusSpy.mockResolvedValue({
+        percent: 100,
+        duration: 120,
+        currentTime: 120,
+      });
+
+      await vi.advanceTimersByTimeAsync(1000);
+      await flushPromises();
+
+      expect((wrapper.vm as any).transcodingProgress).toBe(100);
+      expect((wrapper.vm as any).isTranscodingLoading).toBe(false);
+
+      vi.useRealTimers();
     });
   });
 });

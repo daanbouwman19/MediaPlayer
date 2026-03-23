@@ -25,6 +25,7 @@ import {
   getAlbumsWithViewCountsAfterScan,
   extractAndSaveMetadata,
 } from '../../../src/core/media-service';
+import { generateSessionId } from '../../../src/core/hls-handler';
 
 // --- Global Mocks ---
 
@@ -62,6 +63,10 @@ vi.mock('../../../src/core/media-service', () => ({
   getAlbumsWithViewCounts: vi.fn(),
   getAlbumsWithViewCountsAfterScan: vi.fn(),
   extractAndSaveMetadata: vi.fn(),
+}));
+
+vi.mock('../../../src/core/hls-handler', () => ({
+  generateSessionId: vi.fn(),
 }));
 
 // Default mock for ffmpeg-static (can be overridden in specific tests via vi.doMock if needed, but here we use a variable)
@@ -279,6 +284,41 @@ describe('Media Controller Combined', () => {
         (getDriveParent as Mock).mockRejectedValue(new Error('Fail'));
         const res = await handler({}, 'folderId');
         expect(res).toBeNull();
+      });
+    });
+
+    describe('GET_HLS_STATUS', () => {
+      it('should return session progress', async () => {
+        const handler = getHandler(IPC_CHANNELS.GET_HLS_STATUS);
+        (validatePathAccess as Mock).mockResolvedValue(undefined);
+        (generateSessionId as Mock).mockResolvedValue('test-session');
+        const mockHlsManager = {
+          getSessionProgress: vi.fn().mockReturnValue(50),
+        };
+        const HlsManagerModule = await import('../../../src/core/hls-manager');
+        vi.spyOn(HlsManagerModule.HlsManager, 'getInstance').mockReturnValue(
+          mockHlsManager as any,
+        );
+
+        const res = await handler({}, '/path/to.mp4');
+        expect(res).toBe(50);
+        expect(mockHlsManager.getSessionProgress).toHaveBeenCalledWith(
+          'test-session',
+        );
+      });
+
+      it('should handle errors', async () => {
+        const handler = getHandler(IPC_CHANNELS.GET_HLS_STATUS);
+        (validatePathAccess as Mock).mockRejectedValue(
+          new Error('Validation fail'),
+        );
+        const consoleSpy = vi
+          .spyOn(console, 'error')
+          .mockImplementation(() => {});
+        const res = await handler({}, '/path/to.mp4');
+        expect(res).toBeNull();
+        expect(consoleSpy).toHaveBeenCalled();
+        consoleSpy.mockRestore();
       });
     });
 
