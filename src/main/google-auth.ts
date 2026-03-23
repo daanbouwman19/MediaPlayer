@@ -32,6 +32,20 @@ export function getOAuth2Client(): OAuth2Client {
       );
     }
     oauth2Client = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
+
+    // [PERSISTENCE] Automatically save tokens whenever they are refreshed
+    oauth2Client.on('tokens', (tokens) => {
+      if (oauth2Client) {
+        // Merge tokens into current credentials to ensure we don't lose existing ones
+        oauth2Client.setCredentials({
+          ...oauth2Client.credentials,
+          ...tokens,
+        });
+        saveCredentials(oauth2Client).catch((err) => {
+          console.error('[GoogleAuth] Failed to auto-save refreshed tokens:', err);
+        });
+      }
+    });
   }
   return oauth2Client;
 }
@@ -46,13 +60,18 @@ export async function loadSavedCredentialsIfExist(): Promise<boolean> {
     // Attempt to decrypt. If it fails (legacy plaintext), it returns original content.
     // If original content is valid JSON, JSON.parse will succeed.
     const decrypted = decrypt(content);
+    if (!decrypted) {
+      console.warn('[GoogleAuth] Failed to decrypt saved credentials. A re-authorization may be required.');
+      return false;
+    }
     const credentials = JSON.parse(decrypted);
 
     const client = getOAuth2Client();
     client.setCredentials(credentials);
+    console.log('[GoogleAuth] Successfully loaded saved credentials from DB.');
     return true;
   } catch (error) {
-    console.error('Failed to load credentials from DB:', error);
+    console.error('[GoogleAuth] Failed to load credentials from DB:', error);
     return false;
   }
 }
