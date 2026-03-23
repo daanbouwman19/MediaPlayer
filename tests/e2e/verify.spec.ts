@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 
 test('verify google drive inputs', async ({ page }) => {
   // Go to the local app (assume it is running on 5173 or configured port)
-  await page.goto('http://localhost:5173');
+  await page.goto('https://localhost:5173');
 
   // Wait for the app to load
   await expect(page.locator('#app')).toBeVisible();
