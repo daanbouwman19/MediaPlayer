@@ -91,7 +91,8 @@ export async function checkGoogleDriveAuth(): Promise<boolean> {
       return true;
     }
     return await loadSavedCredentialsIfExist();
-  } catch {
+  } catch (error) {
+    console.error('[GoogleAuth] Failed to check auth status:', error);
     return false;
   }
 }
