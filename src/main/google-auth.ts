@@ -32,6 +32,7 @@ export function getOAuth2Client(): OAuth2Client {
       );
     }
     oauth2Client = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
+    const initializedClient = oauth2Client;
 
     // [PERSISTENCE] Automatically save tokens whenever they are refreshed
     const tokenEventsClient = oauth2Client as OAuth2Client & {
@@ -39,19 +40,17 @@ export function getOAuth2Client(): OAuth2Client {
     };
 
     tokenEventsClient.on?.('tokens', (tokens) => {
-      if (oauth2Client) {
-        // Merge tokens into current credentials to ensure we don't lose existing ones
-        oauth2Client.setCredentials({
-          ...oauth2Client.credentials,
-          ...tokens,
-        });
-        saveCredentials(oauth2Client).catch((err) => {
-          console.error(
-            '[GoogleAuth] Failed to auto-save refreshed tokens:',
-            err,
-          );
-        });
-      }
+      // Merge tokens into current credentials to ensure we don't lose existing ones
+      initializedClient.setCredentials({
+        ...initializedClient.credentials,
+        ...tokens,
+      });
+      saveCredentials(initializedClient).catch((err) => {
+        console.error(
+          '[GoogleAuth] Failed to auto-save refreshed tokens:',
+          err,
+        );
+      });
     });
   }
   return oauth2Client;
