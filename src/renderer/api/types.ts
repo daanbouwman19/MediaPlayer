@@ -83,6 +83,7 @@ export interface IMediaBackend {
   extractMetadata(filePaths: string[]): Promise<void>;
 
   // Google Drive
+  checkGoogleDriveAuth(): Promise<boolean>;
   startGoogleDriveAuth(): Promise<string>;
   submitGoogleDriveAuthCode(code: string): Promise<boolean>;
   addGoogleDriveSource(folderId: string): Promise<{ name?: string }>;

@@ -142,6 +142,10 @@ export interface IpcContract {
     payload: [];
     response: Album[];
   };
+  [IPC_CHANNELS.AUTH_GOOGLE_DRIVE_STATUS]: {
+    payload: [];
+    response: boolean;
+  };
   [IPC_CHANNELS.AUTH_GOOGLE_DRIVE_START]: {
     payload: [];
     response: string;

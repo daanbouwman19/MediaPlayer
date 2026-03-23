@@ -40,6 +40,11 @@ const __dirname = path.dirname(__filename);
 const DB_PATH =
   process.env.DB_FILE_PATH || path.join(process.cwd(), 'media-library.db');
 
+// Ensure encryption key is stored alongside the database
+if (!process.env.MASTER_KEY_DIR) {
+  process.env.MASTER_KEY_DIR = path.dirname(DB_PATH);
+}
+
 registerSensitiveFile(path.basename(DB_PATH));
 registerSensitiveFile(path.basename(DB_PATH) + '-wal');
 registerSensitiveFile(path.basename(DB_PATH) + '-shm');

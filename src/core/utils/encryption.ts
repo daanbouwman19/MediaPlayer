@@ -32,7 +32,8 @@ function getEncryptionKey(): Buffer {
   }
 
   // 2. Check key file
-  const keyPath = path.resolve(process.cwd(), MASTER_KEY_FILE);
+  const keyDir = process.env.MASTER_KEY_DIR || process.cwd();
+  const keyPath = path.resolve(keyDir, MASTER_KEY_FILE);
   if (fs.existsSync(keyPath)) {
     try {
       const keyHex = fs.readFileSync(keyPath, 'utf8').trim();

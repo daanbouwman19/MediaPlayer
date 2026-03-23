@@ -46,6 +46,42 @@
 
         <!-- Scrollable Body -->
         <div class="grow overflow-y-auto p-6">
+          <div
+            v-if="hasDriveAuthError"
+            class="mb-6 p-4 bg-red-900/50 border border-red-500/50 rounded-xl flex items-start space-x-3"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              class="h-6 w-6 text-red-400 shrink-0 mt-0.5"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+              />
+            </svg>
+            <div>
+              <h4 class="text-white font-semibold">
+                Google Drive Disconnected
+              </h4>
+              <p class="text-red-200 text-sm mt-1">
+                Your Google Drive credentials could not be loaded (likely due to
+                a master key rotation). Please re-authenticate to continue
+                accessing your Drive media.
+              </p>
+              <button
+                class="mt-3 px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-100 text-sm font-medium rounded-lg transition-colors border border-red-500/30"
+                @click="showDriveAuth = true"
+              >
+                Re-authenticate Drive
+              </button>
+            </div>
+          </div>
+
           <div class="space-y-4">
             <h3
               class="text-xs font-bold uppercase tracking-wider text-gray-500"
@@ -418,7 +454,7 @@ import { useUIStore } from '../composables/useUIStore';
 import { usePlayerStore } from '../composables/usePlayerStore'; // For resetting slideshow state
 import { selectAllAlbums } from '../utils/albumUtils';
 import { api } from '../api';
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
 import FileExplorer from './FileExplorer.vue';
 import CloseIcon from './icons/CloseIcon.vue';
 import { useEscapeKey } from '../composables/useEscapeKey';
@@ -443,6 +479,17 @@ const driveFolderId = ref('root');
 const isAddingDrive = ref(false);
 const addDriveError = ref('');
 const pathsPendingRemoval = ref(new Set<string>());
+const hasDriveAuthError = ref(false);
+
+onMounted(async () => {
+  const hasDrive = mediaDirectories.value.some(
+    (d) => d.type === 'google_drive',
+  );
+  if (hasDrive) {
+    const isAuth = await api.checkGoogleDriveAuth();
+    hasDriveAuthError.value = !isAuth;
+  }
+});
 
 /**
  * Closes the modal.

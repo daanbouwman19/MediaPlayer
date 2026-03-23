@@ -24,6 +24,7 @@ vi.mock('@/api', () => ({
     startGoogleDriveAuth: vi.fn(),
     submitGoogleDriveAuthCode: vi.fn(),
     addGoogleDriveSource: vi.fn(),
+    checkGoogleDriveAuth: vi.fn(),
     listDirectory: vi.fn().mockResolvedValue([]),
     getParentDirectory: vi.fn().mockResolvedValue(''),
     listGoogleDriveDirectory: vi.fn().mockResolvedValue([]),
@@ -91,6 +92,7 @@ describe('SourcesModal.vue', () => {
     (api.setDirectoryActiveState as Mock).mockResolvedValue(undefined);
     (api.getMediaDirectories as Mock).mockResolvedValue([]);
     (api.reindexMediaLibrary as Mock).mockResolvedValue([]);
+    (api.checkGoogleDriveAuth as Mock).mockResolvedValue(true);
   });
 
   it('should render modal when visible', () => {
@@ -116,6 +118,30 @@ describe('SourcesModal.vue', () => {
     mockLibraryState.mediaDirectories = [];
     const wrapper = mount(SourcesModal);
     expect(wrapper.text()).toContain('No media sources configured yet');
+  });
+
+  it('shows warning when Google Drive is disconnected on mount', async () => {
+    mockLibraryState.mediaDirectories.push({
+      path: 'gdrive://123',
+      isActive: true,
+      id: '3',
+      name: 'Drive',
+      type: 'google_drive',
+    });
+    (api.checkGoogleDriveAuth as Mock).mockResolvedValue(false);
+
+    const wrapper = mount(SourcesModal);
+    await flushPromises();
+
+    expect(api.checkGoogleDriveAuth).toHaveBeenCalled();
+    expect(wrapper.text()).toContain('Google Drive Disconnected');
+
+    // Test the re-authenticate button
+    const reauthBtn = wrapper
+      .findAll('button')
+      .find((b) => b.text() === 'Re-authenticate Drive');
+    await reauthBtn?.trigger('click');
+    expect((wrapper.vm as any).showDriveAuth).toBe(true);
   });
 
   it('should close modal when close button clicked', async () => {

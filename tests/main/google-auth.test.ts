@@ -21,18 +21,30 @@ vi.mock('../../src/core/utils/encryption', () => ({
 }));
 
 // Hoist mock variables
-const { mockOAuth2Client, MockOAuth2 } = vi.hoisted(() => {
+const { mockOAuth2Client, MockOAuth2, getTokensListener } = vi.hoisted(() => {
+  let tokensListener: ((tokens: Record<string, unknown>) => void) | null = null;
   const mockOAuth2Client = {
     setCredentials: vi.fn(),
     generateAuthUrl: vi.fn(),
     getToken: vi.fn(),
+    on: vi.fn(
+      (event: string, listener: (tokens: Record<string, unknown>) => void) => {
+        if (event === 'tokens') {
+          tokensListener = listener;
+        }
+      },
+    ),
     credentials: { refresh_token: 'mock-refresh-token' },
   };
   // Ensure constructible
   const MockOAuth2 = vi.fn(function () {
     return mockOAuth2Client;
   });
-  return { mockOAuth2Client, MockOAuth2 };
+  return {
+    mockOAuth2Client,
+    MockOAuth2,
+    getTokensListener: () => tokensListener,
+  };
 });
 
 vi.mock('googleapis', () => {
@@ -47,6 +59,7 @@ vi.mock('googleapis', () => {
 
 import * as googleAuth from '../../src/main/google-auth';
 import * as database from '../../src/core/database';
+import * as encryption from '../../src/core/utils/encryption';
 
 describe('Google Auth Service', () => {
   beforeEach(() => {
@@ -60,6 +73,30 @@ describe('Google Auth Service', () => {
       expect(client1).toBe(mockOAuth2Client);
       expect(client2).toBe(client1);
       expect(MockOAuth2).toHaveBeenCalled();
+      expect(mockOAuth2Client.on).toHaveBeenCalledWith(
+        'tokens',
+        expect.any(Function),
+      );
+    });
+
+    it('should auto-save refreshed tokens from OAuth events', async () => {
+      googleAuth.getOAuth2Client();
+      const listener = getTokensListener();
+
+      expect(listener).toBeTruthy();
+      listener?.({ access_token: 'new-access-token' });
+      await Promise.resolve();
+
+      expect(mockOAuth2Client.setCredentials).toHaveBeenCalledWith(
+        expect.objectContaining({
+          refresh_token: 'mock-refresh-token',
+          access_token: 'new-access-token',
+        }),
+      );
+      expect(database.saveSetting).toHaveBeenCalledWith(
+        'google_tokens',
+        expect.stringContaining('ENCRYPTED['),
+      );
     });
   });
 
@@ -105,6 +142,49 @@ describe('Google Auth Service', () => {
 
       expect(result).toBe(false);
       expect(mockOAuth2Client.setCredentials).not.toHaveBeenCalled();
+    });
+
+    it('should return false and warn when decryption fails', async () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      vi.mocked(database.getSetting).mockResolvedValue('ENCRYPTED[unreadable]');
+      vi.mocked(encryption.decrypt).mockReturnValueOnce(null);
+
+      const result = await googleAuth.loadSavedCredentialsIfExist();
+
+      expect(result).toBe(false);
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Failed to decrypt saved credentials'),
+      );
+      warnSpy.mockRestore();
+    });
+  });
+
+  describe('checkGoogleDriveAuth', () => {
+    it('returns true if client already has refresh_token', async () => {
+      mockOAuth2Client.credentials = { refresh_token: 'existing' };
+      const result = await googleAuth.checkGoogleDriveAuth();
+      expect(result).toBe(true);
+      expect(database.getSetting).not.toHaveBeenCalled();
+    });
+
+    it('loads from DB if client lacks refresh_token', async () => {
+      mockOAuth2Client.credentials = {} as any;
+      const mockCreds = { refresh_token: 'saved-token' };
+      vi.mocked(database.getSetting).mockResolvedValue(
+        JSON.stringify(mockCreds),
+      );
+
+      const result = await googleAuth.checkGoogleDriveAuth();
+      expect(result).toBe(true);
+      expect(database.getSetting).toHaveBeenCalled();
+    });
+
+    it('returns false if DB load fails', async () => {
+      mockOAuth2Client.credentials = null as any;
+      vi.mocked(database.getSetting).mockResolvedValue(null);
+
+      const result = await googleAuth.checkGoogleDriveAuth();
+      expect(result).toBe(false);
     });
   });
 

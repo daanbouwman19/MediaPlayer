@@ -9,6 +9,7 @@ import { getQueryParam } from '../../core/utils/http-utils.ts';
 import {
   generateAuthUrl,
   authenticateWithCode,
+  checkGoogleDriveAuth,
 } from '../../main/google-auth.ts';
 import { getGoogleAuthSuccessPage } from '../auth-views.ts';
 import type { RateLimiters } from '../middleware/rate-limiters.ts';
@@ -93,6 +94,14 @@ export function createAuthRoutes(limiters: RateLimiters) {
       }
 
       return res.status(401).json({ error: 'Invalid password' });
+    }),
+  );
+
+  router.get(
+    '/api/auth/google-drive/status',
+    asyncHandler(async (_req, res) => {
+      const isAuthenticated = await checkGoogleDriveAuth();
+      res.json({ isAuthenticated });
     }),
   );
 

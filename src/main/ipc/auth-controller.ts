@@ -1,12 +1,20 @@
 import { IpcMainInvokeEvent } from 'electron';
 import { IPC_CHANNELS } from '../../shared/ipc-channels';
-import { generateAuthUrl, authenticateWithCode } from '../google-auth';
+import {
+  generateAuthUrl,
+  authenticateWithCode,
+  checkGoogleDriveAuth,
+} from '../google-auth';
 import { startAuthServer } from '../auth-server';
 import { getDriveClient } from '../google-drive-service';
 import { addMediaDirectory } from '../database';
 import { handleIpc } from '../utils/ipc-helper';
 
 export function registerAuthHandlers() {
+  handleIpc(IPC_CHANNELS.AUTH_GOOGLE_DRIVE_STATUS, async () => {
+    return await checkGoogleDriveAuth();
+  });
+
   handleIpc(IPC_CHANNELS.AUTH_GOOGLE_DRIVE_START, async () => {
     const url = generateAuthUrl();
     startAuthServer(3000).catch((err) =>

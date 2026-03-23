@@ -145,9 +145,12 @@ export class InternalMediaProxy {
     });
   }
 
-  public getUrlForFile(fileId: string): Promise<string> {
+  public getUrlForFile(
+    fileId: string,
+    extension: string = '',
+  ): Promise<string> {
     const buildUrl = () =>
-      `http://127.0.0.1:${this.port}/stream/${fileId}?token=${this.authToken}`;
+      `http://127.0.0.1:${this.port}/stream/${fileId}${extension}?token=${this.authToken}`;
 
     if (!this.isListening) {
       // Lazy start

@@ -359,6 +359,13 @@ export class WebAdapter implements IMediaBackend {
   }
 
   // Google Drive
+  async checkGoogleDriveAuth(): Promise<boolean> {
+    const data = await this.request<{ isAuthenticated: boolean }>(
+      '/api/auth/google-drive/status',
+    );
+    return data.isAuthenticated;
+  }
+
   async startGoogleDriveAuth(): Promise<string> {
     const url = await this.request<string>('/api/auth/google-drive/start', {
       responseType: 'text',
