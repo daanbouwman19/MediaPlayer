@@ -42,6 +42,10 @@ export interface IpcContract {
     payload: [string];
     response: number | null;
   };
+  [IPC_CHANNELS.GET_HLS_STATUS]: {
+    payload: [string];
+    response: { currentTime: number; duration: number; percent: number } | null;
+  };
   [IPC_CHANNELS.ADD_MEDIA_DIRECTORY]: {
     payload: [string?];
     response: string | null;

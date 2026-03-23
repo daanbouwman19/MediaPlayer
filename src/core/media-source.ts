@@ -3,9 +3,10 @@ import fs from 'fs';
 import { Readable } from 'stream';
 import { getDriveFileMetadata } from '../main/google-drive-service.ts';
 import { getDriveStreamWithCache } from './drive-stream.ts';
-import { authorizeFilePath, AuthorizationResult } from './security.ts';
+import { authorizeFilePath } from './security.ts';
+import type { AuthorizationResult } from './security.ts';
 import { InternalMediaProxy } from './media-proxy.ts';
-import { IMediaSource } from './media-source-types.ts';
+import type { IMediaSource } from './media-source-types.ts';
 import { isDrivePath, getDriveId } from './media-utils.ts';
 import { getMimeType } from './utils/mime-types.ts';
 

@@ -317,6 +317,16 @@ export function createMediaRoutes({
   );
 
   router.get(
+    '/api/hls/status',
+    streamLimiter,
+    fileLimiter,
+    requireFileQueryParam,
+    asyncHandler(async (req, res) => {
+      await mediaHandler.serveHlsStatus(req, res, res.locals.filePath);
+    }),
+  );
+
+  router.get(
     '/api/hls/:segment',
     streamLimiter,
     fileLimiter,

@@ -13,8 +13,11 @@
     <p class="text-white font-semibold text-center">
       <template v-if="isTranscodingLoading">
         <div>Transcoding...</div>
+        <div v-if="progress !== null" class="text-sm font-normal opacity-80">
+          {{ Math.round(progress) }}%
+        </div>
         <div
-          v-if="transcodedDuration > 0"
+          v-else-if="transcodedDuration > 0"
           class="text-sm font-normal opacity-80"
         >
           {{
@@ -35,5 +38,6 @@ defineProps<{
   isBuffering: boolean;
   transcodedDuration: number;
   currentTranscodeStartTime: number;
+  progress: number | null;
 }>();
 </script>

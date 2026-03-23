@@ -58,6 +58,10 @@ export default defineConfig(({ mode }) => {
       clearScreen: false,
       host: '0.0.0.0',
       port: 5173,
+      https: {
+        key: resolve(__dirname, 'certs/server.key'),
+        cert: resolve(__dirname, 'certs/server.cert'),
+      },
       proxy: {
         '/api': {
           target: 'https://127.0.0.1:3000',

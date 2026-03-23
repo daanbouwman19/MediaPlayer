@@ -60,6 +60,11 @@ export interface ElectronAPI {
     points?: number,
   ) => Promise<IpcResult<HeatmapData>>;
   getHeatmapProgress: (filePath: string) => Promise<IpcResult<number | null>>;
+  getHlsStatus: (
+    filePath: string,
+  ) => Promise<
+    IpcResult<{ currentTime: number; duration: number; percent: number } | null>
+  >;
   listDirectory: (
     directoryPath: string,
   ) => Promise<IpcResult<FileSystemEntry[]>>;
@@ -161,6 +166,9 @@ const api: ElectronAPI = {
 
   getHeatmapProgress: (filePath: string) =>
     ipcRenderer.invoke(IPC_CHANNELS.GET_HEATMAP_PROGRESS, filePath),
+
+  getHlsStatus: (filePath: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.GET_HLS_STATUS, filePath),
 
   listDirectory: (directoryPath: string) =>
     ipcRenderer.invoke(IPC_CHANNELS.LIST_DIRECTORY, directoryPath),

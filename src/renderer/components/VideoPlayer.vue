@@ -1,12 +1,14 @@
 <template>
-  <div class="video-player-container relative w-full h-full">
+  <div
+    class="video-player-container relative w-full h-full bg-black flex items-center justify-center overflow-hidden rounded-xl"
+  >
     <!-- Video Element -->
     <video
       ref="videoElement"
-      class="w-full h-full object-contain rounded-xl"
+      class="w-full h-full object-contain"
       :src="effectiveSrc"
       :poster="poster"
-      autoplay
+      :autoplay="!isHls"
       @error="handleError"
       @ended="handleEnded"
       @play="handlePlay"
@@ -20,6 +22,21 @@
       @click="togglePlay"
     />
 
+    <!-- Status Overlay (Loading/Buffering) -->
+    <div
+      v-if="isTranscodingLoading || isBuffering"
+      class="absolute inset-0 flex items-center justify-center z-20 bg-black/20 backdrop-blur-sm transition-opacity duration-300"
+    >
+      <div class="flex flex-col items-center gap-3">
+        <div
+          class="w-12 h-12 border-4 border-white/30 border-t-(--accent-color) rounded-full animate-spin"
+        ></div>
+        <span class="text-white text-sm font-medium drop-shadow-md">
+          {{ isTranscodingLoading ? 'Transcoding...' : 'Buffering...' }}
+        </span>
+      </div>
+    </div>
+
     <!-- Pause/Replay Overlay -->
     <div
       v-if="!isPlaying && !isTranscodingLoading && !isBuffering"
@@ -27,7 +44,7 @@
     >
       <button
         type="button"
-        class="bg-black/40 p-4 rounded-full backdrop-blur-sm pointer-events-auto hover:bg-(--accent-color)/80 transition-colors focus:outline-none focus:ring-2 focus:ring-white/50"
+        class="bg-black/40 p-4 rounded-full backdrop-blur-sm pointer-events-auto hover:bg-(--accent-color)/80 transition-all duration-200 hover:scale-110 active:scale-95 focus:outline-none focus:ring-2 focus:ring-white/50"
         :aria-label="isEnded ? 'Replay video' : 'Play video'"
         @click="togglePlay"
       >
@@ -39,7 +56,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onUnmounted, computed } from 'vue';
+import { ref, watch, onUnmounted, computed, onMounted } from 'vue';
 import PlayIcon from './icons/PlayIcon.vue';
 import RefreshIcon from './icons/RefreshIcon.vue';
 import Hls from 'hls.js';
@@ -60,7 +77,7 @@ const emit = defineEmits<{
   (e: 'play'): void;
   (e: 'pause'): void;
   (e: 'ended'): void;
-  (e: 'error', error: Event): void;
+  (e: 'error', error: Event | Error): void;
   (e: 'trigger-transcode', time: number): void;
   (e: 'buffering', isBuffering: boolean): void;
   (e: 'playing'): void;
@@ -71,99 +88,164 @@ const emit = defineEmits<{
 const videoElement = ref<HTMLVideoElement | null>(null);
 const isPlaying = ref(false);
 const isEnded = ref(false);
+const hlsInstance = ref<Hls | null>(null);
 
-const hls = ref<Hls | null>(null);
+const isHls = computed(
+  () => !!props.src?.includes('.m3u8') && Hls.isSupported(),
+);
 
 const effectiveSrc = computed(() => {
-  // If Hls.js is supported and it's an m3u8, we return undefined
-  // so the video element doesn't try to load it natively (except via Hls.js attachment)
-  if (props.src?.includes('.m3u8') && Hls.isSupported()) {
+  if (isHls.value) {
     return undefined;
   }
   return props.src || undefined;
 });
 
-const initHls = () => {
-  if (hls.value) {
-    hls.value.destroy();
-    hls.value = null;
+const destroyHls = () => {
+  if (hlsInstance.value) {
+    console.log('[VideoPlayer] Destroying HLS instance');
+    hlsInstance.value.destroy();
+    hlsInstance.value = null;
   }
+};
+
+const initHls = () => {
+  destroyHls();
 
   if (!props.src || !videoElement.value) return;
 
-  if (props.src.includes('.m3u8')) {
-    if (Hls.isSupported()) {
-      const hlsInstance = new Hls();
-      hls.value = hlsInstance;
-      hlsInstance.loadSource(props.src);
-      hlsInstance.attachMedia(videoElement.value);
-      hlsInstance.on(Hls.Events.ERROR, (_event, data) => {
-        if (data.fatal) {
-          console.error('HLS Fatal Error:', data);
-          switch (data.type) {
-            case Hls.ErrorTypes.NETWORK_ERROR:
-              hlsInstance.startLoad();
-              break;
-            case Hls.ErrorTypes.MEDIA_ERROR:
-              hlsInstance.recoverMediaError();
-              break;
-            default:
-              hlsInstance.destroy();
-              break;
-          }
+  if (isHls.value) {
+    console.log('[VideoPlayer] Initializing HLS for:', props.src);
+
+    // Explicitly reset video element to clear any previous error state or source
+    videoElement.value.pause();
+    videoElement.value.removeAttribute('src');
+    videoElement.value.load();
+
+    const hls = new Hls({
+      maxBufferLength: 30,
+      maxMaxBufferLength: 60,
+      enableWorker: true,
+      startPosition:
+        props.initialTime && props.initialTime > 0 ? props.initialTime : -1,
+    });
+
+    hlsInstance.value = hls;
+    hls.attachMedia(videoElement.value);
+
+    hls.on(Hls.Events.MEDIA_ATTACHED, () => {
+      console.log('[VideoPlayer] HLS Media attached');
+      if (props.src) {
+        hls.loadSource(props.src);
+      }
+    });
+
+    hls.on(Hls.Events.MANIFEST_PARSED, () => {
+      console.log('[VideoPlayer] HLS Manifest parsed');
+      // Use a small delay to ensure video element is ready for play()
+      setTimeout(() => {
+        if (videoElement.value && videoElement.value.paused) {
+          videoElement.value.play().catch((err) => {
+            if (err.name !== 'AbortError') {
+              console.warn('[VideoPlayer] Autoplay failed:', err);
+            }
+          });
         }
-      });
-    } else if (
-      videoElement.value.canPlayType('application/vnd.apple.mpegurl')
-    ) {
-      videoElement.value.src = props.src;
+      }, 0);
+    });
+
+    hls.on(Hls.Events.LEVEL_LOADED, (_event, data) => {
+      console.log(
+        '[VideoPlayer] HLS Level loaded:',
+        data.details.live ? 'live' : 'vod',
+      );
+    });
+
+    hls.on(Hls.Events.ERROR, (_event, data) => {
+      if (data.fatal) {
+        console.error(
+          '[VideoPlayer] HLS Fatal Error:',
+          data.type,
+          data.details,
+        );
+        switch (data.type) {
+          case Hls.ErrorTypes.NETWORK_ERROR:
+            hls.startLoad();
+            break;
+          case Hls.ErrorTypes.MEDIA_ERROR:
+            hls.recoverMediaError();
+            break;
+          default:
+            destroyHls();
+            emit('error', new Error(`HLS Fatal Error: ${data.details}`));
+            break;
+        }
+      }
+    });
+  } else if (
+    props.src.includes('.m3u8') &&
+    videoElement.value.canPlayType('application/vnd.apple.mpegurl')
+  ) {
+    console.log('[VideoPlayer] Falling back to native HLS');
+    videoElement.value.src = props.src;
+    if (props.initialTime && props.initialTime > 0) {
+      videoElement.value.currentTime = props.initialTime;
     }
   }
 };
 
+onMounted(() => {
+  if (videoElement.value) {
+    emit('update:video-element', videoElement.value);
+    if (
+      props.initialTime &&
+      props.initialTime > 0 &&
+      !props.src?.includes('.m3u8')
+    ) {
+      videoElement.value.currentTime = props.initialTime;
+    }
+    initHls();
+  }
+});
+
 onUnmounted(() => {
-  if (hls.value) {
-    hls.value.destroy();
-  }
+  destroyHls();
 });
 
-watch(videoElement, (el) => {
-  emit('update:video-element', el);
-  if (el && props.initialTime && props.initialTime > 0) {
-    el.currentTime = props.initialTime;
-  }
-  initHls();
-});
-
-// Watch src to reset state if needed
 watch(
   () => props.src,
-  () => {
+  (newSrc, oldSrc) => {
+    if (newSrc === oldSrc) return;
+    console.log('[VideoPlayer] Source changed:', newSrc);
+    isEnded.value = false;
     initHls();
   },
-  { immediate: true },
 );
 
 const togglePlay = () => {
-  // If controls are hidden, the first click should only show them.
-  // The play/pause action is prevented, and the click event is allowed to bubble up
-  // to the parent component (App.vue), which handles showing the controls.
-  if (!props.isControlsVisible) {
-    return;
-  }
+  if (!props.isControlsVisible) return;
 
   if (videoElement.value) {
     if (videoElement.value.paused) {
-      videoElement.value.play?.()?.catch((error) => {
-        console.error('Error attempting to play video:', error);
+      // Don't try to play if no source yet
+      if (!videoElement.value.src && !videoElement.value.srcObject) {
+        console.log('[VideoPlayer] Play ignored: No source attached yet');
+        return;
+      }
+
+      videoElement.value.play()?.catch((err) => {
+        if (err.name !== 'AbortError') {
+          console.error('[VideoPlayer] Play failed:', err);
+        }
       });
     } else {
-      videoElement.value.pause?.();
+      videoElement.value.pause();
     }
   }
 };
 
 const reset = () => {
+  destroyHls();
   if (videoElement.value) {
     videoElement.value.pause();
     videoElement.value.removeAttribute('src');
@@ -184,12 +266,11 @@ const handlePause = () => {
 
 const handleEnded = () => {
   isEnded.value = true;
+  isPlaying.value = false;
   emit('ended');
 };
 
 const handleSeeking = () => {
-  // If user scrubs, they likely want to resume play or see a specific frame,
-  // so we clear the 'ended' state to show the normal play button if paused.
   isEnded.value = false;
 };
 
@@ -215,6 +296,9 @@ const handleLoadedMetadata = (event: Event) => {
     (video.videoWidth === 0 || video.videoHeight === 0) &&
     !props.isTranscodingMode
   ) {
+    console.log(
+      '[VideoPlayer] Metadata loaded but dimensions missing, triggering transcode',
+    );
     emit('trigger-transcode', 0);
   }
 };
@@ -222,7 +306,6 @@ const handleLoadedMetadata = (event: Event) => {
 const handleTimeUpdate = (event: Event) => {
   const target = event.target as HTMLVideoElement;
   const { currentTime } = target;
-
   let realCurrentTime = currentTime;
 
   if (props.isTranscodingMode && props.transcodedDuration > 0) {
@@ -238,7 +321,3 @@ defineExpose({
   videoElement,
 });
 </script>
-
-<style scoped>
-/* No styles needed for bare player */
-</style>

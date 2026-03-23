@@ -1,6 +1,6 @@
 import { spawn } from 'child_process';
 import ffmpegStatic from 'ffmpeg-static';
-import { getFFmpegStreams, runFFmpeg } from '../utils/ffmpeg-utils';
+import { getFFmpegStreams } from '../utils/ffmpeg-utils';
 import { createMediaSource } from '../media-source.ts';
 import fs from 'fs/promises';
 import path from 'path';
@@ -16,10 +16,15 @@ const DEFAULT_HEATMAP_POINTS = 100;
 const MIN_HEATMAP_POINTS = 1;
 const MAX_HEATMAP_POINTS = 1000;
 const ANALYZER_TIMEOUT_MS = 2 * 60 * 1000;
+const MAX_CONCURRENT_ANALYSES = 3;
 
 export class MediaAnalyzer {
   private static instance: MediaAnalyzer;
   private cacheDir: string | null = null;
+  private activeJobs: Map<
+    string,
+    { promise: Promise<HeatmapData>; progress: number }
+  > = new Map();
 
   private constructor() {}
 
@@ -28,6 +33,14 @@ export class MediaAnalyzer {
       MediaAnalyzer.instance = new MediaAnalyzer();
     }
     return MediaAnalyzer.instance;
+  }
+
+  /** @internal Used for testing */
+  static resetInstance() {
+    if (MediaAnalyzer.instance) {
+      MediaAnalyzer.instance.activeJobs.clear();
+    }
+    MediaAnalyzer.instance = null as unknown as MediaAnalyzer;
   }
 
   setCacheDir(dir: string) {
@@ -43,324 +56,106 @@ export class MediaAnalyzer {
     return path.join(this.cacheDir, `heatmap_${hash}.json`);
   }
 
-  private activeJobs: Map<
-    string,
-    { promise: Promise<HeatmapData>; progress: number }
-  > = new Map();
-
   getProgress(filePath: string): number | null {
-    const job = this.activeJobs.get(filePath);
-    return job ? job.progress : null;
+    return this.activeJobs.get(filePath)?.progress ?? null;
   }
-
-  private isProcessing = false;
-  private jobQueue: Array<() => Promise<void>> = [];
 
   async generateHeatmap(
     filePath: string,
     points: number = DEFAULT_HEATMAP_POINTS,
   ): Promise<HeatmapData> {
-    const existingJob = this.activeJobs.get(filePath);
-    if (existingJob) {
-      // Return existing promise if already queued or running
-      return existingJob.promise;
+    const safePoints = this.sanitizePoints(points);
+    if (process.env.DISABLE_HEATMAPS === 'true') {
+      return {
+        audio: Array.from({ length: safePoints }, () => -90),
+        motion: Array.from({ length: safePoints }, () => 0),
+        points: safePoints,
+      };
     }
 
-    // Create a deferred promise to return immediately
-    let deferredResolve: (
-      value: HeatmapData | PromiseLike<HeatmapData>,
-    ) => void;
-    let deferredReject: (reason?: unknown) => void;
+    const existing = this.activeJobs.get(filePath);
+    if (existing) return existing.promise;
 
-    const jobPromise = new Promise<HeatmapData>((resolve, reject) => {
-      deferredResolve = resolve;
-      deferredReject = reject;
-    });
+    // Concurrency limit
+    if (this.activeJobs.size >= MAX_CONCURRENT_ANALYSES) {
+      throw new Error('Server too busy. Please try again later.');
+    }
 
-    // Register job immediately as 0% progress
-    this.activeJobs.set(filePath, { promise: jobPromise, progress: 0 });
-
-    const work = async () => {
-      try {
-        const result = await this.executeHeatmapGeneration(filePath, points);
-        deferredResolve!(result);
-      } catch (e) {
-        deferredReject!(e);
-      } finally {
-        // Cleanup after completion/failure
-        this.activeJobs.delete(filePath);
+    const processJob = async (): Promise<HeatmapData> => {
+      // Check cache
+      const cachePath = this.getCachePath(filePath, safePoints);
+      if (cachePath) {
+        try {
+          const cached = await fs.readFile(cachePath, 'utf-8');
+          return JSON.parse(cached);
+        } catch {
+          // Cache miss
+        }
       }
+
+      return this.executeHeatmapGeneration(filePath, safePoints);
     };
 
-    // Add to queue and trigger processing
-    this.jobQueue.push(work);
-    this.processQueue();
-
-    return jobPromise;
-  }
-
-  private async processQueue() {
-    if (this.isProcessing) return; // Busy
-
-    this.isProcessing = true;
+    const promise = processJob();
+    this.activeJobs.set(filePath, { promise, progress: 0 });
 
     try {
-      while (this.jobQueue.length > 0) {
-        const nextWork = this.jobQueue.shift();
-        if (nextWork) {
-          await nextWork();
-        }
-      }
+      return await promise;
     } finally {
-      this.isProcessing = false;
+      this.activeJobs.delete(filePath);
     }
   }
 
-  private constructFFmpegArgs(
-    inputPath: string,
-    hasVideo: boolean,
-    hasAudio: boolean,
-  ): string[] {
-    const inputs = ['-i', inputPath];
-    const filterChains: string[] = [];
-    const mapArgs: string[] = [];
-
-    // Dynamic Filter Chain Construction
-    // Optimize: Scale down to 320px width to speed up signalstats (YDIF calculation)
-    const videoAnalysisFilter = `[0:v]fps=1,scale=320:-2,signalstats,metadata=print:key=lavfi.signalstats.YDIF:file=-[v]`;
-    const audioAnalysisFilter = `[0:a]asetnsamples=22050,astats=metadata=1:reset=1,ametadata=print:key=lavfi.astats.Overall.RMS_level:file=-[a]`;
-
-    if (hasVideo) {
-      filterChains.push(videoAnalysisFilter);
-      mapArgs.push('-map', '[v]');
-    }
-
-    if (hasAudio) {
-      filterChains.push(audioAnalysisFilter);
-      mapArgs.push('-map', '[a]');
-    }
-
-    return [
-      ...inputs,
-      '-filter_complex',
-      filterChains.join(';'),
-      ...mapArgs,
-      '-f',
-      'null',
-      '-',
-    ];
-  }
-
-  private async spawnFFmpegAndCaptureOutput(
-    filePath: string,
-    args: string[],
-    onProgress: (progress: number) => void,
-  ): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const process = spawn(ffmpegStatic!, args, {
-        windowsHide: true,
-        stdio: ['ignore', 'pipe', 'pipe'],
-      });
-
-      const timeoutTimer = setTimeout(() => {
-        console.warn(`[MediaAnalyzer] Process timed out for ${filePath}`);
-        process.kill('SIGKILL');
-        reject(new Error('Heatmap generation timed out'));
-      }, ANALYZER_TIMEOUT_MS);
-
-      let output = '';
-      let errorOutput = '';
-      let durationSec = 0;
-      let stderrBuffer = '';
-
-      process.stdout.on('data', (data) => {
-        output += data.toString();
-      });
-
-      process.stderr.on('data', (data) => {
-        const str = data.toString();
-        errorOutput += str;
-        stderrBuffer += str;
-
-        const lines = stderrBuffer.split(/[\r\n]+/);
-        // Keep the last partial line (or empty string if ends with newline) in buffer
-        stderrBuffer = lines.pop() || '';
-
-        for (const line of lines) {
-          // Parse Duration if not yet found
-          if (!durationSec) {
-            const durMatch = line.match(/Duration: (\d+):(\d+):(\d+)\.(\d+)/);
-            if (durMatch) {
-              const h = parseInt(durMatch[1], 10);
-              const m = parseInt(durMatch[2], 10);
-              const s = parseInt(durMatch[3], 10);
-              durationSec = h * 3600 + m * 60 + s;
-            }
-          }
-
-          // Parse Progress
-          if (durationSec > 0) {
-            const timeMatch = line.match(/time=(\d+):(\d+):(\d+)\.(\d+)/);
-            if (timeMatch) {
-              const h = parseInt(timeMatch[1], 10);
-              const m = parseInt(timeMatch[2], 10);
-              const s = parseInt(timeMatch[3], 10);
-              const currentSec = h * 3600 + m * 60 + s;
-              const progress = Math.min(
-                100,
-                Math.round((currentSec / durationSec) * 100),
-              );
-              onProgress(progress);
-            }
-          }
-        }
-      });
-
-      process.on('error', (err) => {
-        console.error('[MediaAnalyzer] Failed to start ffmpeg process:', err);
-        reject(err);
-      });
-
-      process.on('close', (code) => {
-        clearTimeout(timeoutTimer);
-        if (code !== 0) {
-          console.error(`[MediaAnalyzer] FFmpeg exited with code ${code}`);
-          console.error(`[MediaAnalyzer] Stderr: ${errorOutput.slice(-1000)}`);
-          reject(new Error(`FFmpeg process exited with code ${code}`));
-          return;
-        }
-
-        if (errorOutput.includes('Error')) {
-          console.warn(
-            `[MediaAnalyzer] FFmpeg succeeded but reported errors: ${errorOutput.slice(-500)}`,
-          );
-        }
-        resolve(output);
-      });
-    });
-  }
-
-  private parseHeatmapOutput(
-    output: string,
-    filePath: string,
-  ): { motion: number[]; audio: number[] } {
-    const motionValues: number[] = [];
-    const audioValues: number[] = [];
-
-    // Regex for more robust parsing
-    // Matches: lavfi.signalstats.YDIF=1.234 or lavfi.signalstats.YDIF= 1.234
-    const ydifRegex = /lavfi\.signalstats\.YDIF\s*=\s*([0-9\.]+)/;
-    const audioRegex = /lavfi\.astats\.Overall\.RMS_level\s*=\s*([0-9\.\-]+)/;
-
-    const lines = output.split(/[\r\n]+/);
-    for (const line of lines) {
-      const ydifMatch = line.match(ydifRegex);
-      if (ydifMatch) {
-        const val = parseFloat(ydifMatch[1]);
-        if (!isNaN(val)) motionValues.push(val);
-      }
-
-      const audioMatch = line.match(audioRegex);
-      if (audioMatch) {
-        const val = parseFloat(audioMatch[1]);
-        if (!isNaN(val)) audioValues.push(val);
-      }
-    }
-
-    if (motionValues.length === 0 && audioValues.length === 0) {
-      console.warn(
-        `[MediaAnalyzer] Warning: Zero samples found for ${filePath}`,
-      );
-      console.warn(
-        `[MediaAnalyzer] Output sample (last 5 lines): ${lines.slice(-5).join('\n')}`,
-      );
-    }
-
-    console.log(
-      `[MediaAnalyzer] Parsed ${motionValues.length} motion samples and ${audioValues.length} audio samples.`,
-    );
-
-    return { motion: motionValues, audio: audioValues };
-  }
-
-  // Renamed the original logic to this method
   private async executeHeatmapGeneration(
     filePath: string,
     points: number,
   ): Promise<HeatmapData> {
-    const safePoints = this.sanitizePoints(points);
-    if (!ffmpegStatic) {
-      throw new Error('FFmpeg not found');
-    }
+    if (!ffmpegStatic) throw new Error('FFmpeg not found');
 
-    console.log(
-      `[MediaAnalyzer] Generating heatmap for ${filePath} with ${safePoints} points`,
-    );
-
-    // Check cache
-    const cachePath = this.getCachePath(filePath, safePoints);
-    if (cachePath) {
-      try {
-        const cached = await fs.readFile(cachePath, 'utf-8');
-        return JSON.parse(cached);
-      } catch {
-        // Cache miss, continue with FFmpeg
-      }
-    }
-
-    // Resolve input path handling gdrive:// etc
     const source = createMediaSource(filePath);
     const inputPath = await source.getFFmpegInput();
-
-    // Check for streams using resolved path
     const { hasVideo, hasAudio } = await getFFmpegStreams(
       inputPath,
-      ffmpegStatic!,
+      ffmpegStatic,
     );
 
-    if (!hasVideo && !hasAudio) {
-      console.error(`[MediaAnalyzer] No streams found for ${filePath}`);
-      // Re-run probe to capture stderr for debugging
-      try {
-        const { stderr } = await runFFmpeg(ffmpegStatic!, ['-i', inputPath]);
-        console.error(`[MediaAnalyzer] Probe stderr: ${stderr}`);
-      } catch (e: unknown) {
-        const msg = e instanceof Error ? e.message : String(e);
-        console.error(`[MediaAnalyzer] Probe stderr (from error): ${msg}`);
-      }
+    if (!hasVideo && !hasAudio)
       throw new Error('No video or audio streams found');
-    }
 
-    const args = this.constructFFmpegArgs(inputPath, hasVideo, hasAudio);
+    const args = [
+      '-i',
+      inputPath,
+      '-filter_complex',
+      [
+        hasVideo
+          ? '[0:v]fps=1,scale=320:-2,signalstats,metadata=print:key=lavfi.signalstats.YDIF:file=-[v]'
+          : '',
+        hasAudio
+          ? '[0:a]asetnsamples=22050,astats=metadata=1:reset=1,ametadata=print:key=lavfi.astats.Overall.RMS_level:file=-[a]'
+          : '',
+      ]
+        .filter(Boolean)
+        .join(';'),
+      ...(hasVideo ? ['-map', '[v]'] : []),
+      ...(hasAudio ? ['-map', '[a]'] : []),
+      '-f',
+      'null',
+      '-',
+    ];
 
-    const output = await this.spawnFFmpegAndCaptureOutput(
-      filePath,
-      args,
-      (progress) => {
-        const job = this.activeJobs.get(filePath);
-        if (job) {
-          job.progress = progress;
-        }
-      },
-    );
+    const output = await this.spawnFFmpegAndCaptureOutput(filePath, args);
+    const { motion, audio } = this.parseHeatmapOutput(output);
 
-    const { motion, audio } = this.parseHeatmapOutput(output, filePath);
-
-    // Downsample to `points`
-    const resampledAudio = this.resample(audio, safePoints, -90);
-    const resampledMotion = this.resample(motion, safePoints, 0);
-
-    const result: HeatmapData = {
-      audio: resampledAudio,
-      motion: resampledMotion,
-      points: safePoints,
+    const result = {
+      audio: this.resample(audio, points, -90),
+      motion: this.resample(motion, points, 0),
+      points,
     };
 
-    // Cache result
+    const cachePath = this.getCachePath(filePath, points);
     if (cachePath) {
-      const dir = path.dirname(cachePath);
       try {
-        await fs.mkdir(dir, { recursive: true });
+        await fs.mkdir(path.dirname(cachePath), { recursive: true });
         await fs.writeFile(cachePath, JSON.stringify(result));
       } catch (cacheErr) {
         console.warn('[MediaAnalyzer] Failed to write cache', cacheErr);
@@ -370,49 +165,116 @@ export class MediaAnalyzer {
     return result;
   }
 
-  // Simple bucket average resampling
+  private async spawnFFmpegAndCaptureOutput(
+    filePath: string,
+    args: string[],
+  ): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const proc = spawn(ffmpegStatic!, args, { windowsHide: true });
+      const timeoutTimer = setTimeout(() => {
+        proc.kill('SIGKILL');
+        reject(new Error('Heatmap generation timed out'));
+      }, ANALYZER_TIMEOUT_MS);
+
+      let output = '',
+        stderrBuffer = '',
+        durationSec = 0;
+
+      proc.stdout?.on('data', (d) => (output += d.toString()));
+      proc.stderr?.on('data', (d) => {
+        stderrBuffer += d.toString();
+        const lines = stderrBuffer.split(/[\r\n]+/);
+        stderrBuffer = lines.pop() || ''; // Keep partial line
+
+        for (const line of lines) {
+          if (!durationSec) {
+            const match = line.match(/Duration: (\d+):(\d+):(\d+)\.(\d+)/);
+            if (match) {
+              durationSec =
+                parseInt(match[1], 10) * 3600 +
+                parseInt(match[2], 10) * 60 +
+                parseFloat(`${match[3]}.${match[4]}`);
+            }
+          }
+          if (durationSec > 0) {
+            const match = line.match(/time=(\d+):(\d+):(\d+)\.(\d+)/);
+            if (match) {
+              const currentSec =
+                parseInt(match[1], 10) * 3600 +
+                parseInt(match[2], 10) * 60 +
+                parseFloat(`${match[3]}.${match[4]}`);
+              const job = this.activeJobs.get(filePath);
+              if (job) {
+                job.progress = Math.min(
+                  100,
+                  Math.round((currentSec / durationSec) * 100),
+                );
+              }
+            }
+          }
+        }
+      });
+
+      proc.on('error', (err) => {
+        clearTimeout(timeoutTimer);
+        reject(err);
+      });
+      proc.on('close', (code) => {
+        clearTimeout(timeoutTimer);
+        if (code !== 0)
+          reject(new Error(`FFmpeg process exited with code ${code}`));
+        else {
+          if (stderrBuffer.includes('Error'))
+            console.warn(
+              '[MediaAnalyzer] FFmpeg succeeded but reported errors',
+            );
+          resolve(output);
+        }
+      });
+    });
+  }
+
+  private parseHeatmapOutput(output: string) {
+    const motion: number[] = [],
+      audio: number[] = [];
+    output.split(/[\r\n]+/).forEach((line) => {
+      const mMatch = line.match(/lavfi\.signalstats\.YDIF\s*=\s*([0-9\.]+)/);
+      if (mMatch) motion.push(parseFloat(mMatch[1]));
+      const aMatch = line.match(
+        /lavfi\.astats\.Overall\.RMS_level\s*=\s*([0-9\.\-]+)/,
+      );
+      if (aMatch) audio.push(parseFloat(aMatch[1]));
+    });
+    return { motion, audio };
+  }
+
   private resample(
     data: number[],
-    targetLength: number,
+    target: number,
     defaultValue: number,
   ): number[] {
-    const safeTargetLength = this.sanitizePoints(targetLength);
-    if (data.length === 0) {
-      return new Array(safeTargetLength).fill(defaultValue);
-    }
-
-    const result: number[] = [];
-    const step = data.length / safeTargetLength;
-
-    for (let i = 0; i < safeTargetLength; i++) {
-      const start = Math.floor(i * step);
-      const end = Math.floor((i + 1) * step);
+    if (data.length === 0)
+      return Array.from({ length: target }, () => defaultValue);
+    const result: number[] = [],
+      step = data.length / target;
+    for (let i = 0; i < target; i++) {
+      const start = Math.floor(i * step),
+        end = Math.floor((i + 1) * step);
       const slice = data.slice(start, end);
-
-      // Note: When downsampling, slice will have 1 or more items.
-      // When upsampling, slice can be empty.
-      if (slice.length > 0) {
-        const sum = slice.reduce((a, b) => a + b, 0);
-        result.push(sum / slice.length);
-      } else {
-        // Updated Up-sampling Logic:
-        // If slice is empty (start == end), we are zooming in on a single point.
-        // Use data[start] if available, otherwise fallback.
-        if (start < data.length) {
-          result.push(data[start]);
-        } else {
-          // Should be unreachable with current math, but safe fallback to default
-          result.push(defaultValue);
-        }
-      }
+      result.push(
+        slice.length > 0
+          ? slice.reduce((a, b) => a + b, 0) / slice.length
+          : (data[start] ?? defaultValue),
+      );
     }
     return result;
   }
 
   private sanitizePoints(points: number): number {
     if (!Number.isFinite(points)) return DEFAULT_HEATMAP_POINTS;
-    const rounded = Math.floor(points);
-    if (rounded < MIN_HEATMAP_POINTS) return MIN_HEATMAP_POINTS;
-    return Math.min(MAX_HEATMAP_POINTS, rounded);
+    return Math.max(
+      MIN_HEATMAP_POINTS,
+      Math.min(MAX_HEATMAP_POINTS, Math.floor(points)),
+    );
   }
 }

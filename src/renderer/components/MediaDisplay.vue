@@ -12,6 +12,7 @@
         :is-buffering="isBuffering"
         :transcoded-duration="transcodedDuration"
         :current-transcode-start-time="currentTranscodeStartTime"
+        :progress="transcodingProgress"
       />
 
       <!-- 2. Placeholder (No Item & Not Loading) -->
@@ -316,11 +317,45 @@ const isTranscodingMode = ref(false);
 const isTranscodingLoading = ref(false);
 const isBuffering = ref(false);
 const transcodedDuration = ref(0);
+const transcodingProgress = ref<number | null>(null);
 const currentTranscodeStartTime = ref(0);
 const isVrMode = ref(false); // [NEW]
 const savedCurrentTime = ref(0); // [NEW] Sync time between players
 const isOpeningVlc = ref(false);
 const isMuted = ref(false);
+
+const transcodingPollInterval = ref<NodeJS.Timeout | null>(null);
+
+const stopTranscodingProgressPoll = () => {
+  if (transcodingPollInterval.value) {
+    clearInterval(transcodingPollInterval.value);
+    transcodingPollInterval.value = null;
+  }
+};
+
+const startTranscodingProgressPoll = (filePath: string) => {
+  stopTranscodingProgressPoll();
+  transcodingProgress.value = 0;
+
+  transcodingPollInterval.value = setInterval(async () => {
+    try {
+      const status = await api.getHlsStatus(filePath);
+      if (status) {
+        transcodingProgress.value = status.percent;
+        if (status.duration > 0) {
+          transcodedDuration.value = status.duration;
+        }
+        if (status.percent >= 100) {
+          isTranscodingLoading.value = false;
+          isBuffering.value = false;
+          stopTranscodingProgressPoll();
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to poll transcoding progress', e);
+    }
+  }, 1000);
+};
 
 const posterUrl = computed(() => {
   if (displayedItem.value && thumbnailUrlGenerator?.value) {
@@ -455,8 +490,7 @@ const tryTranscoding = async (startTime = 0, requestId?: number) => {
 
   // We are "transcoding" in the backend, but for the frontend player (HLS),
   // it behaves like a native stream (seekable).
-  // So isTranscodingMode = false prevents manual seek triggers in VideoPlayer.
-  isTranscodingMode.value = false;
+  isTranscodingMode.value = true;
   isTranscodingLoading.value = true;
   error.value = null;
 
@@ -477,6 +511,9 @@ const tryTranscoding = async (startTime = 0, requestId?: number) => {
     displayedItem.value = currentMediaItem.value;
 
     isVideoSupported.value = true;
+
+    // Start polling for progress
+    startTranscodingProgressPoll(rawPath);
   } catch (e) {
     if (effectiveRequestId !== currentLoadRequestId) return;
 
@@ -509,7 +546,9 @@ const loadMediaUrl = async () => {
   isTranscodingLoading.value = false;
   isBuffering.value = false;
   transcodedDuration.value = 0;
+  transcodingProgress.value = null;
   currentTranscodeStartTime.value = 0;
+  stopTranscodingProgressPoll();
 
   // Cleanup previous video stream explicitly to prevent pending requests
   if (videoPlayerRef.value) {
@@ -638,6 +677,7 @@ const persistWatchedSegments = async () => {
 
 onBeforeUnmount(() => {
   persistWatchedSegments();
+  stopTranscodingProgressPoll();
 });
 
 watch(currentMediaItem, () => {
@@ -722,6 +762,8 @@ const handleMediaError = () => {
     tryTranscoding(0); // Uses currentLoadRequestId implicitly
   } else {
     error.value = 'Failed to display media file.';
+    isTranscodingLoading.value = false;
+    stopTranscodingProgressPoll();
   }
 };
 
@@ -906,6 +948,7 @@ const handleVideoPause = () => {
 const handleVideoPlaying = () => {
   isTranscodingLoading.value = false;
   isBuffering.value = false;
+  stopTranscodingProgressPoll();
 };
 
 const handleBuffering = (buffering: boolean) => {
