@@ -97,9 +97,10 @@ export function encrypt(text: string): string {
 
 /**
  * Decrypts a string using AES-256-GCM.
- * Handles legacy plain text gracefully.
+ * Handles legacy plain text gracefully by returning it as-is if format doesn't match.
+ * Returns null if decryption fails for a string that looks like encrypted data.
  */
-export function decrypt(text: string): string {
+export function decrypt(text: string): string | null {
   if (!text) return text;
 
   // Check format: iv:authTag:ciphertext
@@ -114,13 +115,14 @@ export function decrypt(text: string): string {
   // Basic validation of hex strings
   // IV is 12 bytes = 24 hex chars
   // AuthTag is 16 bytes = 32 hex chars
-  // ciphertext can be empty string
   if (
     !/^[0-9a-fA-F]{24}$/.test(ivHex) ||
     !/^[0-9a-fA-F]{32}$/.test(authTagHex) ||
     (encryptedHex.length > 0 && !/^[0-9a-fA-F]+$/.test(encryptedHex)) ||
     encryptedHex.length % 2 !== 0
   ) {
+    // If it has 3 parts but doesn't look like valid hex, it's likely just plain text
+    // that happened to contain two colons.
     return text;
   }
 
@@ -137,13 +139,12 @@ export function decrypt(text: string): string {
 
     return decrypted;
   } catch (err) {
-    // If decryption fails (e.g. wrong key, or it was actually a plain text string with 2 colons),
-    // we return the original text as fallback, assuming it might be legacy data that looked like encrypted format.
-    // But GCM failure usually means tampering or wrong key.
+    // If decryption fails (e.g. wrong key), we return null to indicate a genuine failure.
+    // This allows the caller to handle the case where data exists but is unreadable.
     console.warn(
-      '[Encryption] Decryption failed, returning original text:',
+      '[Encryption] Decryption failed (possibly wrong key):',
       (err as Error).message,
     );
-    return text;
+    return null;
   }
 }

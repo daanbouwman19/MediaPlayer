@@ -44,8 +44,11 @@ export async function loadSavedCredentialsIfExist(): Promise<boolean> {
     }
 
     // Attempt to decrypt. If it fails (legacy plaintext), it returns original content.
-    // If original content is valid JSON, JSON.parse will succeed.
+    // If it looks like encrypted data but decryption fails (wrong key), it returns null.
     const decrypted = decrypt(content);
+    if (!decrypted) {
+      return false;
+    }
     const credentials = JSON.parse(decrypted);
 
     const client = getOAuth2Client();

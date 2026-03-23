@@ -93,7 +93,7 @@ describe('Encryption Utils Coverage', () => {
     );
   });
 
-  it('should return original text if decryption throws internally', async () => {
+  it('should return null if decryption throws internally and format is correct', async () => {
     // Provide a valid key via env to avoid FS operations/failures during setup
     vi.stubEnv('MASTER_KEY', crypto.randomBytes(32).toString('hex'));
 
@@ -112,7 +112,7 @@ describe('Encryption Utils Coverage', () => {
     });
 
     const result = decrypt(encrypted);
-    expect(result).toBe(encrypted); // Fallback to returning input
+    expect(result).toBeNull(); // Should return null for formatted data
     expect(consoleWarnSpy).toHaveBeenCalledWith(
       expect.stringContaining('Decryption failed'),
       expect.any(String),

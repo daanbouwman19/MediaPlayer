@@ -111,6 +111,7 @@ export class MediaService {
       const tokenString = await this.mediaRepo.getSetting('google_tokens');
       if (!tokenString) return null;
       const decrypted = decrypt(tokenString);
+      if (!decrypted) return null;
       return JSON.parse(decrypted);
     } catch (e) {
       console.warn(
