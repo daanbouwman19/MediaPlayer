@@ -24,7 +24,13 @@ export function registerDatabaseHandlers() {
     async (_event: IpcMainInvokeEvent, { filePath, metadata }) => {
       await upsertMetadata(filePath, metadata);
     },
-    { validators: [({ filePath }) => validatePathAccess(filePath)] },
+    {
+      validators: [
+        async ({ filePath }) => {
+          await validatePathAccess(filePath);
+        },
+      ],
+    },
   );
 
   handleIpc(
@@ -40,7 +46,13 @@ export function registerDatabaseHandlers() {
     async (_event: IpcMainInvokeEvent, { filePath, rating }) => {
       await setRating(filePath, rating);
     },
-    { validators: [({ filePath }) => validatePathAccess(filePath)] },
+    {
+      validators: [
+        async ({ filePath }) => {
+          await validatePathAccess(filePath);
+        },
+      ],
+    },
   );
 
   handleIpc(
@@ -72,7 +84,13 @@ export function registerDatabaseHandlers() {
     async (_event: IpcMainInvokeEvent, { filePath, segmentsJson }) => {
       await updateWatchedSegments(filePath, segmentsJson);
     },
-    { validators: [({ filePath }) => validatePathAccess(filePath)] },
+    {
+      validators: [
+        async ({ filePath }) => {
+          await validatePathAccess(filePath);
+        },
+      ],
+    },
   );
 
   handleIpc(

@@ -19,27 +19,15 @@ import { isDrivePath } from './media-utils.ts';
 
 /**
  * Generates a session ID based on the file path.
+ * Caller should provide a validated/canonical path.
  */
 export async function generateSessionId(
   validatedPath: string,
 ): Promise<string> {
-  let canonicalPath = validatedPath;
-  if (!isDrivePath(validatedPath)) {
-    try {
-      // Ensure we use an absolute, normalized path for realpath
-      const absolutePath = path.isAbsolute(validatedPath)
-        ? path.normalize(validatedPath)
-        : path.resolve(validatedPath);
-      canonicalPath = await fs.realpath(absolutePath);
-    } catch (err) {
-      // [SECURITY] Fix: Avoid externally-controlled format string by using a constant message
-      console.warn('[HLS] realpath failed, falling back to original path', {
-        path: validatedPath,
-        error: err,
-      });
-      canonicalPath = validatedPath;
-    }
-  }
+  const canonicalPath = isDrivePath(validatedPath)
+    ? validatedPath
+    : path.normalize(validatedPath);
+
   return crypto.createHash('md5').update(canonicalPath).digest('hex');
 }
 

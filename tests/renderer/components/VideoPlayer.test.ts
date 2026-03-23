@@ -473,18 +473,50 @@ describe('VideoPlayer Coverage', () => {
     const video = wrapper.find('video').element as HTMLVideoElement;
     Object.defineProperty(video, 'paused', { value: true, configurable: true });
     Object.defineProperty(video, 'src', { value: '', configurable: true });
-    Object.defineProperty(video, 'srcObject', { value: null, configurable: true });
-    
+    Object.defineProperty(video, 'srcObject', {
+      value: null,
+      configurable: true,
+    });
+
     video.play = vi.fn();
     const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
     await (wrapper.vm as any).togglePlay();
-    
+
     expect(video.play).not.toHaveBeenCalled();
     expect(consoleSpy).toHaveBeenCalledWith(
       '[VideoPlayer] Play ignored: No source attached yet',
     );
     consoleSpy.mockRestore();
+  });
+
+  it('attempts to recover on HLS media error', async () => {
+    mount(VideoPlayer, {
+      props: { ...defaultProps, src: 'test.m3u8' },
+    });
+    await nextTick();
+
+    const errorCall = mockHlsInstance.on.mock.calls.find(
+      (c: any[]) => c[0] === Hls.Events.ERROR,
+    );
+    expect(errorCall).toBeDefined();
+
+    // Trigger fatal media error
+    errorCall![1](Hls.Events.ERROR, {
+      fatal: true,
+      type: Hls.ErrorTypes.MEDIA_ERROR,
+    });
+
+    expect(mockHlsInstance.recoverMediaError).toHaveBeenCalled();
+  });
+
+  it('sets initialTime for raw video files on mount', async () => {
+    const initialTime = 42;
+    const wrapper = mount(VideoPlayer, {
+      props: { ...defaultProps, src: 'test.mp4', initialTime },
+    });
+    const video = wrapper.find('video').element as HTMLVideoElement;
+    expect(video.currentTime).toBe(initialTime);
   });
 
   it('handleSeeking triggers update logic', async () => {
