@@ -8,7 +8,7 @@
       class="w-full h-full object-contain"
       :src="effectiveSrc"
       :poster="poster"
-      autoplay
+      :autoplay="!isHls"
       @error="handleError"
       @ended="handleEnded"
       @play="handlePlay"
@@ -90,8 +90,12 @@ const isPlaying = ref(false);
 const isEnded = ref(false);
 const hlsInstance = ref<Hls | null>(null);
 
+const isHls = computed(
+  () => !!props.src?.includes('.m3u8') && Hls.isSupported(),
+);
+
 const effectiveSrc = computed(() => {
-  if (props.src?.includes('.m3u8') && Hls.isSupported()) {
+  if (isHls.value) {
     return undefined;
   }
   return props.src || undefined;
@@ -108,10 +112,16 @@ const destroyHls = () => {
 const initHls = () => {
   destroyHls();
 
-  if (!props.src || !videoElement.value || !props.src.includes('.m3u8')) return;
+  if (!props.src || !videoElement.value) return;
 
-  if (Hls.isSupported()) {
+  if (isHls.value) {
     console.log('[VideoPlayer] Initializing HLS for:', props.src);
+
+    // Explicitly reset video element to clear any previous error state or source
+    videoElement.value.pause();
+    videoElement.value.removeAttribute('src');
+    videoElement.value.load();
+
     const hls = new Hls({
       maxBufferLength: 30,
       maxMaxBufferLength: 60,
@@ -121,16 +131,27 @@ const initHls = () => {
     });
 
     hlsInstance.value = hls;
-    hls.loadSource(props.src);
     hls.attachMedia(videoElement.value);
+
+    hls.on(Hls.Events.MEDIA_ATTACHED, () => {
+      console.log('[VideoPlayer] HLS Media attached');
+      if (props.src) {
+        hls.loadSource(props.src);
+      }
+    });
 
     hls.on(Hls.Events.MANIFEST_PARSED, () => {
       console.log('[VideoPlayer] HLS Manifest parsed');
-      videoElement.value?.play().catch((err) => {
-        if (err.name !== 'AbortError') {
-          console.warn('[VideoPlayer] Autoplay failed:', err);
+      // Use a small delay to ensure video element is ready for play()
+      setTimeout(() => {
+        if (videoElement.value && videoElement.value.paused) {
+          videoElement.value.play().catch((err) => {
+            if (err.name !== 'AbortError') {
+              console.warn('[VideoPlayer] Autoplay failed:', err);
+            }
+          });
         }
-      });
+      }, 0);
     });
 
     hls.on(Hls.Events.LEVEL_LOADED, (_event, data) => {
@@ -161,7 +182,10 @@ const initHls = () => {
         }
       }
     });
-  } else if (videoElement.value.canPlayType('application/vnd.apple.mpegurl')) {
+  } else if (
+    props.src.includes('.m3u8') &&
+    videoElement.value.canPlayType('application/vnd.apple.mpegurl')
+  ) {
     console.log('[VideoPlayer] Falling back to native HLS');
     videoElement.value.src = props.src;
     if (props.initialTime && props.initialTime > 0) {
@@ -203,6 +227,12 @@ const togglePlay = () => {
 
   if (videoElement.value) {
     if (videoElement.value.paused) {
+      // Don't try to play if no source yet
+      if (!videoElement.value.src && !videoElement.value.srcObject) {
+        console.log('[VideoPlayer] Play ignored: No source attached yet');
+        return;
+      }
+
       videoElement.value.play()?.catch((err) => {
         if (err.name !== 'AbortError') {
           console.error('[VideoPlayer] Play failed:', err);

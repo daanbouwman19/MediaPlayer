@@ -762,6 +762,7 @@ const handleMediaError = () => {
     tryTranscoding(0); // Uses currentLoadRequestId implicitly
   } else {
     error.value = 'Failed to display media file.';
+    isTranscodingLoading.value = false;
     stopTranscodingProgressPoll();
   }
 };

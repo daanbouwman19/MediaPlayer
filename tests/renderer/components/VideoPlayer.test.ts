@@ -209,13 +209,15 @@ describe('VideoPlayer Coverage', () => {
     video.play = vi.fn().mockResolvedValue(undefined);
 
     // Trigger manifest parsed
-    await manifestParsedCall![1](Hls.Events.MANIFEST_PARSED);
+    manifestParsedCall![1](Hls.Events.MANIFEST_PARSED);
+    await new Promise(resolve => setTimeout(resolve, 0));
     expect(video.play).toHaveBeenCalled();
 
     // Test play failure
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     video.play = vi.fn().mockRejectedValue(new Error('Autoplay blocked'));
-    await manifestParsedCall![1](Hls.Events.MANIFEST_PARSED);
+    manifestParsedCall![1](Hls.Events.MANIFEST_PARSED);
+    await new Promise(resolve => setTimeout(resolve, 0));
     expect(warnSpy).toHaveBeenCalled();
     warnSpy.mockRestore();
   });
@@ -440,7 +442,8 @@ describe('VideoPlayer Coverage', () => {
       .mockRejectedValue(Object.assign(new Error(), { name: 'AbortError' }));
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-    await manifestParsedCall![1](Hls.Events.MANIFEST_PARSED);
+    manifestParsedCall![1](Hls.Events.MANIFEST_PARSED);
+    await new Promise(resolve => setTimeout(resolve, 0));
     expect(warnSpy).not.toHaveBeenCalled();
     warnSpy.mockRestore();
   });
@@ -450,7 +453,8 @@ describe('VideoPlayer Coverage', () => {
       props: { ...defaultProps, isControlsVisible: true },
     });
     const video = wrapper.find('video').element as HTMLVideoElement;
-    Object.defineProperty(video, 'paused', { value: true });
+    Object.defineProperty(video, 'paused', { value: true, configurable: true });
+    Object.defineProperty(video, 'src', { value: 'test.mp4', configurable: true });
     video.play = vi.fn().mockRejectedValue(new Error('play error'));
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
