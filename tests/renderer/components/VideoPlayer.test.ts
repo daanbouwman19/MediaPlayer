@@ -210,14 +210,14 @@ describe('VideoPlayer Coverage', () => {
 
     // Trigger manifest parsed
     manifestParsedCall![1](Hls.Events.MANIFEST_PARSED);
-    await new Promise(resolve => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
     expect(video.play).toHaveBeenCalled();
 
     // Test play failure
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     video.play = vi.fn().mockRejectedValue(new Error('Autoplay blocked'));
     manifestParsedCall![1](Hls.Events.MANIFEST_PARSED);
-    await new Promise(resolve => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
     expect(warnSpy).toHaveBeenCalled();
     warnSpy.mockRestore();
   });
@@ -443,7 +443,7 @@ describe('VideoPlayer Coverage', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     manifestParsedCall![1](Hls.Events.MANIFEST_PARSED);
-    await new Promise(resolve => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
     expect(warnSpy).not.toHaveBeenCalled();
     warnSpy.mockRestore();
   });
@@ -454,13 +454,37 @@ describe('VideoPlayer Coverage', () => {
     });
     const video = wrapper.find('video').element as HTMLVideoElement;
     Object.defineProperty(video, 'paused', { value: true, configurable: true });
-    Object.defineProperty(video, 'src', { value: 'test.mp4', configurable: true });
+    Object.defineProperty(video, 'src', {
+      value: 'test.mp4',
+      configurable: true,
+    });
     video.play = vi.fn().mockRejectedValue(new Error('play error'));
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     await (wrapper.vm as any).togglePlay();
     expect(errorSpy).toHaveBeenCalled();
     errorSpy.mockRestore();
+  });
+
+  it('togglePlay returns early if no source attached', async () => {
+    const wrapper = mount(VideoPlayer, {
+      props: { ...defaultProps, isControlsVisible: true },
+    });
+    const video = wrapper.find('video').element as HTMLVideoElement;
+    Object.defineProperty(video, 'paused', { value: true, configurable: true });
+    Object.defineProperty(video, 'src', { value: '', configurable: true });
+    Object.defineProperty(video, 'srcObject', { value: null, configurable: true });
+    
+    video.play = vi.fn();
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    await (wrapper.vm as any).togglePlay();
+    
+    expect(video.play).not.toHaveBeenCalled();
+    expect(consoleSpy).toHaveBeenCalledWith(
+      '[VideoPlayer] Play ignored: No source attached yet',
+    );
+    consoleSpy.mockRestore();
   });
 
   it('handleSeeking triggers update logic', async () => {

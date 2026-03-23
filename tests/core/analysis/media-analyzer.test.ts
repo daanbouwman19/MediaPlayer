@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, Mock } from 'vitest';
 import {
   MediaAnalyzer,
   HeatmapData,
@@ -68,6 +68,7 @@ describe('MediaAnalyzer', () => {
     MediaAnalyzer.resetInstance();
     analyzer = MediaAnalyzer.getInstance();
     analyzer.setCacheDir('/tmp/cache');
+    process.env.DISABLE_HEATMAPS = 'false';
 
     // Default mock behavior
     vi.mocked(getFFmpegStreams).mockResolvedValue({
@@ -215,6 +216,41 @@ describe('MediaAnalyzer', () => {
 
       expect(result1).toEqual(result2);
       expect(spawn).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('Concurrency Limit', () => {
+    it('should throw error when max concurrent analyses reached', async () => {
+      (fs.readFile as any).mockRejectedValue(new Error('ENOENT'));
+
+      // Start 3 jobs (the current limit)
+      setupMockSpawn();
+      const p1 = analyzer.generateHeatmap('file1.mp4', 10);
+      setupMockSpawn();
+      const p2 = analyzer.generateHeatmap('file2.mp4', 10);
+      setupMockSpawn();
+      const p3 = analyzer.generateHeatmap('file3.mp4', 10);
+
+      // Wait for jobs to register in activeJobs map
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      // Attempt a 4th job
+      await expect(analyzer.generateHeatmap('file4.mp4', 10)).rejects.toThrow(
+        'Server too busy',
+      );
+
+      // Cleanup
+      const mockProcesses = (spawn as Mock).mock.results.map(
+        (r: any) => r.value,
+      );
+      mockProcesses.forEach((proc: any) => {
+        if (proc) {
+          proc.stdout.end();
+          proc.stderr.end();
+          proc.emit('close', 0);
+        }
+      });
+      await Promise.allSettled([p1, p2, p3]);
     });
   });
 });

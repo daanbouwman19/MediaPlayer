@@ -16,6 +16,7 @@ const DEFAULT_HEATMAP_POINTS = 100;
 const MIN_HEATMAP_POINTS = 1;
 const MAX_HEATMAP_POINTS = 1000;
 const ANALYZER_TIMEOUT_MS = 2 * 60 * 1000;
+const MAX_CONCURRENT_ANALYSES = 3;
 
 export class MediaAnalyzer {
   private static instance: MediaAnalyzer;
@@ -66,14 +67,19 @@ export class MediaAnalyzer {
     const safePoints = this.sanitizePoints(points);
     if (process.env.DISABLE_HEATMAPS === 'true') {
       return {
-        audio: new Array(safePoints).fill(-90),
-        motion: new Array(safePoints).fill(0),
+        audio: Array.from({ length: safePoints }, () => -90),
+        motion: Array.from({ length: safePoints }, () => 0),
         points: safePoints,
       };
     }
 
     const existing = this.activeJobs.get(filePath);
     if (existing) return existing.promise;
+
+    // Concurrency limit
+    if (this.activeJobs.size >= MAX_CONCURRENT_ANALYSES) {
+      throw new Error('Server too busy. Please try again later.');
+    }
 
     const processJob = async (): Promise<HeatmapData> => {
       // Check cache
@@ -177,29 +183,34 @@ export class MediaAnalyzer {
       proc.stdout?.on('data', (d) => (output += d.toString()));
       proc.stderr?.on('data', (d) => {
         stderrBuffer += d.toString();
-        if (!durationSec) {
-          const match = stderrBuffer.match(
-            /Duration: (\d+):(\d+):(\d+)\.(\d+)/,
-          );
-          if (match)
-            durationSec =
-              parseInt(match[1]) * 3600 +
-              parseInt(match[2]) * 60 +
-              parseFloat(`${match[3]}.${match[4]}`);
-        }
-        if (durationSec > 0) {
-          const match = stderrBuffer.match(/time=(\d+):(\d+):(\d+)\.(\d+)/);
-          if (match) {
-            const currentSec =
-              parseInt(match[1]) * 3600 +
-              parseInt(match[2]) * 60 +
-              parseFloat(`${match[3]}.${match[4]}`);
-            const job = this.activeJobs.get(filePath);
-            if (job)
-              job.progress = Math.min(
-                100,
-                Math.round((currentSec / durationSec) * 100),
-              );
+        const lines = stderrBuffer.split(/[\r\n]+/);
+        stderrBuffer = lines.pop() || ''; // Keep partial line
+
+        for (const line of lines) {
+          if (!durationSec) {
+            const match = line.match(/Duration: (\d+):(\d+):(\d+)\.(\d+)/);
+            if (match) {
+              durationSec =
+                parseInt(match[1], 10) * 3600 +
+                parseInt(match[2], 10) * 60 +
+                parseFloat(`${match[3]}.${match[4]}`);
+            }
+          }
+          if (durationSec > 0) {
+            const match = line.match(/time=(\d+):(\d+):(\d+)\.(\d+)/);
+            if (match) {
+              const currentSec =
+                parseInt(match[1], 10) * 3600 +
+                parseInt(match[2], 10) * 60 +
+                parseFloat(`${match[3]}.${match[4]}`);
+              const job = this.activeJobs.get(filePath);
+              if (job) {
+                job.progress = Math.min(
+                  100,
+                  Math.round((currentSec / durationSec) * 100),
+                );
+              }
+            }
           }
         }
       });
@@ -227,10 +238,10 @@ export class MediaAnalyzer {
     const motion: number[] = [],
       audio: number[] = [];
     output.split(/[\r\n]+/).forEach((line) => {
-      const mMatch = line.match(/lavfi\.signalstats\.YDIF=([0-9\.]+)/);
+      const mMatch = line.match(/lavfi\.signalstats\.YDIF\s*=\s*([0-9\.]+)/);
       if (mMatch) motion.push(parseFloat(mMatch[1]));
       const aMatch = line.match(
-        /lavfi\.astats\.Overall\.RMS_level=([0-9\.\-]+)/,
+        /lavfi\.astats\.Overall\.RMS_level\s*=\s*([0-9\.\-]+)/,
       );
       if (aMatch) audio.push(parseFloat(aMatch[1]));
     });
@@ -242,7 +253,8 @@ export class MediaAnalyzer {
     target: number,
     defaultValue: number,
   ): number[] {
-    if (data.length === 0) return new Array(target).fill(defaultValue);
+    if (data.length === 0)
+      return Array.from({ length: target }, () => defaultValue);
     const result: number[] = [],
       step = data.length / target;
     for (let i = 0; i < target; i++) {

@@ -75,6 +75,7 @@ describe('MediaAnalyzer Robustness', () => {
     MediaAnalyzer.resetInstance();
     analyzer = MediaAnalyzer.getInstance();
     analyzer.setCacheDir('/tmp/cache');
+    process.env.DISABLE_HEATMAPS = 'false';
     (fs.readFile as any).mockRejectedValue(new Error('ENOENT')); // Cache miss
     vi.mocked(createMediaSource).mockImplementation((path: string) => ({
       getFFmpegInput: vi.fn().mockResolvedValue(path),
