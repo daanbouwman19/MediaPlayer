@@ -36,6 +36,7 @@ export const IPC_CHANNELS = {
   REINDEX_MEDIA_LIBRARY: 'reindex-media-library',
 
   // Auth / Drive
+  AUTH_GOOGLE_DRIVE_STATUS: 'auth:google-drive-status',
   AUTH_GOOGLE_DRIVE_START: 'auth:google-drive-start',
   AUTH_GOOGLE_DRIVE_CODE: 'auth:google-drive-code',
   ADD_GOOGLE_DRIVE_SOURCE: 'add-google-drive-source',

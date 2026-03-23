@@ -108,6 +108,35 @@ describe('Google Auth Service', () => {
     });
   });
 
+  describe('checkGoogleDriveAuth', () => {
+    it('returns true if client already has refresh_token', async () => {
+      mockOAuth2Client.credentials = { refresh_token: 'existing' };
+      const result = await googleAuth.checkGoogleDriveAuth();
+      expect(result).toBe(true);
+      expect(database.getSetting).not.toHaveBeenCalled();
+    });
+
+    it('loads from DB if client lacks refresh_token', async () => {
+      mockOAuth2Client.credentials = {} as any;
+      const mockCreds = { refresh_token: 'saved-token' };
+      vi.mocked(database.getSetting).mockResolvedValue(
+        JSON.stringify(mockCreds),
+      );
+
+      const result = await googleAuth.checkGoogleDriveAuth();
+      expect(result).toBe(true);
+      expect(database.getSetting).toHaveBeenCalled();
+    });
+
+    it('returns false if DB load fails', async () => {
+      mockOAuth2Client.credentials = null as any;
+      vi.mocked(database.getSetting).mockResolvedValue(null);
+
+      const result = await googleAuth.checkGoogleDriveAuth();
+      expect(result).toBe(false);
+    });
+  });
+
   describe('saveCredentials', () => {
     it('should save credentials to database (encrypted)', async () => {
       await googleAuth.saveCredentials(mockOAuth2Client as any);

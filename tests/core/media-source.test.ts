@@ -171,26 +171,32 @@ describe('media-source', () => {
     });
 
     it('getFFmpegInput delegates to InternalMediaProxy and appends extension', async () => {
-      mockProxyGetUrlForFile.mockResolvedValue('http://proxy/123');
+      mockProxyGetUrlForFile.mockResolvedValue(
+        'http://proxy/123.mov?token=xyz',
+      );
       mockGetDriveFileMetadata.mockResolvedValue({ name: 'video.mov' });
 
       // Should append .mov to the proxy URL
-      expect(await source.getFFmpegInput()).toBe('http://proxy/123.mov');
-      expect(mockProxyGetUrlForFile).toHaveBeenCalledWith('123');
+      expect(await source.getFFmpegInput()).toBe(
+        'http://proxy/123.mov?token=xyz',
+      );
+      expect(mockProxyGetUrlForFile).toHaveBeenCalledWith('123', '.mov');
     });
 
     it('getFFmpegInput handles missing extension in metadata', async () => {
-      mockProxyGetUrlForFile.mockResolvedValue('http://proxy/123');
+      mockProxyGetUrlForFile.mockResolvedValue('http://proxy/123?token=xyz');
       mockGetDriveFileMetadata.mockResolvedValue({ name: 'file_without_ext' });
 
-      expect(await source.getFFmpegInput()).toBe('http://proxy/123');
+      expect(await source.getFFmpegInput()).toBe('http://proxy/123?token=xyz');
+      expect(mockProxyGetUrlForFile).toHaveBeenCalledWith('123', '');
     });
 
     it('getFFmpegInput handles metadata error gracefully', async () => {
-      mockProxyGetUrlForFile.mockResolvedValue('http://proxy/123');
+      mockProxyGetUrlForFile.mockResolvedValue('http://proxy/123?token=xyz');
       mockGetDriveFileMetadata.mockRejectedValue(new Error('Fetch failed'));
 
-      expect(await source.getFFmpegInput()).toBe('http://proxy/123');
+      expect(await source.getFFmpegInput()).toBe('http://proxy/123?token=xyz');
+      expect(mockProxyGetUrlForFile).toHaveBeenCalledWith('123', '');
     });
 
     it('getStream delegates to drive-stream', async () => {

@@ -60,6 +60,18 @@ export async function loadSavedCredentialsIfExist(): Promise<boolean> {
   }
 }
 
+export async function checkGoogleDriveAuth(): Promise<boolean> {
+  try {
+    const auth = getOAuth2Client();
+    if (auth.credentials && auth.credentials.refresh_token) {
+      return true;
+    }
+    return await loadSavedCredentialsIfExist();
+  } catch {
+    return false;
+  }
+}
+
 export async function saveCredentials(client: OAuth2Client): Promise<void> {
   try {
     const json = JSON.stringify(client.credentials);

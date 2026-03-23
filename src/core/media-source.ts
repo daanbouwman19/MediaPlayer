@@ -101,22 +101,23 @@ export class DriveMediaSource implements IMediaSource {
   }
 
   async getFFmpegInput(): Promise<string> {
-    const proxyUrl = await InternalMediaProxy.getInstance().getUrlForFile(
-      this.fileId,
-    );
+    let ext = '';
     try {
       const meta = await this.ensureMetadata();
       if (meta.name) {
         const lastDot = meta.name.lastIndexOf('.');
         if (lastDot !== -1) {
-          const ext = meta.name.substring(lastDot); // includes dot
-          return `${proxyUrl}${ext}`;
+          ext = meta.name.substring(lastDot); // includes dot
         }
       }
     } catch (e) {
       console.warn('Failed to resolve extension for Drive file input', e);
     }
-    return proxyUrl;
+
+    return await InternalMediaProxy.getInstance().getUrlForFile(
+      this.fileId,
+      ext,
+    );
   }
 
   async getStream(range?: {

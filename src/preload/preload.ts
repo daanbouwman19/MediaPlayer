@@ -104,6 +104,7 @@ export interface ElectronAPI {
   extractMetadata: (filePaths: string[]) => Promise<IpcResult<void>>;
 
   // Google Drive
+  checkGoogleDriveAuth: () => Promise<IpcResult<boolean>>;
   startGoogleDriveAuth: () => Promise<IpcResult<string>>;
   submitGoogleDriveAuthCode: (code: string) => Promise<IpcResult<boolean>>;
   addGoogleDriveSource: (
@@ -221,7 +222,9 @@ const api: ElectronAPI = {
   extractMetadata: (filePaths: string[]) =>
     ipcRenderer.invoke(IPC_CHANNELS.MEDIA_EXTRACT_METADATA, filePaths),
 
-  // Google Drive
+  // Auth / Drive
+  checkGoogleDriveAuth: () =>
+    ipcRenderer.invoke(IPC_CHANNELS.AUTH_GOOGLE_DRIVE_STATUS),
   startGoogleDriveAuth: () =>
     ipcRenderer.invoke(IPC_CHANNELS.AUTH_GOOGLE_DRIVE_START),
   submitGoogleDriveAuthCode: (code: string) =>

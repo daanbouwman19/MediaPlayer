@@ -253,6 +253,10 @@ export class ElectronAdapter implements IMediaBackend {
     return this.invoke(this.bridge.extractMetadata(filePaths));
   }
 
+  async checkGoogleDriveAuth(): Promise<boolean> {
+    return this.invoke(this.bridge.checkGoogleDriveAuth());
+  }
+
   async startGoogleDriveAuth(): Promise<string> {
     const url = await this.invoke(this.bridge.startGoogleDriveAuth());
     await this.invoke(this.bridge.openExternal(url));
