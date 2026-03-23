@@ -32,6 +32,26 @@ export function getOAuth2Client(): OAuth2Client {
       );
     }
     oauth2Client = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
+    const initializedClient = oauth2Client;
+
+    // [PERSISTENCE] Automatically save tokens whenever they are refreshed
+    const tokenEventsClient = oauth2Client as OAuth2Client & {
+      on?: (event: 'tokens', listener: (tokens: Credentials) => void) => void;
+    };
+
+    tokenEventsClient.on?.('tokens', (tokens) => {
+      // Merge tokens into current credentials to ensure we don't lose existing ones
+      initializedClient.setCredentials({
+        ...initializedClient.credentials,
+        ...tokens,
+      });
+      saveCredentials(initializedClient).catch((err) => {
+        console.error(
+          '[GoogleAuth] Failed to auto-save refreshed tokens:',
+          err,
+        );
+      });
+    });
   }
   return oauth2Client;
 }
@@ -47,15 +67,19 @@ export async function loadSavedCredentialsIfExist(): Promise<boolean> {
     // If it looks like encrypted data but decryption fails (wrong key), it returns null.
     const decrypted = decrypt(content);
     if (!decrypted) {
+      console.warn(
+        '[GoogleAuth] Failed to decrypt saved credentials. A re-authorization may be required.',
+      );
       return false;
     }
     const credentials = JSON.parse(decrypted);
 
     const client = getOAuth2Client();
     client.setCredentials(credentials);
+    console.log('[GoogleAuth] Successfully loaded saved credentials from DB.');
     return true;
   } catch (error) {
-    console.error('Failed to load credentials from DB:', error);
+    console.error('[GoogleAuth] Failed to load credentials from DB:', error);
     return false;
   }
 }

@@ -86,6 +86,11 @@ app.commandLine.appendSwitch(
 app.on('ready', () => {
   createWindow();
 
+  // Ensure encryption key is stored in persistent user data directory
+  if (!process.env.MASTER_KEY_DIR) {
+    process.env.MASTER_KEY_DIR = app.getPath('userData');
+  }
+
   const driveCacheDir = path.join(app.getPath('userData'), 'drive-cache');
   initializeDriveCacheManager(driveCacheDir);
 
