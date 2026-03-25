@@ -118,6 +118,7 @@ describe('Palette Accessibility Improvements', () => {
       pauseTimerOnPlay: false,
       isTimerRunning: false,
       mainVideoElement: null,
+      isLoading: false,
       slideshowTimerId: null,
     });
 

@@ -167,6 +167,7 @@ describe('MediaDisplay Combined Tests', () => {
       pauseTimerOnPlay: false,
       isTimerRunning: false,
       mainVideoElement: null,
+      isLoading: false,
     });
 
     mockUIState = reactive({
@@ -372,17 +373,6 @@ describe('MediaDisplay Combined Tests', () => {
     });
   });
 
-  // --- From MediaDisplay.coverage.test.ts ---
-  describe('Additional Coverage', () => {
-    it('should handle handleMediaError when item is Image', async () => {
-      mockPlayerState.currentMediaItem = { name: 'img.jpg', path: 'img.jpg' };
-      const wrapper = mount(MediaDisplay);
-      await flushPromises();
-      (wrapper.vm as any).handleMediaError();
-      expect((wrapper.vm as any).error).toBe('Failed to load image.');
-    });
-  });
-
   // --- From MediaDisplay.test.ts (Restored Logic) ---
   describe('Keyboard & Interactions', () => {
     it('covers Space key to toggle play', async () => {
@@ -431,6 +421,90 @@ describe('MediaDisplay Combined Tests', () => {
       );
     });
 
+    it('covers tryTranscoding failure when not matching request id', async () => {
+      mockPlayerState.currentMediaItem = { name: 't.mov', path: '/t.mov' };
+      const wrapper = mount(MediaDisplay);
+      (wrapper.vm as any).currentLoadRequestId++;
+      await flushPromises();
+    });
+
+    it('covers handleMediaError fallback branch when in transcoding mode', async () => {
+      mockPlayerState.currentMediaItem = { name: 't.mp4', path: '/t.mp4' };
+      mockPlayerState.isTimerRunning = true;
+      const wrapper = mount(MediaDisplay);
+      await flushPromises();
+      (wrapper.vm as any).isTranscodingMode = true;
+
+      const videoPlayer = wrapper.findComponent(VideoPlayer);
+      await videoPlayer.vm.$emit('error', new Event('error'));
+
+      await flushPromises();
+      expect((wrapper.vm as any).error).toBe('Failed to display media file.');
+      expect((wrapper.vm as any).isLoading).toBe(false);
+      expect((wrapper.vm as any).isTranscodingLoading).toBe(false);
+      expect(slideshowMock.pauseSlideshowTimer).toHaveBeenCalled();
+    });
+
+    it('covers handleMediaError fallback branch when in transcoding mode (timer false)', async () => {
+      mockPlayerState.currentMediaItem = { name: 't.mp4', path: '/t.mp4' };
+      mockPlayerState.isTimerRunning = false;
+      const wrapper = mount(MediaDisplay);
+      await flushPromises();
+      (wrapper.vm as any).isTranscodingMode = true;
+
+      const videoPlayer = wrapper.findComponent(VideoPlayer);
+      await videoPlayer.vm.$emit('error', new Event('error'));
+
+      await flushPromises();
+      expect((wrapper.vm as any).error).toBe('Failed to display media file.');
+      expect((wrapper.vm as any).isLoading).toBe(false);
+      expect((wrapper.vm as any).isTranscodingLoading).toBe(false);
+    });
+
+    it('covers handleImageError from img element', async () => {
+      mockPlayerState.currentMediaItem = { name: 't.jpg', path: '/t.jpg' };
+      mockPlayerState.isTimerRunning = true;
+      const wrapper = mount(MediaDisplay);
+      await flushPromises();
+
+      (wrapper.vm as any).handleImageError();
+
+      await flushPromises();
+      expect((wrapper.vm as any).error).toBe('Failed to load image.');
+      expect((wrapper.vm as any).isLoading).toBe(false);
+      expect(slideshowMock.pauseSlideshowTimer).toHaveBeenCalled();
+    });
+
+    it('covers handleImageError from img element (timer false)', async () => {
+      mockPlayerState.currentMediaItem = { name: 't.jpg', path: '/t.jpg' };
+      mockPlayerState.isTimerRunning = false;
+      const wrapper = mount(MediaDisplay);
+      await flushPromises();
+
+      (wrapper.vm as any).handleImageError();
+
+      await flushPromises();
+      expect((wrapper.vm as any).error).toBe('Failed to load image.');
+      expect((wrapper.vm as any).isLoading).toBe(false);
+    });
+
+    it('ignores load error if request ID mismatch', async () => {
+      mockPlayerState.currentMediaItem = {
+        name: 'test.mp4',
+        path: '/test.mp4',
+      };
+      const wrapper = mount(MediaDisplay);
+      await wrapper.vm.$nextTick();
+
+      // trigger ID mismatch
+      (wrapper.vm as any).currentLoadRequestId++;
+
+      (mockLibraryState.mediaUrlGenerator as any) = null;
+      await flushPromises();
+
+      expect((wrapper.vm as any).error).toBeNull();
+    });
+
     it('covers proactive transcoding for legacy formats', async () => {
       mockPlayerState.currentMediaItem = { name: 't.mov', path: '/t.mov' };
       const wrapper = mount(MediaDisplay);
@@ -455,6 +529,7 @@ describe('MediaDisplay Combined Tests', () => {
       mockPlayerState.isTimerRunning = false;
       mockPlayerState.pauseTimerOnPlay = true;
       mockPlayerState.playFullVideo = false;
+      (wrapper.vm as any).isLoading = false;
 
       await videoPlayer.vm.$emit('pause');
       expect(slideshowMock.resumeSlideshowTimer).toHaveBeenCalled();
@@ -575,11 +650,14 @@ describe('MediaDisplay Combined Tests', () => {
 
     it('covers currentMediaItem watch resumeSlideshowTimer branch', async () => {
       mockPlayerState.currentMediaItem = { name: 't.jpg', path: '/t.jpg' };
-      mockPlayerState.playFullVideo = true;
+      mockPlayerState.playFullVideo = false;
       mockPlayerState.isTimerRunning = false;
+      mockPlayerState.pauseTimerOnPlay = true;
 
-      mount(MediaDisplay);
+      const wrapper = mount(MediaDisplay);
       await flushPromises();
+      (wrapper.vm as any).isLoading = false;
+      (wrapper.vm as any).handleVideoPause();
       expect(slideshowMock.resumeSlideshowTimer).toHaveBeenCalled();
     });
 

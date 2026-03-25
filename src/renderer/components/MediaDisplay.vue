@@ -766,14 +766,9 @@ const handleGlobalKeydown = (event: KeyboardEvent) => {
 };
 
 /**
- * Handles errors from the <img> or <video> elements.
+ * Handles errors from the <video> elements.
  */
 const handleMediaError = () => {
-  if (isImage.value) {
-    handleImageError();
-    return;
-  }
-
   if (!isTranscodingMode.value) {
     console.log('Media playback error, attempting auto-transcode...');
     tryTranscoding(0); // Uses currentLoadRequestId implicitly

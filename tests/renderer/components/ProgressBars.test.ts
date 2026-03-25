@@ -65,6 +65,7 @@ describe('Progress Bars', () => {
       playFullVideo: false,
       pauseTimerOnPlay: false,
       mainVideoElement: null,
+      isLoading: false,
     });
 
     mockUIState = reactive({
