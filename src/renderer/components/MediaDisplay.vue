@@ -138,7 +138,8 @@
             :key="(displayedItem?.path || '') + '-img'"
             :src="mediaUrl"
             :alt="displayedItem?.name"
-            @error="handleMediaError"
+            @load="handleImageLoad"
+            @error="handleImageError"
           />
           <VRVideoPlayer
             v-else-if="isVrMode"
@@ -269,6 +270,7 @@ const {
   pauseTimerOnPlay,
   isTimerRunning,
   mainVideoElement,
+  isLoading,
 } = playerStore;
 
 const {
@@ -282,11 +284,6 @@ const {
  * The URL of the media to be displayed (can be a Data URL or an HTTP URL).
  */
 const mediaUrl = ref<string | null>(null);
-
-/**
- * A flag indicating if the media is currently being loaded.
- */
-const isLoading = ref(false);
 
 /**
  * A string to hold any error message that occurs during media loading.
@@ -304,6 +301,29 @@ const displayedIsImage = computed(() => {
     isMediaFileImage(displayedItem.value, imageExtensionsSet.value)
   );
 });
+
+/**
+ * Handles image load completion to clear loading state and start timer.
+ */
+const handleImageLoad = () => {
+  isLoading.value = false;
+  // If we are in a slideshow, start/resume the timer now that image is visible
+  if (isTimerRunning.value) {
+    resumeSlideshowTimer();
+  }
+};
+
+/**
+ * Handles image load errors.
+ */
+const handleImageError = () => {
+  isLoading.value = false;
+  error.value = 'Failed to load image.';
+  // Pause the timer on error so the user can see it
+  if (isTimerRunning.value) {
+    pauseSlideshowTimer();
+  }
+};
 
 /**
  * Reference to the video element.
@@ -596,10 +616,7 @@ const loadMediaUrl = async () => {
     console.error('Error loading media:', err);
     error.value = 'Failed to load media file.';
     mediaUrl.value = null;
-  } finally {
-    if (requestId === currentLoadRequestId) {
-      isLoading.value = false;
-    }
+    isLoading.value = false;
   }
 };
 
@@ -753,7 +770,7 @@ const handleGlobalKeydown = (event: KeyboardEvent) => {
  */
 const handleMediaError = () => {
   if (isImage.value) {
-    error.value = 'Failed to load image.';
+    handleImageError();
     return;
   }
 
@@ -761,9 +778,13 @@ const handleMediaError = () => {
     console.log('Media playback error, attempting auto-transcode...');
     tryTranscoding(0); // Uses currentLoadRequestId implicitly
   } else {
+    isLoading.value = false;
     error.value = 'Failed to display media file.';
     isTranscodingLoading.value = false;
     stopTranscodingProgressPoll();
+    if (isTimerRunning.value) {
+      pauseSlideshowTimer();
+    }
   }
 };
 
@@ -870,14 +891,9 @@ watch(
   currentMediaItem,
   (newItem) => {
     loadMediaUrl();
-    if (
-      newItem &&
-      isImage.value &&
-      playFullVideo.value &&
-      !isTimerRunning.value
-    ) {
-      resumeSlideshowTimer();
-    }
+    // Removed immediate timer resumption.
+    // It is now handled by ready events (handleImageLoad, handleVideoPlaying).
+
     // Trigger prefetch of the NEXT item if current item is valid
     if (newItem) {
       preloadNextMedia();
@@ -946,9 +962,15 @@ const handleVideoPause = () => {
  * Handles the playing event to clear the loading state.
  */
 const handleVideoPlaying = () => {
+  isLoading.value = false;
   isTranscodingLoading.value = false;
   isBuffering.value = false;
   stopTranscodingProgressPoll();
+
+  // If we are in a slideshow and NOT in playFullVideo mode, resume the timer now
+  if (isTimerRunning.value && !playFullVideo.value) {
+    resumeSlideshowTimer();
+  }
 };
 
 const handleBuffering = (buffering: boolean) => {

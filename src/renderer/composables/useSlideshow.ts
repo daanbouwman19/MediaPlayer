@@ -93,14 +93,11 @@ export function useSlideshow() {
         await api.recordMediaView(mediaItem.path);
       }
       if (playerStore.state.isTimerRunning) {
-        const ext = getCachedExtension(mediaItem);
-        const isVideo = videoExtensionsSet.value.has(ext);
-        // If it's a video and we are in "play full video" mode,
-        // don't start/resume the slideshow timer yet.
-        // MediaDisplay will handle the transition once the video ends via handleVideoEnded.
-        if (!(isVideo && playerStore.state.playFullVideo)) {
-          resumeSlideshowTimer();
-        }
+        // Reset progress but don't start the interval yet.
+        // The MediaDisplay component will call resumeSlideshowTimer()
+        // once the media has actually loaded to prevent premature skipping.
+        playerStore.state.timerProgress = 100;
+        clearSlideshowTimer();
       }
     } catch (error) {
       console.error('Error recording media view:', error);

@@ -13,6 +13,7 @@ interface PlayerState {
   currentMediaItem: MediaFile | null;
   currentMediaIndex: number;
   mainVideoElement: HTMLVideoElement | null;
+  isLoading: boolean;
 }
 
 const state = reactive<PlayerState>({
@@ -27,6 +28,7 @@ const state = reactive<PlayerState>({
   currentMediaItem: null,
   currentMediaIndex: -1,
   mainVideoElement: null,
+  isLoading: false,
 });
 
 export function usePlayerStore() {
