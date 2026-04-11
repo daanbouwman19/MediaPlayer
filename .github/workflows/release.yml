@@ -54,4 +54,4 @@ jobs:
           # GH_TOKEN is required for creating the release and uploading assets
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ELECTRON_SKIP_BINARY_DOWNLOAD: 1
-        run: npm run package -- --publish always
+        run: npm run electron:package -- --publish always

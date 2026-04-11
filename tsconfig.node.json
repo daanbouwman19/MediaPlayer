@@ -20,7 +20,9 @@
     "src/preload/**/*",
     "src/server/**/*",
     "src/core/**/*",
-    "electron.vite.config.ts",
+    "vite.main.config.ts",
+    "vite.preload.config.ts",
+    "vite.renderer.config.ts",
     "tests/main/**/*",
     "tests/core/**/*",
     "tests/server/**/*"
