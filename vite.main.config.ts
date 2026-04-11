@@ -25,7 +25,7 @@ export default defineConfig({
         'express',
         'cors',
         'dotenv',
-        'electron-log/main.js',
+        /^electron-log/,
       ],
       output: {
         entryFileNames: '[name].js',

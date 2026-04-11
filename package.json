@@ -23,7 +23,7 @@
     "_dev:preload": "vite build -c vite.preload.config.ts --watch",
     "_dev:renderer": "vite dev -c vite.renderer.config.ts",
     "preelectron:dev": "npm run rebuild:electron",
-    "electron:dev": "concurrently -k --success first \"npm run _dev:main\" \"npm run _dev:preload\" \"npm run _dev:renderer\" \"wait-on file:out/main/index.js file:out/preload/preload.cjs tcp:5173 && electron .\"",
+    "electron:dev": "concurrently -k --success first \"npm run _dev:main\" \"npm run _dev:preload\" \"npm run _dev:renderer\" \"rimraf out && wait-on file:out/main/index.js file:out/preload/preload.cjs tcp:5173 && electron .\"",
     "_build:main": "vite build -c vite.main.config.ts",
     "_build:preload": "vite build -c vite.preload.config.ts",
     "_build:renderer": "vite build -c vite.renderer.config.ts",
