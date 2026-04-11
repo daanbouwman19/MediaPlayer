@@ -22,21 +22,6 @@
       @click="togglePlay"
     />
 
-    <!-- Status Overlay (Loading/Buffering) -->
-    <div
-      v-if="isTranscodingLoading || isBuffering"
-      class="absolute inset-0 flex items-center justify-center z-20 bg-black/20 backdrop-blur-sm transition-opacity duration-300"
-    >
-      <div class="flex flex-col items-center gap-3">
-        <div
-          class="w-12 h-12 border-4 border-white/30 border-t-(--accent-color) rounded-full animate-spin"
-        ></div>
-        <span class="text-white text-sm font-medium drop-shadow-md">
-          {{ isTranscodingLoading ? 'Transcoding...' : 'Buffering...' }}
-        </span>
-      </div>
-    </div>
-
     <!-- Pause/Replay Overlay -->
     <div
       v-if="!isPlaying && !isTranscodingLoading && !isBuffering"

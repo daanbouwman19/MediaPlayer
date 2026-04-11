@@ -32,7 +32,7 @@ A versatile media application that runs as both a **Desktop Application** (Elect
 - **Core**: [TypeScript](https://www.typescriptlang.org/)
 - **Desktop Framework**: [Electron](https://www.electronjs.org/)
 - **Web Framework**: [Vue 3](https://vuejs.org/)
-- **Build Tool**: [electron-vite](https://electron-vite.org/)
+- **Build Tool**: [Vite](https://vitejs.dev/)
 - **Database**: [sqlite3](https://github.com/TryGhost/node-sqlite3)
 - **Media Processing**: [FFmpeg](https://ffmpeg.org/)
 - **Styling**: [Tailwind CSS](https://tailwindcss.com/)

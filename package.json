@@ -6,9 +6,15 @@
   "type": "module",
   "scripts": {
     "predev": "rimraf node_modules/better-sqlite3/build && npx electron-builder install-app-deps",
-    "dev": "electron-vite dev",
-    "build": "electron-vite build",
-    "preview": "electron-vite preview",
+    "dev:main": "vite build -c vite.main.config.ts --watch",
+    "dev:preload": "vite build -c vite.preload.config.ts --watch",
+    "dev:renderer": "vite dev -c vite.renderer.config.ts",
+    "dev": "concurrently -k --success first \"npm run dev:main\" \"npm run dev:preload\" \"npm run dev:renderer\" \"wait-on file:out/main/index.js file:out/preload/preload.cjs tcp:5173 && electron .\"",
+    "build:main": "vite build -c vite.main.config.ts",
+    "build:preload": "vite build -c vite.preload.config.ts",
+    "build:renderer": "vite build -c vite.renderer.config.ts",
+    "build": "npm run build:main && npm run build:preload && npm run build:renderer",
+    "preview": "npm run build && electron .",
     "pretest": "npm rebuild better-sqlite3",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -128,7 +134,6 @@
     "cross-env": "^10.1.0",
     "electron": "^41.1.1",
     "electron-builder": "^26.8.1",
-    "electron-vite": "^5.0.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-vue": "^10.8.0",
     "execa": "^9.6.1",
@@ -150,10 +155,5 @@
     "vue": "^3.5.32",
     "vue-tsc": "^3.2.5",
     "wait-on": "^9.0.4"
-  },
-  "overrides": {
-    "electron-vite": {
-      "vite": "$vite"
-    }
   }
 }

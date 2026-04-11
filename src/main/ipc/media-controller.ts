@@ -23,6 +23,7 @@ import {
 import { isDrivePath, getDriveId } from '../../core/media-utils';
 import { MediaAnalyzer } from '../../core/analysis/media-analyzer';
 import { HlsManager } from '../../core/hls-manager';
+import { generateSessionId } from '../../core/hls-handler';
 import { getServerPort } from '../local-server';
 import { handleIpc } from '../utils/ipc-helper';
 
@@ -183,7 +184,6 @@ export function registerMediaHandlers() {
 
   handleIpc(IPC_CHANNELS.GET_HLS_STATUS, async (_event, filePath: string) => {
     try {
-      const { generateSessionId } = await import('../../core/hls-handler');
       const authorizedPath = await validatePathAccess(filePath);
       const sessionId = await generateSessionId(authorizedPath);
       return HlsManager.getInstance().getSessionProgress(sessionId);
