@@ -38,6 +38,19 @@ vi.mock('../../src/core/media-source.ts', () => ({
 
 import { createMediaSource } from '../../src/core/media-source.ts';
 
+vi.mock('../../src/core/utils/ffmpeg-utils.ts', () => ({
+  getHlsTranscodeArgs: vi.fn().mockReturnValue(['-f', 'hls', 'playlist.m3u8']),
+  detectFFmpegCapabilities: vi.fn().mockResolvedValue({
+    nvenc: false,
+    videotoolbox: false,
+    vaapi: false,
+  }),
+  getHardwareCodec: vi.fn().mockReturnValue(null),
+  getFFmpegStreams: vi
+    .fn()
+    .mockResolvedValue({ hasVideo: true, hasAudio: true }),
+}));
+
 describe('HlsManager DOS Protection', () => {
   const CACHE_DIR = '/tmp/hls-dos';
   let hlsManager: HlsManager;
@@ -48,10 +61,9 @@ describe('HlsManager DOS Protection', () => {
     hlsManager = HlsManager.getInstance();
     hlsManager.setCacheDir(CACHE_DIR);
 
-    // Reset internal state
-    (hlsManager as any).sessions.clear();
-    (hlsManager as any).pendingSessions.clear();
-    hlsManager.stopCleanupInterval();
+    HlsManager.resetInstance();
+    hlsManager = HlsManager.getInstance();
+    hlsManager.setCacheDir(CACHE_DIR);
 
     // Default fs behavior
     mockFsStat.mockResolvedValue({ size: 100, isDirectory: () => true } as any);

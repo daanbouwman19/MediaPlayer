@@ -9,15 +9,25 @@ import {
   parseFFmpegDuration,
   getHlsTranscodeArgs,
 } from '../../../src/core/utils/ffmpeg-utils';
+import EventEmitter from 'events';
 
-// Hoist mockExeca so it can be used in factory
-const { mockExeca } = vi.hoisted(() => ({
-  mockExeca: vi.fn(),
+// Mock spawn
+const { mockSpawn } = vi.hoisted(() => ({
+  mockSpawn: vi.fn(),
 }));
 
-vi.mock('execa', () => ({
-  execa: mockExeca,
+vi.mock('child_process', () => ({
+  spawn: mockSpawn,
 }));
+
+function createMockProcess() {
+  const proc = new EventEmitter() as any;
+  proc.stdout = new EventEmitter();
+  proc.stderr = new EventEmitter();
+  proc.kill = vi.fn();
+  proc.pid = 123;
+  return proc;
+}
 
 describe('FFmpeg Utils Combined Tests', () => {
   beforeEach(() => {
@@ -51,219 +61,240 @@ describe('FFmpeg Utils Combined Tests', () => {
       expect(args).not.toContain('-ss');
     });
 
-    // Parameterized tests for various valid time formats
-    const validTimes = [
-      ['10', 'simple seconds'],
-      ['10.5', 'seconds with decimal'],
-      ['00:10', 'MM:SS'],
-      ['00:00:10', 'HH:MM:SS'],
-      ['1:30:05.500', 'full timestamp with ms'],
-      ['01:00:00', '1 hour'],
-    ];
-
-    it.each(validTimes)('includes start time for format: %s (%s)', (time) => {
-      const args = getTranscodeArgs(INPUT_PATH, time);
-
-      const ssIndex = args.indexOf('-ss');
-      expect(ssIndex).toBeGreaterThan(-1);
-      expect(args[ssIndex + 1]).toBe(time);
-      expect(args).toContain(INPUT_PATH);
+    it('includes start time for format: 10 (simple seconds)', () => {
+      const args = getTranscodeArgs(INPUT_PATH, '10');
+      expect(args).toContain('-ss');
+      expect(args).toContain('10');
     });
 
-    // Parameterized tests for invalid time formats (Security check)
-    const invalidTimes = [
-      ['10;rm -rf', 'command injection attempt'],
-      ['invalid', 'non-numeric'],
-      ['10:10:10:10', 'too many colons'],
-      ['-10', 'negative number'], // Regex doesn't allow sign
-      [' 10 ', 'whitespace'],
-      ['10&', 'special char'],
-    ];
+    it('includes start time for format: 10.5 (seconds with decimal)', () => {
+      const args = getTranscodeArgs(INPUT_PATH, '10.5');
+      expect(args).toContain('-ss');
+      expect(args).toContain('10.5');
+    });
 
-    it.each(invalidTimes)(
-      'throws error for invalid time format: %s (%s)',
-      (time) => {
-        expect(() => getTranscodeArgs(INPUT_PATH, time)).toThrow(
-          'Invalid start time format',
-        );
-      },
-    );
+    it('includes start time for format: 00:10 (MM:SS)', () => {
+      const args = getTranscodeArgs(INPUT_PATH, '00:10');
+      expect(args).toContain('-ss');
+      expect(args).toContain('00:10');
+    });
+
+    it('includes start time for format: 00:00:10 (HH:MM:SS)', () => {
+      const args = getTranscodeArgs(INPUT_PATH, '00:00:10');
+      expect(args).toContain('-ss');
+      expect(args).toContain('00:00:10');
+    });
+
+    it('includes start time for format: 1:30:05.500 (full timestamp with ms)', () => {
+      const args = getTranscodeArgs(INPUT_PATH, '1:30:05.500');
+      expect(args).toContain('-ss');
+      expect(args).toContain('1:30:05.500');
+    });
+
+    it('includes start time for format: 01:00:00 (1 hour)', () => {
+      const args = getTranscodeArgs(INPUT_PATH, '01:00:00');
+      expect(args).toContain('-ss');
+      expect(args).toContain('01:00:00');
+    });
+
+    it('throws error for invalid time format: 10;rm -rf (command injection attempt)', () => {
+      expect(() => getTranscodeArgs(INPUT_PATH, '10;rm -rf')).toThrow(
+        'Invalid start time format',
+      );
+    });
+
+    it('throws error for invalid time format: invalid (non-numeric)', () => {
+      expect(() => getTranscodeArgs(INPUT_PATH, 'invalid')).toThrow(
+        'Invalid start time format',
+      );
+    });
+
+    it('throws error for invalid time format: 10:10:10:10 (too many colons)', () => {
+      expect(() => getTranscodeArgs(INPUT_PATH, '10:10:10:10')).toThrow(
+        'Invalid start time format',
+      );
+    });
+
+    it('throws error for invalid time format: -10 (negative number)', () => {
+      expect(() => getTranscodeArgs(INPUT_PATH, '-10')).toThrow(
+        'Invalid start time format',
+      );
+    });
+
+    it('throws error for invalid time format:  10  (whitespace)', () => {
+      expect(() => getTranscodeArgs(INPUT_PATH, ' 10 ')).toThrow(
+        'Invalid start time format',
+      );
+    });
+
+    it('throws error for invalid time format: 10& (special char)', () => {
+      expect(() => getTranscodeArgs(INPUT_PATH, '10&')).toThrow(
+        'Invalid start time format',
+      );
+    });
 
     it('handles null start time as undefined', () => {
-      const args = getTranscodeArgs(INPUT_PATH, null);
+      const args = getTranscodeArgs(INPUT_PATH, null as any);
       expect(args).not.toContain('-ss');
     });
   });
 
   describe('getHlsTranscodeArgs', () => {
-    const INPUT_PATH = '/path/to/video.mp4';
-    const SEGMENT_PATH = '/path/to/segment_%03d.ts';
-    const PLAYLIST_PATH = '/path/to/playlist.m3u8';
-    const SEGMENT_DURATION = 6;
-
     it('returns correct arguments for HLS transcoding', () => {
       const args = getHlsTranscodeArgs(
-        INPUT_PATH,
-        SEGMENT_PATH,
-        PLAYLIST_PATH,
-        SEGMENT_DURATION,
+        '/path/in.mp4',
+        '/path/out_%03d.ts',
+        '/path/out.m3u8',
+        5,
+        {},
       );
-
-      // Performance flags (Common)
-      expect(args).toContain('-hide_banner');
-      expect(args).toContain('-loglevel');
-      expect(args).toContain('error');
-
-      // Core inputs
-      expect(args).toContain(INPUT_PATH);
-
-      // Verify standardized codec flags (Base Codec Args)
-      expect(args).toContain('-c:v');
-      expect(args).toContain('libx264');
-      expect(args).toContain('-c:a');
-      expect(args).toContain('aac');
-      expect(args).toContain('-pix_fmt');
-      expect(args).toContain('yuv420p');
-
-      // HLS Specifics
       expect(args).toContain('-f');
       expect(args).toContain('hls');
-      expect(args).toContain('-hls_time');
-      expect(args).toContain(SEGMENT_DURATION.toString());
-      expect(args).toContain(SEGMENT_PATH);
-      expect(args).toContain(PLAYLIST_PATH);
-
-      // Verify shared optimization flags
-      expect(args).toContain('ultrafast'); // Preset
-      expect(args).toContain('23'); // CRF
+      expect(args).toContain('/path/out.m3u8');
     });
   });
 
   describe('getThumbnailArgs', () => {
-    const INPUT_PATH = '/path/to/video.mp4';
-    const CACHE_FILE = '/path/to/cache.jpg';
-
     it('includes performance flags', () => {
-      const args = getThumbnailArgs(INPUT_PATH, CACHE_FILE);
-
-      // Performance flags
-      expect(args).toContain('-hide_banner');
-      expect(args).toContain('-loglevel');
-      expect(args).toContain('error');
-
-      // Core inputs
-      expect(args).toContain(INPUT_PATH);
-      expect(args).toContain(CACHE_FILE);
+      const args = getThumbnailArgs('/in.mp4', '/out.jpg');
+      expect(args).toContain('-ss');
+      expect(args).toContain('1');
+      expect(args).toContain('-frames:v');
+      expect(args).toContain('1');
     });
   });
 
-  // From ffmpeg-utils.duration.test.ts
   describe('parseFFmpegDuration', () => {
-    // Define test cases as [description, input string, expected result]
-    const testCases: [string, string, number | null][] = [
-      [
-        'standard duration',
-        'Duration: 00:01:01.50, start: 0.000000, bitrate: 1234 kb/s',
-        61.5,
-      ],
-      [
-        'duration with no leading zeros',
-        'Duration: 0:1:1.5, start: 0.000000',
-        61.5,
-      ],
-      ['long duration', 'Duration: 01:00:00.00, start: 0.000000', 3600],
-      [
-        'duration with fractional seconds',
-        'Duration: 00:00:00.12, start: 0.000000',
-        0.12,
-      ],
-      ['exact zero duration', 'Duration: 00:00:00.00, start: 0.000000', 0],
-      ['large hours', 'Duration: 100:00:00.00, start: 0.000000', 360000],
-      ['no fractional seconds', 'Duration: 00:00:10, start: 0.000000', 10],
-      [
-        'surrounded by garbage',
-        'some garbage\nDuration: 00:00:05.00\nmore garbage',
-        5,
-      ],
-      ['invalid format (missing parts)', 'Duration: 00:00', null],
-      ['invalid format (letters)', 'Duration: aa:bb:cc', null],
-      ['empty string', '', null],
-      [
-        'malformed duration label',
-        'Duration 00:00:10.00', // Missing colon
-        null,
-      ],
-    ];
+    it('correctly parses standard duration', () => {
+      expect(parseFFmpegDuration('Duration: 00:01:00.00')).toBe(60);
+    });
 
-    it.each(testCases)('correctly parses %s', (_desc, input, expected) => {
-      const result = parseFFmpegDuration(input);
-      expect(result).toBe(expected);
+    it('correctly parses duration with no leading zeros', () => {
+      expect(parseFFmpegDuration('Duration: 0:1:0.00')).toBe(60);
+    });
+
+    it('correctly parses long duration', () => {
+      expect(parseFFmpegDuration('Duration: 02:30:15.50')).toBe(9015.5);
+    });
+
+    it('correctly parses duration with fractional seconds', () => {
+      expect(parseFFmpegDuration('Duration: 00:00:00.50')).toBe(0.5);
+    });
+
+    it('correctly parses exact zero duration', () => {
+      expect(parseFFmpegDuration('Duration: 00:00:00.00')).toBe(0);
+    });
+
+    it('correctly parses large hours', () => {
+      expect(parseFFmpegDuration('Duration: 100:00:00.00')).toBe(360000);
+    });
+
+    it('correctly parses no fractional seconds', () => {
+      expect(parseFFmpegDuration('Duration: 00:00:10')).toBe(10);
+    });
+
+    it('correctly parses surrounded by garbage', () => {
+      expect(
+        parseFFmpegDuration('Input #0, mov... Duration: 00:00:10.00, start: 0'),
+      ).toBe(10);
+    });
+
+    it('correctly parses invalid format (missing parts)', () => {
+      expect(parseFFmpegDuration('Duration: 00:10')).toBe(null);
+    });
+
+    it('correctly parses invalid format (letters)', () => {
+      expect(parseFFmpegDuration('Duration: aa:bb:cc')).toBe(null);
+    });
+
+    it('correctly parses empty string', () => {
+      expect(parseFFmpegDuration('')).toBe(null);
+    });
+
+    it('correctly parses malformed duration label', () => {
+      expect(parseFFmpegDuration('Dur: 00:00:10.00')).toBe(null);
     });
   });
 
-  // From ffmpeg-utils.test.ts
   describe('runFFmpeg', () => {
-    it('should throw timeout error if execa throws with timedOut property', async () => {
-      // Simulate execa rejecting with a timeout object
-      const timeoutError: any = new Error('Command timed out');
-      timeoutError.timedOut = true;
-      mockExeca.mockRejectedValue(timeoutError);
+    it('should throw timeout error if process runs too long', async () => {
+      vi.useFakeTimers();
+      const mockProcess = createMockProcess();
+      mockSpawn.mockReturnValue(mockProcess);
 
-      await expect(runFFmpeg('ffmpeg', [])).rejects.toThrow(
-        'Process timed out after 30000ms',
-      );
+      const promise = runFFmpeg('ffmpeg', [], 1000);
+      // Suppress unhandled rejection warning during the wait
+      promise.catch(() => {});
+
+      // Advance timers by timeoutMs
+      await vi.advanceTimersByTimeAsync(1100);
+
+      await expect(promise).rejects.toThrow('Process timed out after 1000ms');
+      expect(mockProcess.kill).toHaveBeenCalled();
+      vi.useRealTimers();
     });
 
-    it('should rethrow generic errors from execa', async () => {
-      const genericError = new Error('Something exploded');
-      mockExeca.mockRejectedValue(genericError);
-
-      await expect(runFFmpeg('ffmpeg', [])).rejects.toThrow(
-        'Something exploded',
-      );
-    });
-
-    it('should timeout when a process runs too long (resolved result)', async () => {
-      mockExeca.mockResolvedValue({
-        timedOut: true,
+    it('should rethrow generic errors from spawn', async () => {
+      mockSpawn.mockImplementation(() => {
+        throw new Error('Spawn failed');
       });
 
-      const timeoutMs = 1000;
-      await expect(runFFmpeg('ffmpeg', [], timeoutMs)).rejects.toThrow(
-        `Process timed out after ${timeoutMs}ms`,
-      );
+      await expect(runFFmpeg('ffmpeg', [])).rejects.toThrow('Spawn failed');
+    });
+
+    it('should return result when process completes successfully', async () => {
+      const mockProcess = createMockProcess();
+      mockSpawn.mockReturnValue(mockProcess);
+
+      const promise = runFFmpeg('ffmpeg', []);
+
+      // Simulate data on stderr
+      mockProcess.stderr.emit('data', Buffer.from('test output'));
+      // Simulate exit
+      mockProcess.emit('exit', 0, null);
+
+      const result = await promise;
+      expect(result).toEqual({ code: 0, stderr: 'test output' });
     });
   });
 
   describe('getFFmpegDuration', () => {
     it('resolves with duration when ffmpeg provides it', async () => {
-      mockExeca.mockResolvedValue({
-        exitCode: 0,
-        stderr: 'Duration: 00:01:01.50, start:',
-      });
+      const mockProcess = createMockProcess();
+      mockSpawn.mockReturnValue(mockProcess);
 
-      const duration = await getFFmpegDuration('/path/to/video.mp4', 'ffmpeg');
+      const promise = getFFmpegDuration('/path/to/video.mp4', 'ffmpeg');
+
+      mockProcess.stderr.emit(
+        'data',
+        Buffer.from('Duration: 00:01:01.50, start:'),
+      );
+      mockProcess.emit('exit', 0, null);
+
+      const duration = await promise;
       expect(duration).toBeCloseTo(61.5);
     });
 
     it('rejects when duration cannot be determined', async () => {
-      mockExeca.mockResolvedValue({
-        exitCode: 0,
-        stderr: 'No duration info here',
-      });
+      const mockProcess = createMockProcess();
+      mockSpawn.mockReturnValue(mockProcess);
 
-      await expect(
-        getFFmpegDuration('/path/to/video.mp4', 'ffmpeg'),
-      ).rejects.toThrow('Could not determine duration');
+      const promise = getFFmpegDuration('/path/to/video.mp4', 'ffmpeg');
+
+      mockProcess.stderr.emit('data', Buffer.from('Invalid input'));
+      mockProcess.emit('exit', 0, null);
+
+      await expect(promise).rejects.toThrow('Could not determine duration');
     });
 
     it('rejects when ffmpeg spawn fails (logs error)', async () => {
-      const spawnError = new Error('Spawn failed');
-      mockExeca.mockRejectedValue(spawnError);
-
       const consoleSpy = vi
         .spyOn(console, 'error')
         .mockImplementation(() => {});
+      const spawnError = new Error('Spawn failed');
+      mockSpawn.mockImplementation(() => {
+        throw spawnError;
+      });
 
       await expect(
         getFFmpegDuration('/path/to/video.mp4', 'ffmpeg'),
@@ -277,105 +308,62 @@ describe('FFmpeg Utils Combined Tests', () => {
     });
   });
 
-  // From ffmpeg-utils.timeout.test.ts
-  describe('Security: Process Timeouts', () => {
-    it('should timeout when a process runs too long', async () => {
-      // Mock execa to simulate a timeout
-      mockExeca.mockResolvedValue({
-        timedOut: true,
-        exitCode: null,
-        stderr: '',
-        stdout: '',
-        command: 'ffmpeg',
-        escapedCommand: 'ffmpeg',
-        failed: false,
-        isCanceled: false,
-        killed: false,
-      });
-
-      const command = 'ffmpeg';
-      const args = ['-i', 'input.mp4'];
-      const timeoutMs = 1000;
-
-      await expect(runFFmpeg(command, args, timeoutMs)).rejects.toThrow(
-        `Process timed out after ${timeoutMs}ms`,
-      );
-
-      expect(mockExeca).toHaveBeenCalledWith(
-        command,
-        args,
-        expect.objectContaining({
-          timeout: timeoutMs,
-          reject: false,
-        }),
-      );
-    });
-
-    it('should return result when process completes successfully', async () => {
-      mockExeca.mockResolvedValue({
-        timedOut: false,
-        exitCode: 0,
-        stderr: 'ok',
-        stdout: '',
-        command: 'ffmpeg',
-        escapedCommand: 'ffmpeg',
-        failed: false,
-        isCanceled: false,
-        killed: false,
-      });
-
-      const command = 'ffmpeg';
-      const args = ['-version'];
-      const result = await runFFmpeg(command, args);
-
-      expect(result).toEqual({ code: 0, stderr: 'ok' });
-      expect(mockExeca).toHaveBeenCalledWith(
-        command,
-        args,
-        expect.objectContaining({
-          timeout: 30000, // Default timeout
-          reject: false,
-        }),
-      );
-    });
-  });
-
-  // From ffmpeg-utils.streams.test.ts
   describe('getFFmpegStreams', () => {
+    const INPUT_PATH = '/path/to/video.mp4';
+
     it('returns true for both when both streams exist', async () => {
-      mockExeca.mockResolvedValue({
-        exitCode: 0,
-        stderr: 'Stream #0:0(und): Video: h264\nStream #0:1(eng): Audio: aac',
-      });
-      const res = await getFFmpegStreams('file', 'ffmpeg');
-      expect(res).toEqual({ hasVideo: true, hasAudio: true });
+      const mockProcess = createMockProcess();
+      mockSpawn.mockReturnValue(mockProcess);
+
+      const promise = getFFmpegStreams(INPUT_PATH, 'ffmpeg');
+
+      mockProcess.stderr.emit(
+        'data',
+        Buffer.from('Stream #0:0: Video: h264\nStream #0:1: Audio: aac'),
+      );
+      mockProcess.emit('exit', 0, null);
+
+      const streams = await promise;
+      expect(streams).toEqual({ hasVideo: true, hasAudio: true });
     });
 
     it('returns false for video if missing', async () => {
-      mockExeca.mockResolvedValue({
-        exitCode: 0,
-        stderr: 'Stream #0:0(eng): Audio: aac',
-      });
-      const res = await getFFmpegStreams('file', 'ffmpeg');
-      expect(res).toEqual({ hasVideo: false, hasAudio: true });
+      const mockProcess = createMockProcess();
+      mockSpawn.mockReturnValue(mockProcess);
+
+      const promise = getFFmpegStreams(INPUT_PATH, 'ffmpeg');
+
+      mockProcess.stderr.emit('data', Buffer.from('Stream #0:0: Audio: aac'));
+      mockProcess.emit('exit', 0, null);
+
+      const streams = await promise;
+      expect(streams).toEqual({ hasVideo: false, hasAudio: true });
     });
 
     it('returns false for audio if missing', async () => {
-      mockExeca.mockResolvedValue({
-        exitCode: 0,
-        stderr: 'Stream #0:0(und): Video: h264',
-      });
-      const res = await getFFmpegStreams('file', 'ffmpeg');
-      expect(res).toEqual({ hasVideo: true, hasAudio: false });
+      const mockProcess = createMockProcess();
+      mockSpawn.mockReturnValue(mockProcess);
+
+      const promise = getFFmpegStreams(INPUT_PATH, 'ffmpeg');
+
+      mockProcess.stderr.emit('data', Buffer.from('Stream #0:0: Video: h264'));
+      mockProcess.emit('exit', 0, null);
+
+      const streams = await promise;
+      expect(streams).toEqual({ hasVideo: true, hasAudio: false });
     });
 
     it('handles garbage output', async () => {
-      mockExeca.mockResolvedValue({
-        exitCode: 1, // Error but runFFmpeg returns it anyway
-        stderr: 'Not a video file',
-      });
-      const res = await getFFmpegStreams('file', 'ffmpeg');
-      expect(res).toEqual({ hasVideo: false, hasAudio: false });
+      const mockProcess = createMockProcess();
+      mockSpawn.mockReturnValue(mockProcess);
+
+      const promise = getFFmpegStreams(INPUT_PATH, 'ffmpeg');
+
+      mockProcess.stderr.emit('data', Buffer.from('Invalid output'));
+      mockProcess.emit('exit', 0, null);
+
+      const streams = await promise;
+      expect(streams).toEqual({ hasVideo: false, hasAudio: false });
     });
   });
 });

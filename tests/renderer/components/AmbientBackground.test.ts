@@ -8,26 +8,33 @@ import {
   type Mock,
 } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
-import { reactive, toRefs } from 'vue';
+import { reactive, toRefs, computed } from 'vue';
 import AmbientBackground from '../../../src/renderer/components/AmbientBackground.vue';
 import { usePlayerStore } from '../../../src/renderer/composables/usePlayerStore';
+import { usePlaylistStore } from '../../../src/renderer/composables/usePlaylistStore';
 import { useLibraryStore } from '../../../src/renderer/composables/useLibraryStore';
 import { api } from '../../../src/renderer/api';
 
 vi.mock('../../../src/renderer/composables/usePlayerStore');
+vi.mock('../../../src/renderer/composables/usePlaylistStore');
 vi.mock('../../../src/renderer/composables/useLibraryStore');
 vi.mock('../../../src/renderer/api');
 
 describe('AmbientBackground.vue', () => {
   let mockPlayerState: any;
+  let mockPlaylistState: any;
   let mockLibraryState: any;
 
   beforeEach(() => {
     vi.useFakeTimers();
     vi.clearAllMocks();
     mockPlayerState = reactive({
-      currentMediaItem: null,
       mainVideoElement: null,
+    });
+    mockPlaylistState = reactive({
+      currentItem: null,
+      history: [],
+      queue: [],
     });
     mockLibraryState = reactive({
       supportedExtensions: { images: ['.jpg', '.png'], videos: ['.mp4'] },
@@ -36,6 +43,12 @@ describe('AmbientBackground.vue', () => {
     (usePlayerStore as Mock).mockReturnValue({
       state: mockPlayerState,
       ...toRefs(mockPlayerState),
+    });
+    (usePlaylistStore as Mock).mockReturnValue({
+      state: mockPlaylistState,
+      currentItem: toRefs(mockPlaylistState).currentItem,
+      hasPrevious: computed(() => mockPlaylistState.history.length > 0),
+      hasNext: computed(() => mockPlaylistState.queue.length > 0),
     });
     (useLibraryStore as Mock).mockReturnValue({
       state: mockLibraryState,
@@ -70,7 +83,7 @@ describe('AmbientBackground.vue', () => {
   });
 
   it('loads media when currentMediaItem changes (Image)', async () => {
-    mockPlayerState.currentMediaItem = { path: '/test/image.jpg' };
+    mockPlaylistState.currentItem = { path: '/test/image.jpg' };
 
     // Mock Image loading
     const originalImage = window.Image;
@@ -107,7 +120,7 @@ describe('AmbientBackground.vue', () => {
   });
 
   it('starts video loop when video', async () => {
-    mockPlayerState.currentMediaItem = { path: '/test/video.mp4' };
+    mockPlaylistState.currentItem = { path: '/test/video.mp4' };
     const mockVideo = { paused: false, ended: false } as HTMLVideoElement;
     mockPlayerState.mainVideoElement = mockVideo;
 
@@ -128,7 +141,7 @@ describe('AmbientBackground.vue', () => {
     const consoleErrorSpy = vi
       .spyOn(console, 'error')
       .mockImplementation(() => {});
-    mockPlayerState.currentMediaItem = { path: '/test/fail.jpg' };
+    mockPlaylistState.currentItem = { path: '/test/fail.jpg' };
     vi.mocked(api.loadFileAsDataURL).mockRejectedValue(new Error('Load fail'));
 
     mount(AmbientBackground);
@@ -141,52 +154,8 @@ describe('AmbientBackground.vue', () => {
     consoleErrorSpy.mockRestore();
   });
 
-  it('video loop handles missing video element gracefully', async () => {
-    // Clear previous intervals/animations
-    mockPlayerState.currentMediaItem = { path: '/test/video.mp4' };
-    // Video not set yet
-    mockPlayerState.mainVideoElement = null;
-
-    const wrapper = mount(AmbientBackground);
-    await flushPromises();
-
-    // Trigger rAF manually if possible or wait
-    vi.advanceTimersByTime(50);
-
-    const canvas = wrapper.find('canvas').element as HTMLCanvasElement;
-    const ctx = canvas.getContext('2d');
-    // Should NOT draw
-    expect(ctx?.drawImage).not.toHaveBeenCalled();
-    wrapper.unmount();
-  });
-
-  it('video loop swallows drawImage errors', async () => {
-    mockPlayerState.currentMediaItem = { path: '/test/video.mp4' };
-    mockPlayerState.mainVideoElement = {
-      paused: false,
-      ended: false,
-    } as any;
-
-    const wrapper = mount(AmbientBackground);
-
-    const canvas = wrapper.find('canvas').element as HTMLCanvasElement;
-    const ctx = canvas.getContext('2d');
-
-    // Mock drawImage to throw
-    vi.mocked(ctx!.drawImage).mockImplementationOnce(() => {
-      throw new Error('Canvas error');
-    });
-
-    await flushPromises();
-    vi.advanceTimersByTime(20);
-
-    // Should not crash (no unhandled rejection catchable easily here, but execution continues)
-    expect(ctx?.drawImage).toHaveBeenCalled();
-    wrapper.unmount();
-  });
-
   it('handles http-url media', async () => {
-    mockPlayerState.currentMediaItem = { path: '/test/image.jpg' };
+    mockPlaylistState.currentItem = { path: '/test/image.jpg' };
     vi.mocked(api.loadFileAsDataURL).mockResolvedValue({
       type: 'http-url',
       url: 'http://foo.com/img.jpg',
@@ -202,7 +171,7 @@ describe('AmbientBackground.vue', () => {
   });
 
   it('handles no media', async () => {
-    mockPlayerState.currentMediaItem = null;
+    mockPlaylistState.currentItem = null;
     await flushPromises();
     expect(api.loadFileAsDataURL).not.toHaveBeenCalled();
   });

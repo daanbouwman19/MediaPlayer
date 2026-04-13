@@ -115,6 +115,16 @@ Run all tests:
 npm test
 ```
 
+#### Test Media Generation
+
+The project includes a utility to generate a diverse collection of media files (different containers and codecs) for robust transcoding tests without bloating the repository. These are excluded from Git and generated on-demand during tests or manually via:
+
+```bash
+npx tsx tests/utils/media-generator.ts
+```
+
+Generated files are stored in `tests/fixtures/diversity`.
+
 ## Building
 
 To package the application for your OS:
