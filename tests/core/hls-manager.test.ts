@@ -2,21 +2,14 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import EventEmitter from 'events';
 
 // vi.hoisted ensures these are available inside vi.mock factory closures
-const {
-  mockSpawn,
-  mockFsMkdir,
-  mockFsRm,
-  mockFsStat,
-  mockFsReaddir,
-  mockFsAccess,
-} = vi.hoisted(() => ({
-  mockSpawn: vi.fn(),
-  mockFsMkdir: vi.fn(),
-  mockFsRm: vi.fn(),
-  mockFsStat: vi.fn(),
-  mockFsReaddir: vi.fn(),
-  mockFsAccess: vi.fn(),
-}));
+const { mockSpawn, mockFsMkdir, mockFsRm, mockFsStat, mockFsReaddir } =
+  vi.hoisted(() => ({
+    mockSpawn: vi.fn(),
+    mockFsMkdir: vi.fn(),
+    mockFsRm: vi.fn(),
+    mockFsStat: vi.fn(),
+    mockFsReaddir: vi.fn(),
+  }));
 
 vi.mock('child_process', () => ({
   spawn: mockSpawn,
@@ -26,13 +19,11 @@ vi.mock('child_process', () => ({
 vi.mock('fs/promises', () => ({
   default: {
     mkdir: mockFsMkdir,
-    access: mockFsAccess,
     rm: mockFsRm,
     readdir: mockFsReaddir,
     stat: mockFsStat,
   },
   mkdir: mockFsMkdir,
-  access: mockFsAccess,
   rm: mockFsRm,
   readdir: mockFsReaddir,
   stat: mockFsStat,
@@ -99,8 +90,6 @@ describe('HlsManager Robustness', () => {
     // By default, playlist is NOT ready
     mockFsStat.mockRejectedValue(new Error('ENOENT'));
     mockFsReaddir.mockResolvedValue([]);
-    // access resolves → playlist ready (legacy, but keep for other checks)
-    mockFsAccess.mockResolvedValue(undefined);
   });
 
   afterEach(() => {

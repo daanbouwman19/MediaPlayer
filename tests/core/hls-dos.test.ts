@@ -3,13 +3,12 @@ import { HlsManager } from '../../src/core/hls-manager.ts';
 import { MAX_CONCURRENT_TRANSCODES } from '../../src/core/constants.ts';
 import EventEmitter from 'events';
 
-const { mockSpawn, mockFsMkdir, mockFsRm, mockFsStat, mockFsAccess } =
+const { mockSpawn, mockFsMkdir, mockFsRm, mockFsStat } =
   vi.hoisted(() => ({
     mockSpawn: vi.fn(),
     mockFsMkdir: vi.fn(),
     mockFsRm: vi.fn(),
     mockFsStat: vi.fn(),
-    mockFsAccess: vi.fn(),
   }));
 
 vi.mock('child_process', () => ({
@@ -20,13 +19,11 @@ vi.mock('child_process', () => ({
 vi.mock('fs/promises', () => ({
   default: {
     mkdir: mockFsMkdir,
-    access: mockFsAccess,
     rm: mockFsRm,
     stat: mockFsStat,
     readdir: vi.fn().mockResolvedValue([]),
   },
   mkdir: mockFsMkdir,
-  access: mockFsAccess,
   rm: mockFsRm,
   stat: mockFsStat,
   readdir: vi.fn().mockResolvedValue([]),
@@ -71,7 +68,6 @@ describe('HlsManager DOS Protection', () => {
     mockFsStat.mockResolvedValue({ size: 100, isDirectory: () => true } as any);
     mockFsMkdir.mockResolvedValue(undefined);
     mockFsRm.mockResolvedValue(undefined);
-    mockFsAccess.mockResolvedValue(undefined);
 
     vi.mocked(createMediaSource).mockImplementation((path: string) => ({
       getFFmpegInput: vi.fn().mockResolvedValue(path),
