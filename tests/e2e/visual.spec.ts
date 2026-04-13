@@ -1,8 +1,15 @@
 import { test, expect } from '@playwright/test';
 
-test('MediaGrid visual regression', async ({ page, isMobile }) => {
-  // Mock backend API
-  await page.route('**/api/albums', async (route) => {
+for (const theme of ['light', 'dark'] as const) {
+  test(`MediaGrid visual regression - ${theme} mode`, async ({
+    page,
+    isMobile,
+  }) => {
+    // Set color scheme before navigating
+    await page.emulateMedia({ colorScheme: theme });
+
+    // Mock backend API
+    await page.route('**/api/albums', async (route) => {
     const json = [
       {
         name: 'Test Album',
@@ -54,12 +61,13 @@ test('MediaGrid visual regression', async ({ page, isMobile }) => {
     await closeSidebarBtn.click();
   }
 
-  // Wait for data to load
-  await expect(page.getByText('Test Album')).toBeVisible();
+    // Wait for data to load
+    await expect(page.getByText('Test Album')).toBeVisible();
 
-  // Take screenshot
-  await expect(page).toHaveScreenshot('media-grid.png', {
-    fullPage: true,
-    maxDiffPixelRatio: 0.02,
+    // Take screenshot
+    await expect(page).toHaveScreenshot(`media-grid-${theme}.png`, {
+      fullPage: true,
+      maxDiffPixelRatio: 0.02,
+    });
   });
-});
+}
