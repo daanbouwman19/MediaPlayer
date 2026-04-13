@@ -146,7 +146,7 @@ const { currentItem: currentMediaItem } = playlistStore;
 const { isLocked, isInitialized: isAuthInitialized } = authStore;
 const initializeApp = libraryStore.loadInitialData;
 const { navigateMedia, toggleSlideshowTimer } = useSlideshow();
-const { initTheme } = useTheme();
+const { initTheme, cleanupTheme } = useTheme();
 initTheme();
 
 const isShortcutsModalOpen = ref(false);
@@ -252,6 +252,7 @@ watch(
 // Before unmounting, clean up by removing the event listener
 onBeforeUnmount(() => {
   document.removeEventListener('keydown', handleKeydown);
+  cleanupTheme();
 });
 </script>
 
