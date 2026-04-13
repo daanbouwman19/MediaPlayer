@@ -10,30 +10,31 @@ vi.mock('../../../src/renderer/composables/useUIStore');
 describe('useTheme', () => {
   let mockMatchMedia: any;
   let mockThemeMode: any;
-  let mockAddListener: any;
+  let sharedMockMQ: any;
 
   beforeEach(() => {
     vi.clearAllMocks();
 
     mockThemeMode = { value: 'system' };
-    mockAddListener = vi.fn();
 
     (useUIStore as any).mockReturnValue({
       themeMode: mockThemeMode,
     });
 
-    mockMatchMedia = vi.fn().mockImplementation((query) => ({
+    sharedMockMQ = {
       matches: false,
-      media: query,
+      media: '(prefers-color-scheme: dark)',
       onchange: null,
-      addListener: mockAddListener,
+      addListener: vi.fn(),
       removeListener: vi.fn(),
-      addEventListener: mockAddListener,
+      addEventListener: vi.fn(),
       removeEventListener: vi.fn(),
       dispatchEvent: vi.fn(),
-    }));
+    };
 
+    mockMatchMedia = vi.fn().mockReturnValue(sharedMockMQ);
     window.matchMedia = mockMatchMedia;
+
     _resetThemeModule();
 
     // Reset document classes
@@ -48,7 +49,7 @@ describe('useTheme', () => {
   it('initializes correctly', () => {
     const { initTheme } = useTheme();
     initTheme();
-    expect(mockAddListener).toHaveBeenCalled();
+    expect(sharedMockMQ.addEventListener).toHaveBeenCalled();
   });
 
   it('cycles theme mode', () => {
@@ -81,12 +82,7 @@ describe('useTheme', () => {
   });
 
   it('applies dark theme based on system preference when mode is system', () => {
-    mockMatchMedia.mockImplementation((query: string) => ({
-      matches: true,
-      media: query,
-      addEventListener: vi.fn(),
-    }));
-
+    sharedMockMQ.matches = true;
     mockThemeMode.value = 'system';
     const { applyTheme } = useTheme();
     applyTheme();
@@ -95,17 +91,9 @@ describe('useTheme', () => {
   });
 
   it('cleans up correctly', () => {
-    const mockRemoveListener = vi.fn();
-    mockMatchMedia.mockImplementation((query: string) => ({
-      matches: false,
-      media: query,
-      addEventListener: vi.fn(),
-      removeEventListener: mockRemoveListener,
-    }));
-
     const { initTheme, cleanupTheme } = useTheme();
     initTheme();
     cleanupTheme();
-    expect(mockRemoveListener).toHaveBeenCalled();
+    expect(sharedMockMQ.removeEventListener).toHaveBeenCalled();
   });
 });
