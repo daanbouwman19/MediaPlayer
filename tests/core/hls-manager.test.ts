@@ -131,6 +131,7 @@ describe('HlsManager Robustness', () => {
     mockFsAccess.mockRejectedValue(new Error('ENOENT'));
 
     const promise = hlsManager.ensureSession(sessionId, '/test.mp4');
+    promise.catch(() => {}); // prevent unhandled rejection warning
 
     await vi.advanceTimersByTimeAsync(1);
 
@@ -153,6 +154,7 @@ describe('HlsManager Robustness', () => {
     mockFsAccess.mockRejectedValue(new Error('ENOENT'));
 
     const promise = hlsManager.ensureSession(sessionId, '/test.mp4');
+    promise.catch(() => {}); // prevent unhandled rejection warning
 
     await vi.advanceTimersByTimeAsync(1);
     mockProcess.emit('exit', 1, null);
@@ -211,6 +213,7 @@ describe('HlsManager Robustness', () => {
     mockFsAccess.mockRejectedValue(new Error('ENOENT'));
 
     const promise = hlsManager.ensureSession(sessionId, '/test.mp4');
+    promise.catch(() => {}); // prevent unhandled rejection warning
 
     await vi.advanceTimersByTimeAsync(11000);
 

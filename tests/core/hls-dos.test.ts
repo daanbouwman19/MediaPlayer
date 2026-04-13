@@ -145,7 +145,7 @@ describe('HlsManager DOS Protection', () => {
     expect(mockSpawn.mock.calls.length).toBeLessThanOrEqual(limit);
 
     // Clean up: timeout all waiting sessions
-    await vi.advanceTimersByTimeAsync(15000);
+    await vi.advanceTimersByTimeAsync(30000);
     await Promise.all(promises);
   });
 });
