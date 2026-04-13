@@ -55,6 +55,7 @@ describe('App.vue', () => {
       initTheme: vi.fn(),
       cycleTheme: vi.fn(),
       applyTheme: vi.fn(),
+      cleanupTheme: vi.fn(),
     });
 
     mockLibraryState = reactive({

@@ -45,7 +45,6 @@ describe('useTheme', () => {
     const { initTheme } = useTheme();
     initTheme();
     expect(mockAddListener).toHaveBeenCalled();
-    expect((window as any).electronAPI.setTheme).toHaveBeenCalledWith('system');
   });
 
   it('cycles theme mode', () => {
@@ -67,7 +66,6 @@ describe('useTheme', () => {
     applyTheme();
 
     expect(document.documentElement.classList.contains('dark')).toBe(true);
-    expect((window as any).electronAPI.setTheme).toHaveBeenCalledWith('dark');
   });
 
   it('applies light theme when mode is light', () => {
@@ -76,7 +74,6 @@ describe('useTheme', () => {
     applyTheme();
 
     expect(document.documentElement.classList.contains('dark')).toBe(false);
-    expect((window as any).electronAPI.setTheme).toHaveBeenCalledWith('light');
   });
 
   it('applies dark theme based on system preference when mode is system', () => {
@@ -91,6 +88,5 @@ describe('useTheme', () => {
     applyTheme();
 
     expect(document.documentElement.classList.contains('dark')).toBe(true);
-    expect((window as any).electronAPI.setTheme).toHaveBeenCalledWith('system');
   });
 });

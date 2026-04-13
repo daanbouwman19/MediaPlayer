@@ -8,23 +8,15 @@ export function useTheme() {
   const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
 
   const applyTheme = () => {
-    let isDark = false;
-
-    if (themeMode.value === 'system') {
-      isDark = mediaQuery.matches;
-    } else {
-      isDark = themeMode.value === 'dark';
-    }
+    const isDark =
+      themeMode.value === 'system'
+        ? mediaQuery.matches
+        : themeMode.value === 'dark';
 
     if (isDark) {
       document.documentElement.classList.add('dark');
     } else {
       document.documentElement.classList.remove('dark');
-    }
-
-    // Sync with Electron main process
-    if (window.electronAPI) {
-      window.electronAPI.setTheme(themeMode.value);
     }
   };
 
@@ -42,19 +34,28 @@ export function useTheme() {
     // Listen for OS theme changes
     mediaQuery.addEventListener('change', applyTheme);
 
-    // Watch for user theme selection changes
-    watch(themeMode, (newTheme) => {
-      localStorage.setItem('themeMode', newTheme);
-      applyTheme();
-    });
+    // Watch for user theme selection changes and sync with main process
+    watch(
+      themeMode,
+      (newTheme) => {
+        localStorage.setItem('themeMode', newTheme);
+        applyTheme();
+        if (window.electronAPI) {
+          window.electronAPI.setTheme(newTheme);
+        }
+      },
+      { immediate: true },
+    );
+  };
 
-    // Apply the initial theme
-    applyTheme();
+  const cleanupTheme = () => {
+    mediaQuery.removeEventListener('change', applyTheme);
   };
 
   return {
     initTheme,
     cycleTheme,
     applyTheme,
+    cleanupTheme,
   };
 }

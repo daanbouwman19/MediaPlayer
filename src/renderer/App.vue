@@ -68,16 +68,16 @@
           </h1>
 
           <button
-            class="icon-button p-2 rounded-full hover:bg-white/10 transition-colors pointer-events-auto"
+            class="icon-button p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-colors pointer-events-auto"
             aria-label="Toggle Theme"
             :title="`Current Theme: ${themeMode}`"
             @click="cycleTheme"
           >
-            <ThemeIcon :mode="themeMode" class="w-6 h-6 text-white" />
+            <ThemeIcon :mode="themeMode" class="w-6 h-6" />
           </button>
 
           <button
-            class="icon-button p-2 rounded-full hover:bg-white/10 transition-colors pointer-events-auto"
+            class="icon-button p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-colors pointer-events-auto"
             aria-label="Keyboard Shortcuts"
             title="Keyboard Shortcuts"
             @click="isShortcutsModalOpen = true"
@@ -161,7 +161,7 @@ const { currentItem: currentMediaItem } = playlistStore;
 const { isLocked, isInitialized: isAuthInitialized } = authStore;
 const initializeApp = libraryStore.loadInitialData;
 const { navigateMedia, toggleSlideshowTimer } = useSlideshow();
-const { initTheme, cycleTheme } = useTheme();
+const { initTheme, cycleTheme, cleanupTheme } = useTheme();
 
 const isShortcutsModalOpen = ref(false);
 
@@ -266,6 +266,7 @@ watch(
 // Before unmounting, clean up by removing the event listener
 onBeforeUnmount(() => {
   document.removeEventListener('keydown', handleKeydown);
+  cleanupTheme();
 });
 </script>
 
