@@ -1,4 +1,10 @@
-import { IpcMainInvokeEvent, shell, dialog } from 'electron';
+import {
+  IpcMainInvokeEvent,
+  shell,
+  dialog,
+  ipcMain,
+  nativeTheme,
+} from 'electron';
 import fs from 'fs/promises';
 import path from 'path';
 import { IPC_CHANNELS } from '../../shared/ipc-channels';
@@ -141,6 +147,13 @@ export function registerSystemHandlers() {
       const parent = path.dirname(targetPath);
       if (parent === targetPath) return null;
       return parent;
+    },
+  );
+
+  ipcMain.on(
+    IPC_CHANNELS.THEME_CHANGED,
+    (_event, theme: 'light' | 'dark' | 'system') => {
+      nativeTheme.themeSource = theme;
     },
   );
 }

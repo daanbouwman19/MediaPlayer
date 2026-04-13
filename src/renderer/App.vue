@@ -69,6 +69,15 @@
 
           <button
             class="icon-button p-2 rounded-full hover:bg-white/10 transition-colors pointer-events-auto"
+            aria-label="Toggle Theme"
+            :title="`Current Theme: ${themeMode}`"
+            @click="cycleTheme"
+          >
+            <ThemeIcon :mode="themeMode" class="w-6 h-6 text-white" />
+          </button>
+
+          <button
+            class="icon-button p-2 rounded-full hover:bg-white/10 transition-colors pointer-events-auto"
             aria-label="Keyboard Shortcuts"
             title="Keyboard Shortcuts"
             @click="isShortcutsModalOpen = true"
@@ -124,12 +133,14 @@ import LoadingMask from './components/LoadingMask.vue';
 import LockScreen from './components/LockScreen.vue';
 import MenuIcon from './components/icons/MenuIcon.vue';
 import HelpIcon from './components/icons/HelpIcon.vue';
+import ThemeIcon from './components/icons/ThemeIcon.vue';
 import { useLibraryStore } from './composables/useLibraryStore';
 import { usePlayerStore } from './composables/usePlayerStore';
 import { usePlaylistStore } from './composables/usePlaylistStore';
 import { useUIStore } from './composables/useUIStore';
 import { useAuthStore } from './composables/useAuthStore';
 import { useSlideshow } from './composables/useSlideshow';
+import { useTheme } from './composables/useTheme';
 import { CONTROLS_HIDE_TIMEOUT_MS } from '../core/constants';
 
 const libraryStore = useLibraryStore();
@@ -138,13 +149,19 @@ const playerStore = usePlayerStore(); // Call the store to get the instance
 const playlistStore = usePlaylistStore();
 const authStore = useAuthStore();
 const { isScanning } = libraryStore;
-const { viewMode, playlistToEdit, isControlsVisible, isSidebarVisible } =
-  uiStore;
+const {
+  viewMode,
+  playlistToEdit,
+  isControlsVisible,
+  isSidebarVisible,
+  themeMode,
+} = uiStore;
 const { isSlideshowActive, mainVideoElement } = playerStore; // Destructure from the instance
 const { currentItem: currentMediaItem } = playlistStore;
 const { isLocked, isInitialized: isAuthInitialized } = authStore;
 const initializeApp = libraryStore.loadInitialData;
 const { navigateMedia, toggleSlideshowTimer } = useSlideshow();
+const { initTheme, cycleTheme } = useTheme();
 
 const isShortcutsModalOpen = ref(false);
 
@@ -227,6 +244,7 @@ const handleKeydown = (event: KeyboardEvent) => {
 
 // On component mount, initialize the app and add the keyboard event listener
 onMounted(async () => {
+  initTheme();
   await authStore.checkLockStatus();
   if (!isLocked.value) {
     await initializeApp();

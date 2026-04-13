@@ -53,4 +53,5 @@ export const createMockElectronAPI = (): ElectronAPI => ({
     duration: 100,
     percent: 0,
   }),
+  setTheme: vi.fn(),
 });
