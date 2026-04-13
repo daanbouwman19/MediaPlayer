@@ -37,10 +37,10 @@
               />
             </svg>
           </div>
-          <h2 class="text-2xl font-bold text-white mb-2">
+          <h2 class="text-2xl font-bold text-color mb-2">
             Welcome to Media Player
           </h2>
-          <p class="text-gray-400 mb-6 max-w-md">
+          <p class="text-muted mb-6 max-w-md">
             Your library is currently empty. Add a folder to start enjoying your
             media collection.
           </p>
@@ -65,7 +65,7 @@
         </template>
         <template v-else>
           <div
-            class="flex flex-col items-center gap-3 text-gray-500 opacity-60"
+            class="flex flex-col items-center gap-3 text-muted opacity-80"
             role="status"
             aria-live="polite"
           >
@@ -73,17 +73,17 @@
             <p class="text-lg font-medium">Select an album to start playback</p>
             <button
               v-if="!isSidebarVisible"
-              class="glass-button px-4 py-2 mt-2 flex items-center gap-2 text-sm font-medium text-indigo-300 hover:text-white transition-colors"
+              class="glass-button px-4 py-2 mt-2 flex items-center gap-2 text-sm font-medium text-accent hover:text-accent-hover transition-colors"
               @click="isSidebarVisible = true"
             >
               <MenuIcon class="w-4 h-4" aria-hidden="true" />
               Open Library
             </button>
             <p v-else class="text-sm">Choose from the sidebar to begin</p>
-            <p class="text-xs mt-4 text-gray-600">
+            <p class="text-xs mt-4 text-muted">
               Press
               <kbd
-                class="px-1 py-0.5 rounded bg-gray-800 border border-gray-700 font-mono text-gray-400"
+                class="px-1 py-0.5 rounded bg-black/10 border border-black/10 font-mono text-muted"
                 >?</kbd
               >
               for shortcuts
@@ -108,7 +108,7 @@
         <p class="text-lg md:text-xl font-bold text-red-400 mb-2">
           Video Format Not Supported
         </p>
-        <p class="text-gray-300 mb-4 text-sm md:text-base">
+        <p class="text-muted mb-4 text-sm md:text-base">
           This video codec (likely HEVC) cannot be played natively.
         </p>
         <button

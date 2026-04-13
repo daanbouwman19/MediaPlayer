@@ -7,7 +7,7 @@
     >
       <!-- Mobile Close Button (only visible on mobile) -->
       <button
-        class="md:hidden text-gray-400 hover:text-white mr-2"
+        class="md:hidden text-muted hover:text-accent mr-2"
         aria-label="Close Sidebar"
         title="Close Sidebar"
         @click="$emit('close')"
@@ -15,13 +15,13 @@
         <CloseIcon class="w-5 h-5" />
       </button>
 
-      <h2 class="text-gray-200 font-bold tracking-tight text-sm uppercase">
+      <h2 class="text-accent font-bold tracking-tight text-sm uppercase">
         Library
       </h2>
 
       <div class="flex items-center gap-1">
         <button
-          class="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-md transition-colors"
+          class="p-2 text-muted hover:text-accent hover:bg-black/5 rounded-md transition-colors"
           title="Manage Sources"
           aria-label="Manage Sources"
           @click="openModal"
@@ -30,12 +30,21 @@
         </button>
 
         <button
-          class="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-md transition-colors"
+          class="p-2 text-muted hover:text-accent hover:bg-black/5 rounded-md transition-colors"
           title="Add Playlist"
           aria-label="Add Playlist"
           @click="openSmartPlaylistModal"
         >
           <PlaylistAddIcon class="w-5 h-5" />
+        </button>
+
+        <button
+          class="p-2 text-muted hover:text-accent hover:bg-black/5 rounded-md transition-colors"
+          aria-label="Toggle Theme"
+          :title="`Current Theme: ${themeMode}`"
+          @click="cycleTheme"
+        >
+          <ThemeIcon :mode="themeMode" class="w-5 h-5" />
         </button>
       </div>
     </div>
@@ -107,12 +116,12 @@
                 >
                   <!-- Name (Main Action - Slideshow) -->
                   <button
-                    class="grow flex items-center gap-2 truncate text-sm text-gray-300 group-hover:text-white text-left focus:outline-none focus:text-white cursor-pointer min-w-0"
+                    class="grow flex items-center gap-2 truncate text-sm text-color group-hover:text-accent text-left focus:outline-none cursor-pointer min-w-0"
                     aria-label="Recently Played Slideshow"
                     :disabled="!!loadingAction"
                     @click="handleHistorySlideshow"
                   >
-                    <span class="text-orange-400 shrink-0">
+                    <span class="text-accent-secondary shrink-0">
                       <svg
                         v-if="loadingAction === 'history-slideshow'"
                         class="animate-spin w-4 h-4"
@@ -145,7 +154,7 @@
                   >
                     <!-- Grid Button for History -->
                     <button
-                      class="text-xs text-gray-500 hover:text-white p-1"
+                      class="text-xs text-muted hover:text-accent p-1"
                       title="Open in Grid"
                       aria-label="Open History in Grid"
                       :disabled="!!loadingAction"
@@ -184,12 +193,12 @@
                 >
                   <!-- Name (Main Action) -->
                   <button
-                    class="grow flex items-center gap-2 truncate text-sm text-gray-300 group-hover:text-white text-left focus:outline-none focus:text-white cursor-pointer min-w-0"
+                    class="grow flex items-center gap-2 truncate text-sm text-color group-hover:text-accent text-left focus:outline-none cursor-pointer min-w-0"
                     :aria-label="'Play ' + playlist.name"
                     :disabled="!!loadingAction"
                     @click="handleSmartPlaylistSlideshow(playlist)"
                   >
-                    <span class="text-indigo-500 shrink-0">
+                    <span class="text-accent shrink-0">
                       <svg
                         v-if="loadingAction === `playlist-${playlist.id}`"
                         class="animate-spin w-4 h-4"
@@ -223,7 +232,7 @@
                   >
                     <!-- Grid Button for Playlist -->
                     <button
-                      class="text-xs text-gray-500 hover:text-white p-1"
+                      class="text-xs text-muted hover:text-accent p-1"
                       title="Open in Grid"
                       :aria-label="'Open ' + playlist.name + ' in Grid'"
                       :disabled="!!loadingAction"
@@ -292,8 +301,8 @@
               class="flex-1 px-2 py-1.5 text-xs font-medium rounded-md transition-all duration-200"
               :class="
                 mediaFilter === filter
-                  ? 'bg-indigo-500 text-white shadow-sm'
-                  : 'text-gray-400 hover:text-white hover:bg-white/5'
+                  ? 'bg-accent text-white shadow-sm'
+                  : 'text-muted hover:text-accent hover:bg-black/5'
               "
               :aria-pressed="mediaFilter === filter"
               @click="setFilter(filter)"
@@ -454,6 +463,8 @@ import GridIcon from './icons/GridIcon.vue';
 import EditIcon from './icons/EditIcon.vue';
 import DeleteIcon from './icons/DeleteIcon.vue';
 import HistoryIcon from './icons/HistoryIcon.vue';
+import ThemeIcon from './icons/ThemeIcon.vue';
+import { useTheme } from '../composables/useTheme';
 import { api } from '../api';
 import {
   getAlbumAndChildrenIds,
@@ -466,6 +477,8 @@ import { RECENTLY_PLAYED_FETCH_LIMIT } from '../../core/constants';
 const libraryStore = useLibraryStore();
 const playerStore = usePlayerStore();
 const uiStore = useUIStore();
+const { themeMode } = uiStore;
+const { cycleTheme } = useTheme();
 
 const {
   allAlbums,

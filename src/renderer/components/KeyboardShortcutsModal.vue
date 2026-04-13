@@ -13,7 +13,7 @@
       @click.self="close"
     >
       <div
-        class="relative w-full max-w-md bg-gray-900/95 border border-white/10 rounded-2xl shadow-2xl backdrop-blur-xl ring-1 ring-white/5 overflow-hidden flex flex-col"
+        class="relative w-full max-w-md glass-panel md:rounded-2xl shadow-2xl overflow-hidden flex flex-col transition-all"
         role="dialog"
         aria-modal="true"
         aria-labelledby="shortcuts-title"
@@ -28,7 +28,7 @@
           class="flex shrink-0 justify-between items-center p-4 border-b border-white/5"
         >
           <div>
-            <h2 id="shortcuts-title" class="text-lg font-bold text-white">
+            <h2 id="shortcuts-title" class="text-lg font-bold text-color">
               Keyboard Shortcuts
             </h2>
           </div>
@@ -51,23 +51,23 @@
               Navigation
             </h3>
             <div class="flex justify-between items-center">
-              <span class="text-sm text-gray-300">Previous Media</span>
+              <span class="text-sm text-muted">Previous Media</span>
               <kbd
-                class="px-2 py-1 bg-white/10 rounded border border-white/20 font-mono text-xs text-white min-w-[28px] text-center"
+                class="px-2 py-1 bg-black/5 rounded border border-black/10 font-mono text-xs text-accent min-w-[28px] text-center"
                 >Z</kbd
               >
             </div>
             <div class="flex justify-between items-center">
-              <span class="text-sm text-gray-300">Next Media</span>
+              <span class="text-sm text-muted">Next Media</span>
               <kbd
-                class="px-2 py-1 bg-white/10 rounded border border-white/20 font-mono text-xs text-white min-w-[28px] text-center"
+                class="px-2 py-1 bg-black/5 rounded border border-black/10 font-mono text-xs text-accent min-w-[28px] text-center"
                 >X</kbd
               >
             </div>
             <div class="flex justify-between items-center">
-              <span class="text-sm text-gray-300">Toggle Shortcuts</span>
+              <span class="text-sm text-muted">Toggle Shortcuts</span>
               <kbd
-                class="px-2 py-1 bg-white/10 rounded border border-white/20 font-mono text-xs text-white min-w-[28px] text-center"
+                class="px-2 py-1 bg-black/5 rounded border border-black/10 font-mono text-xs text-accent min-w-[28px] text-center"
                 >?</kbd
               >
             </div>
@@ -81,18 +81,16 @@
               Playback
             </h3>
             <div class="flex justify-between items-center">
-              <span class="text-sm text-gray-300">Play / Pause (Video)</span>
+              <span class="text-sm text-muted">Play / Pause (Video)</span>
               <kbd
-                class="px-2 py-1 bg-white/10 rounded border border-white/20 font-mono text-xs text-white"
+                class="px-2 py-1 bg-black/5 rounded border border-black/10 font-mono text-xs text-accent min-w-[28px] text-center"
                 >Space</kbd
               >
             </div>
             <div class="flex justify-between items-center">
-              <span class="text-sm text-gray-300"
-                >Toggle Slideshow (Image)</span
-              >
+              <span class="text-sm text-muted">Toggle Slideshow (Image)</span>
               <kbd
-                class="px-2 py-1 bg-white/10 rounded border border-white/20 font-mono text-xs text-white"
+                class="px-2 py-1 bg-black/5 rounded border border-black/10 font-mono text-xs text-accent min-w-[28px] text-center"
                 >Space</kbd
               >
             </div>
@@ -106,16 +104,16 @@
               Seeking (Video)
             </h3>
             <div class="flex justify-between items-center">
-              <span class="text-sm text-gray-300">Seek Backward 5s</span>
+              <span class="text-sm text-muted">Seek Backward 5s</span>
               <kbd
-                class="px-2 py-1 bg-white/10 rounded border border-white/20 font-mono text-xs text-white min-w-[28px] text-center"
+                class="px-2 py-1 bg-black/5 rounded border border-black/10 font-mono text-xs text-accent min-w-[28px] text-center"
                 >←</kbd
               >
             </div>
             <div class="flex justify-between items-center">
-              <span class="text-sm text-gray-300">Seek Forward 5s</span>
+              <span class="text-sm text-muted">Seek Forward 5s</span>
               <kbd
-                class="px-2 py-1 bg-white/10 rounded border border-white/20 font-mono text-xs text-white min-w-[28px] text-center"
+                class="px-2 py-1 bg-black/5 rounded border border-black/10 font-mono text-xs text-accent min-w-[28px] text-center"
                 >→</kbd
               >
             </div>

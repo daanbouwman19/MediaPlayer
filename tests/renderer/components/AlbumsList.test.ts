@@ -6,6 +6,7 @@ import { collectTexturesRecursive } from '../../../src/renderer/utils/albumUtils
 import { useLibraryStore } from '../../../src/renderer/composables/useLibraryStore';
 import { usePlayerStore } from '../../../src/renderer/composables/usePlayerStore';
 import { useUIStore } from '../../../src/renderer/composables/useUIStore';
+import { useTheme } from '../../../src/renderer/composables/useTheme';
 
 // --- New Mocking Strategy ---
 import { api } from '../../../src/renderer/api';
@@ -43,6 +44,7 @@ vi.mock('../../../src/renderer/api', () => ({
 vi.mock('../../../src/renderer/composables/useLibraryStore');
 vi.mock('../../../src/renderer/composables/usePlayerStore');
 vi.mock('../../../src/renderer/composables/useUIStore');
+vi.mock('../../../src/renderer/composables/useTheme');
 // --- End New Mocking Strategy ---
 
 // --- Factories ---
@@ -105,6 +107,7 @@ describe('AlbumsList.vue', () => {
   let mockLibraryState: any;
   let mockPlayerState: any;
   let mockUIState: any;
+  let mockCycleTheme: Mock;
 
   // We keep a reference to default mock albums for assertions that rely on the initial structure
   const defaultMockAlbums = createMockAlbums();
@@ -131,6 +134,13 @@ describe('AlbumsList.vue', () => {
     (useUIStore as Mock).mockReturnValue({
       state: mockUIState,
       ...toRefs(mockUIState),
+    });
+
+    mockCycleTheme = vi.fn();
+    (useTheme as Mock).mockReturnValue({
+      initTheme: vi.fn(),
+      cycleTheme: mockCycleTheme,
+      applyTheme: vi.fn(),
     });
 
     (api.getSmartPlaylists as Mock).mockResolvedValue([]);
@@ -507,6 +517,14 @@ describe('AlbumsList.vue', () => {
         expect.any(Error),
       );
       consoleSpy.mockRestore();
+    });
+    it('cycles theme when cycle button is clicked', async () => {
+      const wrapper = mount(AlbumsList);
+      const cycleBtn = wrapper.find('button[aria-label="Toggle Theme"]');
+
+      expect(cycleBtn.exists()).toBe(true);
+      await cycleBtn.trigger('click');
+      expect(mockCycleTheme).toHaveBeenCalled();
     });
   });
 });

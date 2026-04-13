@@ -42,4 +42,7 @@ export const IPC_CHANNELS = {
   ADD_GOOGLE_DRIVE_SOURCE: 'add-google-drive-source',
   DRIVE_LIST_DIRECTORY: 'drive:list-directory',
   DRIVE_GET_PARENT: 'drive:get-parent',
+
+  // Theme
+  THEME_CHANGED: 'theme-changed',
 } as const;

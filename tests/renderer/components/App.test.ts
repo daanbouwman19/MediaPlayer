@@ -7,6 +7,7 @@ import { useLibraryStore } from '@/composables/useLibraryStore';
 import { usePlayerStore } from '@/composables/usePlayerStore';
 import { useUIStore } from '@/composables/useUIStore';
 import { useAuthStore } from '@/composables/useAuthStore';
+import { useTheme } from '@/composables/useTheme';
 
 // Mock the composables
 vi.mock('@/composables/useSlideshow');
@@ -14,6 +15,7 @@ vi.mock('@/composables/useLibraryStore');
 vi.mock('@/composables/usePlayerStore');
 vi.mock('@/composables/useUIStore');
 vi.mock('@/composables/useAuthStore');
+vi.mock('@/composables/useTheme');
 
 // Mock the child components
 vi.mock('@/components/AlbumsList.vue', () => ({
@@ -45,11 +47,20 @@ describe('App.vue', () => {
   let initializeApp: Mock;
   let navigateMedia: Mock;
   let toggleSlideshowTimer: Mock;
+  let mockCycleTheme: Mock;
 
   beforeEach(() => {
     initializeApp = vi.fn().mockResolvedValue(undefined);
     navigateMedia = vi.fn();
     toggleSlideshowTimer = vi.fn();
+    mockCycleTheme = vi.fn();
+
+    (useTheme as Mock).mockReturnValue({
+      initTheme: vi.fn(),
+      cycleTheme: mockCycleTheme,
+      applyTheme: vi.fn(),
+      cleanupTheme: vi.fn(),
+    });
 
     mockLibraryState = reactive({
       allAlbums: [],
@@ -85,6 +96,7 @@ describe('App.vue', () => {
       mediaFilter: 'All',
       isControlsVisible: true,
       isSidebarVisible: true,
+      themeMode: 'system',
     });
 
     (useLibraryStore as Mock).mockReturnValue({
@@ -103,6 +115,7 @@ describe('App.vue', () => {
     (useUIStore as Mock).mockReturnValue({
       state: mockUIState,
       ...toRefs(mockUIState),
+      setThemeMode: vi.fn(),
     });
 
     (useAuthStore as Mock).mockReturnValue({

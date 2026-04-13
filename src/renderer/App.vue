@@ -1,5 +1,5 @@
 <template>
-  <div class="app-container text-white min-h-screen flex flex-col relative">
+  <div class="app-container min-h-screen flex flex-col relative">
     <a
       href="#main-content"
       class="absolute top-4 left-4 z-[100] -translate-y-[150%] focus:translate-y-0 transition-transform bg-indigo-600 text-white px-4 py-2 rounded-md font-bold shadow-lg focus:outline-none focus:ring-2 focus:ring-white"
@@ -53,7 +53,7 @@
             :aria-label="isSidebarVisible ? 'Hide Albums' : 'Show Albums'"
             @click="isSidebarVisible = !isSidebarVisible"
           >
-            <MenuIcon class="w-6 h-6 text-white" />
+            <MenuIcon class="w-6 h-6" />
           </button>
 
           <!-- Title / Filename -->
@@ -73,7 +73,7 @@
             title="Keyboard Shortcuts"
             @click="isShortcutsModalOpen = true"
           >
-            <HelpIcon class="w-6 h-6 text-white" />
+            <HelpIcon class="w-6 h-6" />
           </button>
         </div>
 
@@ -130,6 +130,7 @@ import { usePlaylistStore } from './composables/usePlaylistStore';
 import { useUIStore } from './composables/useUIStore';
 import { useAuthStore } from './composables/useAuthStore';
 import { useSlideshow } from './composables/useSlideshow';
+import { useTheme } from './composables/useTheme';
 import { CONTROLS_HIDE_TIMEOUT_MS } from '../core/constants';
 
 const libraryStore = useLibraryStore();
@@ -145,6 +146,8 @@ const { currentItem: currentMediaItem } = playlistStore;
 const { isLocked, isInitialized: isAuthInitialized } = authStore;
 const initializeApp = libraryStore.loadInitialData;
 const { navigateMedia, toggleSlideshowTimer } = useSlideshow();
+const { initTheme, cleanupTheme } = useTheme();
+initTheme();
 
 const isShortcutsModalOpen = ref(false);
 
@@ -248,6 +251,7 @@ watch(
 // Before unmounting, clean up by removing the event listener
 onBeforeUnmount(() => {
   document.removeEventListener('keydown', handleKeydown);
+  cleanupTheme();
 });
 </script>
 
@@ -255,10 +259,6 @@ onBeforeUnmount(() => {
 .app-container {
   /* Background handled by AmbientBackground */
   background-color: transparent;
-}
-
-.text-accent {
-  color: var(--accent-color);
 }
 
 .font-header {

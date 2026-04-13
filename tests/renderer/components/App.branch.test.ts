@@ -7,6 +7,7 @@ import { useLibraryStore } from '../../../src/renderer/composables/useLibrarySto
 import { usePlayerStore } from '../../../src/renderer/composables/usePlayerStore';
 import { useUIStore } from '../../../src/renderer/composables/useUIStore';
 import { useAuthStore } from '../../../src/renderer/composables/useAuthStore';
+import { useTheme } from '../../../src/renderer/composables/useTheme';
 import { api } from '../../../src/renderer/api';
 
 vi.mock('../../../src/renderer/composables/useSlideshow');
@@ -14,6 +15,7 @@ vi.mock('../../../src/renderer/composables/useLibraryStore');
 vi.mock('../../../src/renderer/composables/usePlayerStore');
 vi.mock('../../../src/renderer/composables/useUIStore');
 vi.mock('../../../src/renderer/composables/useAuthStore');
+vi.mock('../../../src/renderer/composables/useTheme');
 vi.mock('../../../src/renderer/api');
 
 vi.mock('../../../src/renderer/components/MediaGrid.vue', () => ({
@@ -49,6 +51,13 @@ describe('App.vue', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
+    (useTheme as Mock).mockReturnValue({
+      initTheme: vi.fn(),
+      cycleTheme: vi.fn(),
+      applyTheme: vi.fn(),
+      cleanupTheme: vi.fn(),
+    });
+
     mockLibraryState = reactive({
       isScanning: false,
       smartPlaylists: [],
@@ -74,6 +83,7 @@ describe('App.vue', () => {
       supportedExtensions: { images: [], videos: [] },
       isSidebarVisible: true,
       isControlsVisible: true,
+      themeMode: 'system',
     });
 
     (useLibraryStore as Mock).mockReturnValue({

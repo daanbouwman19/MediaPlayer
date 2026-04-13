@@ -140,7 +140,7 @@ onUnmounted(() => {
   height: 100vh;
   z-index: 0; /* Behind content (z-10) but visible */
   overflow: hidden;
-  background-color: #050505;
+  background-color: var(--primary-bg);
 }
 
 .ambient-canvas {
@@ -167,9 +167,9 @@ onUnmounted(() => {
   inset: 0;
   background: radial-gradient(
     circle,
-    rgba(0, 0, 0, 0) 20%,
-    rgba(0, 0, 0, 0.6) 70%,
-    rgba(0, 0, 0, 0.95) 100%
+    rgba(var(--vignette-color), 0) 20%,
+    rgba(var(--vignette-color), var(--vignette-mid)) 70%,
+    rgba(var(--vignette-color), var(--vignette-edge)) 100%
   );
   pointer-events: none;
 }

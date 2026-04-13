@@ -13,7 +13,7 @@
       @click.self="closeModal"
     >
       <div
-        class="relative w-full max-w-2xl bg-gray-900/95 border border-white/10 rounded-2xl shadow-2xl backdrop-blur-xl ring-1 ring-white/5 overflow-hidden flex flex-col max-h-[85vh]"
+        class="relative w-full max-w-2xl glass-panel md:rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[100dvh] md:max-h-[85vh] transition-all"
         role="dialog"
         aria-modal="true"
         aria-labelledby="modal-title"
@@ -28,10 +28,10 @@
           class="flex shrink-0 justify-between items-center p-6 border-b border-white/5"
         >
           <div>
-            <h2 id="modal-title" class="text-xl font-bold text-white">
+            <h2 id="modal-title" class="text-xl font-bold text-color">
               Manage Media Sources
             </h2>
-            <p class="text-sm text-gray-400 mt-0.5">
+            <p class="text-sm text-muted mt-0.5">
               Configure where to look for media
             </p>
           </div>
@@ -83,24 +83,22 @@
           </div>
 
           <div class="space-y-4">
-            <h3
-              class="text-xs font-bold uppercase tracking-wider text-gray-500"
-            >
+            <h3 class="text-xs font-bold uppercase tracking-wider text-muted">
               Configured Sources
             </h3>
 
             <div
               v-if="mediaDirectories.length === 0"
-              class="p-8 text-center border-2 border-dashed border-white/10 rounded-xl"
+              class="p-8 text-center border-2 border-dashed border-black/10 rounded-xl"
             >
-              <p class="text-gray-400">No media sources configured yet.</p>
+              <p class="text-muted">No media sources configured yet.</p>
             </div>
 
             <ul v-else class="space-y-2">
               <li
                 v-for="(dir, index) in mediaDirectories"
                 :key="index"
-                class="group flex items-center justify-between p-3 bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/10 rounded-xl transition-all"
+                class="group flex items-center justify-between p-3 bg-black/5 hover:bg-black/10 border border-black/5 hover:border-black/10 rounded-xl transition-all"
               >
                 <div class="flex items-center min-w-0 mr-4">
                   <!-- Checkbox -->
@@ -171,10 +169,10 @@
                     :for="`source-checkbox-${index}`"
                     class="flex flex-col min-w-0 cursor-pointer"
                   >
-                    <span class="font-medium text-gray-200 truncate">{{
+                    <span class="font-medium text-color truncate">{{
                       dir.name || dir.path
                     }}</span>
-                    <span class="text-xs text-gray-500 truncate font-mono">{{
+                    <span class="text-xs text-muted truncate font-mono">{{
                       dir.path
                     }}</span>
                   </label>
@@ -211,7 +209,7 @@
             <!-- Add Actions Grid -->
             <div class="grid grid-cols-2 gap-3 mt-6">
               <button
-                class="flex items-center justify-center gap-2 p-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/10 text-gray-300 hover:text-white transition-all group"
+                class="flex items-center justify-center gap-2 p-3 rounded-xl bg-black/5 hover:bg-black/10 border border-black/5 hover:border-black/10 text-muted hover:text-color transition-all group"
                 @click="handleAddDirectory"
               >
                 <svg
@@ -232,7 +230,7 @@
               </button>
 
               <button
-                class="flex items-center justify-center gap-2 p-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/10 text-gray-300 hover:text-white transition-all group"
+                class="flex items-center justify-center gap-2 p-3 rounded-xl bg-black/5 hover:bg-black/10 border border-black/5 hover:border-black/10 text-muted hover:text-color transition-all group"
                 @click="showDriveAuth = true"
               >
                 <svg
@@ -252,7 +250,7 @@
         </div>
 
         <!-- Footer Action -->
-        <div class="shrink-0 p-6 border-t border-white/5 bg-black/20">
+        <div class="shrink-0 p-6 border-t border-black/5 bg-black/5">
           <button
             class="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold tracking-wide shadow-lg shadow-indigo-900/20 active:scale-95 transition-all"
             @click="closeModalAndReindex"
@@ -280,7 +278,7 @@
       aria-modal="true"
     >
       <div
-        class="bg-gray-900 border border-gray-700 rounded-xl shadow-2xl w-full max-w-lg p-6 relative"
+        class="glass-panel border-white/5 md:rounded-xl shadow-2xl w-full max-w-lg p-6 relative"
       >
         <button
           class="absolute top-4 right-4 text-gray-500 hover:text-white transition-colors"
@@ -290,12 +288,12 @@
           <CloseIcon class="w-6 h-6" />
         </button>
 
-        <h3 class="text-xl font-bold text-white mb-6">
+        <h3 class="text-xl font-bold text-color mb-6">
           Add Google Drive Source
         </h3>
 
         <div v-if="!driveAuthUrl" class="space-y-6">
-          <p class="text-gray-300 border-l-4 border-indigo-500 pl-4 py-1">
+          <p class="text-muted border-l-4 border-accent pl-4 py-1">
             To access your Google Drive files, you need to authorize this
             application via your browser.
           </p>
@@ -308,18 +306,18 @@
         </div>
 
         <div v-else-if="!authSuccess" class="space-y-4">
-          <div class="space-y-2 text-sm text-gray-300">
+          <div class="space-y-2 text-sm text-muted">
             <p>
-              <span class="font-bold text-indigo-400">Step 1:</span> Complete
-              login in the browser window.
+              <span class="font-bold text-accent">Step 1:</span> Complete login
+              in the browser window.
             </p>
             <p>
-              <span class="font-bold text-indigo-400">Step 2:</span> Copy the
-              code provided by Google.
+              <span class="font-bold text-accent">Step 2:</span> Copy the code
+              provided by Google.
             </p>
             <p>
-              <span class="font-bold text-indigo-400">Step 3:</span> Paste the
-              code below.
+              <span class="font-bold text-accent">Step 3:</span> Paste the code
+              below.
             </p>
           </div>
 
@@ -331,7 +329,7 @@
               id="auth-code-input"
               v-model="authCode"
               type="text"
-              class="w-full bg-black/30 border border-gray-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+              class="w-full glass-input rounded-lg px-4 py-2"
               placeholder="Paste authorization code here"
             />
             <p v-if="authError" class="text-red-400 text-sm">
@@ -378,7 +376,7 @@
           <div>
             <label
               for="drive-folder-id"
-              class="block text-sm font-medium text-gray-400 mb-1"
+              class="block text-sm font-medium text-muted mb-1"
             >
               Folder ID (leave empty for 'My Drive' root)
             </label>
@@ -387,7 +385,7 @@
                 id="drive-folder-id"
                 v-model="driveFolderId"
                 type="text"
-                class="grow bg-black/30 border border-gray-600 rounded-md px-3 py-2 text-white focus:outline-none focus:border-indigo-500"
+                class="grow glass-input rounded-md px-3 py-2"
                 placeholder="e.g. 1A2B3C... or 'root'"
               />
               <button
@@ -432,7 +430,7 @@
     @click.self="closeFileExplorer"
   >
     <div
-      class="bg-gray-800 rounded-lg shadow-2xl w-full max-w-2xl overflow-hidden modal-content"
+      class="glass-panel border-white/5 rounded-lg shadow-2xl w-full max-w-2xl overflow-hidden modal-content"
     >
       <FileExplorer
         :mode="fileExplorerMode"

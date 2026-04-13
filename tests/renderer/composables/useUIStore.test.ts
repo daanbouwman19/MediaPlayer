@@ -24,4 +24,9 @@ describe('useUIStore', () => {
     store.isSourcesModalVisible.value = true;
     expect(store.isSourcesModalVisible.value).toBe(true);
   });
+
+  it('should update theme mode', () => {
+    store.setThemeMode('dark');
+    expect(store.themeMode.value).toBe('dark');
+  });
 });

@@ -40,6 +40,8 @@ vi.mock('../../../src/main/local-server', () => ({
 vi.mock('electron', () => ({
   shell: { openExternal: vi.fn() },
   dialog: { showMessageBox: vi.fn() },
+  ipcMain: { on: vi.fn(), handle: vi.fn() },
+  nativeTheme: { themeSource: 'system' },
 }));
 
 vi.mock('fs/promises', () => ({

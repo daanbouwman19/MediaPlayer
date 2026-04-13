@@ -12,7 +12,12 @@ interface UIState {
   isControlsVisible: boolean;
   isSidebarVisible: boolean;
   isHistoryMode: boolean;
+  themeMode: 'light' | 'dark' | 'system';
 }
+
+const savedTheme =
+  (localStorage.getItem('themeMode') as 'light' | 'dark' | 'system') ||
+  'system';
 
 const state = reactive<UIState>({
   mediaFilter: 'All',
@@ -24,11 +29,15 @@ const state = reactive<UIState>({
   isControlsVisible: true,
   isSidebarVisible: true,
   isHistoryMode: false,
+  themeMode: savedTheme,
 });
 
 export function useUIStore() {
   return {
     ...toRefs(state),
     state,
+    setThemeMode: (mode: 'light' | 'dark' | 'system') => {
+      state.themeMode = mode;
+    },
   };
 }
