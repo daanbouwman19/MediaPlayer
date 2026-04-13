@@ -1,5 +1,5 @@
 <template>
-  <div class="app-container text-white min-h-screen flex flex-col relative">
+  <div class="app-container min-h-screen flex flex-col relative">
     <a
       href="#main-content"
       class="absolute top-4 left-4 z-[100] -translate-y-[150%] focus:translate-y-0 transition-transform bg-indigo-600 text-white px-4 py-2 rounded-md font-bold shadow-lg focus:outline-none focus:ring-2 focus:ring-white"
@@ -53,7 +53,7 @@
             :aria-label="isSidebarVisible ? 'Hide Albums' : 'Show Albums'"
             @click="isSidebarVisible = !isSidebarVisible"
           >
-            <MenuIcon class="w-6 h-6 text-white" />
+            <MenuIcon class="w-6 h-6" />
           </button>
 
           <!-- Title / Filename -->
@@ -69,20 +69,11 @@
 
           <button
             class="icon-button p-2 rounded-full hover:bg-white/10 transition-colors pointer-events-auto"
-            aria-label="Toggle Theme"
-            :title="`Current Theme: ${themeMode}`"
-            @click="cycleTheme"
-          >
-            <ThemeIcon :mode="themeMode" class="w-6 h-6 text-white" />
-          </button>
-
-          <button
-            class="icon-button p-2 rounded-full hover:bg-white/10 transition-colors pointer-events-auto"
             aria-label="Keyboard Shortcuts"
             title="Keyboard Shortcuts"
             @click="isShortcutsModalOpen = true"
           >
-            <HelpIcon class="w-6 h-6 text-white" />
+            <HelpIcon class="w-6 h-6" />
           </button>
         </div>
 
@@ -133,7 +124,6 @@ import LoadingMask from './components/LoadingMask.vue';
 import LockScreen from './components/LockScreen.vue';
 import MenuIcon from './components/icons/MenuIcon.vue';
 import HelpIcon from './components/icons/HelpIcon.vue';
-import ThemeIcon from './components/icons/ThemeIcon.vue';
 import { useLibraryStore } from './composables/useLibraryStore';
 import { usePlayerStore } from './composables/usePlayerStore';
 import { usePlaylistStore } from './composables/usePlaylistStore';
@@ -149,19 +139,15 @@ const playerStore = usePlayerStore(); // Call the store to get the instance
 const playlistStore = usePlaylistStore();
 const authStore = useAuthStore();
 const { isScanning } = libraryStore;
-const {
-  viewMode,
-  playlistToEdit,
-  isControlsVisible,
-  isSidebarVisible,
-  themeMode,
-} = uiStore;
+const { viewMode, playlistToEdit, isControlsVisible, isSidebarVisible } =
+  uiStore;
 const { isSlideshowActive, mainVideoElement } = playerStore; // Destructure from the instance
 const { currentItem: currentMediaItem } = playlistStore;
 const { isLocked, isInitialized: isAuthInitialized } = authStore;
 const initializeApp = libraryStore.loadInitialData;
 const { navigateMedia, toggleSlideshowTimer } = useSlideshow();
-const { initTheme, cycleTheme } = useTheme();
+const { initTheme } = useTheme();
+initTheme();
 
 const isShortcutsModalOpen = ref(false);
 

@@ -8,31 +8,36 @@
    * This allows for easy theming and consistent styling.
  */
 :root {
-  /* Light Theme (Default) */
-  --primary-bg: #f8fafc; /* Slate-50 */
-  --secondary-bg: #ffffff; /* White */
-  --tertiary-bg: #f1f5f9; /* Slate-100 */
+  /* Light Theme (Default) - Refined Premium Palette */
+  --primary-bg: #fbfafe; /* Warm Lavender-White */
+  --secondary-bg: #ffffff; /* Pure White */
+  --tertiary-bg: #f5f3ff; /* Softer Violet */
 
-  --accent-color: #8b5cf6; /* Violet-500 */
-  --accent-secondary: #06b6d4; /* Cyan-500 */
-  --accent-hover: #7c3aed; /* Violet-600 */
-  --watched-color: rgba(6, 182, 212, 0.4);
+  --accent-color: #7c3aed; /* Vibrant Violet-600 */
+  --accent-secondary: #0ea5e9; /* Sky-500 */
+  --accent-hover: #6d28d9; /* Deep Violet-700 */
+  --watched-color: rgba(14, 165, 233, 0.2);
 
-  --text-color: #0f172a; /* Slate-900 */
+  --text-color: #1b1b3a; /* Midnight Indigo */
   --text-muted: #64748b; /* Slate-500 */
-  --border-color: rgba(0, 0, 0, 0.1);
-  --selection-color: #e2e8f0; /* Slate-200 */
+  --border-color: rgba(27, 27, 58, 0.08);
+  --selection-color: #ede9fe; /* Soft Lavender selection */
   --button-text-color: #ffffff;
 
   /* Fonts */
   --header-font: 'Outfit', sans-serif;
   --body-font: 'Inter', sans-serif;
 
-  /* Glassmorphism Variables for Light Mode */
-  --glass-bg: rgba(255, 255, 255, 0.7);
-  --glass-border: rgba(0, 0, 0, 0.1);
-  --glass-shadow: 0 12px 40px 0 rgba(0, 0, 0, 0.1);
-  --glass-blur: blur(28px);
+  /* Glassmorphism Variables for Light Mode - Higher Quality Blur & Soft Glow */
+  --glass-bg: rgba(255, 255, 255, 0.85);
+  --glass-border: rgba(255, 255, 255, 0.3);
+  --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
+  --glass-blur: blur(16px);
+
+  /* Ambient Vignette for Light Mode - Reversed for soft white edges */
+  --vignette-color: 251, 250, 254;
+  --vignette-mid: 0.1;
+  --vignette-edge: 0.2;
 }
 
 .dark {
@@ -59,6 +64,11 @@
   --glass-border: rgba(255, 255, 255, 0.12);
   --glass-shadow: 0 12px 40px 0 rgba(0, 0, 0, 0.7);
   --glass-blur: blur(28px);
+
+  /* Ambient Vignette for Dark Mode - Strong black edges */
+  --vignette-color: 0, 0, 0;
+  --vignette-mid: 0.6;
+  --vignette-edge: 0.95;
 }
 
 /* Glassmorphism Utilities */

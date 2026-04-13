@@ -9,12 +9,12 @@
     :style="{ marginLeft: `${depth * 20}px` }"
   >
     <div
-      class="group flex items-center gap-2 w-full text-gray-300 hover:text-white"
+      class="group flex items-center gap-2 w-full text-color hover:text-accent"
     >
       <!-- Toggle Button (Triangle) -->
       <button
         v-if="isFolder"
-        class="toggle-button flex items-center justify-center w-6 h-6 rounded hover:bg-white/10 text-gray-400 hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+        class="toggle-button flex items-center justify-center w-6 h-6 rounded hover:bg-black/5 text-muted hover:text-accent transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
         :aria-expanded="isOpen"
         :aria-label="isOpen ? `Collapse ${album.name}` : `Expand ${album.name}`"
         @click.stop="toggle"
@@ -75,7 +75,7 @@
 
       <!-- Main Action Button (Name + Badge) -->
       <button
-        class="grow flex items-center gap-2 text-left min-w-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 rounded px-1 -ml-1 transition-colors hover:bg-white/5 cursor-pointer"
+        class="grow flex items-center gap-2 text-left min-w-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 rounded px-1 -ml-1 transition-colors hover:bg-black/5 cursor-pointer"
         :aria-label="'Play ' + album.name"
         @click="handleClickAlbum(album)"
       >
@@ -86,7 +86,7 @@
         <!-- Badge for count -->
         <span
           v-if="totalTextureCount > 0"
-          class="shrink-0 bg-gray-800 text-gray-400 text-[10px] font-bold px-1.5 py-0.5 rounded-md"
+          class="shrink-0 bg-accent/10 text-accent text-[10px] font-bold px-1.5 py-0.5 rounded-md"
         >
           {{ totalTextureCount }}
         </span>
@@ -99,7 +99,7 @@
       >
         <!-- Play Button for Folder/Album -->
         <button
-          class="shrink-0 text-gray-500 hover:text-white p-1 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+          class="shrink-0 text-muted hover:text-accent p-1 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
           title="Play Album"
           :aria-label="'Play ' + album.name"
           @click.stop="handleClickAlbum(album)"
@@ -109,7 +109,7 @@
 
         <!-- Grid Button -->
         <button
-          class="shrink-0 text-gray-500 hover:text-white p-1 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+          class="shrink-0 text-muted hover:text-accent p-1 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
           title="Open in Grid"
           :aria-label="'Open ' + album.name + ' in Grid'"
           @click.stop="handleOpenGrid(album)"

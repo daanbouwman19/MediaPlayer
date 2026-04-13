@@ -280,15 +280,6 @@ describe('App.vue', () => {
     expect(mockUIState.isSidebarVisible).toBe(false);
   });
 
-  it('cycles theme when cycle button is clicked', async () => {
-    const wrapper = mount(App);
-    const toggleBtn = wrapper.find('[aria-label="Toggle Theme"]');
-
-    expect(toggleBtn.exists()).toBe(true);
-    await toggleBtn.trigger('click');
-    expect(mockCycleTheme).toHaveBeenCalled();
-  });
-
   describe('Controls Visibility interactions', () => {
     it('shows controls on mousemove and hides after timeout if video playing', async () => {
       vi.useFakeTimers();

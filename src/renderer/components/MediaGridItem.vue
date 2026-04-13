@@ -13,7 +13,7 @@
     <!-- Skeleton Loader -->
     <div
       v-if="showSkeleton"
-      class="absolute inset-0 bg-gray-800 animate-pulse rounded z-10 flex items-center justify-center text-gray-700"
+      class="absolute inset-0 bg-black/5 animate-pulse rounded z-10 flex items-center justify-center text-muted"
     >
       <component
         :is="isVideo ? PlayIcon : ImageIcon"
@@ -25,7 +25,7 @@
     <template v-if="isImage">
       <div
         v-if="hasFailed"
-        class="h-full w-full flex items-center justify-center bg-gray-800 text-gray-600 rounded"
+        class="h-full w-full flex items-center justify-center bg-black/5 text-muted rounded"
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"

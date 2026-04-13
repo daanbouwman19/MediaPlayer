@@ -1,11 +1,11 @@
 <template>
   <div
-    class="flex flex-col h-full w-full bg-gray-900 rounded-lg overflow-hidden shadow-lg border border-gray-700"
+    class="flex flex-col h-full w-full glass-panel md:rounded-xl overflow-hidden shadow-lg"
   >
     <div
-      class="flex justify-between items-center p-3 bg-gray-800 border-b border-gray-700 shrink-0"
+      class="flex justify-between items-center p-3 bg-black/5 border-b border-white/10 shrink-0"
     >
-      <h2 class="text-lg font-semibold text-gray-200">Grid View</h2>
+      <h2 class="text-lg font-semibold text-color">Grid View</h2>
       <button
         class="text-sm bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-50"
         title="Close Grid View"
@@ -22,11 +22,11 @@
     >
       <div
         v-if="!allMediaFiles || allMediaFiles.length === 0"
-        class="flex flex-col items-center justify-center h-full text-gray-500 opacity-80"
+        class="flex flex-col items-center justify-center h-full text-muted opacity-80"
         role="status"
         aria-live="polite"
       >
-        <div class="mb-4 p-4 rounded-full bg-gray-800">
+        <div class="mb-4 p-4 rounded-full bg-black/10 text-muted">
           <PlaylistIcon class="w-12 h-12 opacity-50" aria-hidden="true" />
         </div>
         <p class="text-lg font-medium">No media files found</p>
