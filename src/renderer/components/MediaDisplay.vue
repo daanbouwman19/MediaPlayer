@@ -347,13 +347,25 @@ const toggleFullscreen = () => {
   }
 };
 
-const tryTranscoding = async (startTime = 0) => {
+const tryTranscoding = async (startTime = 0, requestId?: number) => {
   if (!currentMediaItem.value) return;
+
+  // Use provided requestId or current one if not provided
+  const effectiveRequestId =
+    requestId !== undefined
+      ? requestId
+      : mediaLoader.currentLoadRequestId.value;
+
   try {
     const url = await startTranscoding(currentMediaItem.value.path, startTime);
+
+    // [SECURITY] Race condition check: only update if this is still the active request
+    if (effectiveRequestId !== mediaLoader.currentLoadRequestId.value) return;
+
     mediaUrl.value = url;
     isVideoSupported.value = true;
   } catch (e) {
+    if (effectiveRequestId !== mediaLoader.currentLoadRequestId.value) return;
     error.value = 'Failed to start playback';
     console.error('Transcoding failed', e);
   }
@@ -446,7 +458,7 @@ watch(
     }
 
     if (newItem) {
-      await loadMedia(newItem, () => tryTranscoding(0));
+      await loadMedia(newItem, (_, reqId) => tryTranscoding(0, reqId));
       if (isImage.value && playFullVideo.value && !isTimerRunning.value) {
         resumeSlideshowTimer();
       }

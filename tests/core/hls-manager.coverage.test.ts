@@ -205,7 +205,7 @@ describe('HlsManager Coverage Boost', () => {
 
     await hlsManager.init(CACHE_DIR);
 
-    expect(mockFsRm).toHaveBeenCalledTimes(2);
+    expect(mockFsRm).toHaveBeenCalledTimes(3);
     expect(mockFsRm).toHaveBeenCalledWith(
       expect.stringContaining('session-1'),
       expect.anything(),

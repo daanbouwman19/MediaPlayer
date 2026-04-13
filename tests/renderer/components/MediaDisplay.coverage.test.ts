@@ -138,6 +138,7 @@ describe('MediaDisplay Coverage Boost', () => {
       mediaUrl: ref(null),
       error: ref(null),
       isVideoSupported: ref(true),
+      currentLoadRequestId: ref(0),
       loadMedia: vi.fn(),
     };
     (useMediaLoader as Mock).mockReturnValue(mockMediaLoader);

@@ -254,7 +254,7 @@ describe('FFmpeg Utils Combined Tests', () => {
       mockProcess.emit('exit', 0, null);
 
       const result = await promise;
-      expect(result).toEqual({ code: 0, stderr: 'test output' });
+      expect(result).toEqual({ code: 0, stdout: '', stderr: 'test output' });
     });
   });
 

@@ -42,9 +42,10 @@ export async function detectFFmpegCapabilities(
   if (cachedCapabilities) return cachedCapabilities;
 
   try {
-    const { stderr: stdout } = await runFFmpeg(ffmpegPath, ['-encoders']);
+    const { stdout, stderr } = await runFFmpeg(ffmpegPath, ['-encoders']);
+    const output = stdout || stderr; // FFmpeg sometimes outputs to stderr even for -encoders
     const supportedVideoCodecs = (
-      stdout.match(/[V.][.S][.X][.B][.A][.L]\s+(\w+)/g) || []
+      output.match(/[V.][.S][.X][.B][.A][.L]\s+(\w+)/g) || []
     ).map((m) => m.split(/\s+/).pop() || '');
 
     cachedCapabilities = {
@@ -137,17 +138,28 @@ export async function runFFmpeg(
   command: string,
   args: string[],
   timeoutMs = 30000,
-): Promise<{ code: number | null; stderr: string }> {
+): Promise<{ code: number | null; stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
-    const proc = spawn(command, args);
+    let proc;
+    try {
+      proc = spawn(command, args);
+    } catch (err) {
+      return reject(err);
+    }
+
+    let stdout = '';
     let stderr = '';
     let timedOut = false;
 
     const timeout = setTimeout(() => {
       timedOut = true;
-      proc.kill('SIGKILL');
+      if (proc) proc.kill('SIGKILL');
       reject(new Error(`Process timed out after ${timeoutMs}ms`));
     }, timeoutMs);
+
+    proc.stdout?.on('data', (data) => {
+      stdout += data.toString();
+    });
 
     proc.stderr?.on('data', (data) => {
       stderr += data.toString();
@@ -163,7 +175,7 @@ export async function runFFmpeg(
     proc.on('exit', (code) => {
       if (!timedOut) {
         clearTimeout(timeout);
-        resolve({ code, stderr });
+        resolve({ code, stdout, stderr });
       }
     });
   });

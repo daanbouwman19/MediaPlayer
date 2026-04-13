@@ -131,6 +131,11 @@ export class HlsManager {
       return this.sessions.get(sessionId)!.playlistPath;
     }
 
+    // [SECURITY] Hard limit on concurrent transcodes to prevent CPU exhaustion
+    if (this.sessions.size >= MAX_CONCURRENT_TRANSCODES) {
+      throw new Error('Server too busy. Please try again later.');
+    }
+
     const spawnPromise = (async () => {
       try {
         await this.startSession(sessionId, filePath);
@@ -149,9 +154,11 @@ export class HlsManager {
     const outputDir = path.join(this.cacheDir!, sessionId);
     const playlistPath = path.join(outputDir, 'playlist.m3u8');
 
+    // [SECURITY] Clean up old dir if exists to prevent stale segments
+    await fs.rm(outputDir, { recursive: true, force: true });
     await fs.mkdir(outputDir, { recursive: true });
 
-    // Use p-queue to limit CPU load
+    // Use p-queue to limit CPU load during startup
     await this.transcodeQueue.add(async () => {
       const mediaSource = createMediaSource(filePath);
       const ffmpegInput = await mediaSource.getFFmpegInput();
@@ -211,10 +218,11 @@ export class HlsManager {
       if (!s) return;
 
       stderrBuffer += data.toString();
-      let newlineIndex;
-      while ((newlineIndex = stderrBuffer.indexOf('\n')) !== -1) {
-        const line = stderrBuffer.slice(0, newlineIndex);
-        stderrBuffer = stderrBuffer.slice(newlineIndex + 1);
+      // Split by newline or carriage return (FFmpeg progress updates)
+      const lines = stderrBuffer.split(/[\r\n]+/);
+      stderrBuffer = lines.pop() || '';
+
+      for (const line of lines) {
         this.parseStderrLine(s, line);
       }
     });
@@ -388,14 +396,13 @@ export class HlsManager {
   private async cleanupOrphanedSessions() {
     if (!this.cacheDir) return;
     try {
-      const files = await fs.readdir(this.cacheDir);
-      for (const file of files) {
-        if (file.startsWith('session-')) {
-          const fullPath = path.join(this.cacheDir, file);
-          const stats = await fs.stat(fullPath);
-          if (stats.isDirectory()) {
-            await fs.rm(fullPath, { recursive: true, force: true });
-          }
+      const dirs = await fs.readdir(this.cacheDir);
+      for (const dir of dirs) {
+        const fullPath = path.join(this.cacheDir, dir);
+        const stats = await fs.stat(fullPath);
+        if (stats.isDirectory() && !this.sessions.has(dir)) {
+          console.log(`[HLS] Cleaning up orphaned session directory: ${dir}`);
+          await fs.rm(fullPath, { recursive: true, force: true });
         }
       }
     } catch (err) {
