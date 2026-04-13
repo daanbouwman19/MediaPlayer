@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { useTheme } from '../../../src/renderer/composables/useTheme';
+import {
+  useTheme,
+  _resetThemeModule,
+} from '../../../src/renderer/composables/useTheme';
 import { useUIStore } from '../../../src/renderer/composables/useUIStore';
 
 vi.mock('../../../src/renderer/composables/useUIStore');
@@ -10,6 +13,7 @@ describe('useTheme', () => {
   let mockAddListener: any;
 
   beforeEach(() => {
+    _resetThemeModule();
     vi.clearAllMocks();
 
     mockThemeMode = { value: 'system' };

@@ -1,7 +1,14 @@
 import { watch } from 'vue';
 import { useUIStore } from './useUIStore';
 
-const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+let mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+
+/**
+ * Shared logic to apply theme classes to the document
+ */
+const updateDOM = (isDark: boolean) => {
+  document.documentElement.classList.toggle('dark', isDark);
+};
 
 export function useTheme() {
   const uiStore = useUIStore();
@@ -12,8 +19,7 @@ export function useTheme() {
       themeMode.value === 'system'
         ? mediaQuery.matches
         : themeMode.value === 'dark';
-
-    document.documentElement.classList.toggle('dark', isDark);
+    updateDOM(isDark);
   };
 
   const cycleTheme = () => {
@@ -61,3 +67,10 @@ export function useTheme() {
     cleanupTheme,
   };
 }
+
+/**
+ * For testing purposes only: allow resetting the theme module state
+ */
+export const _resetThemeModule = () => {
+  mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+};
