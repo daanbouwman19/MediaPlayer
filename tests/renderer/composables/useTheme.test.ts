@@ -13,7 +13,6 @@ describe('useTheme', () => {
   let mockAddListener: any;
 
   beforeEach(() => {
-    _resetThemeModule();
     vi.clearAllMocks();
 
     mockThemeMode = { value: 'system' };
@@ -35,6 +34,7 @@ describe('useTheme', () => {
     }));
 
     window.matchMedia = mockMatchMedia;
+    _resetThemeModule();
 
     // Reset document classes
     document.documentElement.className = '';
