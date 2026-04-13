@@ -1,31 +1,41 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import EventEmitter from 'events';
 
-// Mock dependencies BEFORE importing HlsManager
-const mockSpawn = vi.fn();
-const mockFsMkdir = vi.fn();
-const mockFsRm = vi.fn();
-const mockFsStat = vi.fn();
-const mockFsReaddir = vi.fn();
-const mockFsAccess = vi.fn();
+// vi.hoisted ensures these are available inside vi.mock factory closures
+const {
+  mockSpawn,
+  mockFsMkdir,
+  mockFsRm,
+  mockFsStat,
+  mockFsReaddir,
+  mockFsAccess,
+} = vi.hoisted(() => ({
+  mockSpawn: vi.fn(),
+  mockFsMkdir: vi.fn(),
+  mockFsRm: vi.fn(),
+  mockFsStat: vi.fn(),
+  mockFsReaddir: vi.fn(),
+  mockFsAccess: vi.fn(),
+}));
 
 vi.mock('child_process', () => ({
   spawn: mockSpawn,
+  default: { spawn: mockSpawn },
 }));
 
 vi.mock('fs/promises', () => ({
   default: {
-    mkdir: (...args: any[]) => mockFsMkdir(...args),
-    access: (...args: any[]) => mockFsAccess(...args),
-    rm: (...args: any[]) => mockFsRm(...args),
-    readdir: (...args: any[]) => mockFsReaddir(...args),
-    stat: (...args: any[]) => mockFsStat(...args),
+    mkdir: mockFsMkdir,
+    access: mockFsAccess,
+    rm: mockFsRm,
+    readdir: mockFsReaddir,
+    stat: mockFsStat,
   },
-  mkdir: (...args: any[]) => mockFsMkdir(...args),
-  access: (...args: any[]) => mockFsAccess(...args),
-  rm: (...args: any[]) => mockFsRm(...args),
-  readdir: (...args: any[]) => mockFsReaddir(...args),
-  stat: (...args: any[]) => mockFsStat(...args),
+  mkdir: mockFsMkdir,
+  access: mockFsAccess,
+  rm: mockFsRm,
+  readdir: mockFsReaddir,
+  stat: mockFsStat,
 }));
 
 vi.mock('../../src/core/media-source.ts', () => ({
@@ -55,7 +65,6 @@ vi.mock('ffmpeg-static', () => ({
   default: '/usr/bin/ffmpeg',
 }));
 
-// NOW import HlsManager
 import { HlsManager } from '../../src/core/hls-manager.ts';
 
 describe('HlsManager Robustness', () => {
@@ -63,7 +72,13 @@ describe('HlsManager Robustness', () => {
   let hlsManager: HlsManager;
 
   const createMockProcess = () => {
-    const proc = new EventEmitter() as any;
+    const proc = new EventEmitter() as NodeJS.EventEmitter & {
+      kill: ReturnType<typeof vi.fn>;
+      stderr: EventEmitter;
+      stdin: EventEmitter;
+      stdout: EventEmitter;
+      killed: boolean;
+    };
     proc.kill = vi.fn();
     proc.stderr = new EventEmitter();
     proc.stdin = new EventEmitter();
@@ -79,14 +94,11 @@ describe('HlsManager Robustness', () => {
     hlsManager = HlsManager.getInstance();
     hlsManager.setCacheDir(CACHE_DIR);
 
-    // Default mocks
     mockFsMkdir.mockResolvedValue(undefined);
     mockFsRm.mockResolvedValue(undefined);
-    mockFsStat.mockResolvedValue({
-      size: 100,
-      isDirectory: () => true,
-    } as any);
+    mockFsStat.mockResolvedValue({ size: 100, isDirectory: () => true });
     mockFsReaddir.mockResolvedValue([]);
+    // access resolves → playlist ready
     mockFsAccess.mockResolvedValue(undefined);
   });
 
@@ -115,18 +127,16 @@ describe('HlsManager Robustness', () => {
     const mockProcess = createMockProcess();
     mockSpawn.mockReturnValue(mockProcess);
 
-    // Initial check will reject so wait loop continues
+    // Playlist never appears
     mockFsAccess.mockRejectedValue(new Error('ENOENT'));
 
     const promise = hlsManager.ensureSession(sessionId, '/test.mp4');
 
-    // Enter wait loop
     await vi.advanceTimersByTimeAsync(1);
 
-    // Trigger error
+    // Trigger FFmpeg error
     mockProcess.emit('error', new Error('Execution failed'));
 
-    // Advance 500ms to trigger check in loop
     await vi.advanceTimersByTimeAsync(600);
 
     await expect(promise).rejects.toThrow('Execution failed');
@@ -173,16 +183,13 @@ describe('HlsManager Robustness', () => {
   });
 
   it('performs startup cleanup of orphaned directories', async () => {
-    // Ensure fresh mocks
     vi.clearAllMocks();
     mockFsReaddir.mockResolvedValue([
       'session-1',
       'session-2',
       'not-a-session',
     ]);
-    mockFsStat.mockResolvedValue({
-      isDirectory: () => true,
-    } as any);
+    mockFsStat.mockResolvedValue({ isDirectory: () => true });
 
     await hlsManager.init(CACHE_DIR);
 
@@ -205,7 +212,6 @@ describe('HlsManager Robustness', () => {
 
     const promise = hlsManager.ensureSession(sessionId, '/test.mp4');
 
-    // Total timeout is ~10s (20 attempts * 500ms)
     await vi.advanceTimersByTimeAsync(11000);
 
     await expect(promise).rejects.toThrow('Timeout waiting for HLS playlist');
@@ -220,7 +226,6 @@ describe('HlsManager Robustness', () => {
     await vi.advanceTimersByTimeAsync(500);
     await promise;
 
-    // Fast forward 6 minutes
     await vi.advanceTimersByTimeAsync(6 * 60 * 1000);
 
     await (hlsManager as any).cleanup();
@@ -233,12 +238,10 @@ describe('HlsManager Robustness', () => {
     const mockProcess = createMockProcess();
     mockSpawn.mockReturnValue(mockProcess);
 
-    // First call
     const p1 = hlsManager.ensureSession(sessionId, '/test.mp4');
     await vi.advanceTimersByTimeAsync(500);
     await p1;
 
-    // Second call
     await hlsManager.ensureSession(sessionId, '/test.mp4');
     expect(mockSpawn).toHaveBeenCalledTimes(1);
   });
@@ -251,10 +254,7 @@ describe('HlsManager Robustness', () => {
     await vi.advanceTimersByTimeAsync(500);
     await p1;
 
-    // Simulate ffmpeg stderr duration
-    mockProcess.stderr?.emit('data', 'Duration: 01:00:00.00\n');
-
-    // Simulate exit 0
+    mockProcess.stderr.emit('data', 'Duration: 01:00:00.00\n');
     mockProcess.emit('exit', 0, null);
 
     const progress = hlsManager.getSessionProgress(sessionId);

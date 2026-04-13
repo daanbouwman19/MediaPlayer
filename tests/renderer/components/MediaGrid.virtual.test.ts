@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
-import { reactive } from 'vue';
+import { reactive, computed } from 'vue';
 import MediaGrid from '../../../src/renderer/components/MediaGrid.vue';
 import type { MediaFile } from '../../../src/core/types';
 import VirtualScroller from '../../../src/renderer/components/VirtualScroller.vue';
@@ -81,12 +81,12 @@ describe('MediaGrid.vue (Virtual Scrolling)', () => {
     });
 
     vi.mocked(useLibraryStore).mockReturnValue({
-      imageExtensionsSet: { value: new Set(['.jpg', '.png']) },
-      videoExtensionsSet: { value: new Set(['.mp4']) },
-      mediaUrlGenerator: { value: (p: string) => `url://${p}` },
-      thumbnailUrlGenerator: { value: (p: string) => `thumb://${p}` },
+      imageExtensionsSet: computed(() => new Set(['.jpg', '.png'])),
+      videoExtensionsSet: computed(() => new Set(['.mp4'])),
+      mediaUrlGenerator: computed(() => (p: string) => `url://${p}`),
+      thumbnailUrlGenerator: computed(() => (p: string) => `thumb://${p}`),
       state: {},
-    } as ReturnType<typeof useLibraryStore>);
+    } as unknown as ReturnType<typeof useLibraryStore>);
 
     vi.mocked(usePlayerStore).mockReturnValue({
       state: mockPlayerState,
