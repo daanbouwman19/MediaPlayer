@@ -134,16 +134,16 @@
       <template v-else>
         <Transition v-if="mediaUrl" name="media-fade" mode="out-in">
           <img
-            v-if="displayedIsImage"
-            :key="(displayedItem?.path || '') + '-img'"
+            v-if="isImage"
+            :key="(currentMediaItem?.path || '') + '-img'"
             :src="mediaUrl"
-            :alt="displayedItem?.name"
+            :alt="currentMediaItem?.name"
             @error="handleMediaError"
           />
           <VRVideoPlayer
             v-else-if="isVrMode"
             ref="vrPlayerRef"
-            :key="(displayedItem?.path || '') + '-vr'"
+            :key="(currentMediaItem?.path || '') + '-vr'"
             :src="mediaUrl"
             :poster="posterUrl"
             :is-playing="isPlaying"
@@ -157,7 +157,7 @@
           <VideoPlayer
             v-else
             ref="videoPlayerRef"
-            :key="(displayedItem?.path || '') + '-video'"
+            :key="(currentMediaItem?.path || '') + '-video'"
             :src="mediaUrl"
             :poster="posterUrl"
             :is-transcoding-mode="isTranscodingMode"
@@ -167,13 +167,13 @@
             :is-transcoding-loading="isTranscodingLoading"
             :is-buffering="isBuffering"
             :initial-time="savedCurrentTime"
-            :file-path="displayedItem?.path"
+            :file-path="currentMediaItem?.path"
             @play="handleVideoPlay"
             @pause="handleVideoPause"
             @ended="handleVideoEnded"
             @error="handleMediaError"
-            @trigger-transcode="tryTranscoding"
-            @buffering="handleBuffering"
+            @trigger-transcode="() => tryTranscoding(0)"
+            @buffering="transcoder.setBuffering"
             @playing="handleVideoPlaying"
             @update:video-element="handleVideoElementUpdate"
             @timeupdate="handleTimeUpdate"
@@ -214,11 +214,6 @@
 </template>
 
 <script setup lang="ts">
-/**
- * @file This component is responsible for displaying the current media item (image or video).
- * It handles loading the media from the main process, displaying loading/error states,
- * and providing navigation controls to move between media items.
- */
 import {
   ref,
   computed,
@@ -230,6 +225,9 @@ import {
 } from 'vue';
 import { useLibraryStore } from '../composables/useLibraryStore';
 import { usePlayerStore } from '../composables/usePlayerStore';
+import { usePlaylistStore } from '../composables/usePlaylistStore';
+import { useTranscoder } from '../composables/useTranscoder';
+import { useMediaLoader } from '../composables/useMediaLoader';
 import { useSlideshow } from '../composables/useSlideshow';
 import { useUIStore } from '../composables/useUIStore';
 import { useToast } from '../composables/useToast';
@@ -241,126 +239,58 @@ import VlcIcon from './icons/VlcIcon.vue';
 import MediaControls from './MediaControls.vue';
 import TranscodingStatus from './TranscodingStatus.vue';
 import VideoPlayer from './VideoPlayer.vue';
-import VRVideoPlayer from './VRVideoPlayer.vue'; // [NEW]
-import type { MediaFile } from '../../core/types';
-import { LEGACY_VIDEO_EXTENSIONS } from '../../core/constants';
-import { isMediaFileImage, isMediaFileVideo } from '../utils/mediaUtils';
+import VRVideoPlayer from './VRVideoPlayer.vue';
+import { isMediaFileImage } from '../utils/mediaUtils';
 
 defineEmits(['open-shortcuts']);
-
 const libraryStore = useLibraryStore();
 const playerStore = usePlayerStore();
+const playlistStore = usePlaylistStore();
 const uiStore = useUIStore();
 const toast = useToast();
 
-const {
-  imageExtensionsSet,
-  videoExtensionsSet,
-  mediaDirectories,
-  mediaUrlGenerator,
-  thumbnailUrlGenerator,
-} = libraryStore;
-
-const {
-  currentMediaItem,
-  displayedMediaFiles,
-  currentMediaIndex,
-  playFullVideo,
-  pauseTimerOnPlay,
-  isTimerRunning,
-  mainVideoElement,
-} = playerStore;
-
+const { imageExtensionsSet, mediaDirectories, thumbnailUrlGenerator } =
+  libraryStore;
+const { playFullVideo, pauseTimerOnPlay, isTimerRunning, mainVideoElement } =
+  playerStore;
+const { currentItem: currentMediaItem } = playlistStore;
+const { isControlsVisible, isSourcesModalVisible, isSidebarVisible } = uiStore;
 const {
   navigateMedia,
   pauseSlideshowTimer,
   resumeSlideshowTimer,
   toggleSlideshowTimer,
 } = useSlideshow();
+const transcoder = useTranscoder();
+const {
+  isTranscodingMode,
+  isTranscodingLoading,
+  isBuffering,
+  transcodedDuration,
+  transcodingProgress,
+  currentTranscodeStartTime,
+  startTranscoding,
+  resetTranscoderState,
+  stopTranscodingProgressPoll,
+} = transcoder;
 
-/**
- * The URL of the media to be displayed (can be a Data URL or an HTTP URL).
- */
-const mediaUrl = ref<string | null>(null);
+const mediaLoader = useMediaLoader();
+const { isLoading, mediaUrl, error, isVideoSupported, loadMedia } = mediaLoader;
 
-/**
- * A flag indicating if the media is currently being loaded.
- */
-const isLoading = ref(false);
-
-/**
- * A string to hold any error message that occurs during media loading.
- */
-const error = ref<string | null>(null);
-
-const displayedItem = ref<MediaFile | null>(null);
-
-/**
- * A computed property that determines if the displayed media item is an image.
- */
-const displayedIsImage = computed(() => {
-  return (
-    !!displayedItem.value &&
-    isMediaFileImage(displayedItem.value, imageExtensionsSet.value)
-  );
-});
-
-/**
- * Reference to the video element.
- */
 const videoElement = ref<HTMLVideoElement | null>(null);
 const videoPlayerRef = ref<InstanceType<typeof VideoPlayer> | null>(null);
 const vrPlayerRef = ref<InstanceType<typeof VRVideoPlayer> | null>(null);
 
-const isVideoSupported = ref(true);
-const isTranscodingMode = ref(false);
-const isTranscodingLoading = ref(false);
-const isBuffering = ref(false);
-const transcodedDuration = ref(0);
-const transcodingProgress = ref<number | null>(null);
-const currentTranscodeStartTime = ref(0);
-const isVrMode = ref(false); // [NEW]
-const savedCurrentTime = ref(0); // [NEW] Sync time between players
+const isVrMode = ref(false);
+const savedCurrentTime = ref(0);
 const isOpeningVlc = ref(false);
 const isMuted = ref(false);
-
-const transcodingPollInterval = ref<NodeJS.Timeout | null>(null);
-
-const stopTranscodingProgressPoll = () => {
-  if (transcodingPollInterval.value) {
-    clearInterval(transcodingPollInterval.value);
-    transcodingPollInterval.value = null;
-  }
-};
-
-const startTranscodingProgressPoll = (filePath: string) => {
-  stopTranscodingProgressPoll();
-  transcodingProgress.value = 0;
-
-  transcodingPollInterval.value = setInterval(async () => {
-    try {
-      const status = await api.getHlsStatus(filePath);
-      if (status) {
-        transcodingProgress.value = status.percent;
-        if (status.duration > 0) {
-          transcodedDuration.value = status.duration;
-        }
-        if (status.percent >= 100) {
-          isTranscodingLoading.value = false;
-          isBuffering.value = false;
-          stopTranscodingProgressPoll();
-        }
-      }
-    } catch (e) {
-      console.warn('Failed to poll transcoding progress', e);
-    }
-  }, 1000);
-};
+const isPlaying = ref(false);
 
 const posterUrl = computed(() => {
-  if (displayedItem.value && thumbnailUrlGenerator?.value) {
+  if (currentMediaItem.value && thumbnailUrlGenerator?.value) {
     try {
-      return thumbnailUrlGenerator.value(displayedItem.value.path);
+      return thumbnailUrlGenerator.value(currentMediaItem.value.path);
     } catch (e) {
       console.warn('Failed to generate poster URL', e);
     }
@@ -368,15 +298,10 @@ const posterUrl = computed(() => {
   return undefined;
 });
 
-// Use global controls visibility state
-const { isControlsVisible, isSourcesModalVisible, isSidebarVisible } = uiStore;
-
 const openSourcesModal = () => {
   isSourcesModalVisible.value = true;
 };
 
-const isPlaying = ref(false);
-// Removed computed currentVideoTime relying on ref, using state instead
 const currentVideoTime = computed({
   get: () => savedCurrentTime.value,
   set: (val) => {
@@ -384,45 +309,7 @@ const currentVideoTime = computed({
   },
 });
 
-const videoStreamUrlGenerator = ref<
-  ((filePath: string, startTime?: number) => string) | null
->(null);
-
-// Request tracking to prevent race conditions
-let currentLoadRequestId = 0;
-
-let videoStreamGeneratorInitPromise: Promise<
-  (filePath: string, startTime?: number) => string
-> | null = null;
-
-const ensureVideoStreamGenerator = async (): Promise<
-  (filePath: string, startTime?: number) => string
-> => {
-  if (videoStreamUrlGenerator.value) {
-    return videoStreamUrlGenerator.value;
-  }
-
-  if (!videoStreamGeneratorInitPromise) {
-    videoStreamGeneratorInitPromise = api
-      .getVideoStreamUrlGenerator()
-      .then((generator) => {
-        videoStreamUrlGenerator.value = generator;
-        return generator;
-      })
-      .catch((error) => {
-        console.error('Failed to initialize video stream generator', error);
-        videoStreamGeneratorInitPromise = null;
-        throw error;
-      });
-  }
-
-  return videoStreamGeneratorInitPromise;
-};
-
 onMounted(() => {
-  ensureVideoStreamGenerator().catch(() => {
-    // Already logged in ensureVideoStreamGenerator
-  });
   window.addEventListener('keydown', handleGlobalKeydown);
 });
 
@@ -430,27 +317,18 @@ onUnmounted(() => {
   window.removeEventListener('keydown', handleGlobalKeydown);
 });
 
-/**
- * A computed property that determines if the current media item is an image.
- */
 const isImage = computed(() => {
   return currentMediaItem.value
     ? isMediaFileImage(currentMediaItem.value, imageExtensionsSet.value)
     : false;
 });
 
-/**
- * A computed property that determines if media navigation is possible.
- */
 const canNavigate = computed(() => {
-  return displayedMediaFiles.value.length > 0;
+  return playlistStore.hasNext.value || playlistStore.state.queue.length > 0;
 });
 
-const canGoPrevious = computed(() => currentMediaIndex.value > 0);
+const canGoPrevious = computed(() => playlistStore.hasPrevious.value);
 
-/**
- * Toggles fullscreen for the video element.
- */
 const toggleFullscreen = () => {
   if (isVrMode.value && vrPlayerRef.value) {
     vrPlayerRef.value.toggleFullscreen();
@@ -469,141 +347,30 @@ const toggleFullscreen = () => {
   }
 };
 
-/**
- * Attempts to transcode the current video file starting from a specific time.
- * @param startTime - The time to start transcoding from (in seconds).
- * @param requestId - The request ID associated with this operation (optional).
- */
 const tryTranscoding = async (startTime = 0, requestId?: number) => {
-  // If no specific requestId was passed, assume this is a user action and we should respect the current one,
-  // OR it's a new "intent" (like a button click) which conceptually updates the state of the *current* item.
-  // Ideally, button clicks on the *same* item shouldn't increment request ID, but loadMediaUrl does.
-  // So we just check against currentLoadRequestId.
-
   if (!currentMediaItem.value) return;
 
+  // Use provided requestId or current one if not provided
   const effectiveRequestId =
-    requestId !== undefined ? requestId : currentLoadRequestId;
-
-  // Guard: If we are running part of an old request sequence, stop.
-  if (effectiveRequestId !== currentLoadRequestId) return;
-
-  // We are "transcoding" in the backend, but for the frontend player (HLS),
-  // it behaves like a native stream (seekable).
-  isTranscodingMode.value = true;
-  isTranscodingLoading.value = true;
-  error.value = null;
-
-  currentTranscodeStartTime.value = startTime;
+    requestId !== undefined
+      ? requestId
+      : mediaLoader.currentLoadRequestId.value;
 
   try {
-    // Check if item still valid
-    if (effectiveRequestId !== currentLoadRequestId) return;
+    const url = await startTranscoding(currentMediaItem.value.path, startTime);
 
-    // Use HLS for adaptive streaming
-    const rawPath = currentMediaItem.value.path;
-    const hlsUrl = await api.getHlsUrl(rawPath);
+    // [SECURITY] Race condition check: only update if this is still the active request
+    if (effectiveRequestId !== mediaLoader.currentLoadRequestId.value) return;
 
-    console.log('HLS URL:', hlsUrl);
-    mediaUrl.value = hlsUrl;
-
-    // Sync displayed item when transcoding starts successfully
-    displayedItem.value = currentMediaItem.value;
-
+    mediaUrl.value = url;
     isVideoSupported.value = true;
-
-    // Start polling for progress
-    startTranscodingProgressPoll(rawPath);
   } catch (e) {
-    if (effectiveRequestId !== currentLoadRequestId) return;
-
-    console.error('HLS setup failed', e);
-    isTranscodingMode.value = false;
-    isTranscodingLoading.value = false;
+    if (effectiveRequestId !== mediaLoader.currentLoadRequestId.value) return;
     error.value = 'Failed to start playback';
+    console.error('Transcoding failed', e);
   }
 };
 
-/**
- * Asynchronously loads the URL for the current media item.
- */
-const loadMediaUrl = async () => {
-  // Increment ID to invalidate any pending requests
-  currentLoadRequestId++;
-  const requestId = currentLoadRequestId;
-
-  if (!currentMediaItem.value) {
-    mediaUrl.value = null;
-    return;
-  }
-
-  isLoading.value = true;
-
-  // Reset state flags for the new item, but KEEP mediaUrl to show old image while loading
-  error.value = null;
-  isVideoSupported.value = true;
-  isTranscodingMode.value = false;
-  isTranscodingLoading.value = false;
-  isBuffering.value = false;
-  transcodedDuration.value = 0;
-  transcodingProgress.value = null;
-  currentTranscodeStartTime.value = 0;
-  stopTranscodingProgressPoll();
-
-  // Cleanup previous video stream explicitly to prevent pending requests
-  if (videoPlayerRef.value) {
-    videoPlayerRef.value.reset();
-  } else if (videoElement.value) {
-    // Fallback if ref is not ready but element is lingering
-    videoElement.value.pause();
-    videoElement.value.removeAttribute('src');
-    videoElement.value.load();
-  }
-
-  // Proactively transcode formats that often fail in browsers or have poor performance (e.g. MOOV at end)
-  const fileName = currentMediaItem.value.name
-    ? currentMediaItem.value.name.toLowerCase()
-    : '';
-
-  if (LEGACY_VIDEO_EXTENSIONS.some((ext) => fileName.endsWith(ext))) {
-    console.log('Proactively transcoding legacy format:', fileName);
-    await tryTranscoding(0, requestId);
-
-    // Only turn off loading if this request is still active
-    if (requestId === currentLoadRequestId) {
-      isLoading.value = false;
-    }
-    return;
-  }
-
-  try {
-    // Bolt Optimization: Use mediaUrlGenerator directly to avoid expensive IPC calls and base64 overhead.
-    // This allows the browser to handle streaming, caching, and range requests efficiently.
-    if (mediaUrlGenerator.value) {
-      const url = mediaUrlGenerator.value(currentMediaItem.value.path);
-
-      if (requestId !== currentLoadRequestId) return;
-
-      const itemToLoad = currentMediaItem.value;
-      mediaUrl.value = url;
-      displayedItem.value = itemToLoad;
-    } else {
-      throw new Error('Media URL generator not ready');
-    }
-  } catch (err) {
-    if (requestId !== currentLoadRequestId) return;
-
-    console.error('Error loading media:', err);
-    error.value = 'Failed to load media file.';
-    mediaUrl.value = null;
-  } finally {
-    if (requestId === currentLoadRequestId) {
-      isLoading.value = false;
-    }
-  }
-};
-
-// Watched Segments Logic
 const lastTrackedTime = ref(-1);
 const lastSegmentsUpdate = ref(Date.now());
 const SEEK_DETECTION_THRESHOLD_S = 5;
@@ -618,7 +385,6 @@ const handleTimeUpdate = (time: number) => {
 
   const realCurrentTime = time;
 
-  // Watch Tracking Logic
   if (lastTrackedTime.value === -1) {
     lastTrackedTime.value = realCurrentTime;
   } else {
@@ -632,7 +398,6 @@ const handleTimeUpdate = (time: number) => {
     lastTrackedTime.value = realCurrentTime;
   }
 
-  // Periodic Persist
   if (Date.now() - lastSegmentsUpdate.value > UPDATE_INTERVAL_MS) {
     persistWatchedSegments();
     lastSegmentsUpdate.value = Date.now();
@@ -644,7 +409,6 @@ const addWatchedSegment = (start: number, end: number) => {
   const segments = [...mediaControlsRef.value.watchedSegments];
   segments.push({ start, end });
 
-  // Merge overlapping
   segments.sort((a, b) => a.start - b.start);
   const merged: { start: number; end: number }[] = [];
   if (segments.length > 0) {
@@ -680,20 +444,113 @@ onBeforeUnmount(() => {
   stopTranscodingProgressPoll();
 });
 
-watch(currentMediaItem, () => {
-  lastTrackedTime.value = -1;
+watch(
+  currentMediaItem,
+  async (newItem) => {
+    lastTrackedTime.value = -1;
+    resetTranscoderState();
+    if (videoPlayerRef.value) {
+      videoPlayerRef.value.reset();
+    } else if (videoElement.value) {
+      videoElement.value.pause();
+      videoElement.value.removeAttribute('src');
+      videoElement.value.load();
+    }
+
+    if (newItem) {
+      await loadMedia(newItem, (_, reqId) => tryTranscoding(0, reqId));
+      if (isImage.value && playFullVideo.value && !isTimerRunning.value) {
+        resumeSlideshowTimer();
+      }
+    } else {
+      mediaUrl.value = null;
+    }
+  },
+  { immediate: true },
+);
+
+watch(playFullVideo, (newValue) => {
+  if (newValue) {
+    pauseTimerOnPlay.value = false;
+  }
 });
 
-/**
- * Toggles VR mode.
- */
+watch(pauseTimerOnPlay, (newValue) => {
+  if (newValue) {
+    playFullVideo.value = false;
+  }
+});
+
+const handleVideoElementUpdate = (el: HTMLVideoElement | null) => {
+  videoElement.value = el;
+  mainVideoElement.value = el;
+};
+
+watchEffect(() => {
+  if (videoElement.value) {
+    videoElement.value.muted = isMuted.value;
+  }
+});
+
+const toggleMute = () => {
+  isMuted.value = !isMuted.value;
+};
+
+const handleVideoEnded = () => {
+  if (playFullVideo.value && !isLoading.value) {
+    navigateMedia(1);
+  }
+};
+
+const handleVideoPlay = () => {
+  if (isTimerRunning.value && (playFullVideo.value || pauseTimerOnPlay.value)) {
+    pauseSlideshowTimer();
+  }
+  isPlaying.value = true;
+};
+
+const handleVideoPause = () => {
+  if (
+    !isTimerRunning.value &&
+    pauseTimerOnPlay.value &&
+    !playFullVideo.value &&
+    !isLoading.value
+  ) {
+    resumeSlideshowTimer();
+  }
+  isPlaying.value = false;
+};
+
+const handleVideoPlaying = () => {
+  isTranscodingLoading.value = false;
+  isBuffering.value = false;
+  stopTranscodingProgressPoll();
+};
+
+const openInVlc = async () => {
+  if (!currentMediaItem.value) return;
+  if (isOpeningVlc.value) return;
+
+  isOpeningVlc.value = true;
+
+  if (videoElement.value) {
+    videoElement.value.pause();
+  }
+
+  try {
+    const result = await api.openInVlc(currentMediaItem.value.path);
+    if (!result.success) {
+      error.value = result.message || 'Failed to open in VLC.';
+    }
+  } finally {
+    isOpeningVlc.value = false;
+  }
+};
+
 const toggleVrMode = () => {
   isVrMode.value = !isVrMode.value;
 };
 
-/**
- * Toggles video playback.
- */
 const togglePlay = () => {
   if (videoPlayerRef.value) {
     videoPlayerRef.value.togglePlay();
@@ -702,12 +559,10 @@ const togglePlay = () => {
 
 const handleGlobalKeydown = (event: KeyboardEvent) => {
   if (event.code === 'Space') {
-    event.preventDefault(); // Prevent scrolling
+    event.preventDefault();
     if (isImage.value) {
-      // If it's an image, spacebar toggles the slideshow timer (restoring App.vue behavior)
       toggleSlideshowTimer();
     } else {
-      // If it's a video, spacebar toggles playback
       togglePlay();
     }
   } else if (event.code === 'ArrowRight') {
@@ -748,9 +603,6 @@ const handleGlobalKeydown = (event: KeyboardEvent) => {
   }
 };
 
-/**
- * Handles errors from the <img> or <video> elements.
- */
 const handleMediaError = () => {
   if (isImage.value) {
     error.value = 'Failed to load image.';
@@ -759,7 +611,7 @@ const handleMediaError = () => {
 
   if (!isTranscodingMode.value) {
     console.log('Media playback error, attempting auto-transcode...');
-    tryTranscoding(0); // Uses currentLoadRequestId implicitly
+    tryTranscoding(0);
   } else {
     error.value = 'Failed to display media file.';
     isTranscodingLoading.value = false;
@@ -767,16 +619,10 @@ const handleMediaError = () => {
   }
 };
 
-/**
- * Navigates to the previous media item.
- */
 const handlePrevious = () => {
   navigateMedia(-1);
 };
 
-/**
- * Navigates to the next media item.
- */
 const handleNext = () => {
   navigateMedia(1);
 };
@@ -800,206 +646,6 @@ const setRating = async (rating: number) => {
   }
 };
 
-// Watch for changes to the currentMediaItem and trigger a load.
-watch(playFullVideo, (newValue) => {
-  if (newValue) {
-    pauseTimerOnPlay.value = false;
-  }
-});
-
-watch(pauseTimerOnPlay, (newValue) => {
-  if (newValue) {
-    playFullVideo.value = false;
-  }
-});
-
-/**
- * Preloads the next media item in the list if it's an image.
- * This helps eliminate loading times between slides.
- */
-const preloadNextMedia = async () => {
-  // 1. Identify where we are
-  const currentIndex = currentMediaIndex.value;
-  const list = displayedMediaFiles.value;
-
-  // 2. Wrap around logic is handled by playerStore generally,
-  // but let's just look at the next physical index for simplicity
-  // or handle wrapping if we want seamless loop prefetching.
-  let nextIndex = currentIndex + 1;
-  if (nextIndex >= list.length) {
-    nextIndex = 0; // Loop back to start
-  }
-
-  // If list is empty or single item, nothing to preload
-  if (list.length <= 1) return;
-
-  const nextItem = list[nextIndex];
-
-  // 3. Check if it's an image
-  if (isMediaFileImage(nextItem, imageExtensionsSet.value)) {
-    // 4. Preload
-    try {
-      // Bolt Optimization: Use HTTP URL for preloading to leverage browser cache
-      if (mediaUrlGenerator.value) {
-        const url = mediaUrlGenerator.value(nextItem.path);
-        const img = new Image();
-        img.src = url;
-      }
-    } catch (e) {
-      // Silently fail prefetching, it's an optimization only
-      console.warn('Failed to preload next item', e);
-    }
-  } else if (
-    videoExtensionsSet?.value &&
-    isMediaFileVideo(nextItem, videoExtensionsSet.value)
-  ) {
-    // 5. Preload Video Poster
-    try {
-      if (thumbnailUrlGenerator?.value) {
-        const url = thumbnailUrlGenerator.value(nextItem.path);
-        const img = new Image();
-        img.src = url;
-      }
-    } catch (e) {
-      console.warn('Failed to preload next video thumbnail', e);
-    }
-  }
-};
-
-watch(
-  currentMediaItem,
-  (newItem) => {
-    loadMediaUrl();
-    if (
-      newItem &&
-      isImage.value &&
-      playFullVideo.value &&
-      !isTimerRunning.value
-    ) {
-      resumeSlideshowTimer();
-    }
-    // Trigger prefetch of the NEXT item if current item is valid
-    if (newItem) {
-      preloadNextMedia();
-    }
-  },
-  { immediate: true },
-);
-
-// Sync video element with global state for ambient background
-const handleVideoElementUpdate = (el: HTMLVideoElement | null) => {
-  videoElement.value = el;
-};
-watch(videoElement, (el) => {
-  mainVideoElement.value = el;
-});
-
-// Sync mute state with video element
-watchEffect(() => {
-  if (videoElement.value) {
-    videoElement.value.muted = isMuted.value;
-  }
-});
-
-const toggleMute = () => {
-  isMuted.value = !isMuted.value;
-};
-
-/**
- * Handles the end of video playback.
- */
-const handleVideoEnded = () => {
-  // Only navigate if we are not already loading another media
-  if (playFullVideo.value && !isLoading.value) {
-    navigateMedia(1);
-  }
-};
-
-/**
- * Handles the video play event.
- */
-const handleVideoPlay = () => {
-  if (isTimerRunning.value && (playFullVideo.value || pauseTimerOnPlay.value)) {
-    pauseSlideshowTimer();
-  }
-  isPlaying.value = true;
-};
-
-/**
- * Handles the video pause event.
- */
-const handleVideoPause = () => {
-  // If we are loading (navigating), do NOT resume the timer.
-  // The pause event here is a side-effect of resetting the player.
-  if (
-    !isTimerRunning.value &&
-    pauseTimerOnPlay.value &&
-    !playFullVideo.value &&
-    !isLoading.value
-  ) {
-    resumeSlideshowTimer();
-  }
-  isPlaying.value = false;
-};
-
-/**
- * Handles the playing event to clear the loading state.
- */
-const handleVideoPlaying = () => {
-  isTranscodingLoading.value = false;
-  isBuffering.value = false;
-  stopTranscodingProgressPoll();
-};
-
-const handleBuffering = (buffering: boolean) => {
-  if (buffering) {
-    if (!isTranscodingLoading.value) {
-      isBuffering.value = true;
-    }
-  } else {
-    isBuffering.value = false;
-  }
-};
-
-/**
- * Opens the current media file in VLC Media Player.
- */
-const openInVlc = async () => {
-  if (!currentMediaItem.value) return;
-  if (isOpeningVlc.value) return;
-
-  isOpeningVlc.value = true;
-
-  if (videoElement.value) {
-    videoElement.value.pause();
-  }
-
-  try {
-    const result = await api.openInVlc(currentMediaItem.value.path);
-    if (!result.success) {
-      error.value = result.message || 'Failed to open in VLC.';
-    }
-  } finally {
-    isOpeningVlc.value = false;
-  }
-};
-
-defineExpose({
-  isTranscodingMode,
-  isTranscodingLoading,
-  transcodedDuration,
-  currentVideoTime,
-  currentTranscodeStartTime,
-  isBuffering,
-  videoElement,
-  videoStreamUrlGenerator,
-  tryTranscoding,
-  togglePlay,
-});
-
-/**
- * Handles seeking from the progress bar.
- */
 const handleSeek = (time: number) => {
   if (isTranscodingMode.value) {
     tryTranscoding(time);
@@ -1010,12 +656,23 @@ const handleSeek = (time: number) => {
 
 const handleScrubStart = () => {
   // Optional: Pause while scrubbing?
-  // if (isPlaying.value) togglePlay();
 };
 
 const handleScrubEnd = () => {
   // Optional: Resume if paused?
 };
+
+defineExpose({
+  isTranscodingMode,
+  isTranscodingLoading,
+  transcodedDuration,
+  currentVideoTime,
+  currentTranscodeStartTime,
+  isBuffering,
+  videoElement,
+  tryTranscoding,
+  togglePlay,
+});
 </script>
 
 <style scoped>

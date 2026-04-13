@@ -1,7 +1,13 @@
-import { spawn, ChildProcess } from 'child_process';
+import { spawn, type ChildProcess } from 'child_process';
 import path from 'path';
 import fs from 'fs/promises';
-import { getHlsTranscodeArgs } from './utils/ffmpeg-utils.ts';
+import PQueue from 'p-queue';
+import {
+  getHlsTranscodeArgs,
+  detectFFmpegCapabilities,
+  getHardwareCodec,
+  getFFmpegStreams,
+} from './utils/ffmpeg-utils.ts';
 import { createMediaSource } from './media-source.ts';
 import {
   HLS_SEGMENT_DURATION,
@@ -33,20 +39,56 @@ interface HlsSession {
   status: HlsSessionStatus;
   error?: Error;
   progress: HlsProgress;
+  killTimeout?: NodeJS.Timeout;
 }
 
 const SESSION_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes inactivity timeout
 const CLEANUP_INTERVAL_MS = 60 * 1000; // 1 minute cleanup check
 
 export class HlsManager {
-  private static instance: HlsManager;
+  private static instance: HlsManager | null = null;
   private sessions: Map<string, HlsSession> = new Map();
   private pendingSessions: Map<string, Promise<void>> = new Map();
+  private transcodeQueue = new PQueue({
+    concurrency: MAX_CONCURRENT_TRANSCODES,
+  });
   private cacheDir: string | null = null;
   private cleanupInterval: NodeJS.Timeout | null = null;
+  private ffmpegCapabilities: Awaited<
+    ReturnType<typeof detectFFmpegCapabilities>
+  > | null = null;
 
   private constructor() {
     this.startCleanupInterval();
+  }
+
+  /**
+   * Resets the singleton instance for testing purposes.
+   */
+  public static resetInstance() {
+    if (HlsManager.instance) {
+      HlsManager.instance.stopCleanupInterval();
+      HlsManager.instance.sessions.forEach((s) => {
+        if (s.killTimeout) {
+          clearTimeout(s.killTimeout);
+        }
+        if (
+          s.process &&
+          typeof s.process.kill === 'function' &&
+          !s.process.killed
+        ) {
+          try {
+            s.process.kill('SIGKILL');
+          } catch {
+            // Ignore errors during reset
+          }
+        }
+      });
+      HlsManager.instance.sessions.clear();
+      HlsManager.instance.pendingSessions.clear();
+      HlsManager.instance.transcodeQueue.clear();
+      HlsManager.instance = null;
+    }
   }
 
   static getInstance(): HlsManager {
@@ -61,6 +103,9 @@ export class HlsManager {
    */
   async init(cacheDir: string) {
     this.cacheDir = cacheDir;
+    if (ffmpegStatic) {
+      this.ffmpegCapabilities = await detectFFmpegCapabilities(ffmpegStatic);
+    }
     await this.cleanupOrphanedSessions();
   }
 
@@ -68,153 +113,145 @@ export class HlsManager {
     this.cacheDir = dir;
   }
 
-  private startCleanupInterval() {
-    if (this.cleanupInterval) clearInterval(this.cleanupInterval);
-    this.cleanupInterval = setInterval(
-      () => this.cleanup(),
-      CLEANUP_INTERVAL_MS,
-    );
-  }
-
-  stopCleanupInterval() {
-    if (this.cleanupInterval) {
-      clearInterval(this.cleanupInterval);
-      this.cleanupInterval = null;
+  async ensureSession(sessionId: string, filePath: string): Promise<string> {
+    if (!this.cacheDir) {
+      throw new Error('HlsManager: cacheDir not set');
     }
-  }
 
-  /**
-   * Returns the current progress of an HLS session.
-   */
-  getSessionProgress(sessionId: string): HlsProgress | null {
-    const session = this.sessions.get(sessionId);
-    if (!session) return null;
-    return { ...session.progress };
-  }
-
-  /**
-   * Ensures an HLS session is active for the given file.
-   * Uses a promise-based lock to prevent duplicate spawns for the same ID.
-   */
-  async ensureSession(sessionId: string, filePath: string): Promise<void> {
-    // 1. Check if already active
+    // Reuse existing session if active
     const existing = this.sessions.get(sessionId);
-    if (existing && existing.status !== HlsSessionStatus.ERROR) {
-      existing.lastAccess = Date.now();
-      return;
+    if (existing && existing.status === HlsSessionStatus.ACTIVE) {
+      this.touchSession(sessionId);
+      return existing.playlistPath;
     }
 
-    // 2. Check if already starting (lock)
-    const pending = this.pendingSessions.get(sessionId);
-    if (pending) {
-      return pending;
+    // Avoid double-spawning the same session
+    if (this.pendingSessions.has(sessionId)) {
+      await this.pendingSessions.get(sessionId);
+      return this.sessions.get(sessionId)!.playlistPath;
     }
 
-    // 3. Create new session promise
-    const startPromise = this.startSession(sessionId, filePath);
-    this.pendingSessions.set(sessionId, startPromise);
-
-    try {
-      await startPromise;
-    } finally {
-      this.pendingSessions.delete(sessionId);
-    }
-  }
-
-  private async startSession(
-    sessionId: string,
-    filePath: string,
-  ): Promise<void> {
+    // [SECURITY] Hard limit on concurrent transcodes to prevent CPU exhaustion
     if (this.sessions.size >= MAX_CONCURRENT_TRANSCODES) {
       throw new Error('Server too busy. Please try again later.');
     }
 
-    if (!this.cacheDir) throw new Error('HLS Cache directory not set');
-    if (!ffmpegStatic) throw new Error('FFmpeg not found');
+    const spawnPromise = (async () => {
+      try {
+        await this.startSession(sessionId, filePath);
+      } finally {
+        this.pendingSessions.delete(sessionId);
+      }
+    })();
 
-    const outputDir = path.join(this.cacheDir, sessionId);
+    this.pendingSessions.set(sessionId, spawnPromise);
+    await spawnPromise;
+
+    return this.sessions.get(sessionId)!.playlistPath;
+  }
+
+  private async startSession(sessionId: string, filePath: string) {
+    const outputDir = path.join(this.cacheDir!, sessionId);
     const playlistPath = path.join(outputDir, 'playlist.m3u8');
-    const segmentPath = path.join(outputDir, 'segment_%03d.ts');
 
-    // Clean up old dir if exists
+    // [SECURITY] Clean up old dir if exists to prevent stale segments
     await fs.rm(outputDir, { recursive: true, force: true });
     await fs.mkdir(outputDir, { recursive: true });
 
-    const source = createMediaSource(filePath);
-    const inputPath = await source.getFFmpegInput();
+    // Use p-queue to limit CPU load during startup
+    await this.transcodeQueue.add(async () => {
+      const mediaSource = createMediaSource(filePath);
+      const ffmpegInput = await mediaSource.getFFmpegInput();
 
-    const args = getHlsTranscodeArgs(
-      inputPath,
-      segmentPath,
-      playlistPath,
-      HLS_SEGMENT_DURATION,
-    );
+      await getFFmpegStreams(ffmpegInput, ffmpegStatic!);
+      const hardwareCodec = getHardwareCodec(this.ffmpegCapabilities!);
 
-    const proc = spawn(ffmpegStatic, args);
+      const outputSegmentPath = path.join(outputDir, 'seg-%03d.ts');
+      const args = getHlsTranscodeArgs(
+        ffmpegInput,
+        outputSegmentPath,
+        playlistPath,
+        HLS_SEGMENT_DURATION,
+        {
+          hwCodec: hardwareCodec,
+        },
+      );
 
-    const session: HlsSession = {
-      id: sessionId,
-      process: proc,
-      lastAccess: Date.now(),
-      outputDir,
-      playlistPath,
-      status: HlsSessionStatus.STARTING,
-      progress: {
-        currentTime: 0,
-        duration: 0,
-        percent: 0,
-        fps: 0,
-        speed: '0x',
-      },
-    };
+      const proc = spawn(ffmpegStatic!, args, {
+        stdio: ['ignore', 'ignore', 'pipe'],
+      });
 
-    this.sessions.set(sessionId, session);
+      const session: HlsSession = {
+        id: sessionId,
+        process: proc,
+        lastAccess: Date.now(),
+        outputDir,
+        playlistPath,
+        status: HlsSessionStatus.STARTING,
+        progress: {
+          currentTime: 0,
+          duration: 0,
+          percent: 0,
+          fps: 0,
+          speed: '0x',
+        },
+      };
 
-    this.setupProcessHandlers(session, proc);
+      this.sessions.set(sessionId, session);
 
-    try {
-      await this.waitForPlaylist(session);
-      session.status = HlsSessionStatus.ACTIVE;
-    } catch (err) {
-      this.stopSession(sessionId);
-      throw err;
-    }
+      this.setupProcessHandlers(session, proc);
+
+      try {
+        await this.waitForPlaylist(session);
+        session.status = HlsSessionStatus.ACTIVE;
+      } catch (err) {
+        this.stopSession(sessionId);
+        throw err;
+      }
+    });
   }
 
   private setupProcessHandlers(session: HlsSession, proc: ChildProcess) {
     let stderrBuffer = '';
+    proc.stderr!.on('data', (data) => {
+      const s = this.sessions.get(session.id);
+      if (!s) return;
 
-    proc.stderr?.on('data', (data) => {
       stderrBuffer += data.toString();
+      // Split by newline or carriage return (FFmpeg progress updates)
       const lines = stderrBuffer.split(/[\r\n]+/);
       stderrBuffer = lines.pop() || '';
 
       for (const line of lines) {
-        this.parseStderrLine(session, line);
+        this.parseStderrLine(s, line);
       }
     });
 
     proc.on('error', (err) => {
-      console.error(`[HLS] Session ${session.id} spawn error:`, err);
-      session.status = HlsSessionStatus.ERROR;
-      session.error = err;
+      const s = this.sessions.get(session.id);
+      if (!s) return;
+      s.status = HlsSessionStatus.ERROR;
+      s.error = err;
     });
 
     proc.on('exit', (code, signal) => {
+      const s = this.sessions.get(session.id);
+      if (!s) return;
+
       if (code !== 0 && signal !== 'SIGKILL') {
         console.error(
           `[HLS] Session ${session.id} exited with code ${code} (signal: ${signal})`,
         );
-        session.status = HlsSessionStatus.ERROR;
-        session.error = new Error(`FFmpeg exited with code ${code}`);
+        s.status = HlsSessionStatus.ERROR;
+        s.error = new Error(`FFmpeg exited with code ${code}`);
       } else {
-        session.status = HlsSessionStatus.STOPPED;
-        session.progress.percent = 100;
-        if (session.progress.duration > 0) {
-          session.progress.currentTime = session.progress.duration;
+        s.status = HlsSessionStatus.STOPPED;
+        s.progress.percent = 100;
+        if (s.progress.duration > 0) {
+          s.progress.currentTime = s.progress.duration;
         }
       }
-      session.process = null;
+      s.process = null;
     });
   }
 
@@ -230,7 +267,7 @@ export class HlsManager {
       }
     }
 
-    // frame=  100 fps= 25 q=28.0 size=     512kB time=00:00:50.00 bitrate=  83.9kbits/s speed=10.1x
+    // frame=  100 fps= 25 q=28.0 size=  1024kB time=00:00:10.00 bitrate= 838.9kbits/s speed=1.0x
     const timeMatch = line.match(/time=(\d+):(\d+):(\d+)\.(\d+)/);
     if (timeMatch) {
       const h = parseInt(timeMatch[1], 10);
@@ -238,63 +275,91 @@ export class HlsManager {
       const s = parseFloat(`${timeMatch[3]}.${timeMatch[4]}`);
       session.progress.currentTime = h * 3600 + m * 60 + s;
 
-      const fpsMatch = line.match(/fps=\s*(\d+)/);
-      if (fpsMatch) session.progress.fps = parseInt(fpsMatch[1], 10);
-
-      const speedMatch = line.match(/speed=\s*(\d+\.?\d*x)/);
-      if (speedMatch) session.progress.speed = speedMatch[1];
-
       if (session.progress.duration > 0) {
-        session.progress.percent = Math.min(
-          100,
-          Math.round(
-            (session.progress.currentTime / session.progress.duration) * 100,
-          ),
+        session.progress.percent = Math.floor(
+          (session.progress.currentTime / session.progress.duration) * 100,
         );
       }
     }
+
+    const fpsMatch = line.match(/fps=\s*(\d+)/);
+    if (fpsMatch) {
+      session.progress.fps = parseInt(fpsMatch[1], 10);
+    }
+
+    const speedMatch = line.match(/speed=\s*(\d+\.?\d*x)/);
+    if (speedMatch) {
+      session.progress.speed = speedMatch[1];
+    }
   }
 
-  private async waitForPlaylist(
-    session: HlsSession,
-    retries = 30,
-  ): Promise<void> {
-    for (let i = 0; i < retries; i++) {
+  private async waitForPlaylist(session: HlsSession) {
+    const maxAttempts = 20;
+    let attempts = 0;
+
+    while (attempts < maxAttempts) {
       if (session.status === HlsSessionStatus.ERROR) {
-        throw (
-          session.error || new Error('HLS process failed during initialization')
-        );
+        throw session.error || new Error('HLS session failed');
       }
 
       try {
         const stats = await fs.stat(session.playlistPath);
-        // Ensure the file is not empty
         if (stats.size > 0) return;
       } catch {
-        // Ignore and retry
+        // file might not exist yet
       }
 
+      attempts++;
       await new Promise((resolve) => setTimeout(resolve, 500));
     }
+
     throw new Error('Timeout waiting for HLS playlist');
   }
 
-  getSessionDir(sessionId: string): string | undefined {
+  getSessionDir(sessionId: string) {
+    if (!this.cacheDir) return null;
+    return path.join(this.cacheDir, sessionId);
+  }
+
+  getSessionProgress(sessionId: string): HlsProgress | null {
     const session = this.sessions.get(sessionId);
-    return session?.outputDir;
+    if (!session) return null;
+    return session.progress;
   }
 
   touchSession(sessionId: string) {
     const session = this.sessions.get(sessionId);
-    if (session) session.lastAccess = Date.now();
+    if (session) {
+      session.lastAccess = Date.now();
+    }
   }
 
   async stopSession(sessionId: string) {
     const session = this.sessions.get(sessionId);
     if (!session) return;
 
-    if (session.process && !session.process.killed) {
-      session.process.kill('SIGKILL');
+    if (
+      session.process &&
+      typeof session.process.kill === 'function' &&
+      !session.process.killed
+    ) {
+      session.process.kill('SIGTERM');
+      // Give it a chance to exit gracefully, then kill if it hangs
+      session.killTimeout = setTimeout(() => {
+        // Double check session still exists and process is valid
+        if (
+          session.process &&
+          typeof session.process.kill === 'function' &&
+          !session.process.killed
+        ) {
+          try {
+            session.process.kill('SIGKILL');
+          } catch {
+            // Ignore
+          }
+        }
+        session.killTimeout = undefined;
+      }, 2000);
     }
 
     this.sessions.delete(sessionId);
@@ -306,19 +371,25 @@ export class HlsManager {
     }
   }
 
+  private startCleanupInterval() {
+    this.cleanupInterval = setInterval(() => {
+      this.cleanup();
+    }, CLEANUP_INTERVAL_MS);
+  }
+
+  stopCleanupInterval() {
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+      this.cleanupInterval = null;
+    }
+  }
+
   private async cleanup() {
     const now = Date.now();
-    const toStop: string[] = [];
-
     for (const [id, session] of this.sessions.entries()) {
       if (now - session.lastAccess > SESSION_TIMEOUT_MS) {
-        toStop.push(id);
+        await this.stopSession(id);
       }
-    }
-
-    for (const id of toStop) {
-      console.log(`[HLS] Cleaning up inactive session ${id}`);
-      await this.stopSession(id);
     }
   }
 

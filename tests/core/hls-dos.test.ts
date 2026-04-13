@@ -38,6 +38,19 @@ vi.mock('../../src/core/media-source.ts', () => ({
 
 import { createMediaSource } from '../../src/core/media-source.ts';
 
+vi.mock('../../src/core/utils/ffmpeg-utils.ts', () => ({
+  getHlsTranscodeArgs: vi.fn().mockReturnValue(['-f', 'hls', 'playlist.m3u8']),
+  detectFFmpegCapabilities: vi.fn().mockResolvedValue({
+    nvenc: false,
+    videotoolbox: false,
+    vaapi: false,
+  }),
+  getHardwareCodec: vi.fn().mockReturnValue(null),
+  getFFmpegStreams: vi
+    .fn()
+    .mockResolvedValue({ hasVideo: true, hasAudio: true }),
+}));
+
 describe('HlsManager DOS Protection', () => {
   const CACHE_DIR = '/tmp/hls-dos';
   let hlsManager: HlsManager;
@@ -45,15 +58,12 @@ describe('HlsManager DOS Protection', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.useFakeTimers();
+
+    HlsManager.resetInstance();
     hlsManager = HlsManager.getInstance();
     hlsManager.setCacheDir(CACHE_DIR);
 
-    // Reset internal state
-    (hlsManager as any).sessions.clear();
-    (hlsManager as any).pendingSessions.clear();
-    hlsManager.stopCleanupInterval();
-
-    // Default fs behavior
+    // Default fs behavior — stat resolves immediately so playlist wait exits
     mockFsStat.mockResolvedValue({ size: 100, isDirectory: () => true } as any);
     mockFsMkdir.mockResolvedValue(undefined);
     mockFsRm.mockResolvedValue(undefined);
@@ -69,6 +79,7 @@ describe('HlsManager DOS Protection', () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    HlsManager.resetInstance();
   });
 
   it('enforces max concurrent sessions limit (DOS PREVENTION)', async () => {
@@ -83,7 +94,7 @@ describe('HlsManager DOS Protection', () => {
       return mockProcess;
     });
 
-    // 1. Fill the slots up to the limit
+    // Fill the slots up to the limit
     const promises = [];
     for (let i = 0; i < limit; i++) {
       promises.push(
@@ -91,18 +102,45 @@ describe('HlsManager DOS Protection', () => {
       );
     }
 
-    // Advance timers so they all can finish waitForPlaylist
+    // Advance timers so all can finish waitForPlaylist
     await vi.advanceTimersByTimeAsync(500);
     await Promise.all(promises);
 
+    // Exactly `limit` spawns should have occurred
     expect(mockSpawn).toHaveBeenCalledTimes(limit);
+  });
 
-    // 2. Try to add one more
-    await expect(
-      hlsManager.ensureSession(`session-${limit}`, `/path/file-${limit}.mp4`),
-    ).rejects.toThrow('Server too busy');
+  it('queues sessions beyond concurrency limit rather than spawning immediately', async () => {
+    const limit = MAX_CONCURRENT_TRANSCODES;
 
-    // 3. Ensure no new spawn occurred
-    expect(mockSpawn).toHaveBeenCalledTimes(limit);
+    // block — playlist never appears until we advance time more
+    mockFsStat.mockRejectedValue(new Error('ENOENT'));
+
+    mockSpawn.mockImplementation(() => {
+      const mockProcess = new EventEmitter() as any;
+      mockProcess.kill = vi.fn();
+      mockProcess.stderr = new EventEmitter();
+      mockProcess.exitCode = null;
+      mockProcess.killed = false;
+      return mockProcess;
+    });
+
+    // kick off limit+1 sessions concurrently
+    const extra = limit + 1;
+    const promises = Array.from({ length: extra }, (_, i) =>
+      hlsManager
+        .ensureSession(`session-${i}`, `/path/file-${i}.mp4`)
+        .catch(() => null),
+    );
+
+    // Let the first batch start
+    await vi.advanceTimersByTimeAsync(1);
+
+    // Only `limit` spawns should have happened yet (queue holds the rest)
+    expect(mockSpawn.mock.calls.length).toBeLessThanOrEqual(limit);
+
+    // Clean up: timeout all waiting sessions
+    await vi.advanceTimersByTimeAsync(30000);
+    await Promise.all(promises);
   });
 });

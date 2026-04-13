@@ -21,7 +21,7 @@
       class="media-grid-container p-4 grow overflow-hidden"
     >
       <div
-        v-if="allMediaFiles.length === 0"
+        v-if="!allMediaFiles || allMediaFiles.length === 0"
         class="flex flex-col items-center justify-center h-full text-gray-500 opacity-80"
         role="status"
         aria-live="polite"
@@ -83,6 +83,7 @@ import {
 } from 'vue';
 import { useLibraryStore } from '../composables/useLibraryStore';
 import { usePlayerStore } from '../composables/usePlayerStore';
+import { usePlaylistStore } from '../composables/usePlaylistStore';
 import { useUIStore } from '../composables/useUIStore';
 import type { MediaFile } from '../../core/types';
 import MediaGridItem from './MediaGridItem.vue';
@@ -96,6 +97,7 @@ import {
 
 const libraryStore = useLibraryStore();
 const playerStore = usePlayerStore();
+const playlistStore = usePlaylistStore();
 const uiStore = useUIStore();
 
 const {
@@ -161,19 +163,19 @@ const failedImagePaths = reactive(new Set<string>());
 
 // Chunk items into rows for the scroller
 const chunkedItems = computed<GridRow[]>(() => {
-  const total = allMediaFiles.value.length;
+  const chunks: GridRow[] = [];
+  const items = allMediaFiles.value;
+  if (!items) return chunks;
   const cols = columnCount.value;
-  const rows: GridRow[] = [];
-
-  const rowCount = Math.ceil(total / cols);
+  const rowCount = Math.ceil(items.length / cols);
 
   for (let i = 0; i < rowCount; i++) {
-    rows.push({
+    chunks.push({
       id: `row-${i * cols}`,
       startIndex: i * cols,
     });
   }
-  return rows;
+  return chunks;
 });
 
 // Resize Observer
@@ -228,14 +230,11 @@ const handleItemClick = async (item: MediaFile, index: number) => {
     // For now, let's allow trying to play/view it, maybe player handles it.
   }
 
-  // When clicking an item, we pass the FULL list to the player
-  // Optimization: Use toRaw() to avoid Proxy overhead when slicing large arrays.
-  // slice() creates a shallow copy, which is what we need.
-  playerStore.state.displayedMediaFiles = toRaw(allMediaFiles.value).slice();
+  // When clicking an item, we replace the queue
+  const mediaList = toRaw(allMediaFiles.value).slice();
+  playlistStore.setQueue(mediaList.slice(index + 1));
+  playlistStore.playNext(item);
 
-  // Optimization: We now pass the index directly, avoiding an O(N) findIndex scan
-  playerStore.state.currentMediaIndex = index;
-  playerStore.state.currentMediaItem = item;
   uiStore.state.viewMode = 'player';
   playerStore.state.isSlideshowActive = true;
   playerStore.state.isTimerRunning = false;

@@ -13,22 +13,12 @@ describe('usePlayerStore', () => {
 
   it('should initialize with default values', () => {
     expect(store.isSlideshowActive.value).toBe(false);
-    expect(store.displayedMediaFiles.value).toEqual([]);
-    expect(store.currentMediaIndex.value).toBe(-1);
   });
 
   it('should reset player state', () => {
     store.isSlideshowActive.value = true;
-    store.displayedMediaFiles.value = [{ path: 'test' } as any];
-    store.currentMediaIndex.value = 0;
-    store.currentMediaItem.value = { path: 'test' } as any;
-
     store.resetPlayerState();
-
     expect(store.isSlideshowActive.value).toBe(false);
-    expect(store.displayedMediaFiles.value).toEqual([]);
-    expect(store.currentMediaIndex.value).toBe(-1);
-    expect(store.currentMediaItem.value).toBe(null);
   });
 
   it('should stop slideshow and clear timer', () => {

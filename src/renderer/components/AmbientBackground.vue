@@ -14,13 +14,16 @@
  */
 import { ref, watch, onUnmounted, computed } from 'vue';
 import { usePlayerStore } from '../composables/usePlayerStore';
+import { usePlaylistStore } from '../composables/usePlaylistStore';
 import { useLibraryStore } from '../composables/useLibraryStore';
 import { api } from '../api';
 
 const playerStore = usePlayerStore();
+const playlistStore = usePlaylistStore();
 const libraryStore = useLibraryStore();
 
-const { currentMediaItem, mainVideoElement } = playerStore;
+const { mainVideoElement } = playerStore;
+const { currentItem: currentMediaItem } = playlistStore;
 const supportedExtensions = computed(
   () => libraryStore.state.supportedExtensions,
 );

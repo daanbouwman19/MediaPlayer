@@ -180,7 +180,6 @@ describe('MediaHandler Combined Tests', () => {
   // Define spies to replace hoisted vars
   let mockFsStat: any;
   let mockFsReadFile: any;
-  let mockFsAccess: any;
   let mockFsCreateReadStream: any;
 
   // HLS spies
@@ -215,13 +214,11 @@ describe('MediaHandler Combined Tests', () => {
     // Note: Since media-handler imports from fs/promises, we spy on fs.promises
     mockFsStat = vi.spyOn(fs.promises, 'stat');
     mockFsReadFile = vi.spyOn(fs.promises, 'readFile');
-    mockFsAccess = vi.spyOn(fs.promises, 'access');
 
     mockFsCreateReadStream = vi.spyOn(fs, 'createReadStream');
 
     // Default spy implementations to avoid errors
     mockFsStat.mockResolvedValue({ size: 1000, mtime: new Date() });
-    mockFsAccess.mockResolvedValue(undefined); // Success
     mockFsReadFile.mockResolvedValue(Buffer.from(''));
 
     mockFsCreateReadStream.mockImplementation(() => {

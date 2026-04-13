@@ -14,6 +14,7 @@ export default defineConfig({
     ],
     setupFiles: ['tests/renderer/setup.ts'],
     globals: true,
+    silent: true,
     testTimeout: 10000,
     include: ['tests/**/*.{test,spec}.{js,ts}'],
     exclude: [

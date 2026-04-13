@@ -126,6 +126,7 @@ import MenuIcon from './components/icons/MenuIcon.vue';
 import HelpIcon from './components/icons/HelpIcon.vue';
 import { useLibraryStore } from './composables/useLibraryStore';
 import { usePlayerStore } from './composables/usePlayerStore';
+import { usePlaylistStore } from './composables/usePlaylistStore';
 import { useUIStore } from './composables/useUIStore';
 import { useAuthStore } from './composables/useAuthStore';
 import { useSlideshow } from './composables/useSlideshow';
@@ -134,11 +135,13 @@ import { CONTROLS_HIDE_TIMEOUT_MS } from '../core/constants';
 const libraryStore = useLibraryStore();
 const uiStore = useUIStore();
 const playerStore = usePlayerStore(); // Call the store to get the instance
+const playlistStore = usePlaylistStore();
 const authStore = useAuthStore();
 const { isScanning } = libraryStore;
 const { viewMode, playlistToEdit, isControlsVisible, isSidebarVisible } =
   uiStore;
-const { currentMediaItem, isSlideshowActive, mainVideoElement } = playerStore; // Destructure from the instance
+const { isSlideshowActive, mainVideoElement } = playerStore; // Destructure from the instance
+const { currentItem: currentMediaItem } = playlistStore;
 const { isLocked, isInitialized: isAuthInitialized } = authStore;
 const initializeApp = libraryStore.loadInitialData;
 const { navigateMedia, toggleSlideshowTimer } = useSlideshow();

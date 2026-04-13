@@ -452,6 +452,7 @@
 import { useLibraryStore } from '../composables/useLibraryStore';
 import { useUIStore } from '../composables/useUIStore';
 import { usePlayerStore } from '../composables/usePlayerStore'; // For resetting slideshow state
+import { usePlaylistStore } from '../composables/usePlaylistStore';
 import { selectAllAlbums } from '../utils/albumUtils';
 import { api } from '../api';
 import { ref, onMounted } from 'vue';
@@ -462,6 +463,7 @@ import { useEscapeKey } from '../composables/useEscapeKey';
 const libraryStore = useLibraryStore();
 const uiStore = useUIStore();
 const playerStore = usePlayerStore();
+const playlistStore = usePlaylistStore();
 
 const { isSourcesModalVisible } = uiStore;
 const { mediaDirectories } = libraryStore;
@@ -560,9 +562,7 @@ const addDriveSource = async () => {
  */
 const resetSlideshowState = () => {
   playerStore.state.isSlideshowActive = false;
-  playerStore.state.displayedMediaFiles = [];
-  playerStore.state.currentMediaIndex = -1;
-  playerStore.state.currentMediaItem = null;
+  playlistStore.clearPlaylist();
   libraryStore.state.globalMediaPoolForSelection = [];
 };
 

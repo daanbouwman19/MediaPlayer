@@ -1,5 +1,4 @@
-import { execa } from 'execa';
-
+import { spawn } from 'child_process';
 const FFMPEG_TRANSCODE_PRESET = 'ultrafast';
 const FFMPEG_TRANSCODE_CRF = '23';
 
@@ -29,6 +28,48 @@ const FFMPEG_BASE_CODEC_ARGS = [
   '-pix_fmt',
   'yuv420p',
 ];
+
+let cachedCapabilities: {
+  supportedVideoCodecs: string[];
+  hasNVENC: boolean;
+  hasVideoToolbox: boolean;
+  hasVAAPI: boolean;
+} | null = null;
+
+export async function detectFFmpegCapabilities(
+  ffmpegPath: string,
+): Promise<typeof cachedCapabilities> {
+  if (cachedCapabilities) return cachedCapabilities;
+
+  try {
+    const { stdout, stderr } = await runFFmpeg(ffmpegPath, ['-encoders']);
+    const output = stdout || stderr; // FFmpeg sometimes outputs to stderr even for -encoders
+    const supportedVideoCodecs = (
+      output.match(/[V.][.S][.X][.B][.A][.L]\s+(\w+)/g) || []
+    ).map((m) => m.split(/\s+/).pop() || '');
+
+    cachedCapabilities = {
+      supportedVideoCodecs,
+      hasNVENC: supportedVideoCodecs.includes('h264_nvenc'),
+      hasVideoToolbox: supportedVideoCodecs.includes('h264_videotoolbox'),
+      hasVAAPI: supportedVideoCodecs.includes('h264_vaapi'),
+    };
+    return cachedCapabilities;
+  } catch (err) {
+    console.error('[FFmpeg] Failed to detect capabilities:', err);
+    return null;
+  }
+}
+
+export function getHardwareCodec(
+  capabilities: typeof cachedCapabilities,
+): string {
+  if (!capabilities) return 'libx264';
+  if (capabilities.hasNVENC) return 'h264_nvenc';
+  if (capabilities.hasVideoToolbox) return 'h264_videotoolbox';
+  if (capabilities.hasVAAPI) return 'h264_vaapi';
+  return 'libx264';
+}
 
 export function isValidTimeFormat(time: string): boolean {
   // Allow simple seconds (e.g., "10", "10.5") or timestamps (e.g., "00:00:10", "00:10.5")
@@ -97,27 +138,47 @@ export async function runFFmpeg(
   command: string,
   args: string[],
   timeoutMs = 30000,
-): Promise<{ code: number | null; stderr: string }> {
-  try {
-    const result = await execa(command, args, {
-      timeout: timeoutMs,
-      reject: false, // We want to handle non-zero exit codes manually to match previous behavior
+): Promise<{ code: number | null; stdout: string; stderr: string }> {
+  return new Promise((resolve, reject) => {
+    let proc;
+    try {
+      proc = spawn(command, args);
+    } catch (err) {
+      return reject(err);
+    }
+
+    let stdout = '';
+    let stderr = '';
+    let timedOut = false;
+
+    const timeout = setTimeout(() => {
+      timedOut = true;
+      if (proc) proc.kill('SIGKILL');
+      reject(new Error(`Process timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+
+    proc.stdout?.on('data', (data) => {
+      stdout += data.toString();
     });
 
-    if (result.timedOut) {
-      // [SECURITY] Process timed out, ensure it was killed.
-      // Execa kills it automatically on timeout.
-      throw new Error(`Process timed out after ${timeoutMs}ms`);
-    }
+    proc.stderr?.on('data', (data) => {
+      stderr += data.toString();
+    });
 
-    return { code: result.exitCode ?? null, stderr: result.stderr };
-  } catch (error: unknown) {
-    // If it's a timeout error thrown by execa (can happen if reject: true, or maybe version diff)
-    if (typeof error === 'object' && error !== null && 'timedOut' in error) {
-      throw new Error(`Process timed out after ${timeoutMs}ms`);
-    }
-    throw error;
-  }
+    proc.on('error', (err) => {
+      if (!timedOut) {
+        clearTimeout(timeout);
+        reject(err);
+      }
+    });
+
+    proc.on('exit', (code) => {
+      if (!timedOut) {
+        clearTimeout(timeout);
+        resolve({ code, stdout, stderr });
+      }
+    });
+  });
 }
 
 export function parseFFmpegDuration(stderr: string): number | null {
@@ -166,20 +227,42 @@ export function getHlsTranscodeArgs(
   outputSegmentPath: string,
   outputPlaylistPath: string,
   segmentDuration: number,
+  options: {
+    hwCodec?: string;
+    copyAudio?: boolean;
+    preset?: string;
+    crf?: string;
+  } = {},
 ): string[] {
-  // -hls_time: Target segment duration
-  // -hls_list_size 0: Keep all segments in playlist (VOD style) for now.
-  // -hls_segment_filename: naming pattern for segments
-  // -f hls: HLS format
-  return [
+  const {
+    hwCodec = 'libx264',
+    copyAudio = false,
+    preset = FFMPEG_TRANSCODE_PRESET,
+    crf = FFMPEG_TRANSCODE_CRF,
+  } = options;
+
+  const args = [
     ...FFMPEG_COMMON_ARGS,
     ...FFMPEG_INPUT_OPTIONS,
     '-i',
     inputPath,
-    // Base video/audio codecs for HLS output
-    ...FFMPEG_BASE_CODEC_ARGS,
+    '-c:v',
+    hwCodec,
+    '-c:a',
+    copyAudio ? 'copy' : 'aac',
+    '-preset',
+    preset,
+    '-pix_fmt',
+    'yuv420p',
+  ];
+
+  if (hwCodec === 'libx264') {
+    args.push('-crf', crf);
+  }
+
+  args.push(
     '-g',
-    '48', // GOP size. ~2 seconds at 24fps. helps seeking.
+    '48',
     '-sc_threshold',
     '0',
     '-f',
@@ -187,9 +270,11 @@ export function getHlsTranscodeArgs(
     '-hls_time',
     segmentDuration.toString(),
     '-hls_list_size',
-    '0', // 0 = keep all segments
+    '0',
     '-hls_segment_filename',
     outputSegmentPath,
     outputPlaylistPath,
-  ];
+  );
+
+  return args;
 }

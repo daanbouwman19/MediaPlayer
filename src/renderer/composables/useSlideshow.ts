@@ -1,11 +1,10 @@
 /**
  * @file Provides composable functions for managing slideshow logic.
- * This includes starting/stopping slideshows, navigating media, filtering,
- * and selecting media items based on a weighted random algorithm.
  */
 import { computed, toRaw } from 'vue';
 import { useLibraryStore } from './useLibraryStore';
 import { usePlayerStore } from './usePlayerStore';
+import { usePlaylistStore } from './usePlaylistStore';
 import { useUIStore } from './useUIStore';
 import {
   collectTexturesRecursive,
@@ -16,20 +15,15 @@ import { getCachedExtension } from '../utils/mediaUtils';
 import type { Album, MediaFile } from '../../core/types';
 import { api } from '../api';
 
-/**
- * A Vue composable that provides functions for controlling the media slideshow.
- */
 export function useSlideshow() {
   const libraryStore = useLibraryStore();
   const playerStore = usePlayerStore();
+  const playlistStore = usePlaylistStore();
   const uiStore = useUIStore();
 
   const { imageExtensionsSet, videoExtensionsSet } = libraryStore;
   const { stopSlideshow } = playerStore;
 
-  /**
-   * Clears any existing slideshow timer interval.
-   */
   const clearSlideshowTimer = () => {
     if (playerStore.state.slideshowTimerId) {
       clearInterval(playerStore.state.slideshowTimerId);
@@ -37,185 +31,100 @@ export function useSlideshow() {
     }
   };
 
-  /**
-   * Filters a list of media files based on the current filter setting in the global state.
-   * @param mediaFiles - The array of media files to filter.
-   * @returns The filtered array of media files.
-   */
   const filterMedia = (mediaFiles: MediaFile[]): MediaFile[] => {
     if (!mediaFiles || mediaFiles.length === 0) return [];
-
     const filter = uiStore.state.mediaFilter;
 
     return mediaFiles.filter((file) => {
-      // Guard against missing path property
-      if (!file || !file.path || typeof file.path !== 'string') {
-        console.warn('Skipping media item with invalid or missing path:', file);
-        return false;
-      }
-
+      if (!file || !file.path || typeof file.path !== 'string') return false;
       if (filter === 'All') return true;
 
       const ext = getCachedExtension(file);
       if (!ext) return false;
 
-      if (filter === 'Videos') {
-        return videoExtensionsSet.value.has(ext);
-      } else if (filter === 'Images') {
-        return imageExtensionsSet.value.has(ext);
-      }
-      return true; // Should not be reached with controlled filters
+      if (filter === 'Videos') return videoExtensionsSet.value.has(ext);
+      if (filter === 'Images') return imageExtensionsSet.value.has(ext);
+      return true;
     });
   };
 
-  /**
-   * Memoized filtered pool to avoid O(N) filtering on every slide change.
-   * This significantly reduces CPU usage when the media pool is large (e.g., 10k+ items).
-   */
   const filteredGlobalMediaPool = computed(() => {
     return filterMedia(libraryStore.state.globalMediaPoolForSelection);
   });
 
-  /**
-   * Records a view for the given media item.
-   * @param mediaItem - The media item to display.
-   */
   const displayMedia = async (mediaItem: MediaFile | null) => {
     if (!mediaItem) return;
     try {
-      // Optimistically update the local view count so the UI reflects it immediately
       if (!uiStore.state.isHistoryMode) {
         if (mediaItem.viewCount === undefined) {
           mediaItem.viewCount = 0;
         }
         mediaItem.viewCount++;
-
         await api.recordMediaView(mediaItem.path);
       }
+
       if (playerStore.state.isTimerRunning) {
         const ext = getCachedExtension(mediaItem);
         const isVideo = videoExtensionsSet.value.has(ext);
-        // If it's a video and we are in "play full video" mode,
-        // don't start/resume the slideshow timer yet.
-        // MediaDisplay will handle the transition once the video ends via handleVideoEnded.
         if (!(isVideo && playerStore.state.playFullVideo)) {
           resumeSlideshowTimer();
         }
       }
     } catch (error) {
       console.error('Error recording media view:', error);
-      // Rollback if needed, but low risk
     }
   };
 
-  /**
-   * Selects the next media item using a weighted random algorithm and displays it.
-   */
   const pickAndDisplayNextMediaItem = async () => {
-    let selectedMedia: MediaFile | null = null;
+    if (libraryStore.state.globalMediaPoolForSelection.length === 0) return;
 
-    // Standard Logic (fallback or default)
-    if (!selectedMedia) {
-      if (libraryStore.state.globalMediaPoolForSelection.length === 0) {
-        console.warn('No media files available in the pool.');
-        return;
-      }
-      // Use memoized filtered pool
-      const filteredPool = filteredGlobalMediaPool.value;
-      libraryStore.state.totalMediaInPool = filteredPool.length;
+    const filteredPool = filteredGlobalMediaPool.value;
+    libraryStore.state.totalMediaInPool = filteredPool.length;
 
-      if (filteredPool.length === 0) {
-        console.warn('Media pool is empty or no media matches the filter.');
-        return;
-      }
+    if (filteredPool.length === 0) return;
 
-      const historySize = Math.min(
-        5,
-        playerStore.state.displayedMediaFiles.length,
-      );
-      // Optimization: Use a Set for O(1) lookups in selectWeightedRandom
-      // Avoids .map() allocation on every tick
-      const historyPaths = new Set<string>();
-      const startIdx = Math.max(
-        0,
-        playerStore.state.displayedMediaFiles.length - historySize,
-      );
-      for (
-        let i = startIdx;
-        i < playerStore.state.displayedMediaFiles.length;
-        i++
-      ) {
-        historyPaths.add(playerStore.state.displayedMediaFiles[i].path);
-      }
-
-      selectedMedia =
-        selectWeightedRandom(filteredPool, historyPaths) ||
-        filteredPool[Math.floor(Math.random() * filteredPool.length)];
+    const historyPaths = new Set<string>();
+    for (const item of playlistStore.state.history) {
+      historyPaths.add(item.path);
     }
+
+    const selectedMedia =
+      selectWeightedRandom(filteredPool, historyPaths) ||
+      filteredPool[Math.floor(Math.random() * filteredPool.length)];
 
     if (selectedMedia) {
-      playerStore.state.displayedMediaFiles.push(selectedMedia);
-      playerStore.state.currentMediaIndex =
-        playerStore.state.displayedMediaFiles.length - 1;
-      playerStore.state.currentMediaItem = selectedMedia;
-      if (playerStore.state.displayedMediaFiles.length > 100) {
-        playerStore.state.displayedMediaFiles.shift();
-        playerStore.state.currentMediaIndex--;
-      }
-      await displayMedia(playerStore.state.currentMediaItem);
+      playlistStore.playNext(selectedMedia);
+      await displayMedia(playlistStore.state.currentItem);
     }
   };
 
-  /**
-   * Navigates to the next or previous media item in the slideshow history.
-   * If at the end of history, a new random item is picked.
-   * @param direction - The direction to navigate (-1 for previous, 1 for next).
-   */
   const navigateMedia = async (direction: number) => {
     if (!playerStore.state.isSlideshowActive) return;
 
-    // Clear the interval immediately to prevent race conditions with the timer
-    // from the previous media item during the async navigation process.
     clearSlideshowTimer();
 
     if (direction > 0) {
-      // Next
-      if (
-        playerStore.state.currentMediaIndex <
-        playerStore.state.displayedMediaFiles.length - 1
-      ) {
-        playerStore.state.currentMediaIndex++;
-        playerStore.state.currentMediaItem =
-          playerStore.state.displayedMediaFiles[
-            playerStore.state.currentMediaIndex
-          ];
-        await displayMedia(playerStore.state.currentMediaItem);
+      if (playlistStore.hasNext.value) {
+        playlistStore.playNext();
+        await displayMedia(playlistStore.state.currentItem);
       } else {
         await pickAndDisplayNextMediaItem();
       }
     } else {
-      // Previous
-      if (playerStore.state.currentMediaIndex > 0) {
-        playerStore.state.currentMediaIndex--;
-        playerStore.state.currentMediaItem =
-          playerStore.state.displayedMediaFiles[
-            playerStore.state.currentMediaIndex
-          ];
-        await displayMedia(playerStore.state.currentMediaItem);
+      if (playlistStore.hasPrevious.value) {
+        playlistStore.playPrevious();
+        await displayMedia(playlistStore.state.currentItem);
       }
     }
   };
 
-  /**
-   * Resumes the slideshow timer.
-   */
   const resumeSlideshowTimer = () => {
     clearSlideshowTimer();
     playerStore.state.isTimerRunning = true;
     playerStore.state.timerProgress = 100;
 
     const duration = playerStore.state.timerDuration * 1000;
-    const interval = 50; // Update every 50ms
+    const interval = 50;
     let elapsed = 0;
 
     playerStore.state.slideshowTimerId = setInterval(() => {
@@ -230,17 +139,11 @@ export function useSlideshow() {
     }, interval);
   };
 
-  /**
-   * Pauses the slideshow timer.
-   */
   const pauseSlideshowTimer = () => {
     clearSlideshowTimer();
     playerStore.state.isTimerRunning = false;
   };
 
-  /**
-   * Toggles the slideshow timer on or off.
-   */
   const toggleSlideshowTimer = () => {
     if (playerStore.state.isTimerRunning) {
       pauseSlideshowTimer();
@@ -249,11 +152,6 @@ export function useSlideshow() {
     }
   };
 
-  /**
-   * Toggles the selection state of an album for the global slideshow.
-   * @param albumId - The ID of the album to toggle.
-   * @param isSelected - Explicitly set the selection state.
-   */
   const toggleAlbumSelection = (albumId: string, isSelected?: boolean) => {
     if (typeof isSelected === 'boolean') {
       libraryStore.state.albumsSelectedForSlideshow[albumId] = isSelected;
@@ -263,70 +161,46 @@ export function useSlideshow() {
     }
   };
 
-  /**
-   * Starts a global slideshow using all selected albums.
-   */
   const startSlideshow = async () => {
-    if (!libraryStore.state.allAlbums) {
-      return;
-    }
+    if (!libraryStore.state.allAlbums) return;
+
     libraryStore.state.globalMediaPoolForSelection = collectSelectedTextures(
       libraryStore.state.allAlbums,
       libraryStore.state.albumsSelectedForSlideshow,
     );
 
-    if (libraryStore.state.globalMediaPoolForSelection.length === 0) {
-      console.warn('No albums selected for slideshow.');
-      return;
-    }
+    if (libraryStore.state.globalMediaPoolForSelection.length === 0) return;
+
     playerStore.state.isSlideshowActive = true;
-    playerStore.state.displayedMediaFiles = [];
-    playerStore.state.currentMediaIndex = -1;
+    playlistStore.clearPlaylist();
     await pickAndDisplayNextMediaItem();
   };
 
-  /**
-   * Starts a slideshow for an individual album.
-   * @param album - The album to start the slideshow for.
-   */
   const startIndividualAlbumSlideshow = async (album: Album) => {
-    if (!album || !Array.isArray(album.textures)) {
-      console.warn('Album has no valid textures array.');
+    if (!album || !Array.isArray(album.textures) || album.textures.length === 0)
       return;
-    }
-    if (album.textures.length === 0) {
-      console.warn('No media files in this album.');
-      return;
-    }
+
     libraryStore.state.globalMediaPoolForSelection = [...album.textures];
     playerStore.state.isSlideshowActive = true;
-    playerStore.state.displayedMediaFiles = [];
-    playerStore.state.currentMediaIndex = -1;
+    playlistStore.clearPlaylist();
     await pickAndDisplayNextMediaItem();
   };
 
-  /**
-   * Starts a slideshow specifically from the history list preserving order.
-   * @param historyMedia - The array of media files from the user's history
-   */
   const startHistorySlideshow = (historyMedia: MediaFile[]) => {
     if (!historyMedia || historyMedia.length === 0) return;
 
     const mediaArray = toRaw(historyMedia).slice();
     libraryStore.state.globalMediaPoolForSelection = mediaArray;
-    playerStore.state.displayedMediaFiles = mediaArray;
-    playerStore.state.currentMediaIndex = 0;
-    playerStore.state.currentMediaItem = mediaArray[0];
+
+    playlistStore.setQueue(mediaArray);
+    playlistStore.playNext(); // Sets the first item as current
+
     uiStore.state.viewMode = 'player';
     uiStore.state.isHistoryMode = true;
     playerStore.state.isSlideshowActive = true;
     playerStore.state.isTimerRunning = false;
   };
 
-  /**
-   * Opens an album and its children in Grid View.
-   * @param album - The album to open.
-   */
   const openAlbumInGrid = (album: Album) => {
     const allMedia = collectTexturesRecursive(album);
     uiStore.state.gridMediaFiles = filterMedia(allMedia);
@@ -335,17 +209,13 @@ export function useSlideshow() {
     stopSlideshow();
   };
 
-  /**
-   * Re-applies the current media filter and picks a new item.
-   */
   const reapplyFilter = async () => {
     if (playerStore.state.isSlideshowActive) {
       libraryStore.state.globalMediaPoolForSelection = collectSelectedTextures(
         libraryStore.state.allAlbums,
         libraryStore.state.albumsSelectedForSlideshow,
       );
-      playerStore.state.displayedMediaFiles = [];
-      playerStore.state.currentMediaIndex = -1;
+      playlistStore.clearPlaylist();
       await pickAndDisplayNextMediaItem();
     }
   };
@@ -363,7 +233,6 @@ export function useSlideshow() {
     pickAndDisplayNextMediaItem,
     reapplyFilter,
     filterMedia,
-    // Exported for testing/mocking if needed, but primarily used internally via imports
     selectWeightedRandom,
     shuffleArray,
   };
