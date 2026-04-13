@@ -30,12 +30,13 @@ export function useTheme() {
     }
   };
 
+  let unwatchTheme: (() => void) | null = null;
   const initTheme = () => {
     // Listen for OS theme changes
     mediaQuery.addEventListener('change', applyTheme);
 
     // Watch for user theme selection changes and sync with main process
-    watch(
+    unwatchTheme = watch(
       themeMode,
       (newTheme) => {
         localStorage.setItem('themeMode', newTheme);
@@ -50,6 +51,10 @@ export function useTheme() {
 
   const cleanupTheme = () => {
     mediaQuery.removeEventListener('change', applyTheme);
+    if (unwatchTheme) {
+      unwatchTheme();
+      unwatchTheme = null;
+    }
   };
 
   return {

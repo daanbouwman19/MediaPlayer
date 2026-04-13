@@ -121,7 +121,7 @@
                     :disabled="!!loadingAction"
                     @click="handleHistorySlideshow"
                   >
-                    <span class="text-secondary shrink-0">
+                    <span class="text-accent-secondary shrink-0">
                       <svg
                         v-if="loadingAction === 'history-slideshow'"
                         class="animate-spin w-4 h-4"

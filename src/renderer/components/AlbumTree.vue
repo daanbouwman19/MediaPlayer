@@ -14,7 +14,7 @@
       <!-- Toggle Button (Triangle) -->
       <button
         v-if="isFolder"
-        class="toggle-button flex items-center justify-center w-6 h-6 rounded hover:bg-black/5 text-muted hover:text-accent transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+        class="toggle-button flex items-center justify-center w-6 h-6 rounded hover:bg-gray-500/10 text-muted hover:text-accent transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
         :aria-expanded="isOpen"
         :aria-label="isOpen ? `Collapse ${album.name}` : `Expand ${album.name}`"
         @click.stop="toggle"
@@ -75,7 +75,7 @@
 
       <!-- Main Action Button (Name + Badge) -->
       <button
-        class="grow flex items-center gap-2 text-left min-w-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 rounded px-1 -ml-1 transition-colors hover:bg-black/5 cursor-pointer"
+        class="grow flex items-center gap-2 text-left min-w-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 rounded px-1 -ml-1 transition-colors hover:bg-gray-500/10 cursor-pointer"
         :aria-label="'Play ' + album.name"
         @click="handleClickAlbum(album)"
       >

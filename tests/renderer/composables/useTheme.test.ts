@@ -89,4 +89,19 @@ describe('useTheme', () => {
 
     expect(document.documentElement.classList.contains('dark')).toBe(true);
   });
+
+  it('cleans up correctly', () => {
+    const mockRemoveListener = vi.fn();
+    mockMatchMedia.mockImplementation((query: string) => ({
+      matches: false,
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: mockRemoveListener,
+    }));
+
+    const { initTheme, cleanupTheme } = useTheme();
+    initTheme();
+    cleanupTheme();
+    expect(mockRemoveListener).toHaveBeenCalled();
+  });
 });

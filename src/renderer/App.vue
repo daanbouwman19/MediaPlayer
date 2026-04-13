@@ -230,7 +230,6 @@ const handleKeydown = (event: KeyboardEvent) => {
 
 // On component mount, initialize the app and add the keyboard event listener
 onMounted(async () => {
-  initTheme();
   await authStore.checkLockStatus();
   if (!isLocked.value) {
     await initializeApp();
