@@ -205,10 +205,18 @@ export class HlsManager {
   }
 
   private setupProcessHandlers(session: HlsSession, proc: ChildProcess) {
+    let stderrBuffer = '';
     proc.stderr!.on('data', (data) => {
       const s = this.sessions.get(session.id);
       if (!s) return;
-      this.parseStderrLine(s, data.toString());
+
+      stderrBuffer += data.toString();
+      let newlineIndex;
+      while ((newlineIndex = stderrBuffer.indexOf('\n')) !== -1) {
+        const line = stderrBuffer.slice(0, newlineIndex);
+        stderrBuffer = stderrBuffer.slice(newlineIndex + 1);
+        this.parseStderrLine(s, line);
+      }
     });
 
     proc.on('error', (err) => {
@@ -246,7 +254,7 @@ export class HlsManager {
       if (durMatch) {
         const h = parseInt(durMatch[1], 10);
         const m = parseInt(durMatch[2], 10);
-        const s = parseInt(durMatch[3], 10);
+        const s = parseFloat(`${durMatch[3]}.${durMatch[4]}`);
         session.progress.duration = h * 3600 + m * 60 + s;
       }
     }
@@ -256,7 +264,7 @@ export class HlsManager {
     if (timeMatch) {
       const h = parseInt(timeMatch[1], 10);
       const m = parseInt(timeMatch[2], 10);
-      const s = parseInt(timeMatch[3], 10);
+      const s = parseFloat(`${timeMatch[3]}.${timeMatch[4]}`);
       session.progress.currentTime = h * 3600 + m * 60 + s;
 
       if (session.progress.duration > 0) {
@@ -287,12 +295,14 @@ export class HlsManager {
       }
 
       try {
-        await fs.access(session.playlistPath);
-        return;
+        const stats = await fs.stat(session.playlistPath);
+        if (stats.size > 0) return;
       } catch {
-        attempts++;
-        await new Promise((resolve) => setTimeout(resolve, 500));
+        // file might not exist yet
       }
+
+      attempts++;
+      await new Promise((resolve) => setTimeout(resolve, 500));
     }
 
     throw new Error('Timeout waiting for HLS playlist');

@@ -67,7 +67,7 @@ describe('HlsManager DOS Protection', () => {
     hlsManager = HlsManager.getInstance();
     hlsManager.setCacheDir(CACHE_DIR);
 
-    // Default fs behavior — access resolves immediately so playlist wait exits
+    // Default fs behavior — stat resolves immediately so playlist wait exits
     mockFsStat.mockResolvedValue({ size: 100, isDirectory: () => true } as any);
     mockFsMkdir.mockResolvedValue(undefined);
     mockFsRm.mockResolvedValue(undefined);
@@ -119,7 +119,7 @@ describe('HlsManager DOS Protection', () => {
     const limit = MAX_CONCURRENT_TRANSCODES;
 
     // block — playlist never appears until we advance time more
-    mockFsAccess.mockRejectedValue(new Error('ENOENT'));
+    mockFsStat.mockRejectedValue(new Error('ENOENT'));
 
     mockSpawn.mockImplementation(() => {
       const mockProcess = new EventEmitter() as any;

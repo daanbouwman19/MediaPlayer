@@ -96,9 +96,10 @@ describe('HlsManager Robustness', () => {
 
     mockFsMkdir.mockResolvedValue(undefined);
     mockFsRm.mockResolvedValue(undefined);
-    mockFsStat.mockResolvedValue({ size: 100, isDirectory: () => true });
+    // By default, playlist is NOT ready
+    mockFsStat.mockRejectedValue(new Error('ENOENT'));
     mockFsReaddir.mockResolvedValue([]);
-    // access resolves → playlist ready
+    // access resolves → playlist ready (legacy, but keep for other checks)
     mockFsAccess.mockResolvedValue(undefined);
   });
 
@@ -111,6 +112,7 @@ describe('HlsManager Robustness', () => {
     const sessionId = 'test-session';
     const mockProcess = createMockProcess();
     mockSpawn.mockReturnValue(mockProcess);
+    mockFsStat.mockResolvedValue({ size: 100 });
 
     const p1 = hlsManager.ensureSession(sessionId, '/test.mp4');
     const p2 = hlsManager.ensureSession(sessionId, '/test.mp4');
@@ -126,9 +128,6 @@ describe('HlsManager Robustness', () => {
     const sessionId = 'startup-fail';
     const mockProcess = createMockProcess();
     mockSpawn.mockReturnValue(mockProcess);
-
-    // Playlist never appears
-    mockFsAccess.mockRejectedValue(new Error('ENOENT'));
 
     const promise = hlsManager.ensureSession(sessionId, '/test.mp4');
     promise.catch(() => {}); // prevent unhandled rejection warning
@@ -151,7 +150,6 @@ describe('HlsManager Robustness', () => {
     const sessionId = 'exit-during-wait';
     const mockProcess = createMockProcess();
     mockSpawn.mockReturnValue(mockProcess);
-    mockFsAccess.mockRejectedValue(new Error('ENOENT'));
 
     const promise = hlsManager.ensureSession(sessionId, '/test.mp4');
     promise.catch(() => {}); // prevent unhandled rejection warning
@@ -168,6 +166,7 @@ describe('HlsManager Robustness', () => {
     const sessionId = 'progress-test';
     const mockProcess = createMockProcess();
     mockSpawn.mockReturnValue(mockProcess);
+    mockFsStat.mockResolvedValue({ size: 100 });
 
     const promise = hlsManager.ensureSession(sessionId, '/test.mp4');
     await vi.advanceTimersByTimeAsync(100);
@@ -210,7 +209,6 @@ describe('HlsManager Robustness', () => {
     const sessionId = 'timeout-playlist';
     const mockProcess = createMockProcess();
     mockSpawn.mockReturnValue(mockProcess);
-    mockFsAccess.mockRejectedValue(new Error('ENOENT'));
 
     const promise = hlsManager.ensureSession(sessionId, '/test.mp4');
     promise.catch(() => {}); // prevent unhandled rejection warning
@@ -225,6 +223,8 @@ describe('HlsManager Robustness', () => {
     const sessionId = 'timeout-test';
     const mockProcess = createMockProcess();
     mockSpawn.mockReturnValue(mockProcess);
+    mockFsStat.mockResolvedValue({ size: 100 });
+
     const promise = hlsManager.ensureSession(sessionId, '/file.mp4');
     await vi.advanceTimersByTimeAsync(500);
     await promise;
@@ -240,6 +240,7 @@ describe('HlsManager Robustness', () => {
     const sessionId = 'reuse-test';
     const mockProcess = createMockProcess();
     mockSpawn.mockReturnValue(mockProcess);
+    mockFsStat.mockResolvedValue({ size: 100 });
 
     const p1 = hlsManager.ensureSession(sessionId, '/test.mp4');
     await vi.advanceTimersByTimeAsync(500);
@@ -253,6 +254,8 @@ describe('HlsManager Robustness', () => {
     const sessionId = 'exit-duration';
     const mockProcess = createMockProcess();
     mockSpawn.mockReturnValue(mockProcess);
+    mockFsStat.mockResolvedValue({ size: 100 });
+
     const p1 = hlsManager.ensureSession(sessionId, '/test.mp4');
     await vi.advanceTimersByTimeAsync(500);
     await p1;
