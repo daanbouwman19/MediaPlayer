@@ -42,7 +42,7 @@ export function useMediaLoader() {
 
     try {
       if (mediaUrlGenerator.value) {
-        const url = mediaUrlGenerator.value(item.path);
+        const url = await mediaUrlGenerator.value(item.path);
 
         if (requestId !== currentLoadRequestId.value) return;
 

@@ -3,13 +3,12 @@ import { HlsManager } from '../../src/core/hls-manager.ts';
 import { MAX_CONCURRENT_TRANSCODES } from '../../src/core/constants.ts';
 import EventEmitter from 'events';
 
-const { mockSpawn, mockFsMkdir, mockFsRm, mockFsStat } =
-  vi.hoisted(() => ({
-    mockSpawn: vi.fn(),
-    mockFsMkdir: vi.fn(),
-    mockFsRm: vi.fn(),
-    mockFsStat: vi.fn(),
-  }));
+const { mockSpawn, mockFsMkdir, mockFsRm, mockFsStat } = vi.hoisted(() => ({
+  mockSpawn: vi.fn(),
+  mockFsMkdir: vi.fn(),
+  mockFsRm: vi.fn(),
+  mockFsStat: vi.fn(),
+}));
 
 vi.mock('child_process', () => ({
   spawn: mockSpawn,
