@@ -261,10 +261,6 @@ onBeforeUnmount(() => {
   background-color: transparent;
 }
 
-.text-accent {
-  color: var(--accent-color);
-}
-
 .font-header {
   font-family: var(--header-font);
 }

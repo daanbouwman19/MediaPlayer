@@ -71,6 +71,19 @@
   --vignette-edge: 0.95;
 }
 
+/* Text Utility Classes */
+.text-color {
+  color: var(--text-color);
+}
+
+.text-muted {
+  color: var(--text-muted);
+}
+
+.text-accent {
+  color: var(--accent-color);
+}
+
 /* Glassmorphism Utilities */
 .glass-panel {
   background: var(--glass-bg);

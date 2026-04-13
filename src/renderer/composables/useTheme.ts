@@ -1,11 +1,11 @@
 import { watch } from 'vue';
 import { useUIStore } from './useUIStore';
 
+const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+
 export function useTheme() {
   const uiStore = useUIStore();
   const { themeMode } = uiStore;
-
-  const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
 
   const applyTheme = () => {
     const isDark =
@@ -13,11 +13,7 @@ export function useTheme() {
         ? mediaQuery.matches
         : themeMode.value === 'dark';
 
-    if (isDark) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
+    document.documentElement.classList.toggle('dark', isDark);
   };
 
   const cycleTheme = () => {
@@ -31,6 +27,7 @@ export function useTheme() {
   };
 
   let unwatchTheme: (() => void) | null = null;
+
   const initTheme = () => {
     // Listen for OS theme changes
     mediaQuery.addEventListener('change', applyTheme);
