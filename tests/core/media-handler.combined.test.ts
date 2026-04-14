@@ -6,6 +6,8 @@ import path from 'path';
 import request from 'supertest';
 import { createMediaSource } from '../../src/core/media-source';
 import fs from 'fs';
+import { createTestMediaService } from '../utils/test-factory';
+import { MediaService } from '../../src/core/media-service';
 
 // --- Mocks ---
 
@@ -176,6 +178,7 @@ const mockMediaSource = {
 describe('MediaHandler Combined Tests', () => {
   let req: any;
   let res: any;
+  let service: MediaService;
 
   // Define spies to replace hoisted vars
   let mockFsStat: any;
@@ -189,6 +192,7 @@ describe('MediaHandler Combined Tests', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
+    service = createTestMediaService().service;
 
     // Reset all persistent mocks prevents cross-test state pollution
     mockSpawn.mockReset();
@@ -1062,7 +1066,11 @@ describe('MediaHandler Combined Tests', () => {
   // --- From media-handler.branches.test.ts ---
   describe('Additional Integration Coverage', () => {
     it('METADATA route handles array input and missing file', async () => {
-      const app = createMediaApp({ ffmpegPath: 'ffmpeg', cacheDir: '/cache' });
+      const app = createMediaApp({
+        ffmpegPath: 'ffmpeg',
+        cacheDir: '/cache',
+        mediaService: service,
+      });
 
       // Missing file
       const res1 = await request(app).get('/video/metadata');
@@ -1091,7 +1099,11 @@ describe('MediaHandler Combined Tests', () => {
     });
 
     it('THUMBNAIL route handles array input and missing file', async () => {
-      const app = createMediaApp({ ffmpegPath: 'ffmpeg', cacheDir: '/cache' });
+      const app = createMediaApp({
+        ffmpegPath: 'ffmpeg',
+        cacheDir: '/cache',
+        mediaService: service,
+      });
 
       // Missing file
       const res1 = await request(app).get('/video/thumbnail');
@@ -1109,7 +1121,11 @@ describe('MediaHandler Combined Tests', () => {
     });
 
     it('HLS routes handle missing file and segment parameters', async () => {
-      const app = createMediaApp({ ffmpegPath: 'ffmpeg', cacheDir: '/cache' });
+      const app = createMediaApp({
+        ffmpegPath: 'ffmpeg',
+        cacheDir: '/cache',
+        mediaService: service,
+      });
 
       // Missing file for master.m3u8
       const resMaster = await request(app).get('/api/hls/master.m3u8');
@@ -1131,7 +1147,11 @@ describe('MediaHandler Combined Tests', () => {
       const originalPlatform = process.platform;
       Object.defineProperty(process, 'platform', { value: 'win32' });
 
-      const app = createMediaApp({ ffmpegPath: 'ffmpeg', cacheDir: '/cache' });
+      const app = createMediaApp({
+        ffmpegPath: 'ffmpeg',
+        cacheDir: '/cache',
+        mediaService: service,
+      });
 
       mockValidateFileAccess.mockResolvedValue({
         success: true,
@@ -1209,6 +1229,7 @@ describe('MediaHandler Combined Tests', () => {
       const handler = new MediaHandler({
         ffmpegPath: null,
         cacheDir: '/cache',
+        mediaService: service,
       });
 
       const req = { query: { file: '/file.mp4' } } as any;

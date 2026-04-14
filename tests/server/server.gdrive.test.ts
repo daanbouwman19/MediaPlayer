@@ -74,7 +74,9 @@ describe('Server Google Drive Routes', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     const { createApp } = await import('../../src/server/server');
-    app = await createApp();
+    const { createTestMediaService } = await import('../utils/test-factory');
+    const { service } = createTestMediaService();
+    app = await createApp(service);
   });
 
   it('GET /api/auth/google-drive/start returns URL', async () => {

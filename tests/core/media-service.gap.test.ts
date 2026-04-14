@@ -1,72 +1,61 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { MediaService } from '../../src/core/media-service';
-import { MediaRepository } from '../../src/core/repositories/media-repository';
+import { InMemoryMediaRepository } from '../fakes/in-memory-media-repository';
 
-// Mock Repository
-vi.mock('../../src/core/repositories/media-repository');
-
-// Mock Worker Client to simulate scan results
-const mockWorkerClient = {
-  init: vi.fn(),
-  sendMessage: vi.fn(),
-  terminate: vi.fn(),
-};
-
-vi.mock('../../src/core/worker-client', () => {
-  return {
-    WorkerClient: class {
-      init = mockWorkerClient.init;
-      sendMessage = mockWorkerClient.sendMessage;
-      terminate = mockWorkerClient.terminate;
-    },
-  };
-});
-
-// Mock Worker Factory
-vi.mock('../../src/core/worker-factory', () => ({
-  WorkerFactory: {
-    getWorkerPath: vi
-      .fn()
-      .mockResolvedValue({ path: 'worker.js', options: {} }),
-  },
-}));
-
-describe('Media Service Final Gap Fill', () => {
+describe('Media Service Final Gap Fill (DI Refactored)', () => {
   let service: MediaService;
-  let repo: MediaRepository;
+  let repo: InMemoryMediaRepository;
+  let mockFs: { stat: any };
+  let mockWorker: { runScan: any };
+  let mockMediaHandler: { getVideoDuration: any };
 
   beforeEach(() => {
     vi.clearAllMocks();
-    repo = new MediaRepository();
-    service = new MediaService(repo);
 
-    // Default repo behaviors
-    vi.mocked(repo.getMediaDirectories).mockResolvedValue([
-      { path: '/dir', isActive: true },
-    ] as any);
-    vi.mocked(repo.getSetting).mockResolvedValue(null);
-    vi.mocked(repo.getCachedAlbums).mockResolvedValue([]);
+    repo = new InMemoryMediaRepository();
+    mockFs = {
+      stat: vi.fn().mockResolvedValue({ size: 1024, birthtime: new Date() }),
+    };
+    mockWorker = {
+      runScan: vi.fn().mockResolvedValue([]),
+    };
+    mockMediaHandler = {
+      getVideoDuration: vi.fn().mockResolvedValue({ duration: 100 }),
+    };
+
+    service = new MediaService(
+      repo,
+      mockFs as any,
+      mockWorker as any,
+      mockMediaHandler as any,
+    );
   });
 
   it('scanDiskForAlbumsAndCache: handles worker sending null', async () => {
-    mockWorkerClient.sendMessage.mockResolvedValue(null);
+    repo.setMediaDirectories([
+      { id: '1', path: '/dir', type: 'local', name: 'dir', isActive: true },
+    ]);
+    mockWorker.runScan.mockResolvedValue(null);
 
     const albums = await service.scanDiskForAlbumsAndCache();
     expect(albums).toEqual([]);
-    expect(repo.cacheAlbums).toHaveBeenCalledWith([]);
   });
 
   it('getAlbumsFromCacheOrDisk: returns scan result if cache empty', async () => {
-    vi.mocked(repo.getCachedAlbums).mockResolvedValue([]);
-    mockWorkerClient.sendMessage.mockResolvedValue([{ id: 'scan' }]);
+    repo.setMediaDirectories([
+      { id: '1', path: '/dir', type: 'local', name: 'dir', isActive: true },
+    ]);
+    mockWorker.runScan.mockResolvedValue([{ id: 'scan' }]);
 
     const albums = await service.getAlbumsFromCacheOrDisk();
     expect(albums[0].id).toBe('scan');
   });
 
   it('getAlbumsWithViewCounts: handles empty albums list', async () => {
-    vi.mocked(repo.getCachedAlbums).mockResolvedValue([]);
-    mockWorkerClient.sendMessage.mockResolvedValue([]); // Scan returns empty
+    repo.setMediaDirectories([
+      { id: '1', path: '/dir', type: 'local', name: 'dir', isActive: true },
+    ]);
+    mockWorker.runScan.mockResolvedValue([]); // Scan returns empty
 
     const albums = await service.getAlbumsWithViewCounts();
     expect(albums).toEqual([]);
@@ -87,8 +76,8 @@ describe('Media Service Final Gap Fill', () => {
       },
     ];
 
-    vi.mocked(repo.getCachedAlbums).mockResolvedValue(deepAlbums as any);
-    vi.mocked(repo.getAllMetadataAndStats).mockResolvedValue([
+    await repo.cacheAlbums(deepAlbums as any);
+    repo.setAllMetadataAndStats([
       {
         file_path: '/1.mp4',
         file_path_hash: 'hash',

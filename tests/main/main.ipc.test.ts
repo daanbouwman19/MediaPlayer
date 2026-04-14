@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, Mock } from 'vitest';
 import { registerMediaHandlers } from '../../src/main/ipc/media-controller';
+import { createTestMediaService } from '../utils/test-factory';
 import { IPC_CHANNELS } from '../../src/shared/ipc-channels';
 
 // Mock dependencies
@@ -44,11 +45,6 @@ vi.mock('../../src/main/google-drive-service', () => ({
   listDriveDirectory: vi.fn(),
   getDriveParent: vi.fn(),
 }));
-vi.mock('../../src/core/media-service', () => ({
-  getAlbumsWithViewCounts: vi.fn(),
-  getAlbumsWithViewCountsAfterScan: vi.fn(),
-  extractAndSaveMetadata: vi.fn(),
-}));
 
 describe('Media Controller IPC Handlers', () => {
   let handler: (event: any, ...args: any[]) => any;
@@ -70,7 +66,8 @@ describe('Media Controller IPC Handlers', () => {
     );
 
     // Register handlers
-    registerMediaHandlers();
+    const { service } = createTestMediaService();
+    registerMediaHandlers(service);
 
     // Get the handler
     handler = handlers.get(IPC_CHANNELS.LOAD_FILE_AS_DATA_URL);

@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import request from 'supertest';
 import * as security from '../../src/core/security';
 import { createApp } from '../../src/server/server';
+import { createTestMediaService } from '../utils/test-factory';
 
 // Mock dependencies
 vi.mock('../../src/core/database');
@@ -88,7 +89,8 @@ describe('Server CORS', () => {
     });
 
     it('should block evil.com origin (by returning mismatched allowed origin)', async () => {
-      app = await createApp();
+      const { service } = createTestMediaService();
+      app = await createApp(service);
       const response = await request(app)
         .get('/api/config/extensions')
         .set('Origin', 'http://evil.com');
@@ -101,7 +103,8 @@ describe('Server CORS', () => {
     });
 
     it('should allow localhost:5173', async () => {
-      app = await createApp();
+      const { service } = createTestMediaService();
+      app = await createApp(service);
       const response = await request(app)
         .get('/api/config/extensions')
         .set('Origin', 'http://localhost:5173');
@@ -124,7 +127,8 @@ describe('Server CORS', () => {
     });
 
     it('should disable CORS (Same-Origin enforced) by not sending headers', async () => {
-      app = await createApp();
+      const { service } = createTestMediaService();
+      app = await createApp(service);
       const response = await request(app)
         .get('/api/config/extensions')
         .set('Origin', 'http://evil.com');

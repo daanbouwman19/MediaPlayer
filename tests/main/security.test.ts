@@ -77,11 +77,6 @@ vi.mock('../../src/main/local-server', () => ({
   getMimeType: vi.fn().mockReturnValue('image/jpeg'),
 }));
 
-vi.mock('../../src/core/media-service', () => ({
-  getAlbumsWithViewCountsAfterScan: vi.fn(),
-  getAlbumsWithViewCounts: vi.fn(),
-}));
-
 // Mock heavy dependencies of media-handler to speed up tests
 vi.mock('express', () => ({
   default: vi.fn(),
@@ -114,7 +109,9 @@ describe('Security: load-file-as-data-url', () => {
     // Import media-controller to register the handlers
     const { registerMediaHandlers } =
       await import('../../src/main/ipc/media-controller');
-    registerMediaHandlers();
+    const { createTestMediaService } = await import('../utils/test-factory');
+    const { service } = createTestMediaService();
+    registerMediaHandlers(service);
 
     // Find the handler for 'load-file-as-data-url'
     const handleMock = ipcMain.handle as unknown as Mock;

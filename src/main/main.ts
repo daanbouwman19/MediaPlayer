@@ -35,6 +35,24 @@ import { registerSystemHandlers } from './ipc/system-controller';
 import { registerMediaHandlers } from './ipc/media-controller';
 import { registerDatabaseHandlers } from './ipc/database-controller';
 
+import { MediaService } from '../core/media-service';
+import { MediaRepository } from '../core/repositories/media-repository';
+import { NodeFileSystem } from '../core/infrastructure/node-file-system';
+import { WorkerScannerService } from '../core/infrastructure/worker-scanner-service';
+import { MediaDurationHandler } from '../core/infrastructure/media-duration-handler';
+
+// Initialize Media Service and Dependencies
+const mediaRepo = new MediaRepository();
+const fileSystem = new NodeFileSystem();
+const workerService = new WorkerScannerService();
+const mediaHandler = new MediaDurationHandler();
+const mediaService = new MediaService(
+  mediaRepo,
+  fileSystem,
+  workerService,
+  mediaHandler,
+);
+
 const isDev = !app.isPackaged;
 
 let mainWindow: BrowserWindow | null = null;
@@ -42,7 +60,7 @@ let mainWindow: BrowserWindow | null = null;
 // Register IPC Handlers
 registerAuthHandlers();
 registerSystemHandlers();
-registerMediaHandlers();
+registerMediaHandlers(mediaService);
 registerDatabaseHandlers();
 
 function createWindow() {
@@ -112,7 +130,7 @@ app.on('ready', () => {
       const cacheDir = path.join(app.getPath('userData'), 'thumbnails');
       await fs.mkdir(cacheDir, { recursive: true });
 
-      startLocalServer(cacheDir, () => {
+      startLocalServer(cacheDir, mediaService, () => {
         log.info('[main.js] Local server started in background.');
       });
     })
@@ -136,7 +154,7 @@ app.on('activate', () => {
       createWindow();
     } else {
       const cacheDir = path.join(app.getPath('userData'), 'thumbnails');
-      startLocalServer(cacheDir, createWindow);
+      startLocalServer(cacheDir, mediaService, createWindow);
     }
   }
 });

@@ -6,6 +6,7 @@ import http from 'http';
 import { AddressInfo } from 'net';
 import { createMediaApp } from '../core/media-handler';
 import { getMimeType as coreGetMimeType } from '../core/utils/mime-types';
+import { MediaService } from '../core/media-service';
 
 /**
  * Holds the singleton instance of the HTTP server.
@@ -29,6 +30,7 @@ export const getMimeType = coreGetMimeType;
  */
 async function startLocalServer(
   cacheDir: string,
+  mediaService: MediaService,
   onReadyCallback?: () => void,
 ): Promise<void> {
   if (serverInstance) {
@@ -44,6 +46,7 @@ async function startLocalServer(
   const requestHandler = createMediaApp({
     ffmpegPath: ffmpegPath || null,
     cacheDir,
+    mediaService,
   });
 
   serverInstance = http.createServer(requestHandler);

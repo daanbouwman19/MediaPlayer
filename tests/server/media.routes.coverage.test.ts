@@ -7,6 +7,7 @@ import * as database from '../../src/core/database';
 import * as security from '../../src/core/security';
 import * as mediaHandler from '../../src/core/media-handler';
 import * as mediaSource from '../../src/core/media-source';
+import { createTestMediaService } from '../utils/test-factory';
 
 type TestAppResult = {
   app: express.Express;
@@ -73,7 +74,12 @@ const createTestApp = (ffmpegPath: string | null): TestAppResult => {
   const app = express();
   app.use(express.json());
 
-  const handler = new (mediaHandler.MediaHandler as any)();
+  const { service } = createTestMediaService();
+  const handler = new (mediaHandler.MediaHandler as any)({
+    ffmpegPath,
+    cacheDir: '/tmp',
+    mediaService: service,
+  });
 
   const transcodeState = { current: 0 };
 

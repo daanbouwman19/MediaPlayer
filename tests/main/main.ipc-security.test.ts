@@ -115,7 +115,10 @@ describe('main.js IPC Security', () => {
     const { registerDatabaseHandlers } =
       await import('../../src/main/ipc/database-controller');
 
-    registerMediaHandlers();
+    const { createTestMediaService } = await import('../utils/test-factory');
+    const { service } = createTestMediaService();
+
+    registerMediaHandlers(service);
     registerDatabaseHandlers();
 
     // Collect all registered handlers

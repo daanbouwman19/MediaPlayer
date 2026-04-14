@@ -8,6 +8,11 @@ import { fileURLToPath } from 'url';
 import selfsigned from 'selfsigned';
 import { createApp } from './app.ts';
 import { DEFAULT_SERVER_HOST, DEFAULT_SERVER_PORT } from '../core/constants.ts';
+import { MediaService } from '../core/media-service.ts';
+import { MediaRepository } from '../core/repositories/media-repository.ts';
+import { NodeFileSystem } from '../core/infrastructure/node-file-system.ts';
+import { WorkerScannerService } from '../core/infrastructure/worker-scanner-service.ts';
+import { MediaDurationHandler } from '../core/infrastructure/media-duration-handler.ts';
 
 const CERT_DIR = path.join(process.cwd(), 'certs');
 const KEY_PATH = path.join(CERT_DIR, 'server.key');
@@ -44,7 +49,18 @@ async function ensureCertificates() {
 export async function bootstrap() {
   await ensureCertificates();
 
-  const app = await createApp();
+  const mediaRepo = new MediaRepository();
+  const fileSystem = new NodeFileSystem();
+  const workerService = new WorkerScannerService();
+  const mediaHandler = new MediaDurationHandler();
+  const mediaService = new MediaService(
+    mediaRepo,
+    fileSystem,
+    workerService,
+    mediaHandler,
+  );
+
+  const app = await createApp(mediaService);
   const host = process.env.HOST || DEFAULT_SERVER_HOST;
   let port = DEFAULT_SERVER_PORT;
 

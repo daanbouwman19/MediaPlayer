@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import request from 'supertest';
 import { createApp } from '../../src/server/server';
 import { authenticateWithCode } from '../../src/main/google-auth';
+import { createTestMediaService } from '../utils/test-factory';
 
 vi.mock('../../src/core/database', () => ({
   initDatabase: vi.fn(),
@@ -21,10 +22,7 @@ vi.mock('../../src/core/database', () => ({
   getAllMetadataAndStats: vi.fn(),
   getRecentlyPlayed: vi.fn(),
 }));
-vi.mock('../../src/core/media-service', () => ({
-  getAlbumsWithViewCounts: vi.fn(),
-  getAlbumsWithViewCountsAfterScan: vi.fn(),
-}));
+
 vi.mock('../../src/main/google-auth', () => ({
   generateAuthUrl: vi.fn(),
   authenticateWithCode: vi.fn(),
@@ -54,7 +52,8 @@ describe('Server DoS Protection', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
-    app = await createApp();
+    const { service } = createTestMediaService();
+    app = await createApp(service);
   });
 
   it('should reject large JSON bodies', async () => {

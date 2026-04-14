@@ -96,6 +96,7 @@ describe('Coverage Boost - MediaHandler', () => {
     handler = new MediaHandler({
       ffmpegPath: '/usr/bin/ffmpeg',
       cacheDir: '/tmp',
+      mediaService: {} as any,
     });
     req = {
       query: {},
@@ -223,6 +224,7 @@ describe('Coverage Boost - MediaHandler', () => {
     const noFfmpegHandler = new MediaHandler({
       ffmpegPath: null,
       cacheDir: '/tmp',
+      mediaService: {} as any,
     });
 
     mockValidateFileAccess.mockResolvedValueOnce({
@@ -278,7 +280,21 @@ describe('Coverage Boost - MediaService', () => {
       getMetadata: vi.fn(),
       bulkUpsertMetadata: vi.fn(),
     };
-    service = new MediaService(repoMock);
+    const fsMock = {
+      stat: vi.fn(),
+    };
+    const workerMock = {
+      runScan: vi.fn().mockResolvedValue([]),
+    };
+    const handlerMock = {
+      getVideoDuration: vi.fn(),
+    };
+    service = new MediaService(
+      repoMock,
+      fsMock as any,
+      workerMock as any,
+      handlerMock as any,
+    );
     // Reset MockWorkerClient
     MockWorkerClient.mockClear();
   });

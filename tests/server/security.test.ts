@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Express } from 'express';
 import request from 'supertest';
 import https from 'https';
-import fs from 'fs/promises';
 
 // Mock dependencies
 // When using vi.mock with modules that have default exports, sometimes the structure is tricky
@@ -58,9 +57,14 @@ describe('Server Security Enhancements', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
-    (fs.access as any).mockResolvedValue(undefined); // Certs exist
-    (fs.readFile as any).mockResolvedValue('dummy-cert-data');
-    app = await createApp();
+    const { MediaService } = await import('../../src/core/media-service');
+    const service = new MediaService(
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+    app = await createApp(service);
   });
 
   it('should enforce rate limits on sensitive endpoints', async () => {

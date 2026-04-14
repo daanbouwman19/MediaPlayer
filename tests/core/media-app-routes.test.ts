@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import request from 'supertest';
+import { createTestMediaService } from '../utils/test-factory';
 import { MediaRoutes } from '../../src/core/routes';
 import {
   createMediaApp,
@@ -71,9 +72,11 @@ vi.mock('../../src/core/security', async (importOriginal) => {
 });
 
 describe('MediaHandler Extra Coverage', () => {
+  const { service } = createTestMediaService();
   const options = {
     ffmpegPath: '/usr/bin/ffmpeg',
     cacheDir: '/tmp/cache',
+    mediaService: service,
   };
 
   let req: any;

@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
 import request from 'supertest';
 import { createApp } from '../../src/server/server';
 import * as database from '../../src/core/database';
-import * as mediaService from '../../src/core/media-service';
 import * as mediaHandler from '../../src/core/media-handler';
 import * as fileSystem from '../../src/core/file-system'; // Added import
 import * as security from '../../src/core/security';
@@ -95,7 +94,6 @@ vi.mock('fs', () => {
 
 // Mock core modules
 vi.mock('../../src/core/database');
-vi.mock('../../src/core/media-service');
 vi.mock('../../src/core/file-system');
 vi.mock('../../src/main/drive-cache-manager');
 vi.mock('../../src/core/utils/mime-types');
@@ -203,9 +201,13 @@ vi.mock('../../src/core/media-source', async () => {
 
 describe('Server Combined Tests', () => {
   let app: any;
+  let service: any;
 
   beforeAll(async () => {
-    app = await createApp();
+    const { createTestMediaService } = await import('../utils/test-factory');
+    const result = createTestMediaService();
+    service = result.service;
+    app = await createApp(service);
   });
 
   beforeEach(() => {
@@ -257,7 +259,7 @@ describe('Server Combined Tests', () => {
     describe('GET /api/albums', () => {
       it('should return albums', async () => {
         const mockAlbums = [{ id: 1, name: 'Album 1' }];
-        vi.mocked(mediaService.getAlbumsWithViewCounts).mockResolvedValue(
+        vi.spyOn(service, 'getAlbumsWithViewCounts').mockResolvedValue(
           mockAlbums as any,
         );
         const response = await request(app).get('/api/albums');
@@ -266,7 +268,7 @@ describe('Server Combined Tests', () => {
       });
 
       it('should handle errors', async () => {
-        vi.mocked(mediaService.getAlbumsWithViewCounts).mockRejectedValue(
+        vi.spyOn(service, 'getAlbumsWithViewCounts').mockRejectedValue(
           new Error('Test error'),
         );
         const response = await request(app).get('/api/albums');
@@ -277,9 +279,9 @@ describe('Server Combined Tests', () => {
     describe('POST /api/albums/reindex', () => {
       it('should reindex and return albums', async () => {
         const mockAlbums = [{ id: 1, name: 'Album 1' }];
-        vi.mocked(
-          mediaService.getAlbumsWithViewCountsAfterScan,
-        ).mockResolvedValue(mockAlbums as any);
+        vi.spyOn(service, 'getAlbumsWithViewCountsAfterScan').mockResolvedValue(
+          mockAlbums as any,
+        );
         const response = await request(app).post('/api/albums/reindex');
         expect(response.status).toBe(200);
         expect(response.body).toEqual(mockAlbums);

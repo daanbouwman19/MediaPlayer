@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import request from 'supertest';
 import { createApp } from '../../src/server/app';
+import { createTestMediaService } from '../utils/test-factory';
 
 // Mock dependencies
 vi.mock('../../src/core/database', () => ({
@@ -9,11 +10,6 @@ vi.mock('../../src/core/database', () => ({
   getMetadata: vi.fn(),
   getRecentlyPlayed: vi.fn(),
   getAllMetadataAndStats: vi.fn(),
-}));
-
-vi.mock('../../src/core/media-service', () => ({
-  getAlbumsWithViewCounts: vi.fn().mockResolvedValue([]),
-  getAlbumsWithViewCountsAfterScan: vi.fn(),
 }));
 
 vi.mock('../../src/core/worker-factory', () => ({
@@ -76,7 +72,8 @@ describe('Basic Authentication Middleware', () => {
     delete process.env.SYSTEM_USER;
     delete process.env.SYSTEM_PASSWORD;
 
-    const app = await createApp();
+    const { service } = createTestMediaService();
+    const app = await createApp(service);
     const response = await request(app).get('/api/albums');
     expect(response.status).not.toBe(401);
   });
@@ -85,7 +82,8 @@ describe('Basic Authentication Middleware', () => {
     process.env.SYSTEM_USER = 'admin';
     process.env.SYSTEM_PASSWORD = 'password';
 
-    const app = await createApp();
+    const { service } = createTestMediaService();
+    const app = await createApp(service);
     const response = await request(app).get('/api/albums');
     expect(response.status).toBe(401);
     expect(response.headers['www-authenticate']).toBe(
@@ -97,7 +95,8 @@ describe('Basic Authentication Middleware', () => {
     process.env.SYSTEM_USER = 'admin';
     process.env.SYSTEM_PASSWORD = 'password';
 
-    const app = await createApp();
+    const { service } = createTestMediaService();
+    const app = await createApp(service);
     const response = await request(app)
       .get('/api/albums')
       .auth('admin', 'wrongpassword');
@@ -108,7 +107,8 @@ describe('Basic Authentication Middleware', () => {
     process.env.SYSTEM_USER = 'admin';
     process.env.SYSTEM_PASSWORD = 'password';
 
-    const app = await createApp();
+    const { service } = createTestMediaService();
+    const app = await createApp(service);
     const response = await request(app)
       .get('/api/albums')
       .auth('admin', 'password');
@@ -119,7 +119,8 @@ describe('Basic Authentication Middleware', () => {
     process.env.SYSTEM_USER = 'admin';
     process.env.SYSTEM_PASSWORD = 'pass:word';
 
-    const app = await createApp();
+    const { service } = createTestMediaService();
+    const app = await createApp(service);
     const response = await request(app)
       .get('/api/albums')
       .auth('admin', 'pass:word');
@@ -130,7 +131,8 @@ describe('Basic Authentication Middleware', () => {
     process.env.SYSTEM_USER = 'admin';
     process.env.SYSTEM_PASSWORD = 'password';
 
-    const app = await createApp();
+    const { service } = createTestMediaService();
+    const app = await createApp(service);
     const response = await request(app)
       .get('/api/albums')
       .set(

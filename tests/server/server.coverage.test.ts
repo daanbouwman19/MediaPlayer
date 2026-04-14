@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
 import request from 'supertest';
 import * as database from '../../src/core/database';
-import * as mediaService from '../../src/core/media-service';
 import * as security from '../../src/core/security';
 import * as googleDriveService from '../../src/main/google-drive-service';
 import * as mediaHandler from '../../src/core/media-handler';
@@ -15,7 +14,6 @@ vi.mock('../../src/core/database');
 vi.mock('../../src/core/rate-limiter', () => ({
   createRateLimiter: vi.fn(() => (_req: any, _res: any, next: any) => next()),
 }));
-vi.mock('../../src/core/media-service');
 vi.mock('../../src/core/file-system');
 vi.mock('../../src/main/google-drive-service');
 vi.mock('../../src/main/drive-cache-manager');
@@ -94,11 +92,15 @@ vi.mock('fs/promises', () => ({
 
 describe('Server Coverage', () => {
   let app: any;
+  let service: any;
 
   beforeAll(async () => {
     // Create the app instance once for the test suite.
     const { createApp } = await import('../../src/server/server');
-    app = await createApp();
+    const { createTestMediaService } = await import('../utils/test-factory');
+    const result = createTestMediaService();
+    service = result.service;
+    app = await createApp(service);
   });
 
   beforeEach(async () => {
@@ -253,9 +255,9 @@ describe('Server Coverage', () => {
 
   describe('Additional API Routes', () => {
     it('POST /api/albums/reindex returns albums', async () => {
-      vi.mocked(
-        mediaService.getAlbumsWithViewCountsAfterScan,
-      ).mockResolvedValue([]);
+      vi.spyOn(service, 'getAlbumsWithViewCountsAfterScan').mockResolvedValue(
+        [] as any,
+      );
       const res = await request(app).post('/api/albums/reindex');
       expect(res.status).toBe(200);
     });
