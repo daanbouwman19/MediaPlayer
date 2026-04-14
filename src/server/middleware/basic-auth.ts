@@ -66,6 +66,11 @@ export function basicAuthMiddleware(
   const loginUser = credentials.substring(0, idx);
   const loginSecret = credentials.substring(idx + 1);
 
+  // Prevent DoS by rejecting excessively long inputs before expensive scrypt operations
+  if (loginUser.length > 256 || loginSecret.length > 256) {
+    return sendUnauthorized(res);
+  }
+
   const loginKey = deriveAuthKey(loginUser);
   const secretKey = deriveAuthKey(loginSecret);
 
