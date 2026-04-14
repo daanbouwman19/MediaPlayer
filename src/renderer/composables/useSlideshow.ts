@@ -34,28 +34,37 @@ export function useSlideshow() {
   const filterMedia = (mediaFiles: MediaFile[]): MediaFile[] => {
     if (!mediaFiles || mediaFiles.length === 0) return [];
     const filter = uiStore.state.mediaFilter;
+    const isAll = filter === 'All';
+    const isVideos = filter === 'Videos';
+    const isImages = filter === 'Images';
+    const videoSet = videoExtensionsSet.value;
+    const imageSet = imageExtensionsSet.value;
 
-    const result: MediaFile[] = [];
     const len = mediaFiles.length;
+    const result: MediaFile[] = new Array(len);
+    let count = 0;
+
     for (let i = 0; i < len; i++) {
       const file = mediaFiles[i];
       if (!file || !file.path || typeof file.path !== 'string') continue;
-      if (filter === 'All') {
-        result.push(file);
+
+      if (isAll) {
+        result[count++] = file;
         continue;
       }
 
       const ext = getCachedExtension(file);
       if (!ext) continue;
 
-      if (filter === 'Videos') {
-        if (videoExtensionsSet.value.has(ext)) result.push(file);
-      } else if (filter === 'Images') {
-        if (imageExtensionsSet.value.has(ext)) result.push(file);
+      if (isVideos) {
+        if (videoSet.has(ext)) result[count++] = file;
+      } else if (isImages) {
+        if (imageSet.has(ext)) result[count++] = file;
       } else {
-        result.push(file);
+        result[count++] = file;
       }
     }
+    result.length = count;
     return result;
   };
 
