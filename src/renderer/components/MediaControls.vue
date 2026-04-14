@@ -120,7 +120,7 @@
           <!-- Play/Pause -->
           <button
             v-if="!isImage && currentMediaItem"
-            class="play-pause-button p-1.5 md:p-2 rounded-full text-button-text transition-all duration-200 hover:bg-(--accent-color) focus-visible:ring-2 focus-visible:ring-white/50 focus-visible:outline-none shrink-0"
+            class="play-pause-button p-1.5 md:p-2 rounded-full text-white transition-all duration-200 hover:bg-(--accent-color) hover:text-button-text focus-visible:ring-2 focus-visible:ring-white/50 focus-visible:outline-none shrink-0"
             :aria-label="
               isPlaying ? 'Pause video (Space)' : 'Play video (Space)'
             "
@@ -140,7 +140,7 @@
           <!-- Mute/Unmute -->
           <button
             v-if="!isImage && currentMediaItem"
-            class="p-1.5 md:p-2 rounded-full text-button-text transition-all duration-200 hover:bg-(--accent-color) focus-visible:ring-2 focus-visible:ring-white/50 focus-visible:outline-none shrink-0"
+            class="p-1.5 md:p-2 rounded-full text-white transition-all duration-200 hover:bg-(--accent-color) hover:text-button-text focus-visible:ring-2 focus-visible:ring-white/50 focus-visible:outline-none shrink-0"
             :title="isMuted ? 'Unmute' : 'Mute'"
             :aria-label="isMuted ? 'Unmute audio' : 'Mute audio'"
             @click="$emit('toggle-mute')"
@@ -158,9 +158,9 @@
           <!-- VR Mode -->
           <button
             v-if="!isImage && currentMediaItem"
-            class="p-1.5 md:p-2 rounded-full text-button-text transition-all duration-200 hover:bg-(--accent-color) focus-visible:ring-2 focus-visible:ring-white/50 focus-visible:outline-none shrink-0 hidden sm:block"
+            class="p-1.5 md:p-2 rounded-full text-white transition-all duration-200 hover:bg-(--accent-color) hover:text-button-text focus-visible:ring-2 focus-visible:ring-white/50 focus-visible:outline-none shrink-0 hidden sm:block"
             :class="{
-              'bg-(--accent-color)': isVrMode,
+              'bg-(--accent-color) text-button-text': isVrMode,
             }"
             title="Toggle VR Mode (180°)"
             aria-label="Toggle VR Mode"
@@ -179,7 +179,7 @@
           <!-- VLC -->
           <button
             v-if="!isImage && currentMediaItem"
-            class="vlc-button p-1.5 md:p-2 rounded-full text-button-text transition-all duration-200 hover:bg-(--accent-color) focus-visible:ring-2 focus-visible:ring-white/50 focus-visible:outline-none shrink-0 hidden sm:block"
+            class="vlc-button p-1.5 md:p-2 rounded-full text-white transition-all duration-200 hover:bg-(--accent-color) hover:text-button-text focus-visible:ring-2 focus-visible:ring-white/50 focus-visible:outline-none shrink-0 hidden sm:block"
             :class="{ 'opacity-50 cursor-wait': isOpeningVlc }"
             :disabled="isOpeningVlc"
             :title="isOpeningVlc ? 'Opening VLC...' : 'Open in VLC'"
@@ -203,7 +203,7 @@
           <button
             v-if="!isImage && currentMediaItem && showTime"
             type="button"
-            class="text-[10px] md:text-xs font-mono text-button-text min-w-[60px] md:min-w-[80px] text-center hover:text-white cursor-pointer transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-white/50 rounded px-1"
+            class="text-[10px] md:text-xs font-mono text-white/80 min-w-[60px] md:min-w-[80px] text-center hover:text-white cursor-pointer transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-white/50 rounded px-1"
             :title="
               timeDisplayMode === 'total'
                 ? 'Show remaining time'
@@ -225,7 +225,7 @@
           <template v-if="!isImage && currentMediaItem">
             <!-- Shortcuts -->
             <button
-              class="p-1.5 md:p-2 rounded-full text-button-text transition-all duration-200 hover:bg-(--accent-color) focus-visible:ring-2 focus-visible:ring-white/50 focus-visible:outline-none shrink-0 hidden sm:block"
+              class="p-1.5 md:p-2 rounded-full text-white transition-all duration-200 hover:bg-(--accent-color) hover:text-button-text focus-visible:ring-2 focus-visible:ring-white/50 focus-visible:outline-none shrink-0 hidden sm:block"
               title="Keyboard Shortcuts (?)"
               aria-label="Keyboard Shortcuts"
               @click="$emit('open-shortcuts')"
@@ -243,7 +243,7 @@
           <!-- Fullscreen -->
           <button
             v-if="!isImage && currentMediaItem"
-            class="p-1.5 md:p-2 rounded-full text-button-text transition-all duration-200 hover:bg-(--accent-color) focus-visible:ring-2 focus-visible:ring-white/50 focus-visible:outline-none shrink-0"
+            class="p-1.5 md:p-2 rounded-full text-white transition-all duration-200 hover:bg-(--accent-color) hover:text-button-text focus-visible:ring-2 focus-visible:ring-white/50 focus-visible:outline-none shrink-0"
             title="Toggle Fullscreen"
             aria-label="Toggle Fullscreen"
             @click="$emit('toggle-fullscreen')"
@@ -354,16 +354,16 @@ const navButtonClass = computed(() => {
   // Desktop - Large Pill (if space permits)
   if (isDesktop.value && containerWidth.value > 640) {
     // Note: 'nav-button' usually adds padding, but we define specifics here for safety
-    return 'px-5 py-2 rounded-lg text-button-text font-bold uppercase tracking-wider text-sm shadow-md';
+    return 'px-5 py-2 rounded-lg text-white hover:text-button-text font-bold uppercase tracking-wider text-sm shadow-md';
   }
 
   // Mobile Portrait - Medium Pill
   if (!isLandscape.value) {
-    return 'px-4 py-1.5 rounded-lg text-button-text font-bold uppercase tracking-wide text-xs shadow-sm';
+    return 'px-4 py-1.5 rounded-lg text-white hover:text-button-text font-bold uppercase tracking-wide text-xs shadow-sm';
   }
 
   // Mobile Landscape - Compact Circle
-  return 'p-1.5 rounded-full text-button-text';
+  return 'p-1.5 rounded-full text-white hover:text-button-text';
 });
 
 // Dynamic Gap for controls container
