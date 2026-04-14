@@ -160,3 +160,8 @@
 
 **Learning:** Keyboard shortcuts are powerful but useless if users don't know they exist. Relying on a hidden shortcut (like `?`) to show help is an anti-pattern.
 **Action:** Added a visible "Keyboard Shortcuts" button to the media controls. This ensures users can discover the functionality without knowing the secret handshake.
+
+## 2026-04-14 - Improve accessibility for grid view close button
+
+**Learning:** The MediaGrid component's close button lacked a descriptive aria-label, which could be confusing for screen reader users as 'Close' might not provide enough context.
+**Action:** Add descriptive aria-labels to buttons, especially when the visual text might be ambiguous out of context.
