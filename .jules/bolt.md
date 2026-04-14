@@ -92,3 +92,8 @@
 
 **Learning:** Using `loading="lazy"` on images inside a virtual scroller (which already manages visibility by mounting/unmounting) causes double-buffering. The browser waits until the image is strictly in the viewport (or very close) to load it, defeating the purpose of the scroller's buffer zone which is meant to preload items just outside the viewport.
 **Action:** Remove `loading="lazy"` from images within `VirtualScroller` item components to ensure they load eagerly when mounted in the buffer, providing smoother scrolling.
+
+## 2026-04-14 - [Allocation-Free Iteration for Filters]
+
+**Learning:** Using `Array.prototype.filter` allocates intermediate arrays and adds callback overhead per item, which causes GC pressure in performance-critical paths (like media filtering in large libraries).
+**Action:** Replace `Array.prototype.filter` with a manual `for` loop and push matching items to a pre-allocated or dynamically sized array to avoid callback overhead and unnecessary allocations.
