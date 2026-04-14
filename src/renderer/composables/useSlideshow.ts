@@ -35,17 +35,28 @@ export function useSlideshow() {
     if (!mediaFiles || mediaFiles.length === 0) return [];
     const filter = uiStore.state.mediaFilter;
 
-    return mediaFiles.filter((file) => {
-      if (!file || !file.path || typeof file.path !== 'string') return false;
-      if (filter === 'All') return true;
+    const result: MediaFile[] = [];
+    const len = mediaFiles.length;
+    for (let i = 0; i < len; i++) {
+      const file = mediaFiles[i];
+      if (!file || !file.path || typeof file.path !== 'string') continue;
+      if (filter === 'All') {
+        result.push(file);
+        continue;
+      }
 
       const ext = getCachedExtension(file);
-      if (!ext) return false;
+      if (!ext) continue;
 
-      if (filter === 'Videos') return videoExtensionsSet.value.has(ext);
-      if (filter === 'Images') return imageExtensionsSet.value.has(ext);
-      return true;
-    });
+      if (filter === 'Videos') {
+        if (videoExtensionsSet.value.has(ext)) result.push(file);
+      } else if (filter === 'Images') {
+        if (imageExtensionsSet.value.has(ext)) result.push(file);
+      } else {
+        result.push(file);
+      }
+    }
+    return result;
   };
 
   const filteredGlobalMediaPool = computed(() => {
