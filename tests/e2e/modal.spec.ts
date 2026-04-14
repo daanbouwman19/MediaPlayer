@@ -46,14 +46,18 @@ for (const tc of testCases) {
     await page.goto('/');
 
     // Ensure the app loaded
-    await expect(page.getByRole('heading', { name: 'MediaPlayer' })).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'MediaPlayer' }),
+    ).toBeVisible();
 
     // Click the Add Playlist button (it has title="Add Playlist")
     // Wait for any animations to finish
     await page.locator('button[title="Add Playlist"]').click();
 
     // Wait for the modal to be visible
-    const modalHeading = page.getByRole('heading', { name: 'Create Smart Playlist' });
+    const modalHeading = page.getByRole('heading', {
+      name: 'Create Smart Playlist',
+    });
     await expect(modalHeading).toBeVisible();
 
     // Give inputs focus to blur them
@@ -64,13 +68,18 @@ for (const tc of testCases) {
     await page.waitForTimeout(1000);
 
     // Disable blinking cursors
-    await page.addStyleTag({ content: 'input { caret-color: transparent !important; }' });
+    await page.addStyleTag({
+      content: 'input { caret-color: transparent !important; }',
+    });
 
     // Take screenshot
-    await expect(page).toHaveScreenshot(`smart-playlist-modal-${themeLabel}.png`, {
-      fullPage: true,
-      maxDiffPixelRatio: 0.05,
-      animations: 'disabled'
-    });
+    await expect(page).toHaveScreenshot(
+      `smart-playlist-modal-${themeLabel}.png`,
+      {
+        fullPage: true,
+        maxDiffPixelRatio: 0.05,
+        animations: 'disabled',
+      },
+    );
   });
 }
