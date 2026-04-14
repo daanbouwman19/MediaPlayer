@@ -1,6 +1,12 @@
 import { test, expect } from '@playwright/test';
 
-for (const theme of ['light', 'dark', 'pink', 'cyberpunk'] as const) {
+for (const theme of [
+  'light',
+  'dark',
+  'pink',
+  'cyberpunk-light',
+  'cyberpunk-dark',
+] as const) {
   test(`MediaGrid visual regression - ${theme} mode`, async ({
     page,
     isMobile,

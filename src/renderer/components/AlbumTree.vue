@@ -56,7 +56,7 @@
             xmlns="http://www.w3.org/2000/svg"
             viewBox="0 0 20 20"
             fill="currentColor"
-            class="w-2.5 h-2.5 text-white"
+            class="w-2.5 h-2.5 text-button-text"
           >
             <path
               fill-rule="evenodd"
@@ -67,7 +67,7 @@
           <!-- Indeterminate Dash -->
           <div
             v-else-if="selectionState === 'some'"
-            class="w-2 h-0.5 bg-white rounded-full"
+            class="w-2 h-0.5 bg-button-text rounded-full"
           ></div>
         </div>
       </button>
@@ -85,7 +85,7 @@
         <!-- Badge for count -->
         <span
           v-if="totalTextureCount > 0"
-          class="shrink-0 bg-accent/10 text-accent text-[10px] font-bold px-1.5 py-0.5 rounded-md"
+          class="shrink-0 bg-accent/20 text-color text-[10px] font-bold px-1.5 py-0.5 rounded-md"
         >
           {{ totalTextureCount }}
         </span>

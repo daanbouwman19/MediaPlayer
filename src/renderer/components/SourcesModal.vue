@@ -134,7 +134,7 @@
                   <!-- Icon -->
                   <span
                     v-if="dir.type === 'google_drive'"
-                    class="mr-3 text-accent shrink-0"
+                    class="mr-3 text-accent-secondary shrink-0"
                     title="Google Drive"
                   >
                     <svg
@@ -308,16 +308,16 @@
         <div v-else-if="!authSuccess" class="space-y-4">
           <div class="space-y-2 text-sm text-muted">
             <p>
-              <span class="font-bold text-accent">Step 1:</span> Complete login
-              in the browser window.
+              <span class="font-bold text-accent-secondary">Step 1:</span>
+              Complete login in the browser window.
             </p>
             <p>
-              <span class="font-bold text-accent">Step 2:</span> Copy the code
-              provided by Google.
+              <span class="font-bold text-accent-secondary">Step 2:</span> Copy
+              the code provided by Google.
             </p>
             <p>
-              <span class="font-bold text-accent">Step 3:</span> Paste the code
-              below.
+              <span class="font-bold text-accent-secondary">Step 3:</span> Paste
+              the code below.
             </p>
           </div>
 

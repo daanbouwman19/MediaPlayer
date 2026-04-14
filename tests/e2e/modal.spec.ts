@@ -6,8 +6,8 @@ const testCases = [
   { theme: 'light', colorScheme: 'light' },
   { theme: 'dark', colorScheme: 'dark' },
   { theme: 'pink', colorScheme: 'light' },
-  { theme: 'cyberpunk', colorScheme: 'light', label: 'cyberpunk-light' },
-  { theme: 'cyberpunk', colorScheme: 'dark', label: 'cyberpunk-dark' },
+  { theme: 'cyberpunk-light', colorScheme: 'light' },
+  { theme: 'cyberpunk-dark', colorScheme: 'dark' },
 ] as const;
 
 for (const tc of testCases) {

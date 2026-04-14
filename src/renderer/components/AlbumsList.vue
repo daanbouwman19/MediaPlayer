@@ -15,7 +15,7 @@
         <CloseIcon class="w-5 h-5" />
       </button>
 
-      <h2 class="text-accent font-bold tracking-tight text-sm uppercase">
+      <h2 class="text-color font-bold tracking-tight text-sm uppercase">
         Library
       </h2>
 
@@ -62,7 +62,7 @@
                 class="w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-all duration-200 text-left"
                 :class="
                   themeMode === theme.id
-                    ? 'bg-accent/20 text-accent font-bold'
+                    ? 'bg-accent/20 text-button-text font-bold'
                     : 'text-muted hover:bg-black/10 hover:text-accent'
                 "
                 @click="selectTheme(theme.id)"
@@ -328,7 +328,7 @@
               class="flex-1 px-2 py-1.5 text-xs font-medium rounded-md transition-all duration-200"
               :class="
                 mediaFilter === filter
-                  ? 'bg-accent text-white shadow-sm'
+                  ? 'bg-accent text-button-text shadow-sm'
                   : 'text-muted hover:text-accent hover:bg-black/5'
               "
               :aria-pressed="mediaFilter === filter"

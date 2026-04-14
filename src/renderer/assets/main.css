@@ -10,6 +10,7 @@
   --color-accent-hover: var(--accent-hover);
   --color-text-color: var(--text-color);
   --color-text-muted: var(--text-muted);
+  --color-button-text: var(--button-text-color);
 }
 
 /* Custom Color Palette & Typography using CSS Variables.
@@ -133,10 +134,8 @@
   --vignette-edge: 0.4;
 }
 
-.theme-cyberpunk {
-  /* Cyberpunk Theme - Neon Revival palette */
-
-  /* Light Variant (Default) */
+.theme-cyberpunk-light {
+  /* Cyberpunk Light - Neon Revival palette */
   --primary-bg: #fdfaf1; /* Industrial Off-white */
   --secondary-bg: #ffffff;
   --tertiary-bg: #fef9c3; /* Yellow-100 */
@@ -144,16 +143,16 @@
   --accent-color: #fcea2b; /* Vibrant Neon Yellow */
   --accent-secondary: #06b6d4; /* Cyan-500 */
   --accent-hover: #facc15; /* Yellow-400 */
-  --watched-color: rgba(252, 234, 43, 0.3);
+  --watched-color: rgba(252, 234, 43, 0.4);
 
-  --text-color: #0f172a; /* Slate-900 for readability */
-  --text-muted: #475569; /* Slate-600 */
-  --border-color: rgba(252, 234, 43, 0.4);
-  --selection-color: rgba(252, 234, 43, 0.2);
-  --button-text-color: #000000; /* BLACK text on neon buttons */
+  --text-color: #0f172a; /* Slate-900 */
+  --text-muted: #334155; /* Slate-700 for better readability */
+  --border-color: rgba(252, 234, 43, 0.5);
+  --selection-color: rgba(252, 234, 43, 0.25);
+  --button-text-color: #000000;
 
-  --glass-bg: rgba(255, 255, 255, 0.8);
-  --glass-border: rgba(252, 234, 43, 0.3);
+  --glass-bg: rgba(255, 255, 255, 0.85);
+  --glass-border: rgba(252, 234, 43, 0.4);
   --glass-shadow: 0 8px 32px 0 rgba(252, 234, 43, 0.15);
   --glass-blur: blur(16px);
 
@@ -162,29 +161,75 @@
   --vignette-edge: 0.2;
 }
 
+.theme-cyberpunk-dark {
+  /* Cyberpunk Dark Variant */
+  --primary-bg: #09090b; /* Zinc-950 */
+  --secondary-bg: #18181b; /* Zinc-900 */
+  --tertiary-bg: #27272a; /* Zinc-800 */
+
+  --accent-color: #fef08a; /* Yellow-200 / Neon Yellow */
+  --accent-secondary: #22d3ee; /* Cyan-400 */
+  --accent-hover: #fde047; /* Yellow-300 */
+  --watched-color: rgba(254, 240, 138, 0.3);
+
+  --text-color: #fafafa;
+  --text-muted: #a1a1aa; /* Zinc-400 */
+  --border-color: rgba(254, 240, 138, 0.2);
+  --selection-color: #422006;
+  --button-text-color: #09090b;
+
+  --glass-bg: rgba(24, 24, 27, 0.8);
+  --glass-border: rgba(254, 240, 138, 0.2);
+  --glass-shadow: 0 8px 32px 0 rgba(254, 240, 138, 0.15);
+  --glass-blur: blur(20px);
+
+  --vignette-color: 9, 9, 11;
+  --vignette-mid: 0.4;
+  --vignette-edge: 0.8;
+}
+
+.theme-cyberpunk-auto {
+  /* Cyberpunk Auto (System Default) */
+  --primary-bg: #fdfaf1;
+  --secondary-bg: #ffffff;
+  --tertiary-bg: #fef9c3;
+  --accent-color: #fcea2b;
+  --accent-secondary: #06b6d4;
+  --accent-hover: #facc15;
+  --watched-color: rgba(252, 234, 43, 0.4);
+  --text-color: #0f172a;
+  --text-muted: #334155;
+  --border-color: rgba(252, 234, 43, 0.5);
+  --selection-color: rgba(252, 234, 43, 0.25);
+  --button-text-color: #000000;
+  --glass-bg: rgba(255, 255, 255, 0.85);
+  --glass-border: rgba(252, 234, 43, 0.4);
+  --glass-shadow: 0 8px 32px 0 rgba(252, 234, 43, 0.15);
+  --glass-blur: blur(16px);
+  --vignette-color: 253, 250, 241;
+  --vignette-mid: 0.1;
+  --vignette-edge: 0.2;
+}
+
 @media (prefers-color-scheme: dark) {
-  .theme-cyberpunk {
-    /* Dark Variant */
-    --primary-bg: #09090b; /* Zinc-950 */
-    --secondary-bg: #18181b; /* Zinc-900 */
-    --tertiary-bg: #27272a; /* Zinc-800 */
-
-    --accent-color: #fef08a; /* Yellow-200 / Neon Yellow */
-    --accent-secondary: #22d3ee; /* Cyan-400 */
-    --accent-hover: #fde047; /* Yellow-300 */
+  .theme-cyberpunk-auto {
+    /* Switch to Dark variables */
+    --primary-bg: #09090b;
+    --secondary-bg: #18181b;
+    --tertiary-bg: #27272a;
+    --accent-color: #fef08a;
+    --accent-secondary: #22d3ee;
+    --accent-hover: #fde047;
     --watched-color: rgba(254, 240, 138, 0.3);
-
     --text-color: #fafafa;
-    --text-muted: #a1a1aa; /* Zinc-400 */
+    --text-muted: #a1a1aa;
     --border-color: rgba(254, 240, 138, 0.2);
     --selection-color: #422006;
-    --button-text-color: #09090b; /* Dark text for bright button */
-
+    --button-text-color: #09090b;
     --glass-bg: rgba(24, 24, 27, 0.8);
     --glass-border: rgba(254, 240, 138, 0.2);
     --glass-shadow: 0 8px 32px 0 rgba(254, 240, 138, 0.15);
     --glass-blur: blur(20px);
-
     --vignette-color: 9, 9, 11;
     --vignette-mid: 0.4;
     --vignette-edge: 0.8;

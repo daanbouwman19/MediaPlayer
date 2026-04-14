@@ -65,7 +65,14 @@ describe('useTheme', () => {
     expect(mockThemeMode.value).toBe('pink');
 
     cycleTheme();
-    expect(mockThemeMode.value).toBe('cyberpunk');
+    expect(mockThemeMode.value).toBe('cyberpunk-light');
+
+    cycleTheme();
+    expect(mockThemeMode.value).toBe('cyberpunk-dark');
+
+    cycleTheme();
+    expect(mockThemeMode.value).toBe('cyberpunk-auto');
+
     cycleTheme();
     expect(mockThemeMode.value).toBe('system');
   });
