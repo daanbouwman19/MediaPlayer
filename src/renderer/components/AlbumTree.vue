@@ -2,8 +2,7 @@
   <li
     class="flex flex-col items-start p-1.5 rounded-md transition-colors duration-200 mb-0.5"
     :class="{
-      'bg-indigo-500/15 border-l-2 border-indigo-500':
-        selectionState !== 'none',
+      'bg-accent/15 border-l-2 border-accent': selectionState !== 'none',
       'hover:bg-white/5': selectionState === 'none',
     }"
     :style="{ marginLeft: `${depth * 20}px` }"
@@ -14,7 +13,7 @@
       <!-- Toggle Button (Triangle) -->
       <button
         v-if="isFolder"
-        class="toggle-button flex items-center justify-center w-6 h-6 rounded hover:bg-gray-500/10 text-muted hover:text-accent transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+        class="toggle-button flex items-center justify-center w-6 h-6 rounded hover:bg-black/10 text-muted hover:text-accent transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         :aria-expanded="isOpen"
         :aria-label="isOpen ? `Collapse ${album.name}` : `Expand ${album.name}`"
         @click.stop="toggle"
@@ -28,7 +27,7 @@
 
       <!-- Selection Checkbox -->
       <button
-        class="flex items-center justify-center w-5 h-5 rounded hover:bg-white/10 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 shrink-0"
+        class="flex items-center justify-center w-5 h-5 rounded hover:bg-white/10 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent shrink-0"
         data-testid="album-checkbox"
         role="checkbox"
         :aria-checked="
@@ -45,10 +44,10 @@
           class="w-3.5 h-3.5 rounded border flex items-center justify-center transition-colors"
           :class="[
             selectionState === 'all'
-              ? 'bg-indigo-500 border-indigo-500'
+              ? 'bg-accent border-accent'
               : selectionState === 'some'
-                ? 'bg-indigo-500 border-indigo-500'
-                : 'border-gray-600 hover:border-gray-400',
+                ? 'bg-accent border-accent'
+                : 'border-muted hover:border-accent',
           ]"
         >
           <!-- Checkmark -->
@@ -75,7 +74,7 @@
 
       <!-- Main Action Button (Name + Badge) -->
       <button
-        class="grow flex items-center gap-2 text-left min-w-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 rounded px-1 -ml-1 transition-colors hover:bg-gray-500/10 cursor-pointer"
+        class="grow flex items-center gap-2 text-left min-w-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded px-1 -ml-1 transition-colors hover:bg-black/10 cursor-pointer"
         :aria-label="'Play ' + album.name"
         @click="handleClickAlbum(album)"
       >
@@ -99,7 +98,7 @@
       >
         <!-- Play Button for Folder/Album -->
         <button
-          class="shrink-0 text-muted hover:text-accent p-1 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+          class="shrink-0 text-muted hover:text-accent p-1 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           title="Play Album"
           :aria-label="'Play ' + album.name"
           @click.stop="handleClickAlbum(album)"
@@ -109,7 +108,7 @@
 
         <!-- Grid Button -->
         <button
-          class="shrink-0 text-muted hover:text-accent p-1 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+          class="shrink-0 text-muted hover:text-accent p-1 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           title="Open in Grid"
           :aria-label="'Open ' + album.name + ' in Grid'"
           @click.stop="handleOpenGrid(album)"

@@ -116,7 +116,7 @@ export interface ElectronAPI {
   getGoogleDriveParent: (folderId: string) => Promise<IpcResult<string | null>>;
 
   // Theme
-  setTheme: (theme: 'light' | 'dark' | 'system') => void;
+  setTheme: (theme: string) => void;
 }
 
 // Expose a controlled API to the renderer process via `window.electronAPI`.
@@ -241,7 +241,7 @@ const api: ElectronAPI = {
   getGoogleDriveParent: (folderId: string) =>
     ipcRenderer.invoke(IPC_CHANNELS.DRIVE_GET_PARENT, folderId),
 
-  setTheme: (theme: 'light' | 'dark' | 'system') =>
+  setTheme: (theme: string) =>
     ipcRenderer.send(IPC_CHANNELS.THEME_CHANGED, theme),
 };
 

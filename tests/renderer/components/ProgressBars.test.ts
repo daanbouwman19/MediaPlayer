@@ -84,6 +84,7 @@ describe('Progress Bars', () => {
       mediaFilter: 'All',
       isControlsVisible: true,
       isSidebarVisible: true,
+      themeMode: 'system',
     });
 
     (useLibraryStore as Mock).mockReturnValue({
@@ -144,7 +145,7 @@ describe('Progress Bars', () => {
     // Assert
     const progressBar = wrapper.find('[data-testid="slideshow-progress"]');
     expect(progressBar.exists()).toBe(true);
-    const innerBar = progressBar.find('div.bg-indigo-500');
+    const innerBar = progressBar.find('div[class*="bg-accent"]');
     expect(innerBar.attributes('style')).toContain('width: 50%');
   });
 

@@ -13,28 +13,28 @@
       @click.self="close"
     >
       <div
-        class="relative w-full max-w-lg overflow-hidden rounded-2xl bg-gray-900/95 border border-white/10 shadow-2xl backdrop-blur-xl ring-1 ring-white/5 transform transition-all"
+        class="relative w-full max-w-lg overflow-hidden rounded-2xl glass-panel shadow-2xl transform transition-all"
         role="dialog"
         aria-modal="true"
       >
         <!-- Decorative top gradient (Indigo/Violet) -->
         <div
-          class="absolute top-0 left-0 right-0 h-1 bg-linear-to-r from-indigo-500 via-purple-500 to-indigo-500"
+          class="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-accent via-accent-secondary to-accent"
         ></div>
 
         <div class="p-8">
           <!-- Header -->
           <div class="flex justify-between items-start mb-8">
             <div>
-              <h2 class="text-2xl font-bold text-white">
+              <h2 class="text-2xl font-bold text-color">
                 {{ isEditing ? 'Edit' : 'Create' }} Smart Playlist
               </h2>
-              <p class="text-sm text-gray-400 mt-1">
+              <p class="text-sm text-muted mt-1">
                 Automate your library with dynamic filters
               </p>
             </div>
             <button
-              class="text-gray-500 hover:text-white transition-colors p-2 rounded-lg hover:bg-white/10 -mr-2 -mt-2"
+              class="text-muted hover:text-accent transition-colors p-2 rounded-lg hover:bg-black/5 -mr-2 -mt-2"
               aria-label="Close"
               @click="close"
             >
@@ -47,7 +47,7 @@
             <div class="space-y-2">
               <label
                 for="playlist-name"
-                class="block text-xs font-semibold uppercase tracking-wider text-gray-500"
+                class="block text-xs font-semibold uppercase tracking-wider text-muted"
               >
                 Playlist Name
               </label>
@@ -55,7 +55,7 @@
                 id="playlist-name"
                 v-model="name"
                 type="text"
-                class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                class="w-full glass-input rounded-xl px-4 py-3 placeholder-muted focus:ring-2 focus:ring-accent/20 transition-all"
                 placeholder="e.g. My Top Rated Videos"
                 autofocus
               />
@@ -63,22 +63,20 @@
 
             <!-- Rating Criteria -->
             <div
-              class="bg-white/5 rounded-xl p-4 border border-white/5 space-y-3"
+              class="bg-black/5 rounded-xl p-4 border border-white/5 space-y-3"
             >
               <div class="flex justify-between items-center">
-                <label
-                  for="min-rating"
-                  class="text-sm font-medium text-gray-300"
+                <label for="min-rating" class="text-sm font-medium text-color"
                   >Minimum Rating</label
                 >
                 <div
-                  class="flex items-center gap-1 bg-black/40 px-2 py-1 rounded text-xs font-mono text-indigo-400"
+                  class="flex items-center gap-1 bg-black/10 px-2 py-1 rounded text-xs font-mono text-accent"
                 >
                   <span class="font-bold">{{
                     minRating === 0 ? 'Any' : minRating
                   }}</span>
-                  <span v-if="minRating > 0" class="text-gray-600">/</span>
-                  <span v-if="minRating > 0" class="text-gray-500">5</span>
+                  <span v-if="minRating > 0" class="text-muted">/</span>
+                  <span v-if="minRating > 0" class="text-muted">5</span>
                 </div>
               </div>
               <input
@@ -88,12 +86,12 @@
                 min="0"
                 max="5"
                 step="1"
-                class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-indigo-500 hover:accent-indigo-400 transition-colors"
+                class="w-full h-2 bg-black/10 rounded-lg appearance-none cursor-pointer accent-accent hover:accent-accent-hover transition-colors"
                 :aria-valuetext="
                   minRating === 0 ? 'Any rating' : `Minimum ${minRating} stars`
                 "
               />
-              <div class="flex justify-between text-xs text-gray-600 px-1">
+              <div class="flex justify-between text-xs text-muted px-1">
                 <span>Any</span>
                 <span>5 Stars</span>
               </div>
@@ -104,7 +102,7 @@
               <div class="space-y-2">
                 <label
                   for="min-duration"
-                  class="block text-xs font-semibold uppercase tracking-wider text-gray-500"
+                  class="block text-xs font-semibold uppercase tracking-wider text-muted"
                 >
                   Min Duration (Min)
                 </label>
@@ -113,14 +111,14 @@
                   v-model.number="minDurationMinutes"
                   type="number"
                   min="0"
-                  class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                  class="w-full glass-input rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-accent/20 transition-all"
                   placeholder="0"
                 />
               </div>
               <div class="space-y-2">
                 <label
                   for="min-days-untouched"
-                  class="block text-xs font-semibold uppercase tracking-wider text-gray-500"
+                  class="block text-xs font-semibold uppercase tracking-wider text-muted"
                 >
                   Days Untouched
                 </label>
@@ -129,7 +127,7 @@
                   v-model.number="minDaysSinceView"
                   type="number"
                   min="0"
-                  class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                  class="w-full glass-input rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-accent/20 transition-all"
                   placeholder="Any"
                 />
               </div>
@@ -140,7 +138,7 @@
               <div class="space-y-2">
                 <label
                   for="min-views"
-                  class="block text-xs font-semibold uppercase tracking-wider text-gray-500"
+                  class="block text-xs font-semibold uppercase tracking-wider text-muted"
                 >
                   Min Views
                 </label>
@@ -149,14 +147,14 @@
                   v-model.number="minViews"
                   type="number"
                   min="0"
-                  class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                  class="w-full glass-input rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-accent/20 transition-all"
                   placeholder="0"
                 />
               </div>
               <div class="space-y-2">
                 <label
                   for="max-views"
-                  class="block text-xs font-semibold uppercase tracking-wider text-gray-500"
+                  class="block text-xs font-semibold uppercase tracking-wider text-muted"
                 >
                   Max Views
                 </label>
@@ -165,7 +163,7 @@
                   v-model.number="maxViews"
                   type="number"
                   min="0"
-                  class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                  class="w-full glass-input rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-accent/20 transition-all"
                   placeholder="Any"
                 />
               </div>
@@ -177,13 +175,13 @@
             class="mt-10 flex justify-end gap-3 border-t border-white/5 pt-6"
           >
             <button
-              class="px-5 py-2.5 rounded-xl text-gray-400 hover:text-white hover:bg-white/5 transition-all font-medium text-sm"
+              class="px-5 py-2.5 rounded-xl text-muted hover:text-color hover:bg-black/5 transition-all font-medium text-sm"
               @click="close"
             >
               Cancel
             </button>
             <button
-              class="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold shadow-lg shadow-indigo-900/20 transition-all transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+              class="px-6 py-2.5 rounded-xl bg-accent hover:bg-accent-hover text-white font-semibold shadow-lg shadow-accent/20 transition-all transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
               :disabled="!name.trim()"
               @click="save"
             >

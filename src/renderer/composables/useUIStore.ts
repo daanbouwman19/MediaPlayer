@@ -1,6 +1,8 @@
 import { reactive, toRefs } from 'vue';
 import type { SmartPlaylist, MediaFile } from '../../core/types';
 import type { MediaFilter } from '../../core/constants';
+import type { ThemeId } from '../../core/themes';
+import { AVAILABLE_THEMES } from '../../core/themes';
 
 interface UIState {
   mediaFilter: MediaFilter;
@@ -12,12 +14,15 @@ interface UIState {
   isControlsVisible: boolean;
   isSidebarVisible: boolean;
   isHistoryMode: boolean;
-  themeMode: 'light' | 'dark' | 'system';
+  themeMode: ThemeId;
 }
 
-const savedTheme =
-  (localStorage.getItem('themeMode') as 'light' | 'dark' | 'system') ||
-  'system';
+const savedTheme = (localStorage.getItem('themeMode') as ThemeId) || 'system';
+
+// Validate saved theme against current available themes
+const themeMode = AVAILABLE_THEMES.find((t) => t.id === savedTheme)
+  ? savedTheme
+  : 'system';
 
 const state = reactive<UIState>({
   mediaFilter: 'All',
@@ -29,14 +34,14 @@ const state = reactive<UIState>({
   isControlsVisible: true,
   isSidebarVisible: true,
   isHistoryMode: false,
-  themeMode: savedTheme,
+  themeMode,
 });
 
 export function useUIStore() {
   return {
     ...toRefs(state),
     state,
-    setThemeMode: (mode: 'light' | 'dark' | 'system') => {
+    setThemeMode: (mode: ThemeId) => {
       state.themeMode = mode;
     },
   };

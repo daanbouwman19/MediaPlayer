@@ -1,13 +1,25 @@
 import { watch } from 'vue';
 import { useUIStore } from './useUIStore';
+import { AVAILABLE_THEMES } from '../../core/themes';
 
 let mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
 
 /**
  * Shared logic to apply theme classes to the document
  */
-const updateDOM = (isDark: boolean) => {
-  document.documentElement.classList.toggle('dark', isDark);
+const updateDOM = (themeId: string) => {
+  // Remove all existing theme classes
+  const classesToRemove = Array.from(document.documentElement.classList).filter(
+    (cls) => cls === 'dark' || cls === 'light' || cls.startsWith('theme-'),
+  );
+  document.documentElement.classList.remove(...classesToRemove);
+
+  // Apply the new theme class
+  if (themeId === 'dark' || themeId === 'light') {
+    document.documentElement.classList.add(themeId);
+  } else if (themeId !== 'system') {
+    document.documentElement.classList.add(`theme-${themeId}`);
+  }
 };
 
 export function useTheme() {
@@ -15,20 +27,19 @@ export function useTheme() {
   const { themeMode } = uiStore;
 
   const applyTheme = () => {
-    const isDark =
-      themeMode.value === 'system'
-        ? mediaQuery.matches
-        : themeMode.value === 'dark';
-    updateDOM(isDark);
-  };
+    const currentThemeId = themeMode.value;
+    const themeDef = AVAILABLE_THEMES.find((t) => t.id === currentThemeId);
 
-  const cycleTheme = () => {
-    if (themeMode.value === 'system') {
-      themeMode.value = 'light';
-    } else if (themeMode.value === 'light') {
-      themeMode.value = 'dark';
+    if (currentThemeId === 'system') {
+      const isDark = mediaQuery.matches;
+      updateDOM(isDark ? 'dark' : 'light');
     } else {
-      themeMode.value = 'system';
+      updateDOM(currentThemeId);
+    }
+
+    if (window.electronAPI && themeDef) {
+      // Map custom themes to a base native theme for window chrome
+      window.electronAPI.setTheme(themeDef.base);
     }
   };
 
@@ -60,11 +71,19 @@ export function useTheme() {
     }
   };
 
+  const cycleTheme = () => {
+    const currentIndex = AVAILABLE_THEMES.findIndex(
+      (t) => t.id === themeMode.value,
+    );
+    const nextIndex = (currentIndex + 1) % AVAILABLE_THEMES.length;
+    themeMode.value = AVAILABLE_THEMES[nextIndex].id;
+  };
+
   return {
     initTheme,
-    cycleTheme,
     applyTheme,
     cleanupTheme,
+    cycleTheme,
   };
 }
 

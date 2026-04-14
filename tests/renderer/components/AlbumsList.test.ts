@@ -98,6 +98,7 @@ function createMockState() {
     playlistToEdit: null,
     mediaFilter: 'All',
     isHistoryMode: false,
+    themeMode: 'system',
   });
 
   return { libraryState, playerState, uiState };
@@ -141,6 +142,13 @@ describe('AlbumsList.vue', () => {
       initTheme: vi.fn(),
       cycleTheme: mockCycleTheme,
       applyTheme: vi.fn(),
+      AVAILABLE_THEMES: [
+        { id: 'system', label: 'System', base: 'system' },
+        { id: 'light', label: 'Light', base: 'light' },
+        { id: 'dark', label: 'Dark', base: 'dark' },
+        { id: 'pink', label: 'Pink', base: 'light' },
+      ],
+      selectTheme: vi.fn(),
     });
 
     (api.getSmartPlaylists as Mock).mockResolvedValue([]);
@@ -417,7 +425,7 @@ describe('AlbumsList.vue', () => {
     it('logs error if no history found', async () => {
       const consoleSpy = vi
         .spyOn(console, 'error')
-        .mockImplementation(() => {});
+        .mockImplementation(() => { });
       const wrapper = mount(AlbumsList);
       const historyBtn = wrapper.find(
         'button[aria-label="Recently Played Slideshow"]',
@@ -480,7 +488,7 @@ describe('AlbumsList.vue', () => {
       );
       const consoleSpy = vi
         .spyOn(console, 'error')
-        .mockImplementation(() => {});
+        .mockImplementation(() => { });
 
       const wrapper = mount(AlbumsList);
       await wrapper.vm.$nextTick();
@@ -506,7 +514,7 @@ describe('AlbumsList.vue', () => {
 
       const consoleSpy = vi
         .spyOn(console, 'error')
-        .mockImplementation(() => {});
+        .mockImplementation(() => { });
       const wrapper = mount(AlbumsList);
 
       const gridBtn = wrapper.find('button[aria-label="Open History in Grid"]');
@@ -518,13 +526,20 @@ describe('AlbumsList.vue', () => {
       );
       consoleSpy.mockRestore();
     });
-    it('cycles theme when cycle button is clicked', async () => {
+    it('opens theme selector when theme button is clicked', async () => {
       const wrapper = mount(AlbumsList);
-      const cycleBtn = wrapper.find('button[aria-label="Toggle Theme"]');
+      const themeBtn = wrapper.find('button[aria-label="Select Theme"]');
 
-      expect(cycleBtn.exists()).toBe(true);
-      await cycleBtn.trigger('click');
-      expect(mockCycleTheme).toHaveBeenCalled();
+      expect(themeBtn.exists()).toBe(true);
+      await themeBtn.trigger('click');
+
+      // The dropdown menu is now visible
+      const dropdown = wrapper.find('div.glass-panel.z-\\[60\\]');
+      expect(dropdown.exists()).toBe(true);
+
+      // Verify it contains theme options
+      // AVAILABLE_THEMES should have 4 items from the real themes.ts since it's not mocked here
+      expect(dropdown.findAll('button').length).toBeGreaterThan(2);
     });
   });
 });

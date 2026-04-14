@@ -1,12 +1,20 @@
 import { test, expect } from '@playwright/test';
 
-for (const theme of ['light', 'dark'] as const) {
+for (const theme of ['light', 'dark', 'pink'] as const) {
   test(`MediaGrid visual regression - ${theme} mode`, async ({
     page,
     isMobile,
   }) => {
-    // Set color scheme before navigating
-    await page.emulateMedia({ colorScheme: theme });
+    // For system themes (light/dark), we can also emulate the media scheme
+    if (theme === 'light' || theme === 'dark') {
+      const colorScheme = theme as 'light' | 'dark';
+      await page.emulateMedia({ colorScheme });
+    }
+
+    // Set theme in localStorage before navigation to ensure it's applied on load
+    await page.addInitScript((t) => {
+      window.localStorage.setItem('themeMode', t);
+    }, theme);
 
     // Mock backend API
     await page.route('**/api/albums', async (route) => {

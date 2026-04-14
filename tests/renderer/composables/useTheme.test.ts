@@ -62,6 +62,9 @@ describe('useTheme', () => {
     expect(mockThemeMode.value).toBe('dark');
 
     cycleTheme();
+    expect(mockThemeMode.value).toBe('pink');
+
+    cycleTheme();
     expect(mockThemeMode.value).toBe('system');
   });
 
