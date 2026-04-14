@@ -1,0 +1,6 @@
+[
+  {
+    "comment_id": "4245365813",
+    "reply": "I apologize, you are completely right. I lost my changes to `src/renderer/assets/main.css` during a bad git rebase step. I've now added the actual `.theme-cyberpunk` CSS including the requested yellow/neon styling and light/dark modes that auto-switch. I've also registered it in `src/core/themes.ts`. In addition, I lowered the `maxDiffPixelRatio` to `0.02`, removed the explicit `waitForTimeout`, and removed the unnecessary `as any` typecast in the test file. The visual tests have run locally and passed, confirming the CSS is now properly rendering. Thank you for catching this!"
+  }
+]

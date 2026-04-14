@@ -29,6 +29,11 @@ export const AVAILABLE_THEMES: Theme[] = [
     label: 'Pink',
     base: 'light',
   },
+  {
+    id: 'cyberpunk',
+    label: 'Cyberpunk',
+    base: 'system',
+  },
 ];
 
 export type ThemeId = (typeof AVAILABLE_THEMES)[number]['id'];
