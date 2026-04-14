@@ -15,11 +15,7 @@ import {
   getMediaViewCounts,
   getRecentlyPlayed,
 } from '../database';
-import {
-  getAlbumsWithViewCounts,
-  getAlbumsWithViewCountsAfterScan,
-  extractAndSaveMetadata,
-} from '../../core/media-service';
+import { MediaService } from '../../core/media-service';
 import { isDrivePath, getDriveId } from '../../core/media-utils';
 import { MediaAnalyzer } from '../../core/analysis/media-analyzer';
 import { HlsManager } from '../../core/hls-manager';
@@ -36,7 +32,7 @@ async function getFFmpegPath(): Promise<string | null> {
   }
 }
 
-export function registerMediaHandlers() {
+export function registerMediaHandlers(mediaService: MediaService) {
   handleIpc(
     IPC_CHANNELS.LOAD_FILE_AS_DATA_URL,
     async (
@@ -107,12 +103,14 @@ export function registerMediaHandlers() {
 
   handleIpc(IPC_CHANNELS.GET_ALBUMS_WITH_VIEW_COUNTS, async () => {
     const ffmpegPath = await getFFmpegPath();
-    return getAlbumsWithViewCounts(ffmpegPath || undefined);
+    return mediaService.getAlbumsWithViewCounts(ffmpegPath || undefined);
   });
 
   handleIpc(IPC_CHANNELS.REINDEX_MEDIA_LIBRARY, async () => {
     const ffmpegPath = await getFFmpegPath();
-    return getAlbumsWithViewCountsAfterScan(ffmpegPath || undefined);
+    return mediaService.getAlbumsWithViewCountsAfterScan(
+      ffmpegPath || undefined,
+    );
   });
 
   handleIpc(
@@ -127,9 +125,11 @@ export function registerMediaHandlers() {
       // [SECURITY] Filter out unauthorized paths to prevent arbitrary file access
       const allowedPaths = await filterAuthorizedPaths(filePaths);
 
-      extractAndSaveMetadata(allowedPaths, ffmpegPath, {
-        forceCheck: true,
-      }).catch((err) => console.error('State extraction failed', err));
+      mediaService
+        .extractAndSaveMetadata(allowedPaths, ffmpegPath, {
+          forceCheck: true,
+        })
+        .catch((err) => console.error('State extraction failed', err));
     },
   );
 

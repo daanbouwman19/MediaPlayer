@@ -10,6 +10,7 @@ import {
   getMimeType,
 } from '../../src/main/local-server';
 import { clearAuthCache } from '../../src/core/security';
+import { createTestMediaService } from '../utils/test-factory';
 
 // Mock the database module
 vi.mock('../../src/core/database', () => ({
@@ -19,10 +20,12 @@ vi.mock('../../src/core/database', () => ({
 import { getMediaDirectories } from '../../src/core/database';
 
 // Helper to promisify callback-based functions
-const startServer = () =>
-  new Promise<void>((resolve) => {
-    startLocalServer('/tmp', () => resolve());
+const startServer = () => {
+  const { service } = createTestMediaService();
+  return new Promise<void>((resolve) => {
+    startLocalServer('/tmp', service, () => resolve());
   });
+};
 
 const stopServer = () =>
   new Promise<void>((resolve) => {
@@ -87,14 +90,15 @@ describe('Local Server', () => {
     });
 
     it('should ignore start request if server is already running (callback)', async () => {
+      const { service } = createTestMediaService();
       await new Promise<void>((resolve) => {
-        startLocalServer('/tmp', () => {
+        startLocalServer('/tmp', service, () => {
           const originalPort = getServerPort();
           const consoleSpy = vi
             .spyOn(console, 'warn')
             .mockImplementation(() => {});
 
-          startLocalServer('/tmp', () => {
+          startLocalServer('/tmp', service, () => {
             expect(getServerPort()).toBe(originalPort);
             expect(consoleSpy).toHaveBeenCalledWith(
               expect.stringContaining('Server already started'),
@@ -109,7 +113,8 @@ describe('Local Server', () => {
     it('should handle start without callback when running', async () => {
       await startServer();
       const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      startLocalServer('/tmp'); // No callback
+      const { service } = createTestMediaService();
+      startLocalServer('/tmp', service); // No callback
       expect(consoleSpy).toHaveBeenCalled();
       consoleSpy.mockRestore();
     });
@@ -491,7 +496,10 @@ describe('Local Server', () => {
 
       vi.spyOn(http, 'createServer').mockReturnValue(mockServer);
 
-      await startServer();
+      const { service } = createTestMediaService();
+      await new Promise<void>((resolve) => {
+        startLocalServer('/tmp', service, () => resolve());
+      });
       await stopServer();
 
       expect(consoleErrorSpy).toHaveBeenCalledWith(

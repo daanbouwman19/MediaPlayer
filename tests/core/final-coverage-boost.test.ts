@@ -176,13 +176,20 @@ vi.mock('../../src/core/analysis/media-analyzer', () => ({
 
 // Import modules
 import * as dbWorker from '../../src/core/database-worker';
-import * as mediaService from '../../src/core/media-service';
+import { MediaService } from '../../src/core/media-service';
 import * as mediaHandler from '../../src/core/media-handler';
 import * as mediaUtils from '../../src/core/media-utils';
 import { MediaRepository } from '../../src/core/repositories/media-repository';
+import { createTestMediaService } from '../utils/test-factory';
 
 describe('Final Coverage Boost', () => {
+  let service: MediaService;
+  let mediaRepo: any;
+
   beforeEach(() => {
+    const result = createTestMediaService();
+    service = result.service;
+    mediaRepo = result.deps.mediaRepo;
     vi.clearAllMocks();
 
     // Reset mock Db behavior
@@ -351,18 +358,18 @@ describe('Final Coverage Boost', () => {
     it('scanDiskForAlbumsAndCache: handles token parse error', async () => {
       // Mock MediaRepository.prototype methods
       const getSettingSpy = vi
-        .spyOn(MediaRepository.prototype, 'getSetting')
+        .spyOn(mediaRepo, 'getSetting')
         .mockResolvedValue('invalid-json');
       const getDirsSpy = vi
-        .spyOn(MediaRepository.prototype, 'getMediaDirectories')
+        .spyOn(mediaRepo, 'getMediaDirectories')
         .mockResolvedValue([{ path: '/dir', isActive: true }] as any);
       const cacheSpy = vi
-        .spyOn(MediaRepository.prototype, 'cacheAlbums')
-        .mockResolvedValue();
+        .spyOn(mediaRepo, 'cacheAlbums')
+        .mockResolvedValue(undefined);
 
       const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-      await mediaService.scanDiskForAlbumsAndCache();
+      await service.scanDiskForAlbumsAndCache();
 
       expect(consoleSpy).toHaveBeenCalledWith(
         expect.stringContaining('Failed to fetch google tokens'),
@@ -376,27 +383,22 @@ describe('Final Coverage Boost', () => {
     });
 
     it('extractAndSaveMetadata: optimization skips if metadata matches', async () => {
-      const getMetaSpy = vi
-        .spyOn(MediaRepository.prototype, 'getMetadata')
-        .mockResolvedValue({
-          '/file.mp4': {
-            status: 'success',
-            size: 100,
-            createdAt: '2023-01-01T00:00:00.000Z',
-          },
-        });
+      const getMetaSpy = vi.spyOn(mediaRepo, 'getMetadata').mockResolvedValue({
+        '/file.mp4': {
+          status: 'success',
+          size: 100,
+          createdAt: '2023-01-01T00:00:00.000Z',
+        },
+      });
 
       vi.mocked(fs.stat).mockResolvedValue({
         size: 100,
         birthtime: { toISOString: () => '2023-01-01T00:00:00.000Z' },
       } as any);
 
-      const upsertSpy = vi.spyOn(
-        MediaRepository.prototype,
-        'bulkUpsertMetadata',
-      );
+      const upsertSpy = vi.spyOn(mediaRepo, 'bulkUpsertMetadata');
 
-      await mediaService.extractAndSaveMetadata(['/file.mp4'], 'ffmpeg', {
+      await service.extractAndSaveMetadata(['/file.mp4'], 'ffmpeg', {
         forceCheck: false,
       });
 
@@ -412,10 +414,7 @@ describe('Final Coverage Boost', () => {
         'bulkUpsertMetadata',
       );
 
-      await mediaService.extractAndSaveMetadata(
-        ['gdrive://file.mp4'],
-        'ffmpeg',
-      );
+      await service.extractAndSaveMetadata(['gdrive://file.mp4'], 'ffmpeg');
 
       expect(upsertSpy).not.toHaveBeenCalled();
     });
@@ -449,6 +448,7 @@ describe('Final Coverage Boost', () => {
       const handler = new mediaHandler.MediaHandler({
         ffmpegPath: 'ffmpeg',
         cacheDir: '/tmp',
+        mediaService: service,
       });
       await handler.handleStreamRequest(req, res);
 
@@ -481,6 +481,7 @@ describe('Final Coverage Boost', () => {
       const handler = new mediaHandler.MediaHandler({
         ffmpegPath: 'ffmpeg',
         cacheDir: '/tmp',
+        mediaService: service,
       });
 
       await handler.handleStreamRequest(req, res);
@@ -507,6 +508,7 @@ describe('Final Coverage Boost', () => {
       const handler = new mediaHandler.MediaHandler({
         ffmpegPath: null,
         cacheDir: '/tmp',
+        mediaService: service,
       });
       await handler.handleStreamRequest(req, res);
 
@@ -534,6 +536,7 @@ describe('Final Coverage Boost', () => {
       const handler = new mediaHandler.MediaHandler({
         ffmpegPath: 'ffmpeg',
         cacheDir: '/tmp',
+        mediaService: service,
       });
 
       // Capture console error
@@ -573,6 +576,7 @@ describe('Final Coverage Boost', () => {
       const handler = new mediaHandler.MediaHandler({
         ffmpegPath: null,
         cacheDir: '/tmp',
+        mediaService: service,
       });
       await handler.serveMetadata(req, res, '/local.mp4');
 
@@ -596,6 +600,7 @@ describe('Final Coverage Boost', () => {
       const handler = new mediaHandler.MediaHandler({
         ffmpegPath: 'ffmpeg',
         cacheDir: '/tmp',
+        mediaService: service,
       });
       await handler.serveHeatmap(req, res, '/local.mp4');
 

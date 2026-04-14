@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { MediaHandler } from '../../src/core/media-handler';
+import { createTestMediaService } from '../utils/test-factory';
 
 const { mockValidateFileAccess, mockHandleAccessCheck } = vi.hoisted(() => ({
   mockValidateFileAccess: vi.fn(),
@@ -23,8 +24,11 @@ vi.mock('../../src/core/analysis/media-analyzer', () => ({
 }));
 
 describe('Final Coverage Boost Part 2', () => {
+  let service: any;
+
   beforeEach(() => {
     vi.clearAllMocks();
+    service = createTestMediaService().service;
   });
 
   describe('Media Handler Additional Coverage', () => {
@@ -43,7 +47,11 @@ describe('Final Coverage Boost Part 2', () => {
         headersSent: false,
       } as any;
 
-      const handler = new MediaHandler({ ffmpegPath: null, cacheDir: '/tmp' });
+      const handler = new MediaHandler({
+        ffmpegPath: null,
+        cacheDir: '/tmp',
+        mediaService: service,
+      });
       await handler.serveMetadata(req, res, '/local.mp4');
 
       expect(res.status).toHaveBeenCalledWith(500);
@@ -67,6 +75,7 @@ describe('Final Coverage Boost Part 2', () => {
       const handler = new MediaHandler({
         ffmpegPath: 'ffmpeg',
         cacheDir: '/tmp',
+        mediaService: service,
       });
       await handler.serveHeatmap(req, res, '/local.mp4');
 
@@ -90,6 +99,7 @@ describe('Final Coverage Boost Part 2', () => {
       const handler = new MediaHandler({
         ffmpegPath: 'ffmpeg',
         cacheDir: '/tmp',
+        mediaService: service,
       });
       await handler.serveHeatmapProgress(req, res, '/local.mp4');
 

@@ -9,6 +9,7 @@ import {
   getServerPort,
 } from '../../src/main/local-server';
 import { getMediaDirectories } from '../../src/core/database';
+import { createTestMediaService } from '../utils/test-factory';
 
 // Mock dependencies
 vi.mock('../../src/core/database', () => ({
@@ -54,7 +55,10 @@ describe('Local Server Encoding Bug', () => {
   });
 
   it('should handle file paths with percent characters without crashing', async () => {
-    await new Promise<void>((resolve) => startLocalServer('/tmp', resolve));
+    const { service } = createTestMediaService();
+    await new Promise<void>((resolve) =>
+      startLocalServer('/tmp', service, resolve),
+    );
     const port = getServerPort();
 
     // A file name with a '%' that is NOT followed by two hex digits.

@@ -15,8 +15,9 @@ import {
   filterProcessingNeeded,
 } from '../database.ts';
 import type { Album, MediaMetadata } from '../types.ts';
+import { IMediaRepository } from './media-repository.interface.ts';
 
-export class MediaRepository {
+export class MediaRepository implements IMediaRepository {
   async getMediaDirectories() {
     return getMediaDirectories();
   }

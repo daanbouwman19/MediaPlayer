@@ -21,7 +21,7 @@ vi.mock('../../src/core/database', () => ({
   removeMediaDirectory: vi.fn(),
   setDirectoryActiveState: vi.fn(),
 }));
-vi.mock('../../src/core/media-service', () => ({}));
+
 vi.mock('../../src/core/analysis/media-analyzer', () => ({
   MediaAnalyzer: {
     getInstance: vi.fn().mockReturnValue({
@@ -91,7 +91,9 @@ describe('Server Endpoint Security', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
-    app = await createApp();
+    const { createTestMediaService } = await import('../utils/test-factory');
+    const { service } = createTestMediaService();
+    app = await createApp(service);
   });
 
   describe('GET /api/serve', () => {

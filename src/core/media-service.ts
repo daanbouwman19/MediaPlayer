@@ -3,21 +3,19 @@
  * Orchestrates scanning, caching, and view count retrieval.
  */
 
-import { MediaRepository } from './repositories/media-repository.ts';
-import { WorkerClient } from './worker-client.ts';
+import type { IMediaService } from './interfaces/media-service.interface.ts';
+import type { IMediaRepository } from './repositories/media-repository.interface.ts';
+import type { IFileSystem } from './interfaces/file-system.interface.ts';
+import type { IWorkerService } from './interfaces/worker-service.interface.ts';
+import type { IMediaHandler } from './interfaces/media-handler.interface.ts';
 import path from 'path';
-import { fileURLToPath } from 'url';
-import { getVideoDuration } from './media-handler.ts';
-import { WorkerFactory } from './worker-factory.ts';
 import type { Album, MediaMetadata } from './types.ts';
-import fs from 'fs/promises';
 import PQueue from 'p-queue';
 import {
   METADATA_EXTRACTION_CONCURRENCY,
   METADATA_BATCH_SIZE,
   METADATA_VERIFICATION_THRESHOLD,
   SUPPORTED_VIDEO_EXTENSIONS_SET,
-  WORKER_SCAN_TIMEOUT_MS,
 } from './constants.ts';
 import { isDrivePath } from './media-utils.ts';
 import type { MediaLibraryItem } from './types.ts';
@@ -103,8 +101,13 @@ function enrichAlbumsWithStats(
  * and returns the list of albums found.
  * @returns The list of albums found.
  */
-export class MediaService {
-  constructor(private mediaRepo: MediaRepository) {}
+export class MediaService implements IMediaService {
+  constructor(
+    private mediaRepo: IMediaRepository,
+    private fs: IFileSystem,
+    private workerService: IWorkerService,
+    private mediaHandler: IMediaHandler,
+  ) {}
 
   private async getGoogleTokens(): Promise<unknown> {
     try {
@@ -146,44 +149,13 @@ export class MediaService {
       return [];
     }
 
-    // Determine worker path using centralized factory
-    const __filename = fileURLToPath(import.meta.url);
-    const __dirname = path.dirname(__filename);
-    const isElectron = !!process.versions['electron'];
+    const tokens = await this.getGoogleTokens();
+    const previousPaths = await this.getCachedPaths();
 
-    const { path: workerPath, options: workerOptions } =
-      await WorkerFactory.getWorkerPath('scan-worker', {
-        isElectron,
-        currentDirname: __dirname,
-        currentUrl: import.meta.url,
-      });
-
-    // Run scan in a worker
-    const albums = await new Promise<Album[]>(async (resolve, reject) => {
-      const client = new WorkerClient(workerPath, {
-        workerOptions,
-        operationTimeout: WORKER_SCAN_TIMEOUT_MS,
-        name: 'scan-worker',
-      });
-
-      try {
-        const tokens = await this.getGoogleTokens();
-        const previousPaths = await this.getCachedPaths();
-
-        await client.init();
-
-        const result = await client.sendMessage<Album[]>('START_SCAN', {
-          directories: activeDirectories,
-          tokens,
-          previousPaths,
-        });
-
-        resolve(result);
-      } catch (err) {
-        reject(err);
-      } finally {
-        await client.terminate();
-      }
+    const albums = await this.workerService.runScan({
+      directories: activeDirectories,
+      tokens,
+      previousPaths,
     });
 
     await this.mediaRepo.cacheAlbums(albums || []);
@@ -344,7 +316,7 @@ export class MediaService {
             return;
           }
 
-          const stats = await fs.stat(filePath);
+          const stats = await this.fs.stat(filePath);
 
           const existing = existingMetadataMap[filePath];
           if (
@@ -364,7 +336,10 @@ export class MediaService {
 
           const ext = path.extname(filePath).toLowerCase();
           if (SUPPORTED_VIDEO_EXTENSIONS_SET.has(ext)) {
-            const result = await getVideoDuration(filePath, ffmpegPath);
+            const result = await this.mediaHandler.getVideoDuration(
+              filePath,
+              ffmpegPath,
+            );
             if (result && 'duration' in result) {
               metadata.duration = result.duration;
             }
@@ -393,34 +368,4 @@ export class MediaService {
     await queue.onIdle();
     await flush();
   }
-}
-
-const defaultMediaService = new MediaService(new MediaRepository());
-
-export async function scanDiskForAlbumsAndCache(ffmpegPath?: string) {
-  return defaultMediaService.scanDiskForAlbumsAndCache(ffmpegPath);
-}
-
-export async function getAlbumsFromCacheOrDisk(ffmpegPath?: string) {
-  return defaultMediaService.getAlbumsFromCacheOrDisk(ffmpegPath);
-}
-
-export async function getAlbumsWithViewCountsAfterScan(ffmpegPath?: string) {
-  return defaultMediaService.getAlbumsWithViewCountsAfterScan(ffmpegPath);
-}
-
-export async function getAlbumsWithViewCounts(ffmpegPath?: string) {
-  return defaultMediaService.getAlbumsWithViewCounts(ffmpegPath);
-}
-
-export async function extractAndSaveMetadata(
-  filePaths: string[],
-  ffmpegPath: string,
-  options: { forceCheck?: boolean } = {},
-) {
-  return defaultMediaService.extractAndSaveMetadata(
-    filePaths,
-    ffmpegPath,
-    options,
-  );
 }

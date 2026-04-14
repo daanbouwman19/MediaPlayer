@@ -13,6 +13,7 @@ import { fileURLToPath } from 'url';
 import fs from 'fs/promises';
 import crypto from 'crypto';
 import ffmpegStatic from 'ffmpeg-static';
+import { MediaService } from '../core/media-service.ts';
 import { initDatabase } from '../core/database.ts';
 import {
   HLS_CACHE_DIR_NAME,
@@ -54,7 +55,7 @@ const CACHE_DIR = path.join(CACHE_ROOT, 'thumbnails');
 const HLS_CACHE_DIR = path.join(CACHE_ROOT, HLS_CACHE_DIR_NAME);
 const DRIVE_CACHE_DIR = path.join(CACHE_ROOT, 'drive');
 
-export async function createApp() {
+export async function createApp(mediaService: MediaService) {
   const isDev = process.env.NODE_ENV !== 'production';
   const app = express();
 
@@ -190,9 +191,10 @@ export async function createApp() {
   const mediaHandler = new MediaHandler({
     ffmpegPath: ffmpegStatic,
     cacheDir: CACHE_DIR,
+    mediaService,
   });
 
-  app.use(createAlbumRoutes(limiters));
+  app.use(createAlbumRoutes(limiters, mediaService));
   app.use(
     createMediaRoutes({
       limiters,

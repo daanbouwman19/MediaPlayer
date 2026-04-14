@@ -10,6 +10,7 @@ import { spawn } from 'child_process';
 import { createInterface } from 'readline';
 import path from 'path';
 import { createMediaSource } from './media-source.ts';
+import type { IMediaService } from './interfaces/media-service.interface.ts';
 
 import type { IMediaSource } from './media-source-types.ts';
 import { isDrivePath, normalizeFilePath } from './media-utils.ts';
@@ -44,6 +45,7 @@ import {
 export interface MediaHandlerOptions {
   ffmpegPath: string | null;
   cacheDir: string;
+  mediaService: IMediaService;
 }
 
 export class MediaHandler {

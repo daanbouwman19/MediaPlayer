@@ -88,9 +88,10 @@ describe('Server app additional coverage', () => {
     process.env.VITEST = 'true';
 
     vi.resetModules();
-    const { createApp } = await import('../../src/server/app.ts');
-
-    await createApp();
+    const { createTestMediaService } = await import('../utils/test-factory.ts');
+    const { service } = createTestMediaService();
+    const { createApp } = await import('../../src/server/server.ts');
+    await createApp(service);
 
     expect(capturedMediaOptions).toBeTruthy();
     const handler = capturedMediaOptions.mediaHandler;
@@ -131,8 +132,10 @@ describe('Server app additional coverage', () => {
     }) as any);
 
     const { createApp } = await import('../../src/server/app.ts');
+    const { createTestMediaService } = await import('../utils/test-factory.ts');
+    const { service } = createTestMediaService();
 
-    await expect(createApp()).rejects.toThrow('process.exit');
+    await expect(createApp(service)).rejects.toThrow('process.exit');
     expect(consoleSpy).toHaveBeenCalled();
     expect(exitSpy).toHaveBeenCalledWith(1);
   });
@@ -150,8 +153,10 @@ describe('Server app additional coverage', () => {
 
     vi.resetModules();
     const { createApp } = await import('../../src/server/app.ts');
+    const { createTestMediaService } = await import('../utils/test-factory.ts');
+    const { service } = createTestMediaService();
 
-    const app = await createApp();
+    const app = await createApp(service);
     const res = await request(app).get('/somewhere');
 
     expect(res.status).toBe(200);

@@ -25,7 +25,9 @@ describe('System Routes Type Validation', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
-    app = await createApp();
+    const { createTestMediaService } = await import('../utils/test-factory');
+    const { service } = createTestMediaService();
+    app = await createApp(service);
   });
 
   describe('POST /api/directories', () => {
