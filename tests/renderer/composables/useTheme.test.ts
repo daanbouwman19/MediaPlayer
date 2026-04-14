@@ -93,6 +93,63 @@ describe('useTheme', () => {
     expect(document.documentElement.classList.contains('dark')).toBe(true);
   });
 
+  it('applies pink theme when mode is pink', () => {
+    mockThemeMode.value = 'pink';
+    const { applyTheme } = useTheme();
+    applyTheme();
+
+    expect(document.documentElement.classList.contains('theme-pink')).toBe(
+      true,
+    );
+    expect(document.documentElement.classList.contains('light')).toBe(false);
+    expect(document.documentElement.classList.contains('dark')).toBe(false);
+
+    // Should sync with electron as light (base of pink is light)
+    expect(window.electronAPI.setTheme).toHaveBeenCalledWith('light');
+  });
+
+  it('removes previous theme classes when applying a new one', () => {
+    document.documentElement.classList.add('dark', 'theme-old');
+
+    mockThemeMode.value = 'pink';
+    const { applyTheme } = useTheme();
+    applyTheme();
+
+    expect(document.documentElement.classList.contains('dark')).toBe(false);
+    expect(document.documentElement.classList.contains('theme-pink')).toBe(
+      true,
+    );
+  });
+
+  it('syncs system theme correctly', () => {
+    sharedMockMQ.matches = false; // light
+    mockThemeMode.value = 'system';
+    const { applyTheme } = useTheme();
+    applyTheme();
+
+    expect(document.documentElement.classList.contains('light')).toBe(true);
+    expect(window.electronAPI.setTheme).toHaveBeenCalledWith('system');
+
+    sharedMockMQ.matches = true; // dark
+    applyTheme();
+    expect(document.documentElement.classList.contains('dark')).toBe(true);
+    expect(document.documentElement.classList.contains('light')).toBe(false);
+  });
+
+  it('handles missing electronAPI gracefully', () => {
+    const originalAPI = window.electronAPI;
+    delete (window as any).electronAPI;
+
+    mockThemeMode.value = 'dark';
+    const { applyTheme } = useTheme();
+
+    // Should not throw
+    expect(() => applyTheme()).not.toThrow();
+    expect(document.documentElement.classList.contains('dark')).toBe(true);
+
+    (window as any).electronAPI = originalAPI;
+  });
+
   it('cleans up correctly', () => {
     const { initTheme, cleanupTheme } = useTheme();
     initTheme();

@@ -152,6 +152,8 @@ export function registerSystemHandlers() {
 
   ipcMain.on(IPC_CHANNELS.THEME_CHANGED, (_event, theme: string) => {
     nativeTheme.themeSource =
-      (theme as 'light' | 'dark' | 'system') || 'system';
+      theme === 'light' || theme === 'dark' || theme === 'system'
+        ? theme
+        : 'system';
   });
 }

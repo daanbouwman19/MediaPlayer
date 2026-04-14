@@ -390,3 +390,15 @@ footer {
 .custom-scrollbar:not(:hover)::-webkit-scrollbar-thumb {
   background: transparent;
 }
+
+/* Transitions */
+.fade-slide-up-enter-active,
+.fade-slide-up-leave-active {
+  transition: all 0.2s ease-out;
+}
+
+.fade-slide-up-enter-from,
+.fade-slide-up-leave-to {
+  opacity: 0;
+  transform: translateY(10px);
+}

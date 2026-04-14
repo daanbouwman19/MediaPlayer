@@ -11,7 +11,7 @@ import {
 import { openMediaInVlc } from '../../../src/core/vlc-player';
 import { listDirectory } from '../../../src/core/file-system';
 import { getServerPort } from '../../../src/main/local-server';
-import { shell, dialog } from 'electron';
+import { shell, dialog, ipcMain, nativeTheme } from 'electron';
 import fs from 'fs/promises';
 
 vi.mock('../../../src/main/utils/ipc-helper', () => ({
@@ -228,6 +228,35 @@ describe('system-controller', () => {
       const handler = getHandler(IPC_CHANNELS.GET_PARENT_DIRECTORY);
       const result = await handler({}, '');
       expect(result).toBeNull();
+    });
+  });
+
+  describe('THEME_CHANGED', () => {
+    it('sets themeSource for valid themes', () => {
+      const handler = (ipcMain.on as Mock).mock.calls.find(
+        (c) => c[0] === IPC_CHANNELS.THEME_CHANGED,
+      )![1];
+
+      handler({}, 'dark');
+      expect(nativeTheme.themeSource).toBe('dark');
+
+      handler({}, 'light');
+      expect(nativeTheme.themeSource).toBe('light');
+
+      handler({}, 'system');
+      expect(nativeTheme.themeSource).toBe('system');
+    });
+
+    it('defaults to system for invalid themes', () => {
+      const handler = (ipcMain.on as Mock).mock.calls.find(
+        (c) => c[0] === IPC_CHANNELS.THEME_CHANGED,
+      )![1];
+
+      handler({}, 'pink');
+      expect(nativeTheme.themeSource).toBe('system');
+
+      handler({}, 'invalid');
+      expect(nativeTheme.themeSource).toBe('system');
     });
   });
 });

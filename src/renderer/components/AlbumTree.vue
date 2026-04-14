@@ -13,7 +13,7 @@
       <!-- Toggle Button (Triangle) -->
       <button
         v-if="isFolder"
-        class="toggle-button flex items-center justify-center w-6 h-6 rounded hover:bg-black/10 text-muted hover:text-accent transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        class="toggle-button flex items-center justify-center w-6 h-6 rounded hover:bg-accent/10 text-muted hover:text-accent transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         :aria-expanded="isOpen"
         :aria-label="isOpen ? `Collapse ${album.name}` : `Expand ${album.name}`"
         @click.stop="toggle"

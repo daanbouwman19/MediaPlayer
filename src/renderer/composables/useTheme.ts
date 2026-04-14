@@ -55,9 +55,6 @@ export function useTheme() {
       (newTheme) => {
         localStorage.setItem('themeMode', newTheme);
         applyTheme();
-        if (window.electronAPI) {
-          window.electronAPI.setTheme(newTheme);
-        }
       },
       { immediate: true },
     );
