@@ -9,6 +9,7 @@
       <button
         class="text-sm bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-50"
         title="Close Grid View"
+        aria-label="Close Grid View"
         @click="closeGrid"
       >
         Close

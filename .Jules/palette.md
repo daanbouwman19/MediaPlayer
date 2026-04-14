@@ -1,0 +1,1 @@
+## 2025-02-18 - Improve accessibility for grid view close button\n**Learning:** The MediaGrid component's close button lacked a descriptive aria-label, which could be confusing for screen reader users as 'Close' might not provide enough context.\n**Action:** Add descriptive aria-labels to buttons, especially when the visual text might be ambiguous out of context.
