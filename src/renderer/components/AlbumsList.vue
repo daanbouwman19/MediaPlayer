@@ -85,7 +85,7 @@
           <!-- SECTION: ALBUMS -->
           <div class="mb-6">
             <h3
-              class="px-3 text-xs font-bold text-gray-500 uppercase tracking-wider mb-2"
+              class="px-3 text-xs font-bold text-muted uppercase tracking-wider mb-2"
             >
               Albums
             </h3>
@@ -131,7 +131,7 @@
           <!-- SECTION: SMART PLAYLISTS -->
           <div class="mb-4">
             <h3
-              class="px-3 text-xs font-bold text-gray-500 uppercase tracking-wider mb-2"
+              class="px-3 text-xs font-bold text-muted uppercase tracking-wider mb-2"
             >
               Playlists
             </h3>

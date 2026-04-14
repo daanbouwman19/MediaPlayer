@@ -171,10 +171,17 @@ const drawHeatmap = () => {
     ctx.rect(0, 0, playedW, height);
     ctx.clip();
 
+    // Fetch theme colors from computed style
+    const style = getComputedStyle(document.documentElement);
+    const accentColor =
+      style.getPropertyValue('--accent-color').trim() || '#6366f1';
+    const accentSecondary =
+      style.getPropertyValue('--accent-secondary').trim() || '#818cf8';
+
     // Use gradient for played part
     const gradient = ctx.createLinearGradient(0, 0, playedW, 0);
-    gradient.addColorStop(0, '#6366f1'); // Indigo
-    gradient.addColorStop(1, '#818cf8'); // Lighter indigo
+    gradient.addColorStop(0, accentColor);
+    gradient.addColorStop(1, accentSecondary);
 
     drawWaveform(gradient);
     ctx.restore();

@@ -111,7 +111,7 @@ describe('FileExplorer.vue', () => {
     await items[0].trigger('click');
 
     // Check if Select Directory button is enabled
-    const selectBtn = wrapper.find('button.bg-blue-600');
+    const selectBtn = wrapper.find('button.bg-accent');
     expect(selectBtn.attributes('disabled')).toBeUndefined();
   });
 
@@ -129,7 +129,7 @@ describe('FileExplorer.vue', () => {
     const items = wrapper.findAll('.grid > button');
     await items[0].trigger('click');
 
-    const selectBtn = wrapper.find('button.bg-blue-600');
+    const selectBtn = wrapper.find('button.bg-accent');
     await selectBtn.trigger('click');
 
     expect(wrapper.emitted('select')).toBeTruthy();
@@ -160,7 +160,7 @@ describe('FileExplorer.vue', () => {
 
   it('emits cancel event', async () => {
     const wrapper = mount(FileExplorer);
-    await wrapper.find('button.text-gray-300').trigger('click');
+    await wrapper.find('button.px-4.text-muted').trigger('click');
     expect(wrapper.emitted('cancel')).toBeTruthy();
   });
 
@@ -418,10 +418,10 @@ describe('FileExplorer.vue', () => {
 
     // Check selection state
     expect((wrapper.vm as any).selectedPath).toBe('folder-123');
-    expect(folderItem?.classes()).toContain('bg-blue-900/50');
+    expect(folderItem?.classes()).toContain('bg-accent/20');
 
     // Find select button
-    const selectBtn = wrapper.find('button.bg-blue-600');
+    const selectBtn = wrapper.find('button.bg-accent');
     expect(selectBtn.attributes('disabled')).toBeUndefined();
 
     // Click select button
@@ -449,7 +449,7 @@ describe('FileExplorer.vue', () => {
     await flushPromises();
 
     expect((wrapper.vm as any).selectedPath).toBeNull();
-    const selectBtn = wrapper.find('button.bg-blue-600');
+    const selectBtn = wrapper.find('button.bg-accent');
     expect(selectBtn.attributes()).toHaveProperty('disabled');
   });
 

@@ -3,7 +3,7 @@
     class="flex flex-col items-start p-1.5 rounded-md transition-colors duration-200 mb-0.5"
     :class="{
       'bg-accent/15 border-l-2 border-accent': selectionState !== 'none',
-      'hover:bg-white/5': selectionState === 'none',
+      'hover:bg-accent/5': selectionState === 'none',
     }"
     :style="{ marginLeft: `${depth * 20}px` }"
   >
@@ -27,7 +27,7 @@
 
       <!-- Selection Checkbox -->
       <button
-        class="flex items-center justify-center w-5 h-5 rounded hover:bg-white/10 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent shrink-0"
+        class="flex items-center justify-center w-5 h-5 rounded hover:bg-accent/10 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent shrink-0"
         data-testid="album-checkbox"
         role="checkbox"
         :aria-checked="
@@ -74,7 +74,7 @@
 
       <!-- Main Action Button (Name + Badge) -->
       <button
-        class="grow flex items-center gap-2 text-left min-w-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded px-1 -ml-1 transition-colors hover:bg-black/10 cursor-pointer"
+        class="grow flex items-center gap-2 text-left min-w-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded px-1 -ml-1 transition-colors hover:bg-accent/10 cursor-pointer"
         :aria-label="'Play ' + album.name"
         @click="handleClickAlbum(album)"
       >

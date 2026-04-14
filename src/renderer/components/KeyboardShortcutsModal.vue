@@ -20,7 +20,7 @@
       >
         <!-- Decorative top gradient -->
         <div
-          class="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-500 z-10"
+          class="absolute top-0 left-0 right-0 h-1 bg-linear-to-r from-accent via-accent-secondary to-accent z-10"
         ></div>
 
         <!-- Header -->
@@ -46,7 +46,7 @@
           <!-- Navigation -->
           <div class="space-y-2">
             <h3
-              class="text-xs font-bold uppercase tracking-wider text-indigo-400 mb-2"
+              class="text-xs font-bold uppercase tracking-wider text-accent mb-2"
             >
               Navigation
             </h3>
@@ -76,7 +76,7 @@
           <!-- Playback -->
           <div class="space-y-2">
             <h3
-              class="text-xs font-bold uppercase tracking-wider text-indigo-400 mb-2"
+              class="text-xs font-bold uppercase tracking-wider text-accent mb-2"
             >
               Playback
             </h3>
@@ -99,7 +99,7 @@
           <!-- Seeking -->
           <div class="space-y-2">
             <h3
-              class="text-xs font-bold uppercase tracking-wider text-indigo-400 mb-2"
+              class="text-xs font-bold uppercase tracking-wider text-accent mb-2"
             >
               Seeking (Video)
             </h3>
@@ -123,7 +123,7 @@
         <!-- Footer -->
         <div class="p-4 bg-white/5 border-t border-white/5 text-center">
           <button
-            class="px-6 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-400 text-sm"
+            class="px-6 py-2 rounded-lg bg-accent hover:bg-accent-hover text-button-text font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-accent text-sm"
             @click="close"
           >
             Got it

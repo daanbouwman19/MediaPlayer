@@ -378,7 +378,7 @@ describe('MediaGrid.vue Coverage', () => {
     await wrapper.vm.$nextTick();
 
     expect(wrapper.text()).toContain('5');
-    expect(wrapper.find('.text-yellow-400').exists()).toBe(true);
+    expect(wrapper.find('.text-accent').exists()).toBe(true);
   });
 
   it('disconnects ResizeObserver on unmount', async () => {

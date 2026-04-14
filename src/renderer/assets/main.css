@@ -134,30 +134,30 @@
 }
 
 .theme-cyberpunk {
-  /* Cyberpunk Theme - Yellow/Neon palette */
+  /* Cyberpunk Theme - Neon Revival palette */
 
   /* Light Variant (Default) */
-  --primary-bg: #fefce8; /* Yellow-50 */
+  --primary-bg: #fdfaf1; /* Industrial Off-white */
   --secondary-bg: #ffffff;
-  --tertiary-bg: #fef08a; /* Yellow-200 */
+  --tertiary-bg: #fef9c3; /* Yellow-100 */
 
-  --accent-color: #eab308; /* Yellow-500 */
+  --accent-color: #fcea2b; /* Vibrant Neon Yellow */
   --accent-secondary: #06b6d4; /* Cyan-500 */
-  --accent-hover: #ca8a04; /* Yellow-600 */
-  --watched-color: rgba(234, 179, 8, 0.2);
+  --accent-hover: #facc15; /* Yellow-400 */
+  --watched-color: rgba(252, 234, 43, 0.3);
 
-  --text-color: #422006; /* Yellow-900 */
-  --text-muted: #854d0e; /* Yellow-800 */
-  --border-color: rgba(234, 179, 8, 0.2);
-  --selection-color: #fef08a;
-  --button-text-color: #ffffff;
+  --text-color: #0f172a; /* Slate-900 for readability */
+  --text-muted: #475569; /* Slate-600 */
+  --border-color: rgba(252, 234, 43, 0.4);
+  --selection-color: rgba(252, 234, 43, 0.2);
+  --button-text-color: #000000; /* BLACK text on neon buttons */
 
-  --glass-bg: rgba(255, 255, 255, 0.85);
-  --glass-border: rgba(234, 179, 8, 0.3);
-  --glass-shadow: 0 8px 32px 0 rgba(234, 179, 8, 0.1);
+  --glass-bg: rgba(255, 255, 255, 0.8);
+  --glass-border: rgba(252, 234, 43, 0.3);
+  --glass-shadow: 0 8px 32px 0 rgba(252, 234, 43, 0.15);
   --glass-blur: blur(16px);
 
-  --vignette-color: 254, 252, 232;
+  --vignette-color: 253, 250, 241;
   --vignette-mid: 0.1;
   --vignette-edge: 0.2;
 }

@@ -21,7 +21,7 @@
         class="flex flex-col items-center justify-center p-6 text-center z-10"
       >
         <template v-if="mediaDirectories.length === 0">
-          <div class="mb-4 p-4 rounded-full bg-indigo-500/10 text-indigo-400">
+          <div class="mb-4 p-4 rounded-full bg-accent/10 text-accent">
             <svg
               xmlns="http://www.w3.org/2000/svg"
               class="w-12 h-12"
@@ -45,7 +45,7 @@
             media collection.
           </p>
           <button
-            class="glass-button px-6 py-3 flex items-center gap-2 font-semibold text-white bg-indigo-600/80 hover:bg-indigo-600 border-indigo-500/50"
+            class="glass-button px-6 py-3 flex items-center gap-2 font-semibold text-button-text bg-accent hover:bg-accent-hover border-accent/50"
             @click="openSourcesModal"
           >
             <svg

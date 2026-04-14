@@ -9,9 +9,9 @@
     >
       <div class="mb-6">
         <div
-          class="w-20 h-20 bg-indigo-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg shadow-indigo-500/30"
+          class="w-20 h-20 bg-accent rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg shadow-accent/30"
         >
-          <LockIcon class="w-10 h-10 text-white" />
+          <LockIcon class="w-10 h-10 text-button-text" />
         </div>
         <h2 class="text-3xl font-bold text-white mb-2">Media Locked</h2>
         <p class="text-white/60">Enter the password to access your library</p>
@@ -23,7 +23,7 @@
             v-model="password"
             type="password"
             placeholder="Password"
-            class="w-full bg-white/5 border border-white/10 rounded-xl px-5 py-4 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white/10 transition-all text-lg placeholder:text-white/20"
+            class="w-full bg-white/5 border border-white/10 rounded-xl px-5 py-4 text-white focus:outline-none focus:ring-2 focus:ring-accent focus:bg-white/10 transition-all text-lg placeholder:text-white/20"
             :disabled="isUnlocking"
             autofocus
           />
@@ -35,7 +35,7 @@
 
         <button
           type="submit"
-          class="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-4 rounded-xl transition-all shadow-lg shadow-indigo-500/20 text-lg flex items-center justify-center gap-2"
+          class="w-full bg-accent hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed text-button-text font-bold py-4 rounded-xl transition-all shadow-lg shadow-accent/20 text-lg flex items-center justify-center gap-2"
           :disabled="isUnlocking || !password"
         >
           <span v-if="isUnlocking" class="spinner-small"></span>
