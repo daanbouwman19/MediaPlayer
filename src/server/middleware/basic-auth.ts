@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import crypto from 'crypto';
+import { MAX_PASSWORD_LENGTH } from '../../core/constants.ts';
 
 // Generate a unique salt for this process lifetime.
 const AUTH_SALT = crypto.randomBytes(16);
@@ -57,6 +58,13 @@ export function basicAuthMiddleware(
   }
 
   const credentials = Buffer.from(match[1], 'base64').toString();
+
+  // Prevent DoS by rejecting excessively long inputs before expensive scrypt operations and substring allocations
+  if (credentials.length > MAX_PASSWORD_LENGTH * 2 + 1) {
+    // user:secret
+    return sendUnauthorized(res);
+  }
+
   // Split on the FIRST colon only to support passwords with colons
   const idx = credentials.indexOf(':');
   if (idx === -1) {
@@ -65,6 +73,13 @@ export function basicAuthMiddleware(
 
   const loginUser = credentials.substring(0, idx);
   const loginSecret = credentials.substring(idx + 1);
+
+  if (
+    loginUser.length > MAX_PASSWORD_LENGTH ||
+    loginSecret.length > MAX_PASSWORD_LENGTH
+  ) {
+    return sendUnauthorized(res);
+  }
 
   const loginKey = deriveAuthKey(loginUser);
   const secretKey = deriveAuthKey(loginSecret);

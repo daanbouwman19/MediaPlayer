@@ -307,6 +307,12 @@ const MAX_CONCURRENT_TRANSCODES = 10;
 const MAX_API_BATCH_SIZE = 1000;
 
 /**
+ * Maximum allowed length for passwords.
+ * Used to prevent CPU exhaustion DoS attacks on expensive hashing algorithms.
+ */
+const MAX_PASSWORD_LENGTH = 256;
+
+/**
  * Duration of each HLS segment in seconds.
  */
 const HLS_SEGMENT_DURATION = 6;
@@ -379,6 +385,7 @@ export {
   RATE_LIMIT_FS_READ_MAX_REQUESTS,
   MAX_CONCURRENT_TRANSCODES,
   MAX_API_BATCH_SIZE,
+  MAX_PASSWORD_LENGTH,
   HLS_SEGMENT_DURATION,
   HLS_CACHE_DIR_NAME,
   HEATMAP_CACHE_DIR_NAME,

@@ -6,6 +6,7 @@ import crypto from 'crypto';
 import { AppError } from '../../core/errors.ts';
 import { escapeHtml } from '../../core/security.ts';
 import { getQueryParam } from '../../core/utils/http-utils.ts';
+import { MAX_PASSWORD_LENGTH } from '../../core/constants.ts';
 import {
   generateAuthUrl,
   authenticateWithCode,
@@ -59,7 +60,12 @@ export function createAuthRoutes(limiters: RateLimiters) {
       // Note: We use the same random salt for both because the "stored" password is in memory,
       // not in a database. This prevents timing attacks on the length/content of the password
       // while making brute-force more expensive than simple string comparison.
-      if (typeof password === 'string') {
+
+      // Prevent DoS by restricting password length before expensive scrypt operations
+      if (
+        typeof password === 'string' &&
+        password.length <= MAX_PASSWORD_LENGTH
+      ) {
         const salt = crypto.randomBytes(16);
 
         try {

@@ -158,3 +158,9 @@
 **Vulnerability:** Google OAuth tokens were stored in plain text in the `media-library.db` database. If an attacker gained access to the database file (e.g. via backup or local access), they could steal the refresh tokens and access the user's Google Drive data.
 **Learning:** Sensitive credentials should never be stored in plain text, even in local databases. In shared environments (like Electron + Node Server), relying on OS-specific secure storage (Keychain) is difficult. A robust fallback (like application-level encryption with a generated key) is better than plain text.
 **Prevention:** Implemented AES-256-GCM encryption for token storage. The master key is either provided via environment variable or generated securely and stored in a restricted `master.key` file, which is explicitly blocked from application file access APIs.
+
+## 2026-04-14 - Basic Auth DoS via Input Length
+
+**Vulnerability:** The `basicAuthMiddleware` and `/api/auth/unlock` endpoint did not limit the length of password inputs before executing `crypto.scryptSync` or `crypto.scrypt`. An attacker could send massive passwords causing a severe Denial of Service (DoS) by exhausting CPU resources and blocking the event loop for a significant time.
+**Learning:** Cryptographic functions designed to be CPU/memory intensive (like scrypt) must always be preceded by strict input length validation to prevent attacker-controlled resource exhaustion.
+**Prevention:** Added a maximum length limit of 256 characters for password inputs prior to performing expensive scrypt operations.
