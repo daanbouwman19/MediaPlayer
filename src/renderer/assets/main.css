@@ -133,6 +133,64 @@
   --vignette-edge: 0.4;
 }
 
+.theme-cyberpunk {
+  /* Cyberpunk Theme - Yellow/Neon palette */
+
+  /* Light Variant (Default) */
+  --primary-bg: #fefce8; /* Yellow-50 */
+  --secondary-bg: #ffffff;
+  --tertiary-bg: #fef08a; /* Yellow-200 */
+
+  --accent-color: #eab308; /* Yellow-500 */
+  --accent-secondary: #06b6d4; /* Cyan-500 */
+  --accent-hover: #ca8a04; /* Yellow-600 */
+  --watched-color: rgba(234, 179, 8, 0.2);
+
+  --text-color: #422006; /* Yellow-900 */
+  --text-muted: #854d0e; /* Yellow-800 */
+  --border-color: rgba(234, 179, 8, 0.2);
+  --selection-color: #fef08a;
+  --button-text-color: #ffffff;
+
+  --glass-bg: rgba(255, 255, 255, 0.85);
+  --glass-border: rgba(234, 179, 8, 0.3);
+  --glass-shadow: 0 8px 32px 0 rgba(234, 179, 8, 0.1);
+  --glass-blur: blur(16px);
+
+  --vignette-color: 254, 252, 232;
+  --vignette-mid: 0.1;
+  --vignette-edge: 0.2;
+}
+
+@media (prefers-color-scheme: dark) {
+  .theme-cyberpunk {
+    /* Dark Variant */
+    --primary-bg: #09090b; /* Zinc-950 */
+    --secondary-bg: #18181b; /* Zinc-900 */
+    --tertiary-bg: #27272a; /* Zinc-800 */
+
+    --accent-color: #fef08a; /* Yellow-200 / Neon Yellow */
+    --accent-secondary: #22d3ee; /* Cyan-400 */
+    --accent-hover: #fde047; /* Yellow-300 */
+    --watched-color: rgba(254, 240, 138, 0.3);
+
+    --text-color: #fafafa;
+    --text-muted: #a1a1aa; /* Zinc-400 */
+    --border-color: rgba(254, 240, 138, 0.2);
+    --selection-color: #422006;
+    --button-text-color: #09090b; /* Dark text for bright button */
+
+    --glass-bg: rgba(24, 24, 27, 0.8);
+    --glass-border: rgba(254, 240, 138, 0.2);
+    --glass-shadow: 0 8px 32px 0 rgba(254, 240, 138, 0.15);
+    --glass-blur: blur(20px);
+
+    --vignette-color: 9, 9, 11;
+    --vignette-mid: 0.4;
+    --vignette-edge: 0.8;
+  }
+}
+
 /* Text Utility Classes */
 .text-color {
   color: var(--text-color);

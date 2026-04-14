@@ -17,7 +17,7 @@ for (const tc of testCases) {
     page,
   }) => {
     // For system themes (light/dark/cyberpunk)
-    await page.emulateMedia({ colorScheme: tc.colorScheme as any });
+    await page.emulateMedia({ colorScheme: tc.colorScheme });
 
     // Set theme in localStorage before navigation to ensure it's applied on load
     await page.addInitScript((t) => {
@@ -64,9 +64,6 @@ for (const tc of testCases) {
     await page.locator('#playlist-name').click();
     await page.locator('body').click({ position: { x: 0, y: 0 } });
 
-    // The modal has a transition, wait a moment for it to complete
-    await page.waitForTimeout(1000);
-
     // Disable blinking cursors
     await page.addStyleTag({
       content: 'input { caret-color: transparent !important; }',
@@ -77,7 +74,7 @@ for (const tc of testCases) {
       `smart-playlist-modal-${themeLabel}.png`,
       {
         fullPage: true,
-        maxDiffPixelRatio: 0.05,
+        maxDiffPixelRatio: 0.02,
         animations: 'disabled',
       },
     );
