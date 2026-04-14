@@ -3,7 +3,7 @@
 **Learning:** The application frequently uses `.glass-button` or `.glass-button-icon` for control buttons. These often contain only icons (arrows, VLC icon) and lack text labels. This pattern repeats in `MediaDisplay` and `SourcesModal` close buttons.
 **Action:** When using glass-styled buttons with icons, always verify `aria-label` presence, as they are likely to be purely visual. Future audits should target `.glass-button-icon` specifically.
 
-## 2025-02-18 - [Custom Checkbox Accessibility in Tree Views]
+## 2026-02-18 - [Custom Checkbox Accessibility in Tree Views]
 
 **Learning:** UX journal created.
 **Action:** Use this to track critical UX/a11y learnings.
@@ -161,7 +161,7 @@
 **Learning:** Keyboard shortcuts are powerful but useless if users don't know they exist. Relying on a hidden shortcut (like `?`) to show help is an anti-pattern.
 **Action:** Added a visible "Keyboard Shortcuts" button to the media controls. This ensures users can discover the functionality without knowing the secret handshake.
 
-## 2025-02-18 - Improve accessibility for grid view close button
+## 2026-02-18 - Improve accessibility for grid view close button
 
 **Learning:** The MediaGrid component's close button lacked a descriptive aria-label, which could be confusing for screen reader users as 'Close' might not provide enough context.
 **Action:** Add descriptive aria-labels to buttons, especially when the visual text might be ambiguous out of context.
