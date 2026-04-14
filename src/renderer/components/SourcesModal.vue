@@ -20,7 +20,7 @@
       >
         <!-- Decorative top gradient -->
         <div
-          class="absolute top-0 left-0 right-0 h-1 bg-linear-to-r from-indigo-500 via-purple-500 to-indigo-500 z-10"
+          class="absolute top-0 left-0 right-0 h-1 bg-linear-to-r from-accent via-accent-secondary to-accent z-10"
         ></div>
 
         <!-- Header -->
@@ -107,7 +107,7 @@
                       :id="`source-checkbox-${index}`"
                       type="checkbox"
                       :checked="dir.isActive"
-                      class="peer appearance-none w-5 h-5 border-2 border-gray-600 rounded checked:bg-indigo-500 checked:border-indigo-500 transition-colors cursor-pointer"
+                      class="peer appearance-none w-5 h-5 border-2 border-gray-600 rounded checked:bg-accent checked:border-accent transition-colors cursor-pointer"
                       :aria-label="'Toggle ' + (dir.name || dir.path)"
                       @change="
                         handleToggleActive(
@@ -134,7 +134,7 @@
                   <!-- Icon -->
                   <span
                     v-if="dir.type === 'google_drive'"
-                    class="mr-3 text-indigo-400 shrink-0"
+                    class="mr-3 text-accent-secondary shrink-0"
                     title="Google Drive"
                   >
                     <svg
@@ -214,7 +214,7 @@
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
-                  class="h-5 w-5 text-gray-500 group-hover:text-indigo-400 transition-colors"
+                  class="h-5 w-5 text-gray-500 group-hover:text-accent transition-colors"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -235,7 +235,7 @@
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
-                  class="h-5 w-5 text-gray-500 group-hover:text-indigo-400 transition-colors"
+                  class="h-5 w-5 text-gray-500 group-hover:text-accent transition-colors"
                   viewBox="0 0 20 20"
                   fill="currentColor"
                 >
@@ -252,7 +252,7 @@
         <!-- Footer Action -->
         <div class="shrink-0 p-6 border-t border-black/5 bg-black/5">
           <button
-            class="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold tracking-wide shadow-lg shadow-indigo-900/20 active:scale-95 transition-all"
+            class="w-full py-3 rounded-xl bg-accent hover:bg-accent-hover text-button-text font-bold tracking-wide shadow-lg shadow-accent/20 active:scale-95 transition-all"
             @click="closeModalAndReindex"
           >
             APPLY CHANGES & RE-INDEX
@@ -298,7 +298,7 @@
             application via your browser.
           </p>
           <button
-            class="w-full py-3 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition-colors"
+            class="w-full py-3 rounded-lg bg-accent hover:bg-accent-hover text-button-text font-semibold transition-colors"
             @click="startDriveAuth"
           >
             Start Authorization
@@ -308,16 +308,16 @@
         <div v-else-if="!authSuccess" class="space-y-4">
           <div class="space-y-2 text-sm text-muted">
             <p>
-              <span class="font-bold text-accent">Step 1:</span> Complete login
-              in the browser window.
+              <span class="font-bold text-accent-secondary">Step 1:</span>
+              Complete login in the browser window.
             </p>
             <p>
-              <span class="font-bold text-accent">Step 2:</span> Copy the code
-              provided by Google.
+              <span class="font-bold text-accent-secondary">Step 2:</span> Copy
+              the code provided by Google.
             </p>
             <p>
-              <span class="font-bold text-accent">Step 3:</span> Paste the code
-              below.
+              <span class="font-bold text-accent-secondary">Step 3:</span> Paste
+              the code below.
             </p>
           </div>
 
@@ -345,7 +345,7 @@
               Cancel
             </button>
             <button
-              class="flex-2 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition-colors disabled:opacity-50"
+              class="flex-2 py-2 rounded-lg bg-accent hover:bg-accent-hover text-button-text font-bold transition-colors disabled:opacity-50"
               :disabled="!authCode || isAuthenticating"
               @click="submitAuthCode"
             >
@@ -409,7 +409,7 @@
               Close
             </button>
             <button
-              class="flex-2 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition-colors disabled:opacity-50"
+              class="flex-2 py-2 rounded-lg bg-accent hover:bg-accent-hover text-button-text font-bold transition-colors disabled:opacity-50"
               :disabled="isAddingDrive"
               @click="addDriveSource"
             >

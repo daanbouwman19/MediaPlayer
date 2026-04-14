@@ -45,6 +45,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue';
 import type { HeatmapData } from '../../core/types';
+import { useUIStore } from '../composables/useUIStore';
 
 const props = defineProps<{
   currentTime: number;
@@ -60,11 +61,32 @@ const emit = defineEmits<{
   (e: 'scrub-end'): void;
 }>();
 
+const uiStore = useUIStore();
 const isDragging = ref(false);
 const isHovering = ref(false);
 const isFocused = ref(false);
 const localPreviewTime = ref(0);
 const heatmapCanvas = ref<HTMLCanvasElement | null>(null);
+
+// Cache theme colors to avoid getComputedStyle in the draw loop
+const themeColors = ref({
+  accent: '#6366f1',
+  accentSecondary: '#818cf8',
+});
+
+const updateThemeColors = () => {
+  const style = getComputedStyle(document.documentElement);
+  themeColors.value = {
+    accent: style.getPropertyValue('--accent-color').trim() || '#6366f1',
+    accentSecondary:
+      style.getPropertyValue('--accent-secondary').trim() || '#818cf8',
+  };
+};
+
+// Update colors when theme changes
+if (uiStore.themeMode) {
+  watch(() => uiStore.themeMode.value, updateThemeColors);
+}
 
 const HEATMAP_MOTION_SCALE = 0.8; // Adjust based on data range
 
@@ -171,10 +193,13 @@ const drawHeatmap = () => {
     ctx.rect(0, 0, playedW, height);
     ctx.clip();
 
+    // Use cached theme colors
+    const { accent, accentSecondary } = themeColors.value;
+
     // Use gradient for played part
     const gradient = ctx.createLinearGradient(0, 0, playedW, 0);
-    gradient.addColorStop(0, '#6366f1'); // Indigo
-    gradient.addColorStop(1, '#818cf8'); // Lighter indigo
+    gradient.addColorStop(0, accent);
+    gradient.addColorStop(1, accentSecondary);
 
     drawWaveform(gradient);
     ctx.restore();
@@ -210,6 +235,7 @@ watch(
 );
 
 onMounted(() => {
+  updateThemeColors(); // Initial fetch
   if (heatmapCanvas.value) {
     const ro = new ResizeObserver(() => {
       requestAnimationFrame(drawHeatmap);

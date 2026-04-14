@@ -57,9 +57,7 @@
           </button>
 
           <!-- Title / Filename -->
-          <h1
-            class="text-lg font-bold bg-clip-text text-transparent bg-linear-to-r from-blue-400 to-indigo-500 truncate mx-4"
-          >
+          <h1 class="text-lg font-bold text-accent truncate mx-4">
             {{
               viewMode === 'player' && currentMediaItem
                 ? currentMediaItem.name

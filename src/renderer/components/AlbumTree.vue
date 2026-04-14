@@ -3,7 +3,7 @@
     class="flex flex-col items-start p-1.5 rounded-md transition-colors duration-200 mb-0.5"
     :class="{
       'bg-accent/15 border-l-2 border-accent': selectionState !== 'none',
-      'hover:bg-white/5': selectionState === 'none',
+      'hover:bg-accent/5': selectionState === 'none',
     }"
     :style="{ marginLeft: `${depth * 20}px` }"
   >
@@ -27,7 +27,7 @@
 
       <!-- Selection Checkbox -->
       <button
-        class="flex items-center justify-center w-5 h-5 rounded hover:bg-white/10 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent shrink-0"
+        class="flex items-center justify-center w-5 h-5 rounded hover:bg-accent/10 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent shrink-0"
         data-testid="album-checkbox"
         role="checkbox"
         :aria-checked="
@@ -56,7 +56,7 @@
             xmlns="http://www.w3.org/2000/svg"
             viewBox="0 0 20 20"
             fill="currentColor"
-            class="w-2.5 h-2.5 text-white"
+            class="w-2.5 h-2.5 text-button-text"
           >
             <path
               fill-rule="evenodd"
@@ -67,14 +67,14 @@
           <!-- Indeterminate Dash -->
           <div
             v-else-if="selectionState === 'some'"
-            class="w-2 h-0.5 bg-white rounded-full"
+            class="w-2 h-0.5 bg-button-text rounded-full"
           ></div>
         </div>
       </button>
 
       <!-- Main Action Button (Name + Badge) -->
       <button
-        class="grow flex items-center gap-2 text-left min-w-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded px-1 -ml-1 transition-colors hover:bg-black/10 cursor-pointer"
+        class="grow flex items-center gap-2 text-left min-w-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded px-1 -ml-1 transition-colors hover:bg-accent/10 cursor-pointer"
         :aria-label="'Play ' + album.name"
         @click="handleClickAlbum(album)"
       >
@@ -85,7 +85,7 @@
         <!-- Badge for count -->
         <span
           v-if="totalTextureCount > 0"
-          class="shrink-0 bg-accent/10 text-accent text-[10px] font-bold px-1.5 py-0.5 rounded-md"
+          class="shrink-0 bg-accent/20 text-color text-[10px] font-bold px-1.5 py-0.5 rounded-md"
         >
           {{ totalTextureCount }}
         </span>

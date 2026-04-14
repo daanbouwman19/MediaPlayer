@@ -13,14 +13,14 @@
       @click.self="close"
     >
       <div
-        class="relative w-full max-w-md glass-panel md:rounded-2xl shadow-2xl overflow-hidden flex flex-col transition-all"
+        class="relative w-full max-w-sm glass-panel md:rounded-2xl shadow-2xl overflow-hidden flex flex-col transition-all"
         role="dialog"
         aria-modal="true"
         aria-labelledby="shortcuts-title"
       >
         <!-- Decorative top gradient -->
         <div
-          class="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-500 z-10"
+          class="absolute top-0 left-0 right-0 h-1 bg-linear-to-r from-accent via-accent-secondary to-accent z-10"
         ></div>
 
         <!-- Header -->
@@ -46,28 +46,28 @@
           <!-- Navigation -->
           <div class="space-y-2">
             <h3
-              class="text-xs font-bold uppercase tracking-wider text-indigo-400 mb-2"
+              class="text-xs font-bold uppercase tracking-wider text-accent-secondary mb-2"
             >
               Navigation
             </h3>
             <div class="flex justify-between items-center">
               <span class="text-sm text-muted">Previous Media</span>
               <kbd
-                class="px-2 py-1 bg-black/5 rounded border border-black/10 font-mono text-xs text-accent min-w-[28px] text-center"
+                class="px-2 py-1 bg-accent rounded font-mono text-xs text-button-text min-w-[28px] text-center font-bold"
                 >Z</kbd
               >
             </div>
             <div class="flex justify-between items-center">
               <span class="text-sm text-muted">Next Media</span>
               <kbd
-                class="px-2 py-1 bg-black/5 rounded border border-black/10 font-mono text-xs text-accent min-w-[28px] text-center"
+                class="px-2 py-1 bg-accent rounded font-mono text-xs text-button-text min-w-[28px] text-center font-bold"
                 >X</kbd
               >
             </div>
             <div class="flex justify-between items-center">
               <span class="text-sm text-muted">Toggle Shortcuts</span>
               <kbd
-                class="px-2 py-1 bg-black/5 rounded border border-black/10 font-mono text-xs text-accent min-w-[28px] text-center"
+                class="px-2 py-1 bg-accent rounded font-mono text-xs text-button-text min-w-[28px] text-center font-bold"
                 >?</kbd
               >
             </div>
@@ -76,21 +76,21 @@
           <!-- Playback -->
           <div class="space-y-2">
             <h3
-              class="text-xs font-bold uppercase tracking-wider text-indigo-400 mb-2"
+              class="text-xs font-bold uppercase tracking-wider text-accent-secondary mb-2"
             >
               Playback
             </h3>
             <div class="flex justify-between items-center">
               <span class="text-sm text-muted">Play / Pause (Video)</span>
               <kbd
-                class="px-2 py-1 bg-black/5 rounded border border-black/10 font-mono text-xs text-accent min-w-[28px] text-center"
+                class="px-2 py-1 bg-accent rounded font-mono text-xs text-button-text min-w-[28px] text-center font-bold"
                 >Space</kbd
               >
             </div>
             <div class="flex justify-between items-center">
               <span class="text-sm text-muted">Toggle Slideshow (Image)</span>
               <kbd
-                class="px-2 py-1 bg-black/5 rounded border border-black/10 font-mono text-xs text-accent min-w-[28px] text-center"
+                class="px-2 py-1 bg-accent rounded font-mono text-xs text-button-text min-w-[28px] text-center font-bold"
                 >Space</kbd
               >
             </div>
@@ -99,21 +99,21 @@
           <!-- Seeking -->
           <div class="space-y-2">
             <h3
-              class="text-xs font-bold uppercase tracking-wider text-indigo-400 mb-2"
+              class="text-xs font-bold uppercase tracking-wider text-accent-secondary mb-2"
             >
               Seeking (Video)
             </h3>
             <div class="flex justify-between items-center">
               <span class="text-sm text-muted">Seek Backward 5s</span>
               <kbd
-                class="px-2 py-1 bg-black/5 rounded border border-black/10 font-mono text-xs text-accent min-w-[28px] text-center"
+                class="px-2 py-1 bg-accent rounded font-mono text-xs text-button-text min-w-[28px] text-center font-bold"
                 >←</kbd
               >
             </div>
             <div class="flex justify-between items-center">
               <span class="text-sm text-muted">Seek Forward 5s</span>
               <kbd
-                class="px-2 py-1 bg-black/5 rounded border border-black/10 font-mono text-xs text-accent min-w-[28px] text-center"
+                class="px-2 py-1 bg-accent rounded font-mono text-xs text-button-text min-w-[28px] text-center font-bold"
                 >→</kbd
               >
             </div>
@@ -123,7 +123,7 @@
         <!-- Footer -->
         <div class="p-4 bg-white/5 border-t border-white/5 text-center">
           <button
-            class="px-6 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-400 text-sm"
+            class="px-6 py-2 rounded-lg bg-accent hover:bg-accent-hover text-button-text font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-accent text-sm"
             @click="close"
           >
             Got it

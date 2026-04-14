@@ -1,7 +1,7 @@
 <template>
   <button
     type="button"
-    class="relative group grid-item cursor-pointer w-full h-full text-left bg-transparent border-0 p-0 block focus:outline-none focus:ring-2 focus:ring-pink-500 rounded overflow-hidden"
+    class="relative group grid-item cursor-pointer w-full h-full text-left bg-transparent border-0 p-0 block focus:outline-none focus:ring-2 focus:ring-accent rounded overflow-hidden"
     :aria-label="ariaLabel"
     :title="displayName"
     @click="$emit('click', item)"
@@ -13,7 +13,7 @@
     <!-- Skeleton Loader -->
     <div
       v-if="showSkeleton"
-      class="absolute inset-0 bg-black/5 animate-pulse rounded z-10 flex items-center justify-center text-muted"
+      class="absolute inset-0 bg-accent/10 animate-pulse rounded z-10 flex items-center justify-center text-muted"
     >
       <component
         :is="isVideo ? PlayIcon : ImageIcon"
@@ -93,10 +93,9 @@
         {{ item.duration ? formatTime(item.duration) : 'VIDEO' }}
       </div>
     </template>
-    <!-- Rating Overlay -->
     <div
       v-if="item.rating"
-      class="absolute top-2 left-2 bg-black/60 text-yellow-400 text-xs px-1.5 py-0.5 rounded flex items-center pointer-events-none gap-1"
+      class="absolute top-2 left-2 bg-black/60 text-accent text-xs px-1.5 py-0.5 rounded flex items-center pointer-events-none gap-1"
     >
       <StarIcon class="w-3 h-3 fill-current" />
       {{ item.rating }}
@@ -278,7 +277,7 @@ const shouldPlayPreview = computed(() => isHovered.value && isVideo.value);
 
 /* Simplified hover effect - no transitions */
 .grid-item:hover {
-  border-color: #ec4899;
+  border-color: var(--accent-color);
 }
 
 /* Optimize image rendering */

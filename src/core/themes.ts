@@ -30,8 +30,18 @@ export const AVAILABLE_THEMES: Theme[] = [
     base: 'light',
   },
   {
-    id: 'cyberpunk',
-    label: 'Cyberpunk',
+    id: 'cyberpunk-light',
+    label: 'Cyberpunk Light',
+    base: 'light',
+  },
+  {
+    id: 'cyberpunk-dark',
+    label: 'Cyberpunk Dark',
+    base: 'dark',
+  },
+  {
+    id: 'cyberpunk-auto',
+    label: 'Cyberpunk Auto',
     base: 'system',
   },
 ];

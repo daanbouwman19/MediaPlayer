@@ -39,8 +39,8 @@
         <div class="flex gap-2 pointer-events-auto">
           <!-- Recenter Button (VR Motion Mode) -->
           <button
-            class="bg-black/50 text-white p-3 rounded-full hover:bg-indigo-500/80 border border-white/20 backdrop-blur-sm transition-colors pointer-events-auto"
-            :class="{ 'text-indigo-400': isMotionControlActive }"
+            class="bg-black/50 text-white p-3 rounded-full hover:bg-accent/80 border border-white/20 backdrop-blur-sm transition-colors pointer-events-auto"
+            :class="{ 'text-accent': isMotionControlActive }"
             title="Recenter VR View"
             aria-label="Recenter VR View"
             @click="recenterVR"

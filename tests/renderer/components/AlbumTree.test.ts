@@ -203,9 +203,9 @@ describe('AlbumTree.vue', () => {
           .find('div[class*="bg-accent"]')
           .exists(),
       ).toBe(true);
-      // Indeterminate state is now represented by a specific div (line 62 in AlbumTree.vue)
-      // Check for presence of the div with white background and small height
-      expect(wrapper.find('div.w-2.h-0\\.5.bg-white').exists()).toBe(true);
+      expect(wrapper.find('div.w-2.h-0\\.5.bg-button-text').exists()).toBe(
+        true,
+      );
     });
   });
 

@@ -1,13 +1,13 @@
 <template>
   <div
-    class="file-explorer-container flex flex-col h-full bg-gray-900 text-white rounded-lg overflow-hidden border border-gray-700"
+    class="file-explorer-container flex flex-col h-full bg-secondary-bg text-color rounded-lg overflow-hidden border border-border-color"
   >
     <!-- Header: Current Path and Up Button -->
     <div
-      class="header p-3 bg-gray-800 border-b border-gray-700 flex items-center gap-2"
+      class="header p-3 bg-secondary-bg border-b border-border-color flex items-center gap-2"
     >
       <button
-        class="p-2 rounded hover:bg-gray-700 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-400 hover:text-white transition-colors"
+        class="p-2 rounded-lg hover:bg-black/10 transition-colors flex items-center gap-2 text-muted hover:text-accent focus:outline-none focus:ring-2 focus:ring-accent ml-2 md:ml-0"
         :disabled="!parentPath"
         title="Go Up"
         aria-label="Go to parent directory"
@@ -16,12 +16,12 @@
         <ArrowUpIcon class="w-5 h-5" />
       </button>
       <div
-        class="current-path grow font-mono text-sm truncate bg-black/30 p-2 rounded"
+        class="current-path grow font-mono text-sm truncate bg-black/5 p-2 rounded border border-border-color"
       >
         {{ displayPath }}
       </div>
       <button
-        class="p-2 rounded hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-400 hover:text-white transition-colors"
+        class="p-2 rounded hover:bg-black/10 focus:outline-none focus:ring-2 focus:ring-accent text-muted hover:text-accent transition-colors"
         :title="
           viewMode === 'list' ? 'Switch to Grid View' : 'Switch to List View'
         "
@@ -34,7 +34,7 @@
         <ListIcon v-else class="w-5 h-5" />
       </button>
       <button
-        class="p-2 rounded hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-400 hover:text-white transition-colors"
+        class="p-2 rounded hover:bg-black/10 focus:outline-none focus:ring-2 focus:ring-accent text-muted hover:text-accent transition-colors"
         title="Refresh"
         aria-label="Refresh directory"
         @click="refresh"
@@ -48,22 +48,22 @@
       <!-- Loading Overlay -->
       <div
         v-if="isLoading"
-        class="absolute inset-0 bg-gray-900/50 flex items-center justify-center z-10"
+        class="absolute inset-0 bg-secondary-bg/50 flex items-center justify-center z-10"
         role="status"
         aria-live="polite"
         aria-label="Loading directory contents"
       >
         <div
-          class="text-white bg-black/75 p-4 rounded flex flex-col items-center gap-2 shadow-lg"
+          class="text-color bg-secondary-bg p-4 rounded flex flex-col items-center gap-2 shadow-lg border border-border-color"
         >
           <div
-            class="animate-spin rounded-full h-6 w-6 border-4 border-white border-t-transparent"
+            class="animate-spin rounded-full h-6 w-6 border-4 border-accent border-t-transparent"
           ></div>
           <span>Loading...</span>
         </div>
       </div>
 
-      <div v-if="error" class="text-center p-4 text-red-400" role="alert">
+      <div v-if="error" class="text-center p-4 text-red-500" role="alert">
         {{ error }}
       </div>
 
@@ -76,9 +76,10 @@
           v-for="entry in sortedEntries"
           :key="entry.path"
           type="button"
-          class="flex flex-col items-center p-2 rounded transition-colors aspect-square justify-center border border-transparent hover:border-gray-600 cursor-pointer hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 w-full h-full"
+          class="flex flex-col items-center p-2 rounded-lg transition-all duration-200 aspect-square justify-center border border-transparent hover:border-accent/30 cursor-pointer hover:bg-black/10 focus:outline-none focus:ring-2 focus:ring-accent w-full h-full"
           :class="{
-            'bg-blue-900/50 border-blue-500': entry.path === selectedPath,
+            'bg-accent/20 border-accent/50 text-accent':
+              entry.path === selectedPath,
           }"
           :aria-label="`${entry.isDirectory ? 'Folder' : 'File'}: ${entry.name}`"
           @click="handleEntryClick(entry)"
@@ -99,8 +100,12 @@
         <li v-for="entry in sortedEntries" :key="entry.path">
           <button
             type="button"
-            class="flex items-center gap-2 p-2 rounded transition-colors cursor-pointer hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 w-full text-left"
-            :class="{ 'bg-blue-900/50': entry.path === selectedPath }"
+            class="folder-item group flex items-center p-3 rounded-lg border transition-all duration-200 w-full text-left gap-3"
+            :class="
+              selectedPath === entry.path
+                ? 'bg-accent/20 border-accent/50 text-accent font-medium'
+                : 'bg-black/5 border-transparent hover:bg-black/10 text-color hover:border-accent/30'
+            "
             :aria-label="`${entry.isDirectory ? 'Folder' : 'File'}: ${entry.name}`"
             @click="handleEntryClick(entry)"
             @dblclick="handleEntryDoubleClick(entry)"
@@ -127,16 +132,16 @@
 
     <!-- Footer: Selection Actions -->
     <div
-      class="footer p-3 bg-gray-800 border-t border-gray-700 flex justify-end gap-3"
+      class="footer p-3 bg-secondary-bg border-t border-border-color flex justify-end gap-3"
     >
       <button
-        class="px-4 py-2 rounded text-gray-300 hover:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+        class="px-4 py-2 rounded text-muted hover:text-color focus:outline-none focus:ring-2 focus:ring-accent"
         @click="$emit('cancel')"
       >
         Cancel
       </button>
       <button
-        class="px-4 py-2 rounded bg-blue-600 hover:bg-blue-500 text-white disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-blue-500"
+        class="px-4 py-2 rounded bg-accent hover:bg-accent-hover text-button-text disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-accent"
         :disabled="!selectedPath"
         @click="confirmSelection"
       >
