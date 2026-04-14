@@ -6,6 +6,7 @@ import crypto from 'crypto';
 import { AppError } from '../../core/errors.ts';
 import { escapeHtml } from '../../core/security.ts';
 import { getQueryParam } from '../../core/utils/http-utils.ts';
+import { MAX_PASSWORD_LENGTH } from '../../core/constants.ts';
 import {
   generateAuthUrl,
   authenticateWithCode,
@@ -61,7 +62,10 @@ export function createAuthRoutes(limiters: RateLimiters) {
       // while making brute-force more expensive than simple string comparison.
 
       // Prevent DoS by restricting password length before expensive scrypt operations
-      if (typeof password === 'string' && password.length <= 256) {
+      if (
+        typeof password === 'string' &&
+        password.length <= MAX_PASSWORD_LENGTH
+      ) {
         const salt = crypto.randomBytes(16);
 
         try {
