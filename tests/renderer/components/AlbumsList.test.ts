@@ -98,6 +98,7 @@ function createMockState() {
     playlistToEdit: null,
     mediaFilter: 'All',
     isHistoryMode: false,
+    themeMode: 'system',
   });
 
   return { libraryState, playerState, uiState };
@@ -141,6 +142,13 @@ describe('AlbumsList.vue', () => {
       initTheme: vi.fn(),
       cycleTheme: mockCycleTheme,
       applyTheme: vi.fn(),
+      AVAILABLE_THEMES: [
+        { id: 'system', label: 'System', base: 'system' },
+        { id: 'light', label: 'Light', base: 'light' },
+        { id: 'dark', label: 'Dark', base: 'dark' },
+        { id: 'pink', label: 'Pink', base: 'light' },
+      ],
+      selectTheme: vi.fn(),
     });
 
     (api.getSmartPlaylists as Mock).mockResolvedValue([]);
@@ -518,13 +526,63 @@ describe('AlbumsList.vue', () => {
       );
       consoleSpy.mockRestore();
     });
-    it('cycles theme when cycle button is clicked', async () => {
+    it('opens theme selector when theme button is clicked', async () => {
       const wrapper = mount(AlbumsList);
-      const cycleBtn = wrapper.find('button[aria-label="Toggle Theme"]');
+      const themeBtn = wrapper.find('button[aria-label="Select Theme"]');
 
-      expect(cycleBtn.exists()).toBe(true);
-      await cycleBtn.trigger('click');
-      expect(mockCycleTheme).toHaveBeenCalled();
+      expect(themeBtn.exists()).toBe(true);
+      await themeBtn.trigger('click');
+
+      // The dropdown menu is now visible
+      const dropdown = wrapper.find('div.glass-panel.z-60');
+      expect(dropdown.exists()).toBe(true);
+
+      // Verify it contains theme options
+      // AVAILABLE_THEMES should have 4 items from the real themes.ts since it's not mocked here
+      expect(dropdown.findAll('button').length).toBeGreaterThan(2);
+    });
+
+    it('selects a theme and closes dropdown', async () => {
+      const wrapper = mount(AlbumsList);
+      const themeBtn = wrapper.find('button[aria-label="Select Theme"]');
+      await themeBtn.trigger('click');
+
+      const dropdown = wrapper.find('div.glass-panel.z-60');
+      const pinkThemeBtn = dropdown
+        .findAll('button')
+        .find((b) => b.text().includes('Pink'));
+
+      expect(pinkThemeBtn?.exists()).toBe(true);
+      await pinkThemeBtn?.trigger('click');
+
+      // Check if theme was updated (we can check the vm if exposed, or just that dropdown closed)
+      expect(wrapper.find('div.glass-panel.z-60').exists()).toBe(false);
+    });
+
+    it('closes theme dropdown on outside click', async () => {
+      const wrapper = mount(AlbumsList);
+      const themeBtn = wrapper.find('button[aria-label="Select Theme"]');
+      await themeBtn.trigger('click');
+
+      expect(wrapper.find('div.glass-panel.z-60').exists()).toBe(true);
+
+      // Simulate outside click
+      // The handler is on window
+      window.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.find('div.glass-panel.z-60').exists()).toBe(false);
+    });
+
+    it('does not close theme dropdown on inside click', async () => {
+      const wrapper = mount(AlbumsList);
+      const themeBtn = wrapper.find('button[aria-label="Select Theme"]');
+      await themeBtn.trigger('click');
+
+      const dropdown = wrapper.find('div.glass-panel.z-60');
+      await dropdown.trigger('click');
+
+      expect(wrapper.find('div.glass-panel.z-60').exists()).toBe(true);
     });
   });
 });

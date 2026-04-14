@@ -38,14 +38,41 @@
           <PlaylistAddIcon class="w-5 h-5" />
         </button>
 
-        <button
-          class="p-2 text-muted hover:text-accent hover:bg-black/5 rounded-md transition-colors"
-          aria-label="Toggle Theme"
-          :title="`Current Theme: ${themeMode}`"
-          @click="cycleTheme"
-        >
-          <ThemeIcon :mode="themeMode" class="w-5 h-5" />
-        </button>
+        <!-- Theme Selector Dropdown -->
+        <div class="relative">
+          <button
+            class="p-2 text-muted hover:text-accent hover:bg-black/5 rounded-md transition-all duration-200"
+            aria-label="Select Theme"
+            :title="`Current Theme: ${themeMode}`"
+            @click.stop="isThemeDropdownOpen = !isThemeDropdownOpen"
+          >
+            <ThemeIcon :mode="themeMode" class="w-5 h-5" />
+          </button>
+
+          <!-- Dropdown Menu -->
+          <transition name="fade-slide-up">
+            <div
+              v-if="isThemeDropdownOpen"
+              ref="themeDropdownRef"
+              class="absolute top-full right-0 mt-2 w-36 glass-panel rounded-xl shadow-2xl py-2 z-60 overflow-hidden"
+            >
+              <button
+                v-for="theme in AVAILABLE_THEMES"
+                :key="theme.id"
+                class="w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-all duration-200 text-left"
+                :class="
+                  themeMode === theme.id
+                    ? 'bg-accent/20 text-accent font-bold'
+                    : 'text-muted hover:bg-black/10 hover:text-accent'
+                "
+                @click="selectTheme(theme.id)"
+              >
+                <ThemeIcon :mode="theme.id" class="w-4 h-4 shrink-0" />
+                <span>{{ theme.label }}</span>
+              </button>
+            </div>
+          </transition>
+        </div>
       </div>
     </div>
 
@@ -65,11 +92,11 @@
             <ul class="space-y-0.5">
               <li v-if="mediaDirectories.length === 0" class="px-1">
                 <button
-                  class="w-full text-left text-sm text-indigo-400 hover:text-indigo-300 hover:bg-white/5 p-2 rounded-md transition-colors flex items-center gap-2 group focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:outline-none"
+                  class="w-full text-left text-sm text-accent hover:text-accent-secondary hover:bg-white/5 p-2 rounded-md transition-colors flex items-center gap-2 group focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
                   @click="openModal"
                 >
                   <div
-                    class="bg-indigo-500/20 p-1.5 rounded-md group-hover:bg-indigo-500/30 transition-colors"
+                    class="bg-accent/20 p-1.5 rounded-md group-hover:bg-accent/30 transition-colors"
                   >
                     <PlaylistAddIcon class="w-4 h-4" />
                   </div>
@@ -80,11 +107,11 @@
                 v-else-if="allAlbums.length === 0"
                 class="px-3 py-4 text-center"
               >
-                <p class="text-xs text-gray-500 mb-2">
+                <p class="text-xs text-muted mb-2">
                   No albums found in your sources.
                 </p>
                 <button
-                  class="text-xs text-indigo-400 hover:text-indigo-300 underline"
+                  class="text-xs text-accent hover:text-accent-secondary underline"
                   @click="openModal"
                 >
                   Manage Sources
@@ -320,10 +347,10 @@
                 class="peer sr-only"
               />
               <div
-                class="h-full px-3 py-2 rounded-md bg-black/20 border border-white/5 peer-checked:bg-indigo-500/20 peer-checked:border-indigo-500/50 peer-focus-visible:ring-2 peer-focus-visible:ring-indigo-500 transition-all flex items-center justify-center gap-2"
+                class="h-full px-3 py-2 rounded-md bg-black/20 border border-white/5 peer-checked:bg-accent/20 peer-checked:border-accent/50 peer-focus-visible:ring-2 peer-focus-visible:ring-accent transition-all flex items-center justify-center gap-2"
               >
                 <div
-                  class="w-3 h-3 rounded-sm border border-gray-500 peer-checked:bg-indigo-500 peer-checked:border-indigo-500 flex items-center justify-center"
+                  class="w-3 h-3 rounded-sm border border-muted peer-checked:bg-accent peer-checked:border-accent flex items-center justify-center"
                 >
                   <svg
                     v-if="playFullVideo"
@@ -337,7 +364,7 @@
                   </svg>
                 </div>
                 <span
-                  class="text-[10px] font-medium text-gray-400 group-hover:text-gray-200 peer-checked:text-indigo-200"
+                  class="text-[10px] font-medium text-muted group-hover:text-color peer-checked:text-accent-secondary"
                   >Play Full Video</span
                 >
               </div>
@@ -350,10 +377,10 @@
                 class="peer sr-only"
               />
               <div
-                class="h-full px-3 py-2 rounded-md bg-black/20 border border-white/5 peer-checked:bg-indigo-500/20 peer-checked:border-indigo-500/50 peer-focus-visible:ring-2 peer-focus-visible:ring-indigo-500 transition-all flex items-center justify-center gap-2"
+                class="h-full px-3 py-2 rounded-md bg-black/20 border border-white/5 peer-checked:bg-accent/20 peer-checked:border-accent/50 peer-focus-visible:ring-2 peer-focus-visible:ring-accent transition-all flex items-center justify-center gap-2"
               >
                 <div
-                  class="w-3 h-3 rounded-sm border border-gray-500 peer-checked:bg-indigo-500 peer-checked:border-indigo-500 flex items-center justify-center"
+                  class="w-3 h-3 rounded-sm border border-muted peer-checked:bg-accent peer-checked:border-accent flex items-center justify-center"
                 >
                   <svg
                     v-if="pauseTimerOnPlay"
@@ -367,7 +394,7 @@
                   </svg>
                 </div>
                 <span
-                  class="text-[10px] font-medium text-gray-400 group-hover:text-gray-200 peer-checked:text-indigo-200"
+                  class="text-[10px] font-medium text-muted group-hover:text-color peer-checked:text-accent-secondary"
                   >Pause Timer</span
                 >
               </div>
@@ -429,7 +456,7 @@
             data-testid="slideshow-progress"
           >
             <div
-              class="h-full bg-indigo-500 transition-all duration-100 ease-linear"
+              class="h-full bg-accent transition-all duration-100 ease-linear"
               :style="{ width: `${timerProgress}%` }"
             ></div>
           </div>
@@ -446,7 +473,8 @@
  * opening the sources modal, and selecting/deselecting albums for the slideshow.
  * Clicking on an album's name starts a slideshow for that specific album and its sub-albums.
  */
-import { nextTick, ref } from 'vue';
+import { nextTick, ref, onMounted, onBeforeUnmount } from 'vue';
+import { AVAILABLE_THEMES, type ThemeId } from '../../core/themes';
 import { useLibraryStore } from '../composables/useLibraryStore';
 import { usePlayerStore } from '../composables/usePlayerStore';
 import { useUIStore } from '../composables/useUIStore';
@@ -464,7 +492,6 @@ import EditIcon from './icons/EditIcon.vue';
 import DeleteIcon from './icons/DeleteIcon.vue';
 import HistoryIcon from './icons/HistoryIcon.vue';
 import ThemeIcon from './icons/ThemeIcon.vue';
-import { useTheme } from '../composables/useTheme';
 import { api } from '../api';
 import {
   getAlbumAndChildrenIds,
@@ -478,7 +505,32 @@ const libraryStore = useLibraryStore();
 const playerStore = usePlayerStore();
 const uiStore = useUIStore();
 const { themeMode } = uiStore;
-const { cycleTheme } = useTheme();
+
+const isThemeDropdownOpen = ref(false);
+const themeDropdownRef = ref<HTMLElement | null>(null);
+
+const selectTheme = (id: ThemeId) => {
+  themeMode.value = id;
+  isThemeDropdownOpen.value = false;
+};
+
+const handleOutsideClick = (event: MouseEvent) => {
+  if (
+    isThemeDropdownOpen.value &&
+    themeDropdownRef.value &&
+    !themeDropdownRef.value.contains(event.target as Node)
+  ) {
+    isThemeDropdownOpen.value = false;
+  }
+};
+
+onMounted(() => {
+  window.addEventListener('click', handleOutsideClick);
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener('click', handleOutsideClick);
+});
 
 const {
   allAlbums,

@@ -4,24 +4,42 @@
 /* Import Tailwind CSS directives */
 @import 'tailwindcss';
 
+@theme {
+  --color-accent: var(--accent-color);
+  --color-accent-secondary: var(--accent-secondary);
+  --color-accent-hover: var(--accent-hover);
+  --color-text-color: var(--text-color);
+  --color-text-muted: var(--text-muted);
+}
+
 /* Custom Color Palette & Typography using CSS Variables.
    * This allows for easy theming and consistent styling.
  */
-:root {
+:root,
+.light {
   /* Light Theme (Default) - Refined Premium Palette */
-  --primary-bg: #fbfafe; /* Warm Lavender-White */
-  --secondary-bg: #ffffff; /* Pure White */
-  --tertiary-bg: #f5f3ff; /* Softer Violet */
+  --primary-bg: #fbfafe;
+  /* Warm Lavender-White */
+  --secondary-bg: #ffffff;
+  /* Pure White */
+  --tertiary-bg: #f5f3ff;
+  /* Softer Violet */
 
-  --accent-color: #7c3aed; /* Vibrant Violet-600 */
-  --accent-secondary: #0ea5e9; /* Sky-500 */
-  --accent-hover: #6d28d9; /* Deep Violet-700 */
+  --accent-color: #7c3aed;
+  /* Vibrant Violet-600 */
+  --accent-secondary: #0ea5e9;
+  /* Sky-500 */
+  --accent-hover: #6d28d9;
+  /* Deep Violet-700 */
   --watched-color: rgba(14, 165, 233, 0.2);
 
-  --text-color: #1b1b3a; /* Midnight Indigo */
-  --text-muted: #64748b; /* Slate-500 */
+  --text-color: #1b1b3a;
+  /* Midnight Indigo */
+  --text-muted: #64748b;
+  /* Slate-500 */
   --border-color: rgba(27, 27, 58, 0.08);
-  --selection-color: #ede9fe; /* Soft Lavender selection */
+  --selection-color: #ede9fe;
+  /* Soft Lavender selection */
   --button-text-color: #ffffff;
 
   /* Fonts */
@@ -49,14 +67,19 @@
   --tertiary-bg: #1f1f1f;
   /* Soft Charcoal */
   /* User asked for a premium update: Cyberpunk-inspired Midnight theme */
-  --accent-color: #8b5cf6; /* Violet-500 */
-  --accent-secondary: #06b6d4; /* Cyan-500 */
-  --accent-hover: #7c3aed; /* Violet-600 */
-  --watched-color: rgba(6, 182, 212, 0.4); /* Subtle Cyan for watched parts */
+  --accent-color: #8b5cf6;
+  /* Violet-500 */
+  --accent-secondary: #06b6d4;
+  /* Cyan-500 */
+  --accent-hover: #7c3aed;
+  /* Violet-600 */
+  --watched-color: rgba(6, 182, 212, 0.4);
+  /* Subtle Cyan for watched parts */
   --text-color: #f8fafc;
   --text-muted: #64748b;
   --border-color: rgba(255, 255, 255, 0.1);
-  --selection-color: #2e1065; /* Deep Violet */
+  --selection-color: #2e1065;
+  /* Deep Violet */
   --button-text-color: #ffffff;
 
   /* Glassmorphism Variables */
@@ -69,6 +92,45 @@
   --vignette-color: 0, 0, 0;
   --vignette-mid: 0.6;
   --vignette-edge: 0.95;
+}
+
+.theme-pink {
+  /* Pink Theme - Premium Vibrant Palette */
+  --primary-bg: #fff1f2;
+  /* Rose-50 */
+  --secondary-bg: #ffffff;
+  /* Pure White */
+  --tertiary-bg: #fce7f3;
+  /* Pink-100 */
+
+  --accent-color: #db2777;
+  /* Pink-600 */
+  --accent-secondary: #be185d;
+  /* Pink-700 */
+  --accent-hover: #9d174d;
+  /* Pink-800 */
+  --watched-color: rgba(219, 39, 119, 0.2);
+
+  --text-color: #831843;
+  /* Pink-900 */
+  --text-muted: #be185d;
+  /* Pink-700 */
+  --border-color: rgba(219, 39, 119, 0.1);
+  --selection-color: #fce7f3;
+  /* Pink-100 */
+  --button-text-color: #ffffff;
+
+  /* Glassmorphism Variables */
+  --glass-bg: rgba(255, 255, 255, 0.8);
+  --glass-border: rgba(219, 39, 119, 0.2);
+  --glass-shadow: 0 8px 32px 0 rgba(131, 24, 67, 0.1);
+  --glass-blur: blur(16px);
+
+  /* Ambient Vignette for Pink Mode */
+  --vignette-color: 255, 241, 242;
+  /* Rose-50 */
+  --vignette-mid: 0.2;
+  --vignette-edge: 0.4;
 }
 
 /* Text Utility Classes */
@@ -327,4 +389,16 @@ footer {
 /* Hide scrollbar when not hovering over the container */
 .custom-scrollbar:not(:hover)::-webkit-scrollbar-thumb {
   background: transparent;
+}
+
+/* Transitions */
+.fade-slide-up-enter-active,
+.fade-slide-up-leave-active {
+  transition: all 0.2s ease-out;
+}
+
+.fade-slide-up-enter-from,
+.fade-slide-up-leave-to {
+  opacity: 0;
+  transform: translateY(10px);
 }

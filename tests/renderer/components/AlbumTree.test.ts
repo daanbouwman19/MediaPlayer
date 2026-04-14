@@ -200,7 +200,7 @@ describe('AlbumTree.vue', () => {
       expect(
         wrapper
           .find('[data-testid="album-checkbox"]')
-          .find('div.bg-indigo-500')
+          .find('div[class*="bg-accent"]')
           .exists(),
       ).toBe(true);
       // Indeterminate state is now represented by a specific div (line 62 in AlbumTree.vue)

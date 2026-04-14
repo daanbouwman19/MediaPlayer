@@ -150,10 +150,10 @@ export function registerSystemHandlers() {
     },
   );
 
-  ipcMain.on(
-    IPC_CHANNELS.THEME_CHANGED,
-    (_event, theme: 'light' | 'dark' | 'system') => {
-      nativeTheme.themeSource = theme;
-    },
-  );
+  ipcMain.on(IPC_CHANNELS.THEME_CHANGED, (_event, theme: string) => {
+    nativeTheme.themeSource =
+      theme === 'light' || theme === 'dark' || theme === 'system'
+        ? theme
+        : 'system';
+  });
 }
