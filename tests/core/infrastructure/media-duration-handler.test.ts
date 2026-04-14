@@ -12,12 +12,15 @@ describe('MediaDurationHandler', () => {
     const mockDuration = { duration: 120 };
     vi.mocked(mediaHandler.getVideoDuration).mockResolvedValue(mockDuration);
 
-    const result = await handler.getVideoDuration('/path/to/video.mp4', '/path/to/ffmpeg');
+    const result = await handler.getVideoDuration(
+      '/path/to/video.mp4',
+      '/path/to/ffmpeg',
+    );
 
     expect(result).toEqual(mockDuration);
     expect(mediaHandler.getVideoDuration).toHaveBeenCalledWith(
       '/path/to/video.mp4',
-      '/path/to/ffmpeg'
+      '/path/to/ffmpeg',
     );
   });
 });

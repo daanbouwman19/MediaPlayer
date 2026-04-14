@@ -64,12 +64,16 @@ describe('MediaService Combined Tests (DI Refactored)', () => {
         { id: '1', path: '/dir', type: 'local', name: 'dir', isActive: true },
       ]);
       repo.setSetting('google_tokens', 'ENCRYPTED_TOKENS');
-      vi.mocked(encryption.decrypt).mockReturnValue(JSON.stringify({ access_token: 'abc' }));
+      vi.mocked(encryption.decrypt).mockReturnValue(
+        JSON.stringify({ access_token: 'abc' }),
+      );
 
       await service.scanDiskForAlbumsAndCache();
-      expect(mockWorker.runScan).toHaveBeenCalledWith(expect.objectContaining({
-        tokens: { access_token: 'abc' }
-      }));
+      expect(mockWorker.runScan).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tokens: { access_token: 'abc' },
+        }),
+      );
     });
 
     it('handles google tokens decryption failure', async () => {
@@ -80,9 +84,11 @@ describe('MediaService Combined Tests (DI Refactored)', () => {
       vi.mocked(encryption.decrypt).mockReturnValue(null);
 
       await service.scanDiskForAlbumsAndCache();
-      expect(mockWorker.runScan).toHaveBeenCalledWith(expect.objectContaining({
-        tokens: null
-      }));
+      expect(mockWorker.runScan).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tokens: null,
+        }),
+      );
     });
 
     it('handles google tokens JSON parse failure', async () => {
@@ -94,10 +100,15 @@ describe('MediaService Combined Tests (DI Refactored)', () => {
       const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
       await service.scanDiskForAlbumsAndCache();
-      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Failed to fetch google tokens'), expect.any(Error));
-      expect(mockWorker.runScan).toHaveBeenCalledWith(expect.objectContaining({
-        tokens: null
-      }));
+      expect(consoleSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Failed to fetch google tokens'),
+        expect.any(Error),
+      );
+      expect(mockWorker.runScan).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tokens: null,
+        }),
+      );
       consoleSpy.mockRestore();
     });
 
@@ -308,18 +319,24 @@ describe('MediaService Combined Tests (DI Refactored)', () => {
     });
 
     it('getAlbumsFromCacheOrDisk falls back to disk scan if cache empty', async () => {
-      repo.setMediaDirectories([{ id: '1', path: '/dir', type: 'local', name: 'dir', isActive: true }]);
-      mockWorker.runScan.mockResolvedValue([{ id: '1', textures: [], children: [] }]);
-      
+      repo.setMediaDirectories([
+        { id: '1', path: '/dir', type: 'local', name: 'dir', isActive: true },
+      ]);
+      mockWorker.runScan.mockResolvedValue([
+        { id: '1', textures: [], children: [] },
+      ]);
+
       const result = await service.getAlbumsFromCacheOrDisk();
       expect(mockWorker.runScan).toHaveBeenCalled();
       expect(result.length).toBe(1);
     });
 
     it('getAlbumsWithViewCountsAfterScan handles empty results', async () => {
-      repo.setMediaDirectories([{ id: '1', path: '/dir', type: 'local', name: 'dir', isActive: true }]);
+      repo.setMediaDirectories([
+        { id: '1', path: '/dir', type: 'local', name: 'dir', isActive: true },
+      ]);
       mockWorker.runScan.mockResolvedValue([]);
-      
+
       const result = await service.getAlbumsWithViewCountsAfterScan();
       expect(result).toEqual([]);
     });
