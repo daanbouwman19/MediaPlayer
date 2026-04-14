@@ -6,20 +6,21 @@ import path from 'path';
 import type { Album } from '../types.ts';
 import { WORKER_SCAN_TIMEOUT_MS } from '../constants.ts';
 
+const WORKER_FILENAME = fileURLToPath(import.meta.url);
+const WORKER_DIRNAME = path.dirname(WORKER_FILENAME);
+
 export class WorkerScannerService implements IWorkerService {
   async runScan(params: {
     directories: string[];
     tokens: unknown;
     previousPaths: string[];
   }): Promise<Album[]> {
-    const __filename = fileURLToPath(import.meta.url);
-    const __dirname = path.dirname(__filename);
     const isElectron = !!process.versions['electron'];
 
     const { path: workerPath, options: workerOptions } =
       await WorkerFactory.getWorkerPath('scan-worker', {
         isElectron,
-        currentDirname: __dirname,
+        currentDirname: WORKER_DIRNAME,
         currentUrl: import.meta.url,
       });
 

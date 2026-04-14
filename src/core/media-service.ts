@@ -3,6 +3,7 @@
  * Orchestrates scanning, caching, and view count retrieval.
  */
 
+import type { IMediaService } from './interfaces/media-service.interface.ts';
 import type { IMediaRepository } from './repositories/media-repository.interface.ts';
 import type { IFileSystem } from './interfaces/file-system.interface.ts';
 import type { IWorkerService } from './interfaces/worker-service.interface.ts';
@@ -100,7 +101,7 @@ function enrichAlbumsWithStats(
  * and returns the list of albums found.
  * @returns The list of albums found.
  */
-export class MediaService {
+export class MediaService implements IMediaService {
   constructor(
     private mediaRepo: IMediaRepository,
     private fs: IFileSystem,
