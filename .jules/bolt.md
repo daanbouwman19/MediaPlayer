@@ -97,3 +97,8 @@
 
 **Learning:** Using `Array.prototype.filter` allocates intermediate arrays and adds callback overhead per item, which causes GC pressure in performance-critical paths (like media filtering in large libraries).
 **Action:** Replace `Array.prototype.filter` with a manual `for` loop and push matching items to a pre-allocated or dynamically sized array to avoid callback overhead and unnecessary allocations.
+
+## $(date +%Y-%m-%d) - [Allocation-Free Iteration for Arrays]
+
+**Learning:** Using `.map().filter()` chains or spread operators (`...`) with large arrays can lead to "Maximum call stack size exceeded" errors and allocates unnecessary intermediate arrays, especially in high-frequency database-worker paths.
+**Action:** Replaced `.map().filter()` chains and spread operators with manual `for...of` loops in critical worker paths to reduce GC pressure and avoid call stack limits.

@@ -996,11 +996,12 @@ export async function cacheAlbums(
         const album = stack.pop();
         if (album) {
           if (album.textures && Array.isArray(album.textures)) {
-            paths.push(
-              ...(album.textures
-                .map((t) => t?.path)
-                .filter(Boolean) as string[]),
-            );
+            // Bolt Optimization: Use manual loop to avoid multiple intermediate arrays
+            for (const t of album.textures) {
+              if (t && t.path) {
+                paths.push(t.path);
+              }
+            }
           }
           if (album.children && Array.isArray(album.children)) {
             for (let i = album.children.length - 1; i >= 0; i--) {
