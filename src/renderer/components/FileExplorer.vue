@@ -45,7 +45,11 @@
 
     <!-- Screen Reader Announcement for Selection -->
     <div class="sr-only" aria-live="polite" aria-atomic="true">
-      {{ selectedPath ? `Selected: ${selectedPath.split(/[/\\]/).pop() || selectedPath}` : 'Selection cleared' }}
+      {{
+        selectedPath
+          ? `Selected: ${selectedPath.split(/[/\\]/).pop() || selectedPath}`
+          : 'Selection cleared'
+      }}
     </div>
 
     <!-- File List -->
