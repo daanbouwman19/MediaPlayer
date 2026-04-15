@@ -43,6 +43,11 @@
       </button>
     </div>
 
+    <!-- Screen Reader Announcement for Selection -->
+    <div class="sr-only" aria-live="polite" aria-atomic="true">
+      {{ selectedPath ? `Selected: ${selectedPath}` : 'Selection cleared' }}
+    </div>
+
     <!-- File List -->
     <div class="file-list grow overflow-y-auto p-2 relative">
       <!-- Loading Overlay -->
@@ -81,6 +86,7 @@
             'bg-accent/20 border-accent/50 text-accent':
               entry.path === selectedPath,
           }"
+          :aria-current="entry.path === selectedPath ? 'true' : undefined"
           :aria-label="`${entry.isDirectory ? 'Folder' : 'File'}: ${entry.name}`"
           @click="handleEntryClick(entry)"
           @dblclick="handleEntryDoubleClick(entry)"
@@ -106,6 +112,7 @@
                 ? 'bg-accent/20 border-accent/50 text-accent font-medium'
                 : 'bg-black/5 border-transparent hover:bg-black/10 text-color hover:border-accent/30'
             "
+            :aria-current="selectedPath === entry.path ? 'true' : undefined"
             :aria-label="`${entry.isDirectory ? 'Folder' : 'File'}: ${entry.name}`"
             @click="handleEntryClick(entry)"
             @dblclick="handleEntryDoubleClick(entry)"
