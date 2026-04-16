@@ -170,3 +170,8 @@
 
 **Learning:** When navigating a custom file explorer component, screen reader users lacked immediate feedback when a folder or file was selected, as the selection was purely visual (CSS classes). This made it difficult to confirm which item was active before confirming the selection.
 **Action:** Always add an `aria-live="polite"` region to custom selection interfaces to announce the currently selected item, and use `aria-current="true"` on the selected element to convey state programmatically.
+
+## 2026-04-14 - [Accessible Form Inputs]
+
+**Learning:** Form inputs like the password field in the lock screen were missing explicitly associated `<label>` elements or `aria-label` attributes, relying solely on visual placeholders which disappear when text is entered and aren't always reliably read by screen readers.
+**Action:** Always ensure every form `<input>` is explicitly paired with a `<label>` (using `id` and `for` attributes). If a visual label breaks the design, use a visually hidden `<label>` (e.g., with `.sr-only`) to maintain accessibility.
