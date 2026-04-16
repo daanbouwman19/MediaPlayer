@@ -165,3 +165,6 @@
 
 **Learning:** The MediaGrid component's close button lacked a descriptive aria-label, which could be confusing for screen reader users as 'Close' might not provide enough context.
 **Action:** Add descriptive aria-labels to buttons, especially when the visual text might be ambiguous out of context.
+## 2026-04-15 - Tailwind CSS Reset Global Button Cursor
+**Learning:** Tailwind preflight resets the default cursor: pointer on button elements.
+**Action:** Restore the default button cursor globally by explicitly styling button { cursor: pointer; } in the main CSS file.
