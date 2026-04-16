@@ -383,8 +383,7 @@ async function getAllMetadataVerification(): Promise<{
     // Bolt Optimization: Use a standard for loop instead of reduce
     // to avoid allocation overhead on large arrays and improve iteration speed.
     const result: { [path: string]: MediaMetadata } = {};
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
+    for (const row of rows) {
       if (row.filePath) {
         result[row.filePath] = row;
       }

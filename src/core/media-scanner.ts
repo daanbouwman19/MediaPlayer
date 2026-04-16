@@ -204,13 +204,10 @@ async function performFullMediaScan(
       let count = 0;
       const stack: Album[] = [...albums];
       while (stack.length > 0) {
-        const album = stack.pop();
-        if (!album) continue;
-        count += album.textures ? album.textures.length : 0;
-        if (album.children && album.children.length > 0) {
-          for (let i = 0; i < album.children.length; i++) {
-            stack.push(album.children[i]);
-          }
+        const album = stack.pop()!;
+        count += album.textures.length;
+        for (const child of album.children) {
+          stack.push(child);
         }
       }
       return count;
