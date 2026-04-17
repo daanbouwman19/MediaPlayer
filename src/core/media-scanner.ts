@@ -198,12 +198,20 @@ async function performFullMediaScan(
       (album): album is Album => album !== null,
     );
 
-    const countFiles = (albums: Album[]): number =>
-      albums.reduce(
-        (count, album) =>
-          count + album.textures.length + countFiles(album.children),
-        0,
-      );
+    const countFiles = (albums: Album[]): number => {
+      // Bolt Optimization: Replace recursive reduce with an iterative stack
+      // to prevent stack overflows on deeply nested directories and reduce GC pressure.
+      let count = 0;
+      const stack: Album[] = [...albums];
+      while (stack.length > 0) {
+        const album = stack.pop()!;
+        count += album.textures.length;
+        for (const child of album.children) {
+          stack.push(child);
+        }
+      }
+      return count;
+    };
 
     const totalFiles = countFiles(result);
     safeLog(
