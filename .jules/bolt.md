@@ -102,3 +102,8 @@
 
 **Learning:** Using `.map().filter()` chains or spread operators (`...`) with large arrays can lead to "Maximum call stack size exceeded" errors and allocates unnecessary intermediate arrays, especially in high-frequency database-worker paths.
 **Action:** Replaced `.map().filter()` chains and spread operators with manual `for...of` loops in critical worker paths to reduce GC pressure and avoid call stack limits.
+
+## 2026-04-16 - [Iterative Approaches for Recursive structures and Avoidance of reduce]
+
+**Learning:** When optimizing performance for large datasets or deeply nested structures (e.g., database worker rows, media scanner trees), using array methods like `.reduce()` can introduce unnecessary function call overhead and intermediate object allocation. Recursive `.reduce()` can also cause stack overflows on very deep structures.
+**Action:** Prefer standard iterative loops (like `for` loops or stack-based `while` loops) over array methods like `.reduce()` to minimize allocation overhead, reduce garbage collection pressure, and prevent call stack limits.
