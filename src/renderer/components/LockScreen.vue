@@ -19,7 +19,9 @@
 
       <form class="space-y-4" @submit.prevent="handleUnlock">
         <div class="relative">
+          <label for="lock-screen-password" class="sr-only">Password</label>
           <input
+            id="lock-screen-password"
             v-model="password"
             type="password"
             placeholder="Password"

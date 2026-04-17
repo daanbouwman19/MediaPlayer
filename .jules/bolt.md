@@ -97,3 +97,18 @@
 
 **Learning:** Using `Array.prototype.filter` allocates intermediate arrays and adds callback overhead per item, which causes GC pressure in performance-critical paths (like media filtering in large libraries).
 **Action:** Replace `Array.prototype.filter` with a manual `for` loop and push matching items to a pre-allocated or dynamically sized array to avoid callback overhead and unnecessary allocations.
+
+## 2026-04-15 - [Allocation-Free Iteration for Arrays]
+
+**Learning:** Using `.map().filter()` chains or spread operators (`...`) with large arrays can lead to "Maximum call stack size exceeded" errors and allocates unnecessary intermediate arrays, especially in high-frequency database-worker paths.
+**Action:** Replaced `.map().filter()` chains and spread operators with manual `for...of` loops in critical worker paths to reduce GC pressure and avoid call stack limits.
+
+## 2026-04-16 - [Iterative Approaches for Recursive structures and Avoidance of reduce]
+
+**Learning:** When optimizing performance for large datasets or deeply nested structures (e.g., database worker rows, media scanner trees), using array methods like `.reduce()` can introduce unnecessary function call overhead and intermediate object allocation. Recursive `.reduce()` can also cause stack overflows on very deep structures.
+**Action:** Prefer standard iterative loops (like `for` loops or stack-based `while` loops) over array methods like `.reduce()` to minimize allocation overhead, reduce garbage collection pressure, and prevent call stack limits.
+
+## 2026-04-17 - [Allocation-Free Iteration for File System Ops]
+
+**Learning:** Using `.filter().map()` chains in `file-system.ts` for directory listing allocates unnecessary intermediate arrays, increasing garbage collection pressure and reducing performance, especially when reading directories with many files.
+**Action:** Replace array chains with a single `for...of` loop and a manually managed target array to iterate only once without creating intermediate data structures.

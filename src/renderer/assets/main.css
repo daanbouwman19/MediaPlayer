@@ -285,6 +285,11 @@
   background: rgba(255, 255, 255, 0.2);
 }
 
+.glass-button:focus-visible {
+  outline: 2px solid var(--accent-color);
+  outline-offset: 2px;
+}
+
 .glass-button-primary {
   background: rgba(99, 102, 241, 0.6);
   backdrop-filter: blur(8px);
@@ -303,6 +308,11 @@
 
 .glass-button-primary:active {
   transform: scale(0.95);
+}
+
+.glass-button-primary:focus-visible {
+  outline: 2px solid var(--accent-color);
+  outline-offset: 2px;
 }
 
 .floating-bar {

@@ -30,16 +30,20 @@ export async function listDirectory(
 
   try {
     const items = await fs.readdir(directoryPath, { withFileTypes: true });
-    const entries: FileSystemEntry[] = items
+
+    // Bolt Optimization: Replace .filter().map() with a for...of loop to avoid
+    // creating intermediate arrays and reduce GC pressure for large directories.
+    const entries: FileSystemEntry[] = [];
+    for (const item of items) {
       // [SECURITY] Filter out hidden files/dirs and known sensitive files to prevent exposing sensitive data (e.g. .env, .git, server.key)
-      .filter(
-        (item) => !item.name.startsWith('.') && !isSensitiveFilename(item.name),
-      )
-      .map((item) => ({
-        name: item.name,
-        path: path.join(directoryPath, item.name),
-        isDirectory: item.isDirectory(),
-      }));
+      if (!item.name.startsWith('.') && !isSensitiveFilename(item.name)) {
+        entries.push({
+          name: item.name,
+          path: path.join(directoryPath, item.name),
+          isDirectory: item.isDirectory(),
+        });
+      }
+    }
 
     // Sort: Directories first, then files. Both alphabetically.
     entries.sort((a, b) => {
@@ -85,13 +89,22 @@ export async function listDrives(): Promise<FileSystemEntry[]> {
 
     // Remove "Drives:" prefix and split by space
     const drivesLine = stdout.replace('Drives:', '').trim();
-    const drives = drivesLine.split(/\s+/).filter((d) => d);
+    const drivesRaw = drivesLine.split(/\s+/);
 
-    return drives.map((drive) => ({
-      name: drive.replace(/\\$/, ''), // "C:"
-      path: drive, // "C:\" (fsutil returns with backslash)
-      isDirectory: true,
-    }));
+    // Bolt Optimization: Replace .filter().map() with a for...of loop to avoid
+    // creating intermediate arrays and reduce GC pressure.
+    const mappedDrives: FileSystemEntry[] = [];
+    for (const drive of drivesRaw) {
+      if (drive) {
+        mappedDrives.push({
+          name: drive.replace(/\\$/, ''), // "C:"
+          path: drive, // "C:\" (fsutil returns with backslash)
+          isDirectory: true,
+        });
+      }
+    }
+
+    return mappedDrives;
   } catch (error) {
     console.error('Failed to list drives:', error);
     // Fallback to C:\ if fsutil fails

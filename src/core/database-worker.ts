@@ -117,7 +117,13 @@ async function generateFileIdsBatched(
   }
 
   // 2. Identify missing paths
-  const missingPaths = filePaths.filter((p) => !pathIdMap.has(p));
+  // Bolt Optimization: Use manual loop instead of Array.prototype.filter to avoid allocation overhead
+  const missingPaths: string[] = [];
+  for (const p of filePaths) {
+    if (!pathIdMap.has(p)) {
+      missingPaths.push(p);
+    }
+  }
 
   // 3. Process missing paths with fs.stat (limited concurrency)
   const IO_BATCH_SIZE = 50;
@@ -513,9 +519,12 @@ export async function bulkUpsertMetadata(
       const paths = pathOnlyPayloads.map((p) => p.filePath);
       const existingPaths = getExistingPathsBatch(paths);
 
-      payloadsToProcess.push(
-        ...pathOnlyPayloads.filter((p) => !existingPaths.has(p.filePath)),
-      );
+      // Bolt Optimization: Use manual loop instead of Array.prototype.filter and spread operator to avoid allocation overhead and call stack limits
+      for (const p of pathOnlyPayloads) {
+        if (!existingPaths.has(p.filePath)) {
+          payloadsToProcess.push(p);
+        }
+      }
     }
 
     if (payloadsToProcess.length === 0) {
@@ -649,7 +658,13 @@ export async function filterProcessingNeeded(
       }
     }
 
-    const neededPaths = filePaths.filter((p) => !successfulPathsSet.has(p));
+    // Bolt Optimization: Use allocation-free iteration to reduce GC pressure
+    const neededPaths: string[] = [];
+    for (const p of filePaths) {
+      if (!successfulPathsSet.has(p)) {
+        neededPaths.push(p);
+      }
+    }
     return { success: true, data: neededPaths };
   } catch (error: unknown) {
     return { success: false, error: (error as Error).message };
@@ -996,11 +1011,12 @@ export async function cacheAlbums(
         const album = stack.pop();
         if (album) {
           if (album.textures && Array.isArray(album.textures)) {
-            paths.push(
-              ...(album.textures
-                .map((t) => t?.path)
-                .filter(Boolean) as string[]),
-            );
+            // Bolt Optimization: Use manual loop to avoid multiple intermediate arrays
+            for (const t of album.textures) {
+              if (t && t.path) {
+                paths.push(t.path);
+              }
+            }
           }
           if (album.children && Array.isArray(album.children)) {
             for (let i = album.children.length - 1; i >= 0; i--) {

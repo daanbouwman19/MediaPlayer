@@ -380,15 +380,15 @@ async function getAllMetadataVerification(): Promise<{
       }[]
     >('getAllMetadataVerification');
 
-    return rows.reduce(
-      (acc, row) => {
-        if (row.filePath) {
-          acc[row.filePath] = row;
-        }
-        return acc;
-      },
-      {} as { [path: string]: MediaMetadata },
-    );
+    // Bolt Optimization: Use a standard for loop instead of reduce
+    // to avoid allocation overhead on large arrays and improve iteration speed.
+    const result: { [path: string]: MediaMetadata } = {};
+    for (const row of rows) {
+      if (row.filePath) {
+        result[row.filePath] = row;
+      }
+    }
+    return result;
   } catch (error) {
     safeError('[database.js] Error getting all metadata verification:', error);
     return {};
