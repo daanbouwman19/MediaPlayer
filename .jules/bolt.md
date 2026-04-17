@@ -102,3 +102,8 @@
 
 **Learning:** Using `.map().filter()` chains or spread operators (`...`) with large arrays can lead to "Maximum call stack size exceeded" errors and allocates unnecessary intermediate arrays, especially in high-frequency database-worker paths.
 **Action:** Replaced `.map().filter()` chains and spread operators with manual `for...of` loops in critical worker paths to reduce GC pressure and avoid call stack limits.
+
+## 2026-05-18 - [Allocation-Free Iteration for File System Ops]
+
+**Learning:** Using `.filter().map()` chains in `file-system.ts` for directory listing allocates unnecessary intermediate arrays, increasing garbage collection pressure and reducing performance, especially when reading directories with many files.
+**Action:** Replace array chains with a single `for...of` loop and a manually managed target array to iterate only once without creating intermediate data structures.
