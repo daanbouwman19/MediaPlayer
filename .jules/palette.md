@@ -165,6 +165,7 @@
 
 **Learning:** The MediaGrid component's close button lacked a descriptive aria-label, which could be confusing for screen reader users as 'Close' might not provide enough context.
 **Action:** Add descriptive aria-labels to buttons, especially when the visual text might be ambiguous out of context.
+
 ## 2026-04-15 - [File Explorer Selection Announcement]
 
 **Learning:** When navigating a custom file explorer component, screen reader users lacked immediate feedback when a folder or file was selected, as the selection was purely visual (CSS classes). This made it difficult to confirm which item was active before confirming the selection.
@@ -184,3 +185,8 @@
 
 **Learning:** When using utility-based CSS button classes like `.glass-button`, they often lack keyboard focus styles if they aren't built directly with Tailwind utilities, resulting in an accessibility trap across all components where the class is used.
 **Action:** When creating reusable utility classes (especially interactive ones like buttons or inputs), explicitly define `:focus-visible` styles within the global CSS block to ensure keyboard accessibility is applied universally.
+
+## 2026-04-14 - Password input accessibility
+
+**Learning:** Missing autocomplete attributes on password inputs hinder accessibility and password managers.
+**Action:** Always add `autocomplete='current-password'` to password inputs.

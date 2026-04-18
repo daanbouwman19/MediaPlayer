@@ -24,6 +24,7 @@
             id="lock-screen-password"
             v-model="password"
             type="password"
+            autocomplete="current-password"
             placeholder="Password"
             class="w-full bg-white/5 border border-white/10 rounded-xl px-5 py-4 text-white focus:outline-none focus:ring-2 focus:ring-accent focus:bg-white/10 transition-all text-lg placeholder:text-white/20"
             :disabled="isUnlocking"
