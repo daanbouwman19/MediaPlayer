@@ -498,25 +498,32 @@ export async function bulkUpsertMetadata(
     // Bolt Optimization: Filter out payloads that are just "path confirmation" (no new data)
     // and already exist in the database. This avoids thousands of redundant INSERT ... ON CONFLICT calls.
     const pathOnlyPayloads: MetadataPayload[] = [];
-    const updatePayloads: MetadataPayload[] = [];
+    const payloadsToProcess: MetadataPayload[] = [];
 
     for (const p of payloads) {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { filePath, ...metadata } = p;
-      // Check if any property in metadata is defined
-      const hasData = Object.values(metadata).some((v) => v !== undefined);
+      // Bolt Optimization: Manually check for defined properties instead of using rest destructuring and Object.values()
+      // to avoid significant object allocation overhead in large arrays
+      const hasData =
+        p.duration !== undefined ||
+        p.size !== undefined ||
+        p.createdAt !== undefined ||
+        p.rating !== undefined ||
+        p.status !== undefined ||
+        p.watchedSegments !== undefined;
 
       if (hasData) {
-        updatePayloads.push(p);
+        payloadsToProcess.push(p);
       } else {
         pathOnlyPayloads.push(p);
       }
     }
 
-    const payloadsToProcess = [...updatePayloads];
-
     if (pathOnlyPayloads.length > 0) {
-      const paths = pathOnlyPayloads.map((p) => p.filePath);
+      // Bolt Optimization: Use manual loop to gather paths avoiding Array.prototype.map allocation
+      const paths: string[] = [];
+      for (let i = 0; i < pathOnlyPayloads.length; i++) {
+        paths.push(pathOnlyPayloads[i].filePath);
+      }
       const existingPaths = getExistingPathsBatch(paths);
 
       // Bolt Optimization: Use manual loop instead of Array.prototype.filter and spread operator to avoid allocation overhead and call stack limits
@@ -531,18 +538,42 @@ export async function bulkUpsertMetadata(
       return { success: true };
     }
 
-    const idMap = await generateFileIdsBatched(
-      payloadsToProcess.map((p) => p.filePath),
-    );
+    const pathsToProcess: string[] = [];
+    for (let i = 0; i < payloadsToProcess.length; i++) {
+      pathsToProcess.push(payloadsToProcess[i].filePath);
+    }
 
-    // Map payloads to include fileId, failing if any ID is missing
-    const itemsWithIds = payloadsToProcess.map((p) => {
+    const idMap = await generateFileIdsBatched(pathsToProcess);
+
+    // Bolt Optimization: Use manual loop and map directly to transaction item format avoiding Object rest spread and .map
+    const itemsWithIds: Array<{
+      fileId: string;
+      filePath: string;
+      duration?: number;
+      size?: number;
+      createdAt?: string;
+      rating?: number;
+      status?: string;
+      watchedSegments?: string;
+    }> = [];
+
+    for (let i = 0; i < payloadsToProcess.length; i++) {
+      const p = payloadsToProcess[i];
       const fileId = idMap.get(p.filePath);
       if (!fileId) {
         throw new Error(`Failed to generate ID for path: ${p.filePath}`);
       }
-      return { ...p, fileId };
-    });
+      itemsWithIds.push({
+        fileId,
+        filePath: p.filePath,
+        duration: p.duration,
+        size: p.size,
+        createdAt: p.createdAt,
+        rating: p.rating,
+        status: p.status,
+        watchedSegments: p.watchedSegments,
+      });
+    }
 
     const transaction = db.transaction((items: typeof itemsWithIds) => {
       for (const item of items) {
