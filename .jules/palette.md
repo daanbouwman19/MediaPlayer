@@ -18,8 +18,8 @@
 
 ## 2025-05-23 - [Action Buttons in Lists]
 
-**Learning:** List items (like media sources) often have repetitive action buttons (e.g., "Remove"). Without specific context, screen readers just announce "Remove, Remove, Remove".
-**Action:** Always append the item's name or identifier to the `aria-label` of action buttons in lists (e.g., `aria-label="'Remove ' + item.name"`).
+**Learning:** List items (like media sources) often have repetitive action buttons (e.g., \"Remove\"). Without specific context, screen readers just announce \"Remove, Remove, Remove\".
+**Action:** Always append the item's name or identifier to the `aria-label` of action buttons in lists (e.g., `aria-label=\"'Remove ' + item.name\"`).
 
 ## 2025-10-27 - [Keyboard Navigation in File Explorers]
 
@@ -28,8 +28,8 @@
 
 ## 2025-10-28 - [Modal Close Button Patterns]
 
-**Learning:** Modal close buttons often use the generic "×" (&times;) character which screen readers may announce literally or ignore.
-**Action:** Always add `aria-label="Close"` to modal close buttons to ensure they are announced as an actionable control.
+**Learning:** Modal close buttons often use the generic \"×\" (&times;) character which screen readers may announce literally or ignore.
+**Action:** Always add `aria-label=\"Close\"` to modal close buttons to ensure they are announced as an actionable control.
 
 ## 2025-10-29 - [Semantic Buttons in Tree Views]
 
@@ -38,18 +38,18 @@
 
 ## 2025-10-30 - [Consistent Icon Usage]
 
-**Learning:** Using HTML entities like `&times;` for icons leads to inconsistency in sizing and styling compared to SVG components. It also risks screen readers announcing "times" or "multiplication sign".
+**Learning:** Using HTML entities like `&times;` for icons leads to inconsistency in sizing and styling compared to SVG components. It also risks screen readers announcing \"times\" or \"multiplication sign\".
 **Action:** Use dedicated SVG icon components (e.g., `<CloseIcon />`) instead of text characters for UI controls to ensure consistent visual language and better accessibility control.
 
 ## 2026-01-05 - [Accessible Names for Icon Buttons]
 
 **Learning:** Icon-only buttons (like the VR recenter button) often rely solely on the `title` attribute, which is not a reliable accessible name for screen readers, especially on touch devices where hover tooltips are unavailable.
-**Action:** Always add an explicit `aria-label` to icon-only buttons that mirrors the `title`, and add `aria-hidden="true"` to the internal SVG to prevent redundant or confusing announcements.
+**Action:** Always add an explicit `aria-label` to icon-only buttons that mirrors the `title`, and add `aria-hidden=\"true\"` to the internal SVG to prevent redundant or confusing announcements.
 
 ## 2026-01-11 - [Actionable Empty States]
 
-**Learning:** The "Media will appear here" placeholder was passive and confusing for first-time users who hadn't configured sources yet.
-**Action:** All empty states (library, playlists, search) should detect the _reason_ for emptiness (e.g., no sources vs. no search results) and provide a direct button to fix it (e.g., "Add Source", "Clear Filter").
+**Learning:** The \"Media will appear here\" placeholder was passive and confusing for first-time users who hadn't configured sources yet.
+**Action:** All empty states (library, playlists, search) should detect the _reason_ for emptiness (e.g., no sources vs. no search results) and provide a direct button to fix it (e.g., \"Add Source\", \"Clear Filter\").
 
 ## 2026-01-12 - [The Tooltip Gap]
 
@@ -58,7 +58,7 @@
 
 ## 2026-01-14 - [Form Inputs Disconnected from Labels]
 
-**Learning:** In Vue components, simply placing a label near an input is not enough for accessibility. Inputs must have `id` attributes that match the `for` attribute of their corresponding `<label>`. This is especially easy to miss in "row" or "grid" layouts where they visually align but have no programmatic connection.
+**Learning:** In Vue components, simply placing a label near an input is not enough for accessibility. Inputs must have `id` attributes that match the `for` attribute of their corresponding `<label>`. This is especially easy to miss in \"row\" or \"grid\" layouts where they visually align but have no programmatic connection.
 **Action:** Always check form layouts for `id` + `for` pairs. Use screen reader testing or automated a11y checks to catch these disconnects.
 
 ## 2026-01-15 - Extending Media Model
@@ -73,13 +73,13 @@
 
 ## 2026-01-18 - [Star Rating Accessibility]
 
-**Learning:** The star rating component had valid `aria-label`s ("Rate 3 stars"), but provided no state information. A screen reader user would select a rating but never know if it was active or what the current rating was, as that information was purely color-based.
-**Action:** For rating components, always use `aria-pressed="true"` on the selected item and append ", current rating" (or similar context) to the label of the active item to make the state explicit.
+**Learning:** The star rating component had valid `aria-label`s (\"Rate 3 stars\"), but provided no state information. A screen reader user would select a rating but never know if it was active or what the current rating was, as that information was purely color-based.
+**Action:** For rating components, always use `aria-pressed=\"true\"` on the selected item and append \", current rating\" (or similar context) to the label of the active item to make the state explicit.
 
 ## 2026-01-21 - [Empty State Improvement]
 
 **Learning:** Empty states are often overlooked but are critical for user onboarding and orientation. A text-only empty state can feel broken or unfinished.
-**Action:** Always provide a visual cue (icon) and clear instruction ("Choose from the sidebar") in empty states. Use `aria-live="polite"` so screen reader users know the state has changed.
+**Action:** Always provide a visual cue (icon) and clear instruction (\"Choose from the sidebar\") in empty states. Use `aria-live=\"polite\"` so screen reader users know the state has changed.
 
 ## 2026-01-22 - Custom Checkbox Focus States
 
@@ -93,8 +93,8 @@
 
 ## 2026-01-26 - [Accessible Loading States]
 
-**Learning:** Blocking loading masks (overlays) need `role="status"` and `aria-live="assertive"` to ensure screen readers announce the state change immediately. Decorative spinners should be hidden with `aria-hidden="true"`.
-**Action:** When creating full-screen loading indicators, always use `role="status"`, `aria-live="assertive"`, `aria-atomic="true"`, and ensure the visible message is the only thing announced.
+**Learning:** Blocking loading masks (overlays) need `role=\"status\"` and `aria-live=\"assertive\"` to ensure screen readers announce the state change immediately. Decorative spinners should be hidden with `aria-hidden=\"true\"`.
+**Action:** When creating full-screen loading indicators, always use `role=\"status\"`, `aria-live=\"assertive\"`, `aria-atomic=\"true\"`, and ensure the visible message is the only thing announced.
 
 ## 2026-01-27 - [Confirm Source Removal]
 
@@ -103,15 +103,15 @@
 
 ## 2026-01-30 - [Detailed Grid Item Accessibility]
 
-**Learning:** In a grid of media items, a simple "View [Name]" label is insufficient for screen reader users to make informed decisions. They need to know the media type (Image/Video), duration (if video), and rating without opening the item.
-**Action:** Construct detailed `aria-label`s for grid items that include Type, Duration, and Rating (e.g., "View [Name], Video, 3 minutes 20 seconds, Rated 4 stars"). Use a reusable helper for friendly duration formatting.
+**Learning:** In a grid of media items, a simple \"View [Name]\" label is insufficient for screen reader users to make informed decisions. They need to know the media type (Image/Video), duration (if video), and rating without opening the item.
+**Action:** Construct detailed `aria-label`s for grid items that include Type, Duration, and Rating (e.g., \"View [Name], Video, 3 minutes 20 seconds, Rated 4 stars\"). Use a reusable helper for friendly duration formatting.
 
 ## 2026-01-31 - [Accessible Toggle Buttons]
 
 **Learning:** Buttons that toggle a state (like VR Mode) but aren't checkboxes often lack state communication, leaving screen reader users guessing if the mode is on or off.
 **Action:** Always add `aria-pressed` (bound to the boolean state) to toggle buttons to explicitly communicate their active state.
 
-## 2026-02-01 - RecycleScroller & Component Reuse
+## 2026-02-01 - RecycleScroller \u0026 Component Reuse
 
 **Learning:** Components inside `vue-virtual-scroller` (`RecycleScroller`) are reused and props update, but local state does not reset automatically.
 **Action:** When adding local state (like `isLoading`) to grid items, you MUST watch props (e.g., `item.path`) to reset the state manually.
@@ -123,22 +123,22 @@
 
 ## 2026-02-04 - [Clarifying Range Inputs]
 
-**Learning:** Range inputs (sliders) that have a semantic "Any" or "None" value at 0 are confusing to screen reader users who just hear "0".
-**Action:** Use `aria-valuetext` to map "0" to "Any" or "None", and ensure visual labels match this state to prevent "0/5" ambiguity.
+**Learning:** Range inputs (sliders) that have a semantic \"Any\" or \"None\" value at 0 are confusing to screen reader users who just hear \"0\".
+**Action:** Use `aria-valuetext` to map \"0\" to \"Any\" or \"None\", and ensure visual labels match this state to prevent \"0/5\" ambiguity.
 
 ## 2026-02-05 - [Hover-to-Play Video Previews]
 
 **Learning:** Users often have to click videos to see if it's the right content. Adding a muted, autoplay preview on hover (with a debounce to prevent noise) significantly reduces cognitive load and feels much faster.
-**Action:** Always consider how to expose content "peek" capabilities in grids without requiring full navigation. Use `poster` attributes on videos for smooth transitions.
+**Action:** Always consider how to expose content \"peek\" capabilities in grids without requiring full navigation. Use `poster` attributes on videos for smooth transitions.
 
 ## 2026-02-10 - [Invisible Controls Trap]
 
-**Learning:** Using `opacity: 0` for fading out controls leaves them interactive (keyboard & mouse), creating a confusing "invisible controls trap".
+**Learning:** Using `opacity: 0` for fading out controls leaves them interactive (keyboard \u0026 mouse), creating a confusing \"invisible controls trap\".
 **Action:** Use `v-show` with `<Transition>` or `inert` attribute to ensure hidden elements are removed from the accessibility tree and interaction layer.
 
 ## 2026-02-11 - [Empty State Actions]
 
-**Learning:** When the sidebar is collapsible, empty states telling users to "Choose from the sidebar" become frustrating dead ends if the sidebar is hidden.
+**Learning:** When the sidebar is collapsible, empty states telling users to \"Choose from the sidebar\" become frustrating dead ends if the sidebar is hidden.
 **Action:** Empty states should always detect if the necessary UI controls (like a sidebar) are visible. If not, they must provide a direct action button to reveal them or perform the task directly.
 
 ## 2026-02-14 - [Modal Accessibility Gap]
@@ -153,22 +153,23 @@
 
 ## 2026-02-16 - [Toggle Remaining Time Display]
 
-**Learning:** Users often want to know how much time is left in a video, not just the total duration. A static "Current / Total" display forces mental math.
-**Action:** Implemented a toggle on the time display in `MediaControls`. Clicking the time switches between "Total Duration" (e.g., `1:20 / 3:45`) and "Remaining Time" (e.g., `1:20 / -2:25`). The button uses `title` to hint the action while letting screen readers announce the dynamic text content.
+**Learning:** Users often want to know how much time is left in a video, not just the total duration. A static \"Current / Total\" display forces mental math.
+**Action:** Implemented a toggle on the time display in `MediaControls`. Clicking the time switches between \"Total Duration\" (e.g., `1:20 / 3:45`) and \"Remaining Time\" (e.g., `1:20 / -2:25`). The button uses `title` to hint the action while letting screen readers announce the dynamic text content.
 
 ## 2026-02-17 - [Discoverable Keyboard Shortcuts]
 
 **Learning:** Keyboard shortcuts are powerful but useless if users don't know they exist. Relying on a hidden shortcut (like `?`) to show help is an anti-pattern.
-**Action:** Added a visible "Keyboard Shortcuts" button to the media controls. This ensures users can discover the functionality without knowing the secret handshake.
+**Action:** Added a visible \"Keyboard Shortcuts\" button to the media controls. This ensures users can discover the functionality without knowing the secret handshake.
 
 ## 2026-04-14 - Improve accessibility for grid view close button
 
 **Learning:** The MediaGrid component's close button lacked a descriptive aria-label, which could be confusing for screen reader users as 'Close' might not provide enough context.
 **Action:** Add descriptive aria-labels to buttons, especially when the visual text might be ambiguous out of context.
+
 ## 2026-04-15 - [File Explorer Selection Announcement]
 
 **Learning:** When navigating a custom file explorer component, screen reader users lacked immediate feedback when a folder or file was selected, as the selection was purely visual (CSS classes). This made it difficult to confirm which item was active before confirming the selection.
-**Action:** Always add an `aria-live="polite"` region to custom selection interfaces to announce the currently selected item, and use `aria-current="true"` on the selected element to convey state programmatically.
+**Action:** Always add an `aria-live=\"polite\"` region to custom selection interfaces to announce the currently selected item, and use `aria-current=\"true\"` on the selected element to convey state programmatically.
 
 ## 2026-04-16 - [Accessible Form Inputs]
 
