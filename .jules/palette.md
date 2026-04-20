@@ -185,3 +185,8 @@
 
 **Learning:** When using utility-based CSS button classes like `.glass-button`, they often lack keyboard focus styles if they aren't built directly with Tailwind utilities, resulting in an accessibility trap across all components where the class is used.
 **Action:** When creating reusable utility classes (especially interactive ones like buttons or inputs), explicitly define `:focus-visible` styles within the global CSS block to ensure keyboard accessibility is applied universally.
+
+## 2026-04-14 - [Password Input Accessibility]
+
+**Learning:** Password inputs that lack the `autocomplete="current-password"` attribute make it difficult for password managers and browsers to automatically fill in credentials, forcing users to manually type or copy-paste passwords. This is a common accessibility and UX issue for authentication fields.
+**Action:** Always add `autocomplete="current-password"` to password input fields to ensure password managers can correctly identify the field and offer autofill capabilities, significantly improving the user experience and accessibility of the authentication process.
