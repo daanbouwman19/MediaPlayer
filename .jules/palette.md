@@ -185,3 +185,8 @@
 
 **Learning:** When using utility-based CSS button classes like `.glass-button`, they often lack keyboard focus styles if they aren't built directly with Tailwind utilities, resulting in an accessibility trap across all components where the class is used.
 **Action:** When creating reusable utility classes (especially interactive ones like buttons or inputs), explicitly define `:focus-visible` styles within the global CSS block to ensure keyboard accessibility is applied universally.
+
+## 2026-04-14 - [Accessible Modal Dialogs]
+
+**Learning:** Modal dialogs (`role="dialog"`) need to be explicitly labelled using `aria-labelledby` pointing to their heading or `aria-label` if no visible heading exists. Without this, screen readers may just announce "dialog" without context when it opens.
+**Action:** Always ensure that any element with `role="dialog"` has an associated `aria-labelledby` or `aria-label`.

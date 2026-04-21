@@ -276,6 +276,7 @@
       class="fixed inset-0 z-60 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
       role="dialog"
       aria-modal="true"
+      aria-labelledby="drive-auth-title"
     >
       <div
         class="glass-panel border-white/5 md:rounded-xl shadow-2xl w-full max-w-lg p-6 relative"
@@ -288,7 +289,7 @@
           <CloseIcon class="w-6 h-6" />
         </button>
 
-        <h3 class="text-xl font-bold text-color mb-6">
+        <h3 id="drive-auth-title" class="text-xl font-bold text-color mb-6">
           Add Google Drive Source
         </h3>
 
@@ -427,6 +428,7 @@
     class="fixed inset-0 z-70 bg-black bg-opacity-75 flex items-center justify-center p-4 modal-overlay"
     role="dialog"
     aria-modal="true"
+    aria-label="File Explorer"
     @click.self="closeFileExplorer"
   >
     <div
