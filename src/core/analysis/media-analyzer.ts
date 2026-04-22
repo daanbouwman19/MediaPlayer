@@ -144,7 +144,11 @@ export class MediaAnalyzer {
       '-',
     ];
 
-    const output = await this.spawnFFmpegAndCaptureOutput(filePath, args);
+    const output = await this.spawnFFmpegAndCaptureOutput(
+      ffmpegPath,
+      filePath,
+      args,
+    );
     const { motion, audio } = this.parseHeatmapOutput(output);
 
     const result = {
@@ -167,12 +171,10 @@ export class MediaAnalyzer {
   }
 
   private async spawnFFmpegAndCaptureOutput(
+    ffmpegPath: string,
     filePath: string,
     args: string[],
   ): Promise<string> {
-    const ffmpegPath = getFFmpegStaticPath();
-    if (!ffmpegPath) throw new Error('FFmpeg not found');
-
     return new Promise((resolve, reject) => {
       const proc = spawn(ffmpegPath, args, { windowsHide: true });
       const timeoutTimer = setTimeout(() => {
