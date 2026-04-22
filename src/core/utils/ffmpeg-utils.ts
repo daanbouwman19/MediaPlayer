@@ -126,12 +126,11 @@ export function getThumbnailArgs(
 
 /**
  * Runs FFmpeg (or any command) with a timeout to prevent hanging processes (DoS).
- * Uses `execa` for robust process handling.
  *
  * @param command - The command to run (e.g. ffmpeg path).
  * @param args - Arguments for the command.
  * @param timeoutMs - Timeout in milliseconds (default: 30000).
- * @returns Promise resolving to { code, stderr }.
+ * @returns Promise resolving to { code, stdout, stderr }.
  * @throws Error if process fails or times out.
  */
 export async function runFFmpeg(

@@ -22,14 +22,10 @@ import { HlsManager } from '../../core/hls-manager';
 import { generateSessionId } from '../../core/hls-handler';
 import { getServerPort } from '../local-server';
 import { handleIpc } from '../utils/ipc-helper';
+import { getFFmpegStaticPath } from '../../core/utils/ffmpeg-static-path';
 
 async function getFFmpegPath(): Promise<string | null> {
-  try {
-    const { default: path } = await import('ffmpeg-static');
-    return path;
-  } catch {
-    return null;
-  }
+  return getFFmpegStaticPath();
 }
 
 export function registerMediaHandlers(mediaService: MediaService) {

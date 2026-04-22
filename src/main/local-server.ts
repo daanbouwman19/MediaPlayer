@@ -7,6 +7,7 @@ import { AddressInfo } from 'net';
 import { createMediaApp } from '../core/media-handler';
 import { getMimeType as coreGetMimeType } from '../core/utils/mime-types';
 import { MediaService } from '../core/media-service';
+import { getFFmpegStaticPath } from '../core/utils/ffmpeg-static-path';
 
 /**
  * Holds the singleton instance of the HTTP server.
@@ -41,7 +42,7 @@ async function startLocalServer(
     return;
   }
 
-  const { default: ffmpegPath } = await import('ffmpeg-static');
+  const ffmpegPath = getFFmpegStaticPath();
 
   const requestHandler = createMediaApp({
     ffmpegPath: ffmpegPath || null,

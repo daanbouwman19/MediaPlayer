@@ -32,4 +32,7 @@ export default defineConfig({
       },
     },
   },
+  ssr: {
+    noExternal: ['execa', 'p-queue', 'range-parser'],
+  },
 });

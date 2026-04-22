@@ -13,7 +13,7 @@ import {
   HLS_SEGMENT_DURATION,
   MAX_CONCURRENT_TRANSCODES,
 } from './constants.ts';
-import ffmpegStatic from 'ffmpeg-static';
+import { getFFmpegStaticPath } from './utils/ffmpeg-static-path';
 
 export interface HlsProgress {
   currentTime: number; // in seconds
@@ -103,8 +103,9 @@ export class HlsManager {
    */
   async init(cacheDir: string) {
     this.cacheDir = cacheDir;
-    if (ffmpegStatic) {
-      this.ffmpegCapabilities = await detectFFmpegCapabilities(ffmpegStatic);
+    const ffmpegPath = getFFmpegStaticPath();
+    if (ffmpegPath) {
+      this.ffmpegCapabilities = await detectFFmpegCapabilities(ffmpegPath);
     }
     await this.cleanupOrphanedSessions();
   }
@@ -160,10 +161,13 @@ export class HlsManager {
 
     // Use p-queue to limit CPU load during startup
     await this.transcodeQueue.add(async () => {
+      const ffmpegPath = getFFmpegStaticPath();
+      if (!ffmpegPath) throw new Error('FFmpeg not found');
+
       const mediaSource = createMediaSource(filePath);
       const ffmpegInput = await mediaSource.getFFmpegInput();
 
-      await getFFmpegStreams(ffmpegInput, ffmpegStatic!);
+      await getFFmpegStreams(ffmpegInput, ffmpegPath);
       const hardwareCodec = getHardwareCodec(this.ffmpegCapabilities!);
 
       const outputSegmentPath = path.join(outputDir, 'seg-%03d.ts');
@@ -177,7 +181,7 @@ export class HlsManager {
         },
       );
 
-      const proc = spawn(ffmpegStatic!, args, {
+      const proc = spawn(ffmpegPath, args, {
         stdio: ['ignore', 'ignore', 'pipe'],
       });
 

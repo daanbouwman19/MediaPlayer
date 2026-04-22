@@ -12,7 +12,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs/promises';
 import crypto from 'crypto';
-import ffmpegStatic from 'ffmpeg-static';
+import { getFFmpegStaticPath } from '../core/utils/ffmpeg-static-path';
 import { MediaService } from '../core/media-service.ts';
 import { initDatabase } from '../core/database.ts';
 import {
@@ -189,7 +189,7 @@ export async function createApp(mediaService: MediaService) {
   }
 
   const mediaHandler = new MediaHandler({
-    ffmpegPath: ffmpegStatic,
+    ffmpegPath: getFFmpegStaticPath(),
     cacheDir: CACHE_DIR,
     mediaService,
   });
@@ -200,7 +200,7 @@ export async function createApp(mediaService: MediaService) {
       limiters,
       mediaHandler,
       transcodeState,
-      ffmpegPath: ffmpegStatic,
+      ffmpegPath: getFFmpegStaticPath(),
     }),
   );
   app.use(createAuthRoutes(limiters));

@@ -1,5 +1,5 @@
 import { spawn } from 'child_process';
-import ffmpegStatic from 'ffmpeg-static';
+import { getFFmpegStaticPath } from '../utils/ffmpeg-static-path';
 import { getFFmpegStreams } from '../utils/ffmpeg-utils';
 import { createMediaSource } from '../media-source.ts';
 import fs from 'fs/promises';
@@ -110,13 +110,14 @@ export class MediaAnalyzer {
     filePath: string,
     points: number,
   ): Promise<HeatmapData> {
-    if (!ffmpegStatic) throw new Error('FFmpeg not found');
+    const ffmpegPath = getFFmpegStaticPath();
+    if (!ffmpegPath) throw new Error('FFmpeg not found');
 
     const source = createMediaSource(filePath);
     const inputPath = await source.getFFmpegInput();
     const { hasVideo, hasAudio } = await getFFmpegStreams(
       inputPath,
-      ffmpegStatic,
+      ffmpegPath,
     );
 
     if (!hasVideo && !hasAudio)
@@ -143,7 +144,11 @@ export class MediaAnalyzer {
       '-',
     ];
 
-    const output = await this.spawnFFmpegAndCaptureOutput(filePath, args);
+    const output = await this.spawnFFmpegAndCaptureOutput(
+      ffmpegPath,
+      filePath,
+      args,
+    );
     const { motion, audio } = this.parseHeatmapOutput(output);
 
     const result = {
@@ -166,11 +171,12 @@ export class MediaAnalyzer {
   }
 
   private async spawnFFmpegAndCaptureOutput(
+    ffmpegPath: string,
     filePath: string,
     args: string[],
   ): Promise<string> {
     return new Promise((resolve, reject) => {
-      const proc = spawn(ffmpegStatic!, args, { windowsHide: true });
+      const proc = spawn(ffmpegPath, args, { windowsHide: true });
       const timeoutTimer = setTimeout(() => {
         proc.kill('SIGKILL');
         reject(new Error('Heatmap generation timed out'));
