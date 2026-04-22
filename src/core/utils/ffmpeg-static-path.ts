@@ -10,9 +10,7 @@ export function getFFmpegStaticPath(): string | null {
 
   // In Electron production, we need to point to the asar.unpacked directory
   // because the binary is unpacked there via the 'asarUnpack' configuration.
-  const isElectron = !!(
-    process.versions && (process.versions as any).electron
-  );
+  const isElectron = !!(process.versions && process.versions.electron);
   if (
     isElectron &&
     ffmpegStatic.includes('app.asar') &&
@@ -23,4 +21,3 @@ export function getFFmpegStaticPath(): string | null {
 
   return ffmpegStatic;
 }
-
