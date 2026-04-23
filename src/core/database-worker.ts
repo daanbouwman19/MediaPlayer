@@ -501,10 +501,15 @@ export async function bulkUpsertMetadata(
     const updatePayloads: MetadataPayload[] = [];
 
     for (const p of payloads) {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { filePath, ...metadata } = p;
-      // Check if any property in metadata is defined
-      const hasData = Object.values(metadata).some((v) => v !== undefined);
+      // Bolt Optimization: Replace rest destructuring and Object.values with explicit checks
+      // to avoid object allocation overhead and GC pressure in this high-frequency loop.
+      const hasData =
+        p.duration !== undefined ||
+        p.size !== undefined ||
+        p.createdAt !== undefined ||
+        p.rating !== undefined ||
+        p.status !== undefined ||
+        p.watchedSegments !== undefined;
 
       if (hasData) {
         updatePayloads.push(p);
