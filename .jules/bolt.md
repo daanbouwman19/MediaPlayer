@@ -112,6 +112,7 @@
 
 **Learning:** Using `.filter().map()` chains in `file-system.ts` for directory listing allocates unnecessary intermediate arrays, increasing garbage collection pressure and reducing performance, especially when reading directories with many files.
 **Action:** Replace array chains with a single `for...of` loop and a manually managed target array to iterate only once without creating intermediate data structures.
+
 ## 2026-05-18 - [Object Rest Destructuring Overhead]
 
 **Learning:** Using object rest destructuring (`const { a, ...rest } = obj`) and `Object.values()` inside high-frequency loops (like `bulkUpsertMetadata`) creates significant intermediate object and array allocations, increasing garbage collection pressure.
