@@ -62,7 +62,7 @@ for (const tc of testCases) {
 
     // Give inputs focus to blur them
     await page.locator('#playlist-name').click();
-    await page.locator('body').click({ position: { x: 0, y: 0 } });
+    await page.locator('#playlist-name').blur();
 
     // Disable blinking cursors
     await page.addStyleTag({
