@@ -208,18 +208,27 @@ describe('useSlideshow Coverage Boost', () => {
       const { navigateMedia } = useSlideshow();
       mockPlayerState.isSlideshowActive = true;
 
+      // Mock Date.now to control the debounce time
+      const dateSpy = vi.spyOn(Date, 'now');
+      let now = 1000;
+      dateSpy.mockImplementation(() => now);
+
       // No history, no next queue
       await navigateMedia(1); // Should call pickAndDisplayNextMediaItem
 
-      // With next
+      // With next - advance time to pass the 400ms guard
+      now = 1500;
       mockPlaylistState.queue = [{ path: 'next.jpg', name: 'next.jpg' }];
       await navigateMedia(1);
       expect(mockPlaylistState.currentItem.path).toBe('next.jpg');
 
-      // With previous
+      // With previous - advance time to pass the 400ms guard
+      now = 2000;
       mockPlaylistState.history = [{ path: 'prev.jpg', name: 'prev.jpg' }];
       await navigateMedia(-1);
       expect(mockPlaylistState.currentItem.path).toBe('prev.jpg');
+
+      dateSpy.mockRestore();
 
       // Slideshow not active
       mockPlayerState.isSlideshowActive = false;

@@ -107,6 +107,10 @@ describe('MediaDisplay Coverage Boost', () => {
       pauseTimerOnPlay: ref(false),
       isTimerRunning: ref(false),
       mainVideoElement: ref(null),
+      state: {
+        isSlideshowActive: false,
+        timerDuration: 5,
+      },
     };
     (usePlayerStore as Mock).mockReturnValue(mockPlayer);
 

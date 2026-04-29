@@ -84,11 +84,11 @@ export function useSlideshow() {
       }
 
       if (playerStore.state.isTimerRunning) {
-        const ext = getCachedExtension(mediaItem);
-        const isVideo = videoExtensionsSet.value.has(ext);
-        if (!(isVideo && playerStore.state.playFullVideo)) {
-          resumeSlideshowTimer();
-        }
+        // We now start the slideshow timer for ALL media.
+        // For videos, MediaDisplay.vue will check their duration on `play`
+        // and pause the timer if the video is longer than the timer duration,
+        // or loop the video if it's shorter.
+        resumeSlideshowTimer();
       }
     } catch (error) {
       console.error('Error recording media view:', error);
@@ -118,8 +118,15 @@ export function useSlideshow() {
     }
   };
 
+  let lastNavigationTime = 0;
+
   const navigateMedia = async (direction: number) => {
     if (!playerStore.state.isSlideshowActive) return;
+
+    // Prevent double-navigation during crossfades/transitions
+    const now = Date.now();
+    if (now - lastNavigationTime < 400) return;
+    lastNavigationTime = now;
 
     clearSlideshowTimer();
 

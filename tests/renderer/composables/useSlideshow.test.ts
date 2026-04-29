@@ -152,4 +152,22 @@ describe('useSlideshow', () => {
       expect(mockPlaylistState.currentItem.path).toBe('a1.png');
     });
   });
+
+  describe('displayMedia', () => {
+    it('should resume slideshow timer for any media when timer is running', async () => {
+      mockPlayerState.isTimerRunning = true;
+      mockPlayerState.timerDuration = 5;
+
+      const { pickAndDisplayNextMediaItem } = useSlideshow();
+
+      mockLibraryState.globalMediaPoolForSelection = [
+        { path: 'a1.mp4', name: 'a1.mp4' },
+      ];
+
+      await pickAndDisplayNextMediaItem();
+
+      expect(mockPlayerState.isTimerRunning).toBe(true);
+      expect(mockPlayerState.slideshowTimerId).not.toBeNull();
+    });
+  });
 });

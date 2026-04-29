@@ -153,6 +153,7 @@
             @update:video-element="handleVideoElementUpdate"
             @play="handleVideoPlay"
             @pause="handleVideoPause"
+            @loadedmetadata="handleLoadedMetadata"
           />
           <VideoPlayer
             v-else
@@ -177,6 +178,7 @@
             @playing="handleVideoPlaying"
             @update:video-element="handleVideoElementUpdate"
             @timeupdate="handleTimeUpdate"
+            @loadedmetadata="handleLoadedMetadata"
           />
         </Transition>
       </template>
@@ -497,16 +499,44 @@ const toggleMute = () => {
 };
 
 const handleVideoEnded = () => {
-  if (playFullVideo.value && !isLoading.value) {
-    navigateMedia(1);
+  if (!isLoading.value) {
+    if (isTimerRunning.value) {
+      // If timer is still running, the video is shorter than the timer duration.
+      // We should loop the video until the timer finishes.
+      if (videoElement.value) {
+        videoElement.value.currentTime = 0;
+        videoElement.value.play().catch(() => {});
+      }
+    } else if (playerStore.state.isSlideshowActive && playFullVideo.value) {
+      // If the video was longer than the timer, it paused the timer.
+      // We are still in a slideshow, so we should advance to the next media.
+      navigateMedia(1);
+    } else if (playFullVideo.value) {
+      // Normal single media play logic
+      navigateMedia(1);
+    }
   }
 };
 
 const handleVideoPlay = () => {
-  if (isTimerRunning.value && (playFullVideo.value || pauseTimerOnPlay.value)) {
-    pauseSlideshowTimer();
-  }
+  checkAndPauseTimerIfLongVideo();
   isPlaying.value = true;
+};
+
+const handleLoadedMetadata = () => {
+  checkAndPauseTimerIfLongVideo();
+};
+
+const checkAndPauseTimerIfLongVideo = () => {
+  if (isTimerRunning.value && (playFullVideo.value || pauseTimerOnPlay.value)) {
+    // If we have a ref to the component or native video element, get the duration
+    const nativeDuration = videoElement.value?.duration || 0;
+    const videoDuration = transcodedDuration.value || nativeDuration;
+
+    if (videoDuration > playerStore.state.timerDuration) {
+      pauseSlideshowTimer();
+    }
+  }
 };
 
 const handleVideoPause = () => {
