@@ -6,7 +6,6 @@ interface PlayerState {
   timerDuration: number;
   isTimerRunning: boolean;
   timerProgress: number;
-  playFullVideo: boolean;
   pauseTimerOnPlay: boolean;
   mainVideoElement: HTMLVideoElement | null;
 }
@@ -17,7 +16,6 @@ const state = reactive<PlayerState>({
   timerDuration: 5,
   isTimerRunning: false,
   timerProgress: 0,
-  playFullVideo: true,
   pauseTimerOnPlay: false,
   mainVideoElement: null,
 });
@@ -25,7 +23,7 @@ const state = reactive<PlayerState>({
 export function usePlayerStore() {
   const resetPlayerState = () => {
     state.isSlideshowActive = false;
-    // We don't reset playFullVideo/timerDuration as they are user preferences
+    // We don't reset pauseTimerOnPlay/timerDuration as they are user preferences
   };
 
   const stopSlideshow = () => {

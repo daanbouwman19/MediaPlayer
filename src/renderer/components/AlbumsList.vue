@@ -342,36 +342,6 @@
           <div class="flex gap-2">
             <label class="flex-1 glass-toggle-btn cursor-pointer group">
               <input
-                v-model="playFullVideo"
-                type="checkbox"
-                class="peer sr-only"
-              />
-              <div
-                class="h-full px-3 py-2 rounded-md bg-black/20 border border-white/5 peer-checked:bg-accent/20 peer-checked:border-accent/50 peer-focus-visible:ring-2 peer-focus-visible:ring-accent transition-all flex items-center justify-center gap-2"
-              >
-                <div
-                  class="w-3 h-3 rounded-sm border border-muted peer-checked:bg-accent peer-checked:border-accent flex items-center justify-center"
-                >
-                  <svg
-                    v-if="playFullVideo"
-                    class="w-2.5 h-2.5 text-white"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="4"
-                  >
-                    <polyline points="20 6 9 17 4 12"></polyline>
-                  </svg>
-                </div>
-                <span
-                  class="text-[10px] font-medium text-muted group-hover:text-color peer-checked:text-accent-secondary"
-                  >Play Full Video</span
-                >
-              </div>
-            </label>
-
-            <label class="flex-1 glass-toggle-btn cursor-pointer group">
-              <input
                 v-model="pauseTimerOnPlay"
                 type="checkbox"
                 class="peer sr-only"
@@ -544,7 +514,6 @@ const {
   isTimerRunning,
   timerProgress,
   isSlideshowActive,
-  playFullVideo,
   pauseTimerOnPlay,
 } = playerStore;
 

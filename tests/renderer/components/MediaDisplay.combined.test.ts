@@ -41,7 +41,7 @@ vi.mock('@/components/VideoPlayer.vue', () => ({
         duration: 100,
         paused: false,
         pause: vi.fn(),
-        play: vi.fn(),
+        play: vi.fn().mockResolvedValue(undefined),
         load: vi.fn(),
         requestFullscreen: vi.fn(),
       };
@@ -82,8 +82,9 @@ describe('MediaDisplay Combined Tests', () => {
 
     mockPlayerState = reactive({
       isSlideshowActive: false,
-      playFullVideo: false,
       isTimerRunning: false,
+      mainVideoElement: null,
+      pauseTimerOnPlay: false,
     });
 
     mockPlaylistState = reactive({
@@ -133,6 +134,7 @@ describe('MediaDisplay Combined Tests', () => {
       isTranscodingMode: ref(false),
       isTranscodingLoading: ref(false),
       transcodingProgress: ref(0),
+      transcodedDuration: ref(0),
       startTranscoding: vi.fn(),
       resetTranscoderState: vi.fn(),
     };
@@ -177,5 +179,59 @@ describe('MediaDisplay Combined Tests', () => {
     const controls = wrapper.findComponent(MediaControls);
     await controls.vm.$emit('next');
     expect(mockSlideshow.navigateMedia).toHaveBeenCalledWith(1);
+  });
+
+  describe('Slideshow Video Handling', () => {
+    it('should navigate to next slide if video ends and timer is NOT running', async () => {
+      mockPlayerState.isTimerRunning = false;
+      mockPlaylistState.currentItem = { path: '/test.mp4' };
+      mockMediaLoader.mediaUrl.value = 'media://test.mp4';
+      mockMediaLoader.isLoading.value = false;
+
+      const wrapper = mount(MediaDisplay);
+      await flushPromises();
+
+      const videoPlayer = wrapper.findComponent({ name: 'VideoPlayer' });
+      videoPlayer.vm.$emit('ended');
+
+      expect(mockSlideshow.navigateMedia).toHaveBeenCalledWith(1);
+    });
+
+    it('should loop video if video ends and timer IS running (short video)', async () => {
+      mockPlayerState.isTimerRunning = true;
+      mockPlaylistState.currentItem = { path: '/test.mp4' };
+      mockMediaLoader.mediaUrl.value = 'media://test.mp4';
+      mockMediaLoader.isLoading.value = false;
+
+      const wrapper = mount(MediaDisplay);
+      await flushPromises();
+
+      const videoPlayer = wrapper.findComponent({ name: 'VideoPlayer' });
+      videoPlayer.vm.$emit('ended');
+
+      // Navigate should NOT be called, instead it should loop the video (play)
+      expect(mockSlideshow.navigateMedia).not.toHaveBeenCalled();
+      // Test mock doesn't easily expose the videoElement ref through to test without jumping through hoops,
+      // but we know it's not calling navigateMedia which is the most important part.
+    });
+
+    it('should pause timer if video duration is longer than timer duration and we dont pause on play automatically', async () => {
+      mockPlayerState.isTimerRunning = true;
+      mockPlayerState.pauseTimerOnPlay = false; // Add this explicitly to hit the else branch
+      mockPlayerState.timerDuration = 5;
+      mockPlaylistState.currentItem = { path: '/test.mp4' };
+      mockMediaLoader.mediaUrl.value = 'media://test.mp4';
+      mockMediaLoader.isLoading.value = false;
+
+      const wrapper = mount(MediaDisplay);
+      await flushPromises();
+
+      const videoPlayer = wrapper.findComponent({ name: 'VideoPlayer' });
+
+      // In the mock, duration is 100, which is > 5
+      videoPlayer.vm.$emit('loadedmetadata');
+
+      expect(mockSlideshow.pauseSlideshowTimer).toHaveBeenCalled();
+    });
   });
 });

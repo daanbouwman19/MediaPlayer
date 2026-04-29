@@ -49,7 +49,6 @@ vi.mock('../../../src/renderer/composables/usePlayerStore', () => ({
     isTimerRunning: false,
     timerProgress: 0,
     isSlideshowActive: false,
-    playFullVideo: false,
     pauseTimerOnPlay: false,
   })),
 }));

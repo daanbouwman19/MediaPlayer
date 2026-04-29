@@ -86,7 +86,6 @@ function createMockState() {
     isTimerRunning: false,
     timerProgress: 0,
     isSlideshowActive: false,
-    playFullVideo: false,
     pauseTimerOnPlay: false,
   });
 
@@ -455,11 +454,7 @@ describe('AlbumsList.vue', () => {
       const wrapper = mount(AlbumsList);
 
       const checkboxes = wrapper.findAll('input[type="checkbox"]');
-      const playFullVideoCheckbox = checkboxes[0];
-      const pauseTimerCheckbox = checkboxes[1];
-
-      await playFullVideoCheckbox.setValue(true);
-      expect(mockPlayerState.playFullVideo).toBe(true);
+      const pauseTimerCheckbox = checkboxes[0]; // There is only one now
 
       await pauseTimerCheckbox.setValue(true);
       expect(mockPlayerState.pauseTimerOnPlay).toBe(true);

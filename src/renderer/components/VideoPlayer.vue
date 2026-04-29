@@ -78,6 +78,7 @@ const emit = defineEmits<{
   (e: 'playing'): void;
   (e: 'update:video-element', el: HTMLVideoElement | null): void;
   (e: 'timeupdate', time: number): void;
+  (e: 'loadedmetadata', event: Event): void;
 }>();
 
 const videoElement = ref<HTMLVideoElement | null>(null);
@@ -287,6 +288,7 @@ const handleCanPlay = () => {
 
 const handleLoadedMetadata = (event: Event) => {
   const video = event.target as HTMLVideoElement;
+  emit('loadedmetadata', event);
   if (
     (video.videoWidth === 0 || video.videoHeight === 0) &&
     !props.isTranscodingMode

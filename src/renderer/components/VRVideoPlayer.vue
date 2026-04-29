@@ -114,6 +114,7 @@ const emit = defineEmits<{
   (e: 'update:video-element', el: HTMLVideoElement | null): void;
   (e: 'play'): void;
   (e: 'pause'): void;
+  (e: 'loadedmetadata', event: Event): void;
 }>();
 
 const container = ref<HTMLElement | null>(null);
@@ -191,7 +192,7 @@ const activateMotion = () => {
   }
 };
 
-const togglePlayback = () => {
+const togglePlay = () => {
   if (!video) return;
   if (video.paused) {
     video.play().catch(() => {});
@@ -199,6 +200,8 @@ const togglePlayback = () => {
     video.pause();
   }
 };
+
+const togglePlayback = () => togglePlay(); // Alias for backwards compatibility
 
 const toggleStereo = () => {
   isStereo.value = !isStereo.value;
@@ -255,8 +258,11 @@ const handleTimeUpdate = () => {
   if (video) emit('timeupdate', video.currentTime);
 };
 
-const handleLoadedMetadata = () => {
+const handleLoadedMetadata = (event?: Event) => {
   checkAspectRatioAndSetMode();
+  if (event) {
+    emit('loadedmetadata', event);
+  }
 };
 
 const initThree = () => {
@@ -471,6 +477,8 @@ defineExpose({
   initThree,
   toggleFullscreen,
   isFullscreen,
+  togglePlay,
+  togglePlayback,
 });
 </script>
 

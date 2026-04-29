@@ -180,10 +180,9 @@ describe('useSlideshow Coverage Boost', () => {
       expect(api.recordMediaView).toHaveBeenCalledTimes(1);
     });
 
-    it('resumes timer for images or if playFullVideo is false', async () => {
+    it('resumes timer for images or videos', async () => {
       const { pickAndDisplayNextMediaItem } = useSlideshow();
       mockPlayerState.isTimerRunning = true;
-      mockPlayerState.playFullVideo = true;
 
       // Image should resume timer
       mockLibraryState.globalMediaPoolForSelection = [
@@ -193,8 +192,7 @@ describe('useSlideshow Coverage Boost', () => {
       // check if interval was set
       expect(mockPlayerState.slideshowTimerId).not.toBeNull();
 
-      // Video with playFullVideo=false should resume timer
-      mockPlayerState.playFullVideo = false;
+      // Video should resume timer (pausing happens at MediaDisplay level now)
       mockLibraryState.globalMediaPoolForSelection = [
         { path: 'v.mp4', name: 'v.mp4' },
       ];
@@ -208,18 +206,27 @@ describe('useSlideshow Coverage Boost', () => {
       const { navigateMedia } = useSlideshow();
       mockPlayerState.isSlideshowActive = true;
 
+      // Mock Date.now to control the debounce time
+      const dateSpy = vi.spyOn(Date, 'now');
+      let now = 1000;
+      dateSpy.mockImplementation(() => now);
+
       // No history, no next queue
       await navigateMedia(1); // Should call pickAndDisplayNextMediaItem
 
-      // With next
+      // With next - advance time to pass the 400ms guard
+      now = 1500;
       mockPlaylistState.queue = [{ path: 'next.jpg', name: 'next.jpg' }];
       await navigateMedia(1);
       expect(mockPlaylistState.currentItem.path).toBe('next.jpg');
 
-      // With previous
+      // With previous - advance time to pass the 400ms guard
+      now = 2000;
       mockPlaylistState.history = [{ path: 'prev.jpg', name: 'prev.jpg' }];
       await navigateMedia(-1);
       expect(mockPlaylistState.currentItem.path).toBe('prev.jpg');
+
+      dateSpy.mockRestore();
 
       // Slideshow not active
       mockPlayerState.isSlideshowActive = false;
