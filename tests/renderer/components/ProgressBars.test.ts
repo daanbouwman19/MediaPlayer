@@ -72,7 +72,6 @@ describe('Progress Bars', () => {
       isTimerRunning: false,
       timerProgress: 50,
       isSlideshowActive: true,
-      playFullVideo: false,
       pauseTimerOnPlay: false,
       mainVideoElement: null,
     });

@@ -82,9 +82,9 @@ describe('MediaDisplay Combined Tests', () => {
 
     mockPlayerState = reactive({
       isSlideshowActive: false,
-      playFullVideo: false,
       isTimerRunning: false,
       mainVideoElement: null,
+      pauseTimerOnPlay: false,
     });
 
     mockPlaylistState = reactive({
@@ -184,7 +184,6 @@ describe('MediaDisplay Combined Tests', () => {
   describe('Slideshow Video Handling', () => {
     it('should navigate to next slide if video ends and timer is NOT running', async () => {
       mockPlayerState.isTimerRunning = false;
-      mockPlayerState.playFullVideo = true;
       mockPlaylistState.currentItem = { path: '/test.mp4' };
       mockMediaLoader.mediaUrl.value = 'media://test.mp4';
       mockMediaLoader.isLoading.value = false;
@@ -200,7 +199,6 @@ describe('MediaDisplay Combined Tests', () => {
 
     it('should loop video if video ends and timer IS running (short video)', async () => {
       mockPlayerState.isTimerRunning = true;
-      mockPlayerState.playFullVideo = true;
       mockPlaylistState.currentItem = { path: '/test.mp4' };
       mockMediaLoader.mediaUrl.value = 'media://test.mp4';
       mockMediaLoader.isLoading.value = false;
@@ -217,9 +215,9 @@ describe('MediaDisplay Combined Tests', () => {
       // but we know it's not calling navigateMedia which is the most important part.
     });
 
-    it('should pause timer if video duration is longer than timer duration', async () => {
+    it('should pause timer if video duration is longer than timer duration and we dont pause on play automatically', async () => {
       mockPlayerState.isTimerRunning = true;
-      mockPlayerState.playFullVideo = true;
+      mockPlayerState.pauseTimerOnPlay = false; // Add this explicitly to hit the else branch
       mockPlayerState.timerDuration = 5;
       mockPlaylistState.currentItem = { path: '/test.mp4' };
       mockMediaLoader.mediaUrl.value = 'media://test.mp4';

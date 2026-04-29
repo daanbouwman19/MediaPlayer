@@ -103,7 +103,6 @@ describe('MediaDisplay Coverage Boost', () => {
     (useLibraryStore as Mock).mockReturnValue(mockLibrary);
 
     mockPlayer = {
-      playFullVideo: ref(false),
       pauseTimerOnPlay: ref(false),
       isTimerRunning: ref(false),
       mainVideoElement: ref(null),
@@ -234,7 +233,6 @@ describe('MediaDisplay Coverage Boost', () => {
     await videoPlayer.vm.$emit('pause');
 
     // Ended
-    mockPlayer.playFullVideo.value = true;
     await videoPlayer.vm.$emit('ended');
     expect(mockSlideshow.navigateMedia).toHaveBeenCalledWith(1);
 
@@ -284,7 +282,6 @@ describe('MediaDisplay Coverage Boost', () => {
     mockPlaylist.currentItem.value = { path: 'img.jpg' };
     mockLibrary.imageExtensionsSet.value = new Set(['.jpg']);
     mockMediaLoader.mediaUrl.value = 'img-url';
-    mockPlayer.playFullVideo.value = true;
 
     mount(MediaDisplay);
     await flushPromises();

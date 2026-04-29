@@ -180,10 +180,9 @@ describe('useSlideshow Coverage Boost', () => {
       expect(api.recordMediaView).toHaveBeenCalledTimes(1);
     });
 
-    it('resumes timer for images or if playFullVideo is false', async () => {
+    it('resumes timer for images or videos', async () => {
       const { pickAndDisplayNextMediaItem } = useSlideshow();
       mockPlayerState.isTimerRunning = true;
-      mockPlayerState.playFullVideo = true;
 
       // Image should resume timer
       mockLibraryState.globalMediaPoolForSelection = [
@@ -193,8 +192,7 @@ describe('useSlideshow Coverage Boost', () => {
       // check if interval was set
       expect(mockPlayerState.slideshowTimerId).not.toBeNull();
 
-      // Video with playFullVideo=false should resume timer
-      mockPlayerState.playFullVideo = false;
+      // Video should resume timer (pausing happens at MediaDisplay level now)
       mockLibraryState.globalMediaPoolForSelection = [
         { path: 'v.mp4', name: 'v.mp4' },
       ];

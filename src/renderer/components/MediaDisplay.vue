@@ -253,8 +253,7 @@ const toast = useToast();
 
 const { imageExtensionsSet, mediaDirectories, thumbnailUrlGenerator } =
   libraryStore;
-const { playFullVideo, pauseTimerOnPlay, isTimerRunning, mainVideoElement } =
-  playerStore;
+const { pauseTimerOnPlay, isTimerRunning, mainVideoElement } = playerStore;
 const { currentItem: currentMediaItem } = playlistStore;
 const { isControlsVisible, isSourcesModalVisible, isSidebarVisible } = uiStore;
 const {
@@ -461,7 +460,7 @@ watch(
 
     if (newItem) {
       await loadMedia(newItem, (_, reqId) => tryTranscoding(0, reqId));
-      if (isImage.value && playFullVideo.value && !isTimerRunning.value) {
+      if (isImage.value && !isTimerRunning.value) {
         resumeSlideshowTimer();
       }
     } else {
@@ -470,18 +469,6 @@ watch(
   },
   { immediate: true },
 );
-
-watch(playFullVideo, (newValue) => {
-  if (newValue) {
-    pauseTimerOnPlay.value = false;
-  }
-});
-
-watch(pauseTimerOnPlay, (newValue) => {
-  if (newValue) {
-    playFullVideo.value = false;
-  }
-});
 
 const handleVideoElementUpdate = (el: HTMLVideoElement | null) => {
   videoElement.value = el;
@@ -507,12 +494,9 @@ const handleVideoEnded = () => {
         videoElement.value.currentTime = 0;
         videoElement.value.play().catch(() => {});
       }
-    } else if (playerStore.state.isSlideshowActive && playFullVideo.value) {
-      // If the video was longer than the timer, it paused the timer.
-      // We are still in a slideshow, so we should advance to the next media.
-      navigateMedia(1);
-    } else if (playFullVideo.value) {
-      // Normal single media play logic
+    } else {
+      // If the video was longer than the timer (and thus paused it), or if we're
+      // just playing a single video, advance to next.
       navigateMedia(1);
     }
   }
@@ -528,24 +512,23 @@ const handleLoadedMetadata = () => {
 };
 
 const checkAndPauseTimerIfLongVideo = () => {
-  if (isTimerRunning.value && (playFullVideo.value || pauseTimerOnPlay.value)) {
-    // If we have a ref to the component or native video element, get the duration
-    const nativeDuration = videoElement.value?.duration || 0;
-    const videoDuration = transcodedDuration.value || nativeDuration;
-
-    if (videoDuration > playerStore.state.timerDuration) {
+  if (isTimerRunning.value) {
+    if (pauseTimerOnPlay.value) {
+      // Always pause if user explicitly wants timer paused on play
       pauseSlideshowTimer();
+    } else {
+      const nativeDuration = videoElement.value?.duration || 0;
+      const videoDuration = transcodedDuration.value || nativeDuration;
+
+      if (videoDuration > playerStore.state.timerDuration) {
+        pauseSlideshowTimer();
+      }
     }
   }
 };
 
 const handleVideoPause = () => {
-  if (
-    !isTimerRunning.value &&
-    pauseTimerOnPlay.value &&
-    !playFullVideo.value &&
-    !isLoading.value
-  ) {
+  if (!isTimerRunning.value && pauseTimerOnPlay.value && !isLoading.value) {
     resumeSlideshowTimer();
   }
   isPlaying.value = false;

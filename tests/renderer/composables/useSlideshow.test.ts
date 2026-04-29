@@ -42,7 +42,6 @@ describe('useSlideshow', () => {
       slideshowTimerId: null,
       isTimerRunning: false,
       timerDuration: 30,
-      playFullVideo: true,
     });
 
     mockPlaylistState = reactive({

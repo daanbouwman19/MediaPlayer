@@ -108,7 +108,6 @@ describe('Palette Accessibility Improvements', () => {
 
     (usePlayerStore as Mock).mockReturnValue({
       ...toRefs(mockPlayerState),
-      playFullVideo: ref(false),
       pauseTimerOnPlay: ref(false),
       isTimerRunning: computed(() => mockPlayerState.isTimerRunning),
     });
