@@ -149,6 +149,7 @@ vi.mock('../../src/main/local-server.js', () => ({
 }));
 
 vi.mock('../../src/core/database', () => ({
+  isFileInLibrary: vi.fn(),
   closeDatabase: vi.fn(),
   getMediaDirectories: mocks.mockGetMediaDirectories,
 }));
@@ -212,6 +213,7 @@ describe('Main Process IPC - open-in-vlc', () => {
 
     const result = await openInVlcHandler({}, 'C:\\video.mp4');
 
+    expect(result.success).toBe(true);
     expect(result.data.success).toBe(false);
     expect(result.data.message).toContain('VLC Media Player not found');
     expect(mocks.mockSpawn).not.toHaveBeenCalled();
@@ -233,6 +235,7 @@ describe('Main Process IPC - open-in-vlc', () => {
     await vi.runAllTimersAsync();
     const result = await promise;
 
+    expect(result.success).toBe(true);
     expect(result.data.success).toBe(true);
     expect(mocks.mockSpawn).toHaveBeenCalled();
     expect(mockChild.unref).toHaveBeenCalled();
@@ -249,6 +252,7 @@ describe('Main Process IPC - open-in-vlc', () => {
     const result = await promise;
 
     expect(result.success).toBe(true);
+    expect(result.data.success).toBe(true);
     expect(mocks.mockSpawn).toHaveBeenCalledWith(
       'vlc',
       ['--', '/home/user/video.mp4'],
@@ -272,6 +276,7 @@ describe('Main Process IPC - open-in-vlc', () => {
     const result = await promise;
 
     expect(result.success).toBe(true);
+    expect(result.data.success).toBe(true);
     expect(mocks.mockSpawn).toHaveBeenCalledWith(
       '/Applications/VLC.app/Contents/MacOS/VLC',
       ['--', '/Users/video.mp4'],
@@ -291,6 +296,7 @@ describe('Main Process IPC - open-in-vlc', () => {
     const result = await promise;
 
     expect(result.success).toBe(true);
+    expect(result.data.success).toBe(true);
     expect(mocks.mockSpawn).toHaveBeenCalledWith(
       'vlc',
       ['--', '/Users/video.mp4'],
@@ -321,6 +327,7 @@ describe('Main Process IPC - open-in-vlc', () => {
 
     const result = await openInVlcHandler({}, '/home/user/video.mp4');
 
+    expect(result.success).toBe(true);
     expect(result.data.success).toBe(false);
     expect(result.data.message).toContain('Failed to launch VLC: Spawn failed');
   });

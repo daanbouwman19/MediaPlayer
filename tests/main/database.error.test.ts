@@ -67,10 +67,10 @@ describe('Database error handling (isolated)', () => {
   it('initDatabase throws when Worker constructor throws', async () => {
     // Arrange
     mocks.workerShouldThrow = true;
-    const db = await import('../../src/main/database.js');
+    const dbMain = await import('../../src/main/database.js');
 
     // Act & Assert
-    await expect(db.initDatabase()).rejects.toThrow(
+    await expect(dbMain.initDatabase()).rejects.toThrow(
       'Worker construction failed',
     );
   });
@@ -78,32 +78,34 @@ describe('Database error handling (isolated)', () => {
   describe('when worker is initialized but fails messages', () => {
     it('recordMediaView handles worker failure gracefully', async () => {
       // Arrange
-      const db = await import('../../src/main/database.js');
-      await db.initDatabase();
+      const dbMain = await import('../../src/main/database.js');
+      const dbCore = await import('../../src/core/database.js');
+      await dbMain.initDatabase();
 
       // Act & Assert
       // recordMediaView should swallow errors (not throw)
       await expect(
-        db.recordMediaView('/some/file.png'),
+        dbCore.recordMediaView('/some/file.png'),
       ).resolves.toBeUndefined();
 
       // Cleanup
-      await db.closeDatabase();
+      await dbCore.closeDatabase();
     });
 
     it('getMediaViewCounts returns empty object on worker failure', async () => {
       // Arrange
-      const db = await import('../../src/main/database.js');
-      await db.initDatabase();
+      const dbMain = await import('../../src/main/database.js');
+      const dbCore = await import('../../src/core/database.js');
+      await dbMain.initDatabase();
 
       // Act
-      const counts = await db.getMediaViewCounts(['/some/file.png']);
+      const counts = await dbCore.getMediaViewCounts(['/some/file.png']);
 
       // Assert
       expect(counts).toEqual({});
 
       // Cleanup
-      await db.closeDatabase();
+      await dbCore.closeDatabase();
     });
   });
 });

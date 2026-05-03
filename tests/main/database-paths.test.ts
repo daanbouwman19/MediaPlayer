@@ -15,6 +15,7 @@ vi.mock('electron', () => ({
 
 // Mock core database to intercept calls and avoid side effects
 vi.mock('../../src/core/database', () => ({
+  isFileInLibrary: vi.fn(),
   initDatabase: vi.fn(),
   // We don't need to re-export others for this test
 }));

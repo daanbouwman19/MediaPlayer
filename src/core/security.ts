@@ -1,7 +1,7 @@
 import fs from 'fs/promises';
 import { realpathSync } from 'fs';
 import path from 'path';
-import * as database from './database.ts';
+import { getMediaDirectories, isFileInLibrary } from './database.ts';
 import type { MediaDirectory } from './types.ts';
 import { isDrivePath } from './media-utils.ts';
 import { ConcurrencyLimiter } from './utils/concurrency-limiter.ts';
@@ -120,7 +120,7 @@ export async function filterAuthorizedPaths(
   filePaths: string[],
 ): Promise<string[]> {
   if (filePaths.length > 1) {
-    await database.getMediaDirectories();
+    await getMediaDirectories();
   }
 
   const limiter = new ConcurrencyLimiter(DISK_SCAN_CONCURRENCY);
@@ -155,28 +155,9 @@ export async function authorizeFilePath(
       }
       authCache.delete(filePath);
     }
-
-    if (
-      'isFileInLibrary' in database &&
-      database.isFileInLibrary &&
-      (await database.isFileInLibrary(filePath))
-    ) {
-      if (!isDrivePath(filePath)) {
-        const dirs = mediaDirectories || (await database.getMediaDirectories());
-        const allowedPaths = dirs.map((d) => d.path);
-
-        const localResult = await authorizeLocalPath(filePath, allowedPaths);
-        if (localResult) {
-          const result: AuthorizationResult = localResult;
-
-          cacheAuthResult(filePath, result);
-          return result;
-        }
-      }
-    }
   }
 
-  const dirs = mediaDirectories || (await database.getMediaDirectories());
+  const dirs = mediaDirectories || (await getMediaDirectories());
   const allowedPaths = dirs.map((d) => d.path);
 
   let result: AuthorizationResult;
@@ -250,16 +231,11 @@ async function authorizeVirtualPath(
   // This prevents IDOR attacks where an attacker accesses a file ID that exists in Drive
   // but is not part of the allowed/scanned folders.
   if (
-    'isFileInLibrary' in database &&
-    database.isFileInLibrary &&
-    (await database.isFileInLibrary(trimmed))
+    typeof isFileInLibrary === 'function' &&
+    (await isFileInLibrary(trimmed))
   ) {
     return { isAllowed: true, realPath: trimmed };
   }
-
-  // Fallback / Legacy check (optional, but likely ineffective for flat Drive IDs)
-  // We keep this structure in case we add other virtual providers that support hierarchy.
-  // But for now, we rely on DB presence for Drive files.
 
   return null;
 }

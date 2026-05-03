@@ -8,7 +8,6 @@ import { app } from 'electron';
 import { fileURLToPath } from 'url';
 import { initDatabase as initCoreDatabase } from '../core/database';
 import { WorkerFactory } from '../core/worker-factory.ts';
-export * from '../core/database';
 
 /**
  * Initializes the database by creating and managing a worker thread.

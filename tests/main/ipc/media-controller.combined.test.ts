@@ -14,7 +14,7 @@ import {
   recordMediaView,
   getMediaViewCounts,
   getRecentlyPlayed,
-} from '../../../src/main/database';
+} from '../../../src/core/database';
 import {
   getDriveFileMetadata,
   listDriveDirectory,
@@ -44,7 +44,8 @@ vi.mock('../../../src/main/utils/security-utils', () => ({
   filterAuthorizedPaths: vi.fn(),
 }));
 
-vi.mock('../../../src/main/database', () => ({
+vi.mock('../../../src/core/database', () => ({
+  isFileInLibrary: vi.fn(),
   recordMediaView: vi.fn(),
   getMediaViewCounts: vi.fn(),
   getRecentlyPlayed: vi.fn(),

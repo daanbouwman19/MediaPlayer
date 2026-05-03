@@ -25,18 +25,13 @@ vi.mock('../../src/main/local-server', () => ({
   getServerPort: vi.fn().mockReturnValue(0),
 }));
 
-// Mock both database locations to be safe
-// Note: We cannot use top-level variables inside vi.mock factory
-vi.mock('../../src/main/database', () => ({
+// Also mock core/database because src/core/security.ts imports directly from it
+vi.mock('../../src/core/database', () => ({
+  isFileInLibrary: vi.fn(),
   getMediaDirectories: vi.fn(),
   recordMediaView: vi.fn(),
   getMediaViewCounts: vi.fn(),
   getRecentlyPlayed: vi.fn(),
-}));
-
-// Also mock core/database because src/core/security.ts imports directly from it
-vi.mock('../../src/core/database', () => ({
-  getMediaDirectories: vi.fn(),
 }));
 
 // We need to mock other dependencies of media-controller that we aren't testing to avoid errors
@@ -53,14 +48,9 @@ describe('Media Controller IPC Handlers', () => {
     vi.clearAllMocks();
     handlers.clear();
 
-    // Setup default mock response for getMediaDirectories
-    const dbMain = await import('../../src/main/database');
     const dbCore = await import('../../src/core/database');
 
     const mockDirectories = [{ path: '/path/to', isActive: true }];
-    (dbMain.getMediaDirectories as unknown as Mock).mockResolvedValue(
-      mockDirectories,
-    );
     (dbCore.getMediaDirectories as unknown as Mock).mockResolvedValue(
       mockDirectories,
     );

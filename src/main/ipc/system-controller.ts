@@ -13,7 +13,7 @@ import {
   removeMediaDirectory,
   setDirectoryActiveState,
   getMediaDirectories,
-} from '../database';
+} from '../../core/database';
 import {
   SUPPORTED_VIDEO_EXTENSIONS,
   SUPPORTED_IMAGE_EXTENSIONS,
