@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, Mock } from 'vitest';
 import { registerSystemHandlers } from '../../../src/main/ipc/system-controller';
 import { IPC_CHANNELS } from '../../../src/shared/ipc-channels';
 import { handleIpc } from '../../../src/main/utils/ipc-helper';
-import { addMediaDirectory } from '../../../src/main/database';
+import { addMediaDirectory } from '../../../src/core/database';
 import { listDirectory } from '../../../src/core/file-system';
 import fs from 'fs/promises';
 import {
@@ -14,7 +14,8 @@ vi.mock('../../../src/main/utils/ipc-helper', () => ({
   handleIpc: vi.fn(),
 }));
 
-vi.mock('../../../src/main/database', () => ({
+vi.mock('../../../src/core/database', () => ({
+  isFileInLibrary: vi.fn(),
   addMediaDirectory: vi.fn(),
   removeMediaDirectory: vi.fn(),
   setDirectoryActiveState: vi.fn(),

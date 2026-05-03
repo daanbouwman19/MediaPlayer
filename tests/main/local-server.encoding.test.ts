@@ -13,6 +13,7 @@ import { createTestMediaService } from '../utils/test-factory';
 
 // Mock dependencies
 vi.mock('../../src/core/database', () => ({
+  isFileInLibrary: vi.fn(),
   getMediaDirectories: vi.fn(),
 }));
 

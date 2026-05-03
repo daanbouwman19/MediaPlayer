@@ -7,7 +7,7 @@ import {
   removeMediaDirectory,
   setDirectoryActiveState,
   getMediaDirectories,
-} from '../../../src/main/database';
+} from '../../../src/core/database';
 import { openMediaInVlc } from '../../../src/core/vlc-player';
 import { listDirectory } from '../../../src/core/file-system';
 import { getServerPort } from '../../../src/main/local-server';
@@ -18,7 +18,8 @@ vi.mock('../../../src/main/utils/ipc-helper', () => ({
   handleIpc: vi.fn(),
 }));
 
-vi.mock('../../../src/main/database', () => ({
+vi.mock('../../../src/core/database', () => ({
+  isFileInLibrary: vi.fn(),
   addMediaDirectory: vi.fn(),
   removeMediaDirectory: vi.fn(),
   setDirectoryActiveState: vi.fn(),

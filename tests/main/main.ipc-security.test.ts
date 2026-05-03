@@ -43,8 +43,12 @@ vi.mock('../../src/main/local-server.js', () => ({
 }));
 
 vi.mock('../../src/main/database', () => ({
-  getMediaDirectories: vi.fn(),
   initDatabase: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock('../../src/core/database', () => ({
+  isFileInLibrary: vi.fn(),
+  getMediaDirectories: vi.fn(),
   recordMediaView: vi.fn(),
   getMediaViewCounts: vi.fn(),
   upsertMetadata: vi.fn(),
@@ -141,7 +145,7 @@ describe('main.js IPC Security', () => {
 
   it('should deny record-media-view for unauthorized file', async () => {
     const unauthorizedPath = '/etc/passwd';
-    const db = await import('../../src/main/database');
+    const db = await import('../../src/core/database');
     const handler = handlers['record-media-view'];
 
     expect(handler).toBeDefined();
@@ -160,7 +164,7 @@ describe('main.js IPC Security', () => {
     (security.authorizeFilePath as unknown as Mock).mockResolvedValue({
       isAllowed: true,
     });
-    const db = await import('../../src/main/database');
+    const db = await import('../../src/core/database');
     const handler = handlers['record-media-view'];
 
     await handler(null, authorizedPath);
@@ -169,7 +173,7 @@ describe('main.js IPC Security', () => {
 
   it('should allow record-media-view for gdrive file', async () => {
     const gdrivePath = 'gdrive://12345';
-    const db = await import('../../src/main/database');
+    const db = await import('../../src/core/database');
     const handler = handlers['record-media-view'];
 
     await handler(null, gdrivePath);
@@ -184,7 +188,7 @@ describe('main.js IPC Security', () => {
       'gdrive://123',
     ]);
 
-    const db = await import('../../src/main/database');
+    const db = await import('../../src/core/database');
     const handler = handlers['get-media-view-counts'];
 
     await handler(null, paths);
@@ -199,7 +203,7 @@ describe('main.js IPC Security', () => {
 
   it('should deny db:upsert-metadata for unauthorized file', async () => {
     const unauthorizedPath = '/etc/passwd';
-    const db = await import('../../src/main/database');
+    const db = await import('../../src/core/database');
     const handler = handlers['db:upsert-metadata'];
 
     expect(handler).toBeDefined();

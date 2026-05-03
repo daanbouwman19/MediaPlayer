@@ -15,7 +15,7 @@ import {
   updateWatchedSegments,
   executeSmartPlaylist,
   getAllMetadataAndStats,
-} from '../database';
+} from '../../core/database';
 import { handleIpc } from '../utils/ipc-helper';
 
 export function registerDatabaseHandlers() {

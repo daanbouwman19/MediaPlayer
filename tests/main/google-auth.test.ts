@@ -8,6 +8,7 @@ vi.mock('../../src/main/google-secrets', () => ({
 }));
 
 vi.mock('../../src/core/database', () => ({
+  isFileInLibrary: vi.fn(),
   getSetting: vi.fn(),
   saveSetting: vi.fn(),
 }));

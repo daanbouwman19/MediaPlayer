@@ -55,6 +55,7 @@ vi.mock('../../src/main/database', () => ({
 }));
 
 vi.mock('../../src/core/database', () => ({
+  isFileInLibrary: vi.fn(),
   getMediaDirectories: vi.fn(),
   initDatabase: vi.fn(),
   recordMediaView: vi.fn(),

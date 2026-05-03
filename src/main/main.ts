@@ -17,7 +17,8 @@ const __dirname = path.dirname(__filename);
 
 log.initialize();
 
-import { initDatabase, closeDatabase } from './database';
+import { initDatabase } from './database';
+import { closeDatabase } from '../core/database';
 import { loadSecurityConfig, registerSensitiveFile } from '../core/security';
 import {
   startLocalServer,

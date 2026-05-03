@@ -112,3 +112,8 @@
 
 **Learning:** Using `.filter().map()` chains in `file-system.ts` for directory listing allocates unnecessary intermediate arrays, increasing garbage collection pressure and reducing performance, especially when reading directories with many files.
 **Action:** Replace array chains with a single `for...of` loop and a manually managed target array to iterate only once without creating intermediate data structures.
+
+## 2026-05-03 - [Circular Dependencies with Proxy Exports]
+
+**Learning:** Using `export * from './module'` or `import * as module` when there are circular dependencies causes Rollup/Vite to hoist a synthetic namespace helper (`_mergeNamespaces` or `de`) that can be accessed before it's initialized, resulting in runtime crashes like `TypeError: de is not a function`.
+**Action:** Avoid namespace imports/exports (`import * as` and `export *`) in files that might be part of a circular dependency chain. Use explicit named imports and exports to allow ESM to properly hoist and resolve function bindings dynamically.

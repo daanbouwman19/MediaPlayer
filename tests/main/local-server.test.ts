@@ -14,6 +14,7 @@ import { createTestMediaService } from '../utils/test-factory';
 
 // Mock the database module
 vi.mock('../../src/core/database', () => ({
+  isFileInLibrary: vi.fn(),
   getMediaDirectories: vi.fn(),
 }));
 

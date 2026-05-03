@@ -24,7 +24,8 @@ import { createMockElectron } from './mocks/electron';
 vi.mock('electron', () => createMockElectron());
 
 // Static import
-import * as db from '../../src/main/database';
+import * as dbMain from '../../src/main/database';
+import * as db from '../../src/core/database';
 
 describe('Database', () => {
   beforeEach(async () => {
@@ -34,7 +35,7 @@ describe('Database', () => {
     // Set a shorter timeout for tests
     db.setOperationTimeout(5000);
     // Initialize database before each test
-    await db.initDatabase();
+    await dbMain.initDatabase();
   });
 
   afterEach(async () => {
@@ -51,7 +52,7 @@ describe('Database', () => {
 
     it('should handle re-initialization', async () => {
       // Try to initialize again
-      await expect(db.initDatabase()).resolves.not.toThrow();
+      await expect(dbMain.initDatabase()).resolves.not.toThrow();
     });
   });
 
@@ -240,7 +241,7 @@ describe('Database', () => {
 
     it('should allow re-initialization after closing', async () => {
       await db.closeDatabase();
-      await expect(db.initDatabase()).resolves.not.toThrow();
+      await expect(dbMain.initDatabase()).resolves.not.toThrow();
     });
   });
 
@@ -361,7 +362,7 @@ describe('database.js additional coverage - uninitialized', () => {
 describe('Additional Function Coverage', () => {
   beforeEach(async () => {
     resetMockWorker();
-    await db.initDatabase();
+    await dbMain.initDatabase();
   });
 
   afterEach(async () => {
@@ -576,12 +577,12 @@ describe('Additional Function Coverage', () => {
       'Database worker not initialized',
     );
 
-    await db.initDatabase();
+    await dbMain.initDatabase();
   });
 
   it('sendMessageToWorker handles synchronous postMessage error', async () => {
     await db.closeDatabase();
-    await db.initDatabase();
+    await dbMain.initDatabase();
 
     mockWorkerInstance!.postMessage.mockImplementation(() => {
       throw new Error('Sync postMessage error');
@@ -603,7 +604,7 @@ describe('Additional Function Coverage', () => {
     process.env.NODE_ENV = 'development';
 
     await db.closeDatabase();
-    await db.initDatabase();
+    await dbMain.initDatabase();
 
     mockWorkerInstance!.postMessage.mockImplementation((msg: any) => {
       if (msg.type === 'close') throw new Error('Close message failed');

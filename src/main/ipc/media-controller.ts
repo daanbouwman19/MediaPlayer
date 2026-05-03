@@ -14,7 +14,7 @@ import {
   recordMediaView,
   getMediaViewCounts,
   getRecentlyPlayed,
-} from '../database';
+} from '../../core/database';
 import { MediaService } from '../../core/media-service';
 import { isDrivePath, getDriveId } from '../../core/media-utils';
 import { MediaAnalyzer } from '../../core/analysis/media-analyzer';
