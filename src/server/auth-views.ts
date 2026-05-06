@@ -29,10 +29,10 @@ function getStylesHtml(): string {
     if (fs.existsSync(indexPath)) {
       const indexHtml = fs.readFileSync(indexPath, 'utf8');
 
-      const linkRegex = /<link[^>]*rel="stylesheet"[^>]*>/gi;
+      const linkRegex = /<link[^>]*rel=['"]stylesheet['"][^>]*>/gi;
       const links = indexHtml.match(linkRegex) || [];
 
-      const preconnectRegex = /<link[^>]*rel="preconnect"[^>]*>/gi;
+      const preconnectRegex = /<link[^>]*rel=['"]preconnect['"][^>]*>/gi;
       const preconnects = indexHtml.match(preconnectRegex) || [];
 
       cachedStylesHtml = [...preconnects, ...links].join('\n');
@@ -147,17 +147,17 @@ export function getGoogleAuthSuccessPage(
           <script nonce="${nonce}">
             (function() {
               try {
-                let themeId = localStorage.getItem('themeMode') || 'dark';
+                let themeId = localStorage.getItem('themeMode') || 'system';
                 
                 if (themeId === 'system' || themeId === 'cyberpunk-auto') {
                   const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
                   themeId = themeId === 'cyberpunk-auto' ? (isDark ? 'cyberpunk-dark' : 'cyberpunk-light') : (isDark ? 'dark' : 'light');
                 }
 
-                if (themeId !== 'system' && themeId !== 'dark' && themeId !== 'light') {
-                  document.documentElement.classList.add('theme-' + themeId);
-                } else if (themeId === 'dark' || themeId === 'light') {
+                if (themeId === 'dark' || themeId === 'light') {
                   document.documentElement.classList.add(themeId);
+                } else {
+                  document.documentElement.classList.add('theme-' + themeId);
                 }
               } catch (e) {
                 console.error('Failed to apply theme:', e);
