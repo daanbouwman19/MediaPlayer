@@ -14,6 +14,8 @@ import {
   recordMediaView,
   getMediaViewCounts,
   getRecentlyPlayed,
+  listTranscodeJobs,
+  deleteTranscodeJob,
 } from '../../../src/core/database';
 import {
   getDriveFileMetadata,
@@ -49,6 +51,20 @@ vi.mock('../../../src/core/database', () => ({
   recordMediaView: vi.fn(),
   getMediaViewCounts: vi.fn(),
   getRecentlyPlayed: vi.fn(),
+  listTranscodeJobs: vi.fn().mockResolvedValue([]),
+  deleteTranscodeJob: vi.fn().mockResolvedValue(undefined),
+}));
+
+const mockTranscodeManager = vi.hoisted(() => ({
+  start: vi.fn(),
+  enqueue: vi.fn().mockResolvedValue(undefined),
+  cancel: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock('../../../src/core/transcode-queue-manager', () => ({
+  TranscodeQueueManager: {
+    getInstance: vi.fn(() => mockTranscodeManager),
+  },
 }));
 
 vi.mock('../../../src/main/google-drive-service', () => ({
@@ -402,6 +418,62 @@ describe('Media Controller Combined', () => {
           'FFmpeg not found, skipping metadata extraction',
         );
         consoleSpy.mockRestore();
+      });
+    });
+  });
+
+  describe('Transcode Job IPC Handlers (Standard FFmpeg)', () => {
+    beforeEach(async () => {
+      vi.resetModules();
+      vi.doMock('ffmpeg-static', () => ({ default: '/mock/ffmpeg' }));
+      const { registerMediaHandlers } =
+        await import('../../../src/main/ipc/media-controller');
+      registerMediaHandlers(service);
+    });
+
+    describe('TRANSCODE_JOB_ADD', () => {
+      it('enqueues each authorized path', async () => {
+        const handler = getHandler(IPC_CHANNELS.TRANSCODE_JOB_ADD);
+        (validatePathAccess as Mock).mockResolvedValue('/safe/video.mp4');
+
+        await handler({}, ['/safe/video.mp4']);
+
+        expect(validatePathAccess).toHaveBeenCalledWith('/safe/video.mp4');
+        expect(mockTranscodeManager.enqueue).toHaveBeenCalledWith(
+          '/safe/video.mp4',
+        );
+      });
+
+      it('handles empty paths array', async () => {
+        const handler = getHandler(IPC_CHANNELS.TRANSCODE_JOB_ADD);
+        await handler({}, []);
+        expect(validatePathAccess).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('TRANSCODE_JOB_LIST', () => {
+      it('returns list of transcode jobs', async () => {
+        const handler = getHandler(IPC_CHANNELS.TRANSCODE_JOB_LIST);
+        (listTranscodeJobs as Mock).mockResolvedValue([
+          { file_path: '/a.mp4', status: 'pending' },
+        ]);
+        const result = await handler();
+        expect(result).toEqual([{ file_path: '/a.mp4', status: 'pending' }]);
+      });
+    });
+
+    describe('TRANSCODE_JOB_CANCEL', () => {
+      it('cancels and deletes authorized job', async () => {
+        const handler = getHandler(IPC_CHANNELS.TRANSCODE_JOB_CANCEL);
+        (validatePathAccess as Mock).mockResolvedValue('/safe/video.mp4');
+
+        await handler({}, '/safe/video.mp4');
+
+        expect(validatePathAccess).toHaveBeenCalledWith('/safe/video.mp4');
+        expect(mockTranscodeManager.cancel).toHaveBeenCalledWith(
+          '/safe/video.mp4',
+        );
+        expect(deleteTranscodeJob).toHaveBeenCalledWith('/safe/video.mp4');
       });
     });
   });

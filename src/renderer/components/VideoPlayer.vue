@@ -22,9 +22,9 @@
       @click="togglePlay"
     />
 
-    <!-- Loading/Buffering Overlay -->
+    <!-- Loading/Buffering Overlay (TranscodingStatus handles isTranscodingLoading) -->
     <div
-      v-if="isBuffering || isTranscodingLoading"
+      v-if="isBuffering && !isTranscodingLoading"
       class="absolute inset-0 flex items-center justify-center z-20 pointer-events-none bg-black/20"
     >
       <div

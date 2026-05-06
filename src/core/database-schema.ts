@@ -51,12 +51,22 @@ export const DB_SCHEMA = {
     value TEXT,
     updated_at TEXT
   )`,
+
+  TRANSCODE_JOBS: `CREATE TABLE IF NOT EXISTS transcode_jobs (
+    file_path TEXT PRIMARY KEY,
+    file_path_hash TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    error TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+  )`,
 };
 
 export const DB_INDEXES = {
   MEDIA_METADATA_IDX_STATUS: `CREATE INDEX IF NOT EXISTS idx_media_metadata_status ON media_metadata(extraction_status)`,
   MEDIA_METADATA_IDX_FILE_PATH: `CREATE INDEX IF NOT EXISTS idx_media_metadata_file_path ON media_metadata(file_path)`,
   MEDIA_VIEWS_IDX_LAST_VIEWED: `CREATE INDEX IF NOT EXISTS idx_media_views_last_viewed ON media_views(last_viewed DESC)`,
+  TRANSCODE_JOBS_IDX_STATUS: `CREATE INDEX IF NOT EXISTS idx_transcode_jobs_status ON transcode_jobs(status)`,
 };
 
 /**

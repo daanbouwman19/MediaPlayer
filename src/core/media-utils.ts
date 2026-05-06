@@ -47,5 +47,10 @@ export function normalizeFilePath(
   if (platform === 'win32' && normalized.startsWith('/')) {
     normalized = normalized.substring(1);
   }
+  // Drive paths encoded as URL paths arrive with a leading slash (/gdrive://...)
+  // Strip it to recover the canonical gdrive:// scheme.
+  if (normalized.startsWith('/') && isDrivePath(normalized.substring(1))) {
+    normalized = normalized.substring(1);
+  }
   return normalized;
 }

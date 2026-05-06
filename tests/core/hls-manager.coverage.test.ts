@@ -249,6 +249,124 @@ describe('HlsManager Coverage Boost', () => {
     expect(mockFsStat).toHaveBeenCalledTimes(2);
   });
 
+  it('pinSession and unpinSession prevent/allow cleanup eviction', async () => {
+    const sessionId = 'pin-test';
+    (hlsManager as any).sessions.set(sessionId, {
+      id: sessionId,
+      process: null,
+      lastAccess: Date.now() - 999999,
+      outputDir: '/tmp/out/pin-test',
+      playlistPath: '/tmp/out/pin-test/playlist.m3u8',
+      status: 'complete',
+      progress: {},
+      killTimeout: null,
+    });
+
+    hlsManager.pinSession(sessionId);
+
+    // Cleanup should skip pinned session
+    await (hlsManager as any).cleanup();
+    expect((hlsManager as any).sessions.has(sessionId)).toBe(true);
+
+    // Unpin and cleanup should evict it
+    hlsManager.unpinSession(sessionId);
+    await (hlsManager as any).cleanup();
+    expect((hlsManager as any).sessions.has(sessionId)).toBe(false);
+  });
+
+  it('ensureSessionUnthrottled returns early for ACTIVE session', async () => {
+    const sessionId = 'unthrottled-active';
+    (hlsManager as any).sessions.set(sessionId, {
+      id: sessionId,
+      process: null,
+      lastAccess: Date.now(),
+      outputDir: '/tmp/out',
+      playlistPath: '/tmp/out/playlist.m3u8',
+      status: 'active',
+      progress: {},
+      killTimeout: null,
+    });
+
+    const result = await hlsManager.ensureSessionUnthrottled(
+      sessionId,
+      '/v.mp4',
+    );
+    expect(result).toBe('/tmp/out/playlist.m3u8');
+  });
+
+  it('ensureSessionUnthrottled returns early for COMPLETE session', async () => {
+    const sessionId = 'unthrottled-complete';
+    (hlsManager as any).sessions.set(sessionId, {
+      id: sessionId,
+      process: null,
+      lastAccess: Date.now(),
+      outputDir: '/tmp/out',
+      playlistPath: '/tmp/out/playlist.m3u8',
+      status: 'complete',
+      progress: {},
+      killTimeout: null,
+    });
+
+    const result = await hlsManager.ensureSessionUnthrottled(
+      sessionId,
+      '/v.mp4',
+    );
+    expect(result).toBe('/tmp/out/playlist.m3u8');
+  });
+
+  it('ensureSessionUnthrottled throws if cacheDir not set', async () => {
+    (hlsManager as any).cacheDir = null;
+    await expect(
+      hlsManager.ensureSessionUnthrottled('id', '/v.mp4'),
+    ).rejects.toThrow('HlsManager: cacheDir not set');
+  });
+
+  it('ensureSessionUnthrottled waits for pending session', async () => {
+    const sessionId = 'unthrottled-pending';
+    const mockProcess = createMockProcess();
+    mockSpawn.mockReturnValue(mockProcess);
+
+    // Start a pending session via ensureSession
+    const p1 = hlsManager.ensureSession(sessionId, '/v.mp4');
+    await vi.advanceTimersByTimeAsync(500);
+
+    // Call ensureSessionUnthrottled while pending
+    const p2 = hlsManager.ensureSessionUnthrottled(sessionId, '/v.mp4');
+    await vi.advanceTimersByTimeAsync(500);
+
+    // Resolve both
+    await Promise.all([p1, p2]);
+    expect((hlsManager as any).sessions.has(sessionId)).toBe(true);
+  });
+
+  it('ensureSessionUnthrottled starts new session when not pending or existing', async () => {
+    const sessionId = 'unthrottled-new';
+    const mockProcess = createMockProcess();
+    mockSpawn.mockReturnValue(mockProcess);
+
+    const promise = hlsManager.ensureSessionUnthrottled(sessionId, '/v.mp4');
+    await vi.advanceTimersByTimeAsync(500);
+    const result = await promise;
+
+    expect(result).toContain('playlist.m3u8');
+  });
+
+  it('FFmpeg exit with code 0 and pinned sets COMPLETE status', async () => {
+    const sessionId = 'pinned-exit';
+    const mockProcess = createMockProcess();
+    mockSpawn.mockReturnValue(mockProcess);
+
+    hlsManager.pinSession(sessionId);
+    const promise = hlsManager.ensureSession(sessionId, '/v.mp4');
+    await vi.advanceTimersByTimeAsync(500);
+
+    mockProcess.emit('exit', 0, null);
+    await promise;
+
+    const session = (hlsManager as any).sessions.get(sessionId);
+    expect(session.status).toBe('complete');
+  });
+
   it('resetInstance cleans up active processes', () => {
     const sessionId = 'reset-test';
     const mockProcess = createMockProcess();

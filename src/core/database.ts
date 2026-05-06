@@ -579,6 +579,11 @@ export {
   getRecentlyPlayed,
   filterProcessingNeeded,
   isFileInLibrary,
+  addTranscodeJob,
+  listTranscodeJobs,
+  updateTranscodeJobStatus,
+  deleteTranscodeJob,
+  getPendingTranscodeJobs,
 };
 
 /**
@@ -639,5 +644,59 @@ async function filterProcessingNeeded(filePaths: string[]): Promise<string[]> {
   } catch (error) {
     safeError('[database.js] Error filtering processing needed:', error);
     return filePaths; // Fallback to processing all if error
+  }
+}
+
+async function addTranscodeJob(filePath: string): Promise<void> {
+  try {
+    await getClient().sendMessage<void>('addTranscodeJob', { filePath });
+  } catch (error) {
+    safeError('[database.js] Error adding transcode job:', error);
+    throw error;
+  }
+}
+
+async function listTranscodeJobs(): Promise<import('./types').TranscodeJob[]> {
+  try {
+    return await getClient().sendMessage<import('./types').TranscodeJob[]>(
+      'listTranscodeJobs',
+    );
+  } catch (error) {
+    safeError('[database.js] Error listing transcode jobs:', error);
+    return [];
+  }
+}
+
+async function updateTranscodeJobStatus(
+  filePath: string,
+  status: string,
+  error: string | null,
+): Promise<void> {
+  try {
+    await getClient().sendMessage<void>('updateTranscodeJobStatus', {
+      filePath,
+      status,
+      error,
+    });
+  } catch (err) {
+    safeError('[database.js] Error updating transcode job status:', err);
+  }
+}
+
+async function deleteTranscodeJob(filePath: string): Promise<void> {
+  try {
+    await getClient().sendMessage<void>('deleteTranscodeJob', { filePath });
+  } catch (error) {
+    safeError('[database.js] Error deleting transcode job:', error);
+    throw error;
+  }
+}
+
+async function getPendingTranscodeJobs(): Promise<string[]> {
+  try {
+    return await getClient().sendMessage<string[]>('getPendingTranscodeJobs');
+  } catch (error) {
+    safeError('[database.js] Error getting pending transcode jobs:', error);
+    return [];
   }
 }

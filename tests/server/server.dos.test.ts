@@ -23,6 +23,13 @@ vi.mock('../../src/core/database', () => ({
   getRecentlyPlayed: vi.fn(),
 }));
 
+vi.mock('../../src/core/transcode-queue-manager', () => ({
+  TranscodeQueueManager: {
+    getInstance: vi.fn(() => ({ start: vi.fn(), enqueue: vi.fn() })),
+    resetInstance: vi.fn(),
+  },
+}));
+
 vi.mock('../../src/main/google-auth', () => ({
   generateAuthUrl: vi.fn(),
   authenticateWithCode: vi.fn(),

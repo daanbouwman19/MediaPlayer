@@ -245,6 +245,9 @@ export function initDatabase(dbPath: string): WorkerResult {
     migrateMediaDirectories(db);
     migrateMediaMetadata(db);
     createIndexes(db);
+    db.prepare(
+      `UPDATE transcode_jobs SET status='pending', updated_at=CURRENT_TIMESTAMP WHERE status='processing'`,
+    ).run();
 
     // Prepare statements for reuse
     statements.insertMediaView = db.prepare(
@@ -360,6 +363,21 @@ export function initDatabase(dbPath: string): WorkerResult {
       LEFT JOIN media_views v ON m.file_path_hash = v.file_path_hash
       WHERE m.file_path IS NOT NULL
     `);
+    statements.addTranscodeJob = db.prepare(
+      `INSERT OR REPLACE INTO transcode_jobs (file_path, file_path_hash, status, updated_at) VALUES (?, ?, 'pending', CURRENT_TIMESTAMP)`,
+    );
+    statements.listTranscodeJobs = db.prepare(
+      `SELECT file_path, file_path_hash, status, error, created_at, updated_at FROM transcode_jobs ORDER BY created_at DESC`,
+    );
+    statements.updateTranscodeJobStatus = db.prepare(
+      `UPDATE transcode_jobs SET status=?, error=?, updated_at=CURRENT_TIMESTAMP WHERE file_path=?`,
+    );
+    statements.deleteTranscodeJob = db.prepare(
+      `DELETE FROM transcode_jobs WHERE file_path=?`,
+    );
+    statements.getPendingTranscodeJobs = db.prepare(
+      `SELECT file_path FROM transcode_jobs WHERE status='pending' ORDER BY created_at ASC`,
+    );
 
     // Optimized batch statements
     const placeholders = Array(SQL_BATCH_SIZE).fill('?').join(',');
@@ -1185,6 +1203,63 @@ export function setDirectoryActiveState(
   }
 }
 
+export async function addTranscodeJob(filePath: string): Promise<WorkerResult> {
+  if (!db) return { success: false, error: 'Database not initialized' };
+  try {
+    const fileId = await getExistingIdOrGenerate(filePath);
+    statements.addTranscodeJob.run(filePath, fileId);
+    return { success: true };
+  } catch (error: unknown) {
+    return { success: false, error: (error as Error).message };
+  }
+}
+
+export function listTranscodeJobs(): WorkerResult {
+  if (!db) return { success: false, error: 'Database not initialized' };
+  try {
+    const rows = statements.listTranscodeJobs.all();
+    return { success: true, data: rows };
+  } catch (error: unknown) {
+    return { success: false, error: (error as Error).message };
+  }
+}
+
+export function updateTranscodeJobStatus(
+  filePath: string,
+  status: string,
+  error: string | null,
+): WorkerResult {
+  if (!db) return { success: false, error: 'Database not initialized' };
+  try {
+    statements.updateTranscodeJobStatus.run(status, error, filePath);
+    return { success: true };
+  } catch (err: unknown) {
+    return { success: false, error: (err as Error).message };
+  }
+}
+
+export function deleteTranscodeJob(filePath: string): WorkerResult {
+  if (!db) return { success: false, error: 'Database not initialized' };
+  try {
+    statements.deleteTranscodeJob.run(filePath);
+    return { success: true };
+  } catch (error: unknown) {
+    return { success: false, error: (error as Error).message };
+  }
+}
+
+export function getPendingTranscodeJobs(): WorkerResult {
+  if (!db) return { success: false, error: 'Database not initialized' };
+  try {
+    const rows = statements.getPendingTranscodeJobs.all() as {
+      file_path: string;
+    }[];
+    return { success: true, data: rows.map((r) => r.file_path) };
+  } catch (error: unknown) {
+    return { success: false, error: (error as Error).message };
+  }
+}
+
 if (parentPort) {
   /**
    * Listen for messages from the main thread.
@@ -1293,6 +1368,25 @@ if (parentPort) {
           break;
         case 'filterProcessingNeeded':
           result = await filterProcessingNeeded(payload.filePaths);
+          break;
+        case 'addTranscodeJob':
+          result = await addTranscodeJob(payload.filePath);
+          break;
+        case 'listTranscodeJobs':
+          result = listTranscodeJobs();
+          break;
+        case 'updateTranscodeJobStatus':
+          result = updateTranscodeJobStatus(
+            payload.filePath,
+            payload.status,
+            payload.error ?? null,
+          );
+          break;
+        case 'deleteTranscodeJob':
+          result = deleteTranscodeJob(payload.filePath);
+          break;
+        case 'getPendingTranscodeJobs':
+          result = getPendingTranscodeJobs();
           break;
         default:
           result = { success: false, error: `Unknown message type: ${type}` };

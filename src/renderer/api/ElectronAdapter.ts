@@ -7,6 +7,7 @@ import type {
   MediaLibraryItem,
   IpcResult,
   HeatmapData,
+  TranscodeJob,
 } from '../../core/types';
 import type { FileSystemEntry } from '../../core/file-system';
 
@@ -277,5 +278,17 @@ export class ElectronAdapter implements IMediaBackend {
 
   async getGoogleDriveParent(folderId: string): Promise<string | null> {
     return this.invoke(this.bridge.getGoogleDriveParent(folderId));
+  }
+
+  async addTranscodeJobs(paths: string[]): Promise<void> {
+    return this.invoke(this.bridge.addTranscodeJobs(paths));
+  }
+
+  async listTranscodeJobs(): Promise<TranscodeJob[]> {
+    return this.invoke(this.bridge.listTranscodeJobs());
+  }
+
+  async cancelTranscodeJob(path: string): Promise<void> {
+    return this.invoke(this.bridge.cancelTranscodeJob(path));
   }
 }

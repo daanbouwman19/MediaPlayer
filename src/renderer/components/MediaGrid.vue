@@ -7,12 +7,44 @@
     >
       <h2 class="text-lg font-semibold text-color">Grid View</h2>
       <button
-        class="text-sm bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-50"
+        class="text-sm bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-red-500"
         title="Close Grid View"
         aria-label="Close Grid View"
         @click="closeGrid"
       >
         Close
+      </button>
+    </div>
+
+    <!-- Selection action bar — only visible when items are selected -->
+    <div
+      v-if="selectedPaths.size > 0"
+      class="flex items-center gap-2 px-3 py-2 bg-black/10 border-b border-white/10 shrink-0"
+    >
+      <span class="text-sm text-muted grow"
+        >{{ selectedPaths.size }} selected</span
+      >
+      <button
+        v-if="selectedHaveTranscode"
+        class="glass-button text-sm px-3 py-1.5 rounded text-red-400 hover:bg-red-400/10 transition-colors duration-200"
+        title="Remove pre-transcoded HLS for selected files"
+        @click="handleClearTranscode"
+      >
+        Clear HLS
+      </button>
+      <button
+        class="glass-button-primary text-sm px-3 py-1.5 rounded"
+        title="Pre-transcode selected files"
+        @click="handlePreTranscode"
+      >
+        Pre-transcode
+      </button>
+      <button
+        class="glass-button text-sm px-3 py-1.5 rounded text-muted"
+        title="Clear selection"
+        @click="clearSelection"
+      >
+        Deselect
       </button>
     </div>
 
@@ -54,9 +86,23 @@
                 :media-url-generator="mediaUrlGenerator"
                 :thumbnail-url-generator="thumbnailUrlGenerator"
                 :failed-image-paths="failedImagePaths"
+                :is-selected="
+                  selectedPaths.has(
+                    allMediaFiles[(row as GridRow).startIndex + i - 1].path,
+                  )
+                "
+                :transcode-status="
+                  jobStatusMap.get(
+                    allMediaFiles[(row as GridRow).startIndex + i - 1].path,
+                  )
+                "
                 @click="
-                  (item) =>
-                    handleItemClick(item, (row as GridRow).startIndex + i - 1)
+                  (item, event) =>
+                    handleItemClick(
+                      item,
+                      (row as GridRow).startIndex + i - 1,
+                      event,
+                    )
                 "
               />
             </template>
@@ -86,6 +132,7 @@ import { useLibraryStore } from '../composables/useLibraryStore';
 import { usePlayerStore } from '../composables/usePlayerStore';
 import { usePlaylistStore } from '../composables/usePlaylistStore';
 import { useUIStore } from '../composables/useUIStore';
+import { useTranscodeQueue } from '../composables/useTranscodeQueue';
 import type { MediaFile } from '../../core/types';
 import MediaGridItem from './MediaGridItem.vue';
 import VirtualScroller from './VirtualScroller.vue';
@@ -161,6 +208,17 @@ const gridStyle = computed(() => ({
 }));
 
 const failedImagePaths = reactive(new Set<string>());
+const selectedPaths = ref<Set<string>>(new Set());
+const lastClickedIndex = ref<number>(-1);
+const { jobStatusMap, startPolling, stopPolling, addJobs, cancelJob } =
+  useTranscodeQueue();
+
+const selectedHaveTranscode = computed(() => {
+  for (const path of selectedPaths.value) {
+    if (jobStatusMap.value.has(path)) return true;
+  }
+  return false;
+});
 
 // Chunk items into rows for the scroller
 const chunkedItems = computed<GridRow[]>(() => {
@@ -205,6 +263,7 @@ const setupResizeObserver = () => {
 onMounted(() => {
   // Initial setup attempt
   setupResizeObserver();
+  startPolling();
 });
 
 // Watch for the container appearing (e.g. when items are loaded)
@@ -220,18 +279,50 @@ onUnmounted(() => {
   if (resizeFrame) {
     cancelAnimationFrame(resizeFrame);
   }
+  stopPolling();
 });
 
 /**
  * Handlers for interactions
  */
-const handleItemClick = async (item: MediaFile, index: number) => {
-  if (failedImagePaths.has(item.path)) {
-    // Optional: Prevent clicking broken images or let it handle error in player?
-    // For now, let's allow trying to play/view it, maybe player handles it.
+const handleItemClick = async (
+  item: MediaFile,
+  index: number,
+  event: MouseEvent,
+) => {
+  const isModifier = event.ctrlKey || event.metaKey;
+  const isShift = event.shiftKey;
+
+  if (isModifier) {
+    // Toggle selection
+    const next = new Set(selectedPaths.value);
+    if (next.has(item.path)) {
+      next.delete(item.path);
+    } else {
+      next.add(item.path);
+      lastClickedIndex.value = index;
+    }
+    selectedPaths.value = next;
+    return;
   }
 
-  // When clicking an item, we replace the queue
+  if (isShift && lastClickedIndex.value >= 0) {
+    // Range select
+    const lo = Math.min(lastClickedIndex.value, index);
+    const hi = Math.max(lastClickedIndex.value, index);
+    const next = new Set(selectedPaths.value);
+    const items = allMediaFiles.value;
+    for (let i = lo; i <= hi; i++) {
+      if (items[i]) next.add(items[i].path);
+    }
+    selectedPaths.value = next;
+    return;
+  }
+
+  // Plain click: clear selection and play
+  selectedPaths.value = new Set();
+  lastClickedIndex.value = index;
+
   const mediaList = toRaw(allMediaFiles.value).slice();
   playlistStore.setQueue(mediaList.slice(index + 1));
   playlistStore.playNext(item);
@@ -239,6 +330,24 @@ const handleItemClick = async (item: MediaFile, index: number) => {
   uiStore.state.viewMode = 'player';
   playerStore.state.isSlideshowActive = true;
   playerStore.state.isTimerRunning = false;
+};
+
+const handlePreTranscode = async () => {
+  const paths = [...selectedPaths.value];
+  selectedPaths.value = new Set();
+  await addJobs(paths);
+};
+
+const handleClearTranscode = async () => {
+  const paths = [...selectedPaths.value].filter((p) =>
+    jobStatusMap.value.has(p),
+  );
+  selectedPaths.value = new Set();
+  await Promise.all(paths.map((p) => cancelJob(p)));
+};
+
+const clearSelection = () => {
+  selectedPaths.value = new Set();
 };
 
 const closeGrid = () => {

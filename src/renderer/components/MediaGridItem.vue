@@ -4,7 +4,7 @@
     class="relative group grid-item cursor-pointer w-full h-full text-left bg-transparent border-0 p-0 block focus:outline-none focus:ring-2 focus:ring-accent rounded overflow-hidden"
     :aria-label="ariaLabel"
     :title="displayName"
-    @click="$emit('click', item)"
+    @click="$emit('click', item, $event)"
     @mouseenter="handleMouseEnter"
     @mouseleave="handleMouseLeave"
     @focus="handleMouseEnter"
@@ -107,12 +107,90 @@
         {{ displayName }}
       </p>
     </div>
+    <!-- Selection overlay — stable border, no box-shadow flicker -->
+    <div
+      v-if="isSelected"
+      class="absolute inset-0 rounded border-2 border-accent pointer-events-none z-20"
+      aria-hidden="true"
+    />
+    <!-- Transcode status badge -->
+    <div
+      v-if="transcodeStatus"
+      class="absolute bottom-2 right-2 flex items-center gap-1 px-1.5 py-0.5 rounded text-white text-[10px] font-semibold leading-none pointer-events-none"
+      :class="{
+        'bg-gray-600/90': transcodeStatus === 'pending',
+        'bg-blue-600/90': transcodeStatus === 'processing',
+        'bg-green-600/90': transcodeStatus === 'done',
+        'bg-red-600/90': transcodeStatus === 'failed',
+      }"
+      :title="`Transcode: ${transcodeStatus}`"
+    >
+      <svg
+        v-if="transcodeStatus === 'pending'"
+        class="w-2.5 h-2.5 shrink-0"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        stroke-width="2.5"
+      >
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+        />
+      </svg>
+      <svg
+        v-else-if="transcodeStatus === 'processing'"
+        class="w-2.5 h-2.5 shrink-0 animate-spin"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        stroke-width="2.5"
+      >
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+        />
+      </svg>
+      <svg
+        v-else-if="transcodeStatus === 'done'"
+        class="w-2.5 h-2.5 shrink-0"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        stroke-width="2.5"
+      >
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          d="M5 13l4 4L19 7"
+        />
+      </svg>
+      <svg
+        v-else-if="transcodeStatus === 'failed'"
+        class="w-2.5 h-2.5 shrink-0"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        stroke-width="2.5"
+      >
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          d="M6 18L18 6M6 6l12 12"
+        />
+      </svg>
+      <span>{{
+        transcodeStatus === 'processing' ? 'HLS' : transcodeStatus
+      }}</span>
+    </div>
   </button>
 </template>
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
-import type { MediaFile } from '../../core/types';
+import type { MediaFile, TranscodeJob } from '../../core/types';
 import {
   getDisplayName,
   isMediaFileImage,
@@ -130,10 +208,12 @@ const props = defineProps<{
   mediaUrlGenerator: ((path: string) => string) | null;
   thumbnailUrlGenerator: ((path: string) => string) | null;
   failedImagePaths: Set<string>;
+  isSelected?: boolean;
+  transcodeStatus?: TranscodeJob['status'];
 }>();
 
 defineEmits<{
-  (e: 'click', item: MediaFile): void;
+  (e: 'click', item: MediaFile, event: MouseEvent): void;
   (e: 'image-error', item: MediaFile): void;
 }>();
 
@@ -267,7 +347,7 @@ const shouldPlayPreview = computed(() => isHovered.value && isVideo.value);
 <style scoped>
 .grid-item {
   /* Enable GPU acceleration */
-  will-change: border-color;
+  will-change: transform;
   transform: translateZ(0);
 
   /* Optimize rendering */

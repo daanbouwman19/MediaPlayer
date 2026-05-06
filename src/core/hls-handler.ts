@@ -81,9 +81,7 @@ export async function serveHlsPlaylist(
     const fileQuery = getQueryParam(req.query, 'file');
     const encodedFile = encodeURIComponent(fileQuery || '');
 
-    // Simple regex replace
-    // Use a more robust regex that handles potential variations in segment naming
-    const segmentRegex = /(segment_\d+\.ts)/g;
+    const segmentRegex = /(seg-\d+\.ts)/g;
     playlistContent = playlistContent.replace(
       segmentRegex,
       `$1?file=${encodedFile}`,
@@ -113,7 +111,7 @@ export async function serveHlsSegment(
   if (!authorizedPath) return;
 
   // Security check: segmentName must match the expected pattern strictly
-  if (!/^segment_\d+\.ts$/.test(segmentName)) {
+  if (!/^seg-\d+\.ts$/.test(segmentName)) {
     res.status(400).send('Invalid segment name');
     return;
   }
