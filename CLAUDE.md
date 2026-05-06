@@ -45,6 +45,7 @@ src/
 **Dual-mode API abstraction** — The renderer never calls Electron IPC or HTTP directly. `src/renderer/api/ElectronAdapter.ts` and `WebAdapter.ts` implement the same interface; the correct one is injected at runtime. This is the mechanism that lets the Vue UI work in both modes without branching.
 
 **Core layer** — `src/core/` contains all business logic and is imported by both `src/main/` and `src/server/`. It does not import from either. Notable subsystems:
+
 - `media-service.ts` / `media-handler.ts` — orchestrate scanning, streaming, and transcoding
 - `hls-handler.ts` / `hls-manager.ts` — FFmpeg-based HLS transcoding and session management
 - `database.ts` + `database-worker.ts` — SQLite (better-sqlite3) with WAL mode; queries centralized in `repositories/media-repository.ts`

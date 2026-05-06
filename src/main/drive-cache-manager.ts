@@ -11,12 +11,15 @@ class DriveCacheManager extends EventEmitter {
   private cacheDir: string;
   private activeDownloads: Map<string, Promise<string>>;
   private metadataCache: Map<string, { size: number; mimeType: string }>;
+  private accessOrder: Map<string, number>;
+  private readonly MAX_CACHE_BYTES = 5 * 1024 ** 3; // 5 GB
 
   constructor(cacheDir: string) {
     super();
     this.cacheDir = cacheDir;
     this.activeDownloads = new Map();
     this.metadataCache = new Map();
+    this.accessOrder = new Map();
     this.ensureCacheDir();
   }
 
@@ -57,6 +60,8 @@ class DriveCacheManager extends EventEmitter {
       }
     }
 
+    this.accessOrder.set(fileId, Date.now());
+
     let stats: fs.Stats | null = null;
     try {
       stats = await fsPromises.stat(filePath);
@@ -72,12 +77,14 @@ class DriveCacheManager extends EventEmitter {
     }
 
     if (stats) {
-      // If active download is running, we trust it.
-      // If no active download and size < totalSize, maybe resume?
+      // Register the resume promise in activeDownloads to prevent concurrent resume races
       if (!this.activeDownloads.has(fileId) && stats.size < metadata.size) {
-        this.startDownload(fileId, filePath, stats.size).catch((err) =>
-          console.error('[DriveCache] Download failed:', fileId, err),
-        );
+        const resumePromise = this.startDownload(fileId, filePath, stats.size);
+        this.activeDownloads.set(fileId, resumePromise);
+        resumePromise.catch((err) => {
+          this.activeDownloads.delete(fileId);
+          console.error('[DriveCache] Download failed:', fileId, err);
+        });
       }
 
       return {
@@ -91,7 +98,6 @@ class DriveCacheManager extends EventEmitter {
     if (!this.activeDownloads.has(fileId)) {
       const downloadPromise = this.startDownload(fileId, filePath, 0);
       this.activeDownloads.set(fileId, downloadPromise);
-      // Wait for it to be ready
       try {
         await downloadPromise;
       } catch (e) {
@@ -103,7 +109,6 @@ class DriveCacheManager extends EventEmitter {
       try {
         await this.activeDownloads.get(fileId);
       } catch (e) {
-        // Ignore error if specific download failed, maybe retry?
         console.warn(
           '[DriveCache] Existing download errored, trying to proceed anyway:',
           fileId,
@@ -126,23 +131,15 @@ class DriveCacheManager extends EventEmitter {
   ): Promise<string> {
     const flags = startByte > 0 ? 'a' : 'w';
 
-    // 1. Get the stream (async)
     const stream = await getDriveFileStream(fileId, { start: startByte });
-
-    // 2. Create the file (sync-ish, but ensuring it exists for readers)
     const fileStream = fs.createWriteStream(filePath, { flags });
-
-    // 3. Pipe setup
     stream.pipe(fileStream);
 
     return new Promise((resolve, reject) => {
-      // Resolve AS SOON AS the stream is ready/writing, so we can return the path to the player.
-      // The player needs the file to exist.
       fileStream.on('ready', () => {
         resolve(filePath);
       });
 
-      // Also handle early errors (e.g. permission)
       fileStream.on('error', (err) => {
         console.error('[DriveCache] File write error for %s:', fileId, err);
         this.activeDownloads.delete(fileId);
@@ -153,19 +150,86 @@ class DriveCacheManager extends EventEmitter {
         console.error('[DriveCache] Drive Stream error for %s:', fileId, err);
         fileStream.close();
         this.activeDownloads.delete(fileId);
-        // We don't reject here because we already resolved 'ready'.
-        // The player will just hit EOF if the stream dies.
+        // Delete the partial/corrupt file so the next request triggers a fresh download
+        fsPromises.unlink(filePath).catch((unlinkErr) => {
+          if ((unlinkErr as NodeJS.ErrnoException).code !== 'ENOENT') {
+            console.error(
+              '[DriveCache] Failed to delete corrupt file %s:',
+              fileId,
+              unlinkErr,
+            );
+          }
+        });
+        this.metadataCache.delete(fileId);
+        this.accessOrder.delete(fileId);
       });
 
       fileStream.on('finish', () => {
         this.activeDownloads.delete(fileId);
+        void this.enforceEviction();
       });
     });
   }
 
-  // Cleanup hook
+  private async enforceEviction(): Promise<void> {
+    let entries: string[];
+    try {
+      entries = await fsPromises.readdir(this.cacheDir);
+    } catch {
+      return;
+    }
+
+    const fileInfos: { fileId: string; size: number; lastAccess: number }[] =
+      [];
+    let totalSize = 0;
+
+    for (const entry of entries) {
+      try {
+        const entryPath = path.join(this.cacheDir, entry);
+        const stat = await fsPromises.stat(entryPath);
+        const lastAccess = this.accessOrder.get(entry) ?? stat.mtimeMs;
+        fileInfos.push({ fileId: entry, size: stat.size, lastAccess });
+        totalSize += stat.size;
+      } catch {
+        // Skip entries that can't be statted
+      }
+    }
+
+    if (totalSize <= this.MAX_CACHE_BYTES) return;
+
+    // Sort LRU first
+    fileInfos.sort((a, b) => a.lastAccess - b.lastAccess);
+
+    for (const { fileId, size } of fileInfos) {
+      if (totalSize <= this.MAX_CACHE_BYTES) break;
+      if (this.activeDownloads.has(fileId)) continue;
+
+      try {
+        await fsPromises.unlink(path.join(this.cacheDir, fileId));
+        this.metadataCache.delete(fileId);
+        this.accessOrder.delete(fileId);
+        totalSize -= size;
+        console.log('[DriveCache] Evicted %s (%d bytes)', fileId, size);
+      } catch (err) {
+        console.error('[DriveCache] Failed to evict %s:', fileId, err);
+      }
+    }
+  }
+
+  public async invalidateFile(fileId: string): Promise<void> {
+    this.metadataCache.delete(fileId);
+    this.accessOrder.delete(fileId);
+    const filePath = path.join(this.cacheDir, fileId);
+    try {
+      await fsPromises.unlink(filePath);
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+        console.error('[DriveCache] Failed to invalidate %s:', fileId, err);
+      }
+    }
+  }
+
   public cleanup() {
-    // Remove all files in temp dir?
     try {
       fs.rmSync(this.cacheDir, { recursive: true, force: true });
       console.log('[DriveCache] Cache cleared.');
