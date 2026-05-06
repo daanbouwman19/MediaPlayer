@@ -384,6 +384,53 @@ describe('DriveCacheManager', () => {
     expect(r1.path).toBe(r2.path);
   });
 
+  it('eviction guard prevents concurrent runs when multiple downloads finish together', async () => {
+    const driveService = await import('../../src/main/google-drive-service');
+    vi.mocked(driveService.getDriveFileMetadata).mockResolvedValue({
+      size: '100',
+      mimeType: 'video/mp4',
+    } as any);
+    vi.mocked(driveService.getDriveFileStream).mockResolvedValue({
+      pipe: vi.fn(),
+      on: vi.fn(),
+    } as any);
+
+    // Block readdir so the first eviction stays in-flight while the second fires
+    let unblockReaddir!: () => void;
+    vi.mocked(fs.promises.readdir).mockReturnValueOnce(
+      new Promise<string[]>((resolve) => {
+        unblockReaddir = () => resolve([]);
+      }) as any,
+    );
+
+    const writeStream1 = new EventEmitter();
+    const writeStream2 = new EventEmitter();
+    let streamCount = 0;
+    vi.mocked(fs.createWriteStream).mockImplementation(() => {
+      const ws = streamCount++ === 0 ? writeStream1 : writeStream2;
+      setTimeout(() => ws.emit('ready'), 0);
+      return ws as any;
+    });
+
+    const p1 = driveCacheManager.getCachedFilePath('guard-1');
+    const p2 = driveCacheManager.getCachedFilePath('guard-2');
+    await p1;
+    await p2;
+
+    // Both finish events fire synchronously — first sets evictionRunning=true,
+    // second sees the flag and returns immediately.
+    writeStream1.emit('finish');
+    writeStream2.emit('finish');
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    // readdir called exactly once; second eviction was a no-op
+    expect(fs.promises.readdir).toHaveBeenCalledTimes(1);
+
+    unblockReaddir();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+
   it('evicts LRU files when cache exceeds limit', async () => {
     const fileId = 'new-file';
     const threeGB = 3 * 1024 ** 3;

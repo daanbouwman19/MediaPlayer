@@ -12,6 +12,7 @@ class DriveCacheManager extends EventEmitter {
   private activeDownloads: Map<string, Promise<string>>;
   private metadataCache: Map<string, { size: number; mimeType: string }>;
   private accessOrder: Map<string, number>;
+  private evictionRunning = false;
   private readonly MAX_CACHE_BYTES = 5 * 1024 ** 3; // 5 GB
 
   constructor(cacheDir: string) {
@@ -172,47 +173,60 @@ class DriveCacheManager extends EventEmitter {
   }
 
   private async enforceEviction(): Promise<void> {
-    let entries: string[];
+    // Guard: skip if an eviction pass is already in progress. The next
+    // completed download will trigger another check.
+    if (this.evictionRunning) return;
+    this.evictionRunning = true;
     try {
-      entries = await fsPromises.readdir(this.cacheDir);
-    } catch {
-      return;
-    }
-
-    const fileInfos: { fileId: string; size: number; lastAccess: number }[] =
-      [];
-    let totalSize = 0;
-
-    for (const entry of entries) {
+      let entries: string[];
       try {
-        const entryPath = path.join(this.cacheDir, entry);
-        const stat = await fsPromises.stat(entryPath);
-        const lastAccess = this.accessOrder.get(entry) ?? stat.mtimeMs;
-        fileInfos.push({ fileId: entry, size: stat.size, lastAccess });
-        totalSize += stat.size;
+        entries = await fsPromises.readdir(this.cacheDir);
       } catch {
-        // Skip entries that can't be statted
+        return;
       }
-    }
 
-    if (totalSize <= this.MAX_CACHE_BYTES) return;
+      // Stat all entries in parallel instead of sequentially
+      const results = await Promise.all(
+        entries.map(async (entry) => {
+          try {
+            const stat = await fsPromises.stat(path.join(this.cacheDir, entry));
+            return {
+              fileId: entry,
+              size: stat.size,
+              lastAccess: this.accessOrder.get(entry) ?? stat.mtimeMs,
+            };
+          } catch {
+            return null;
+          }
+        }),
+      );
 
-    // Sort LRU first
-    fileInfos.sort((a, b) => a.lastAccess - b.lastAccess);
+      const fileInfos = results.filter(
+        (r): r is { fileId: string; size: number; lastAccess: number } =>
+          r !== null,
+      );
+      let totalSize = fileInfos.reduce((sum, f) => sum + f.size, 0);
 
-    for (const { fileId, size } of fileInfos) {
-      if (totalSize <= this.MAX_CACHE_BYTES) break;
-      if (this.activeDownloads.has(fileId)) continue;
+      if (totalSize <= this.MAX_CACHE_BYTES) return;
 
-      try {
-        await fsPromises.unlink(path.join(this.cacheDir, fileId));
-        this.metadataCache.delete(fileId);
-        this.accessOrder.delete(fileId);
-        totalSize -= size;
-        console.log('[DriveCache] Evicted %s (%d bytes)', fileId, size);
-      } catch (err) {
-        console.error('[DriveCache] Failed to evict %s:', fileId, err);
+      fileInfos.sort((a, b) => a.lastAccess - b.lastAccess);
+
+      for (const { fileId, size } of fileInfos) {
+        if (totalSize <= this.MAX_CACHE_BYTES) break;
+        if (this.activeDownloads.has(fileId)) continue;
+
+        try {
+          await fsPromises.unlink(path.join(this.cacheDir, fileId));
+          this.metadataCache.delete(fileId);
+          this.accessOrder.delete(fileId);
+          totalSize -= size;
+          console.log('[DriveCache] Evicted %s (%d bytes)', fileId, size);
+        } catch (err) {
+          console.error('[DriveCache] Failed to evict %s:', fileId, err);
+        }
       }
+    } finally {
+      this.evictionRunning = false;
     }
   }
 
