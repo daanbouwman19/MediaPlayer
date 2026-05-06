@@ -18,7 +18,7 @@ Welcome to the Mediaplayer App project. This file provides critical context, gui
   - Runs formatting (`npm run format`), linting (`npm run lint`), type checking (`npm run typecheck`), and unit tests with coverage (`npm run test:coverage`).
 - **Development (Web)**: `npm run web:dev` (runs on `https://localhost:5173/`)
 - **Development (Electron)**: `npm run electron:dev`
-- **Testing (E2E)**: `pnpm exec playwright install` (if missing), then `npm run test:e2e`. Update snapshots with `pnpm exec playwright test --update-snapshots`.
+- **Testing (E2E)**: `npx playwright install` (if missing), then `npm run test:e2e`. Update snapshots with `npx playwright test --update-snapshots`.
 
 ## 3. Best Practices & Performance
 
@@ -30,7 +30,7 @@ Welcome to the Mediaplayer App project. This file provides critical context, gui
 ## 4. Accessibility (A11y) & UX
 
 - **Modals**: All modal dialogs (`role="dialog"`) must be explicitly labelled using `aria-labelledby` pointing to their heading, or an `aria-label` if no visible heading exists.
-- **Passwords**: Always add `autocomplete='current-password'` to password inputs.
+- **Passwords**: Always add `autocomplete="current-password"` to password inputs.
 - **Focus**: Define `:focus-visible` states explicitly for interactive elements when updating or creating reusable CSS utility classes.
 
 ## 5. Testing Guidelines
