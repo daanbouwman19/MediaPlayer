@@ -292,21 +292,24 @@ describe('MediaGridItem.vue', () => {
     expect(wrapper.find('img').exists()).toBe(true);
   });
 
-  it('applies ring class when isSelected is true', () => {
+  it('shows selection overlay when isSelected is true', () => {
     const item = { path: 'test.jpg', name: 'test.jpg', rating: 0, duration: 0 };
     const wrapper = mount(MediaGridItem, {
       props: { ...defaultProps, item, isSelected: true },
     });
-    expect(wrapper.find('button').classes()).toContain('ring-2');
-    expect(wrapper.find('button').classes()).toContain('ring-accent');
+    const overlay = wrapper.find('[aria-hidden="true"].border-accent');
+    expect(overlay.exists()).toBe(true);
+    expect(overlay.classes()).toContain('border-2');
   });
 
-  it('does not apply ring class when isSelected is false', () => {
+  it('does not show selection overlay when isSelected is false', () => {
     const item = { path: 'test.jpg', name: 'test.jpg', rating: 0, duration: 0 };
     const wrapper = mount(MediaGridItem, {
       props: { ...defaultProps, item, isSelected: false },
     });
-    expect(wrapper.find('button').classes()).not.toContain('ring-2');
+    expect(wrapper.find('[aria-hidden="true"].border-accent').exists()).toBe(
+      false,
+    );
   });
 
   it('shows transcode badge for pending status', () => {

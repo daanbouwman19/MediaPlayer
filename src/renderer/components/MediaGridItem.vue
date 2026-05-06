@@ -2,7 +2,6 @@
   <button
     type="button"
     class="relative group grid-item cursor-pointer w-full h-full text-left bg-transparent border-0 p-0 block focus:outline-none focus:ring-2 focus:ring-accent rounded overflow-hidden"
-    :class="{ 'ring-2 ring-inset ring-accent': isSelected }"
     :aria-label="ariaLabel"
     :title="displayName"
     @click="$emit('click', item, $event)"
@@ -108,6 +107,12 @@
         {{ displayName }}
       </p>
     </div>
+    <!-- Selection overlay — stable border, no box-shadow flicker -->
+    <div
+      v-if="isSelected"
+      class="absolute inset-0 rounded border-2 border-accent pointer-events-none z-20"
+      aria-hidden="true"
+    />
     <!-- Transcode status badge -->
     <div
       v-if="transcodeStatus"
@@ -342,7 +347,7 @@ const shouldPlayPreview = computed(() => isHovered.value && isVideo.value);
 <style scoped>
 .grid-item {
   /* Enable GPU acceleration */
-  will-change: border-color;
+  will-change: transform;
   transform: translateZ(0);
 
   /* Optimize rendering */

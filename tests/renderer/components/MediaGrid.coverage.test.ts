@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
-import { reactive, nextTick, toRefs } from 'vue';
+import { reactive, ref, nextTick, toRefs } from 'vue';
 import MediaGrid from '../../../src/renderer/components/MediaGrid.vue';
 import { api } from '../../../src/renderer/api';
 import { useLibraryStore } from '../../../src/renderer/composables/useLibraryStore';
@@ -37,6 +37,7 @@ describe('MediaGrid.vue Coverage', () => {
   let mockPlayerState: any;
   let mockUIState: any;
   let mockAddJobs: any;
+  let mockCancelJob: any;
   let mockStartPolling: any;
   let mockStopPolling: any;
 
@@ -72,6 +73,7 @@ describe('MediaGrid.vue Coverage', () => {
     mockStartPolling = vi.fn();
     mockStopPolling = vi.fn();
     mockAddJobs = vi.fn().mockResolvedValue(undefined);
+    mockCancelJob = vi.fn().mockResolvedValue(undefined);
 
     (useLibraryStore as Mock).mockReturnValue({
       state: mockLibraryState,
@@ -96,10 +98,11 @@ describe('MediaGrid.vue Coverage', () => {
     });
 
     (useTranscodeQueue as Mock).mockReturnValue({
-      jobStatusMap: new Map(),
+      jobStatusMap: ref(new Map()),
       startPolling: mockStartPolling,
       stopPolling: mockStopPolling,
       addJobs: mockAddJobs,
+      cancelJob: mockCancelJob,
     });
 
     (api.getMediaUrlGenerator as any).mockResolvedValue(
@@ -623,6 +626,55 @@ describe('MediaGrid.vue Coverage', () => {
     await wrapper.find('[title="Clear selection"]').trigger('click');
     await wrapper.vm.$nextTick();
     expect(wrapper.find('[title="Clear selection"]').exists()).toBe(false);
+  });
+
+  it('clear HLS button calls cancelJob for items with transcode jobs', async () => {
+    const item = { name: 'vid.mp4', path: '/vid.mp4', viewCount: 0 };
+    mockUIState.gridMediaFiles = [item];
+    const jobStatusMap = ref(new Map([['/vid.mp4', 'done']]));
+    (useTranscodeQueue as Mock).mockReturnValue({
+      jobStatusMap,
+      startPolling: mockStartPolling,
+      stopPolling: mockStopPolling,
+      addJobs: mockAddJobs,
+      cancelJob: mockCancelJob,
+    });
+
+    const wrapper = mountGrid();
+    await flushPromises();
+
+    const calls = (ResizeObserverMock as any).mock.calls;
+    for (const call of calls) {
+      call[0]([
+        {
+          contentRect: { width: 1000, height: 800 },
+          contentBoxSize: [{ inlineSize: 1000 }],
+        },
+      ]);
+    }
+    await wrapper.vm.$nextTick();
+
+    // Select an item
+    await wrapper.find('button.grid-item').trigger('click', { ctrlKey: true });
+    await wrapper.vm.$nextTick();
+    expect(wrapper.text()).toContain('1 selected');
+
+    // "Clear HLS" button should be visible since the item has a transcode job
+    const clearHlsBtn = wrapper.find(
+      '[title="Remove pre-transcoded HLS for selected files"]',
+    );
+    expect(clearHlsBtn.exists()).toBe(true);
+
+    await clearHlsBtn.trigger('click');
+    await flushPromises();
+
+    expect(mockCancelJob).toHaveBeenCalledWith('/vid.mp4');
+    // Selection should be cleared
+    expect(
+      wrapper
+        .find('[title="Remove pre-transcoded HLS for selected files"]')
+        .exists(),
+    ).toBe(false);
   });
 
   it('plain click after ctrl+click clears selection and navigates', async () => {

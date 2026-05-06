@@ -25,18 +25,26 @@
         >{{ selectedPaths.size }} selected</span
       >
       <button
-        class="text-sm bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        v-if="selectedHaveTranscode"
+        class="glass-button text-sm px-3 py-1.5 rounded text-red-400 hover:bg-red-400/10 transition-colors duration-200"
+        title="Remove pre-transcoded HLS for selected files"
+        @click="handleClearTranscode"
+      >
+        Clear HLS
+      </button>
+      <button
+        class="glass-button-primary text-sm px-3 py-1.5 rounded"
         title="Pre-transcode selected files"
         @click="handlePreTranscode"
       >
         Pre-transcode
       </button>
       <button
-        class="text-sm text-muted hover:text-accent px-2 py-1.5 rounded transition-colors duration-200"
+        class="glass-button text-sm px-3 py-1.5 rounded text-muted"
         title="Clear selection"
         @click="clearSelection"
       >
-        Clear
+        Deselect
       </button>
     </div>
 
@@ -202,8 +210,15 @@ const gridStyle = computed(() => ({
 const failedImagePaths = reactive(new Set<string>());
 const selectedPaths = ref<Set<string>>(new Set());
 const lastClickedIndex = ref<number>(-1);
-const { jobStatusMap, startPolling, stopPolling, addJobs } =
+const { jobStatusMap, startPolling, stopPolling, addJobs, cancelJob } =
   useTranscodeQueue();
+
+const selectedHaveTranscode = computed(() => {
+  for (const path of selectedPaths.value) {
+    if (jobStatusMap.value.has(path)) return true;
+  }
+  return false;
+});
 
 // Chunk items into rows for the scroller
 const chunkedItems = computed<GridRow[]>(() => {
@@ -321,6 +336,14 @@ const handlePreTranscode = async () => {
   const paths = [...selectedPaths.value];
   selectedPaths.value = new Set();
   await addJobs(paths);
+};
+
+const handleClearTranscode = async () => {
+  const paths = [...selectedPaths.value].filter((p) =>
+    jobStatusMap.value.has(p),
+  );
+  selectedPaths.value = new Set();
+  await Promise.all(paths.map((p) => cancelJob(p)));
 };
 
 const clearSelection = () => {
