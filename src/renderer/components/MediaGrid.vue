@@ -6,35 +6,38 @@
       class="flex justify-between items-center p-3 bg-black/5 border-b border-white/10 shrink-0"
     >
       <h2 class="text-lg font-semibold text-color">Grid View</h2>
-      <div class="flex items-center gap-2">
-        <template v-if="selectedPaths.size > 0">
-          <span class="text-sm text-muted"
-            >{{ selectedPaths.size }} selected</span
-          >
-          <button
-            class="text-sm bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
-            title="Pre-transcode selected files"
-            @click="handlePreTranscode"
-          >
-            Pre-transcode
-          </button>
-          <button
-            class="text-sm bg-gray-600 hover:bg-gray-700 text-white px-3 py-1.5 rounded transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-opacity-50"
-            title="Clear selection"
-            @click="clearSelection"
-          >
-            Clear
-          </button>
-        </template>
-        <button
-          class="text-sm bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-50"
-          title="Close Grid View"
-          aria-label="Close Grid View"
-          @click="closeGrid"
-        >
-          Close
-        </button>
-      </div>
+      <button
+        class="text-sm bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-red-500"
+        title="Close Grid View"
+        aria-label="Close Grid View"
+        @click="closeGrid"
+      >
+        Close
+      </button>
+    </div>
+
+    <!-- Selection action bar — only visible when items are selected -->
+    <div
+      v-if="selectedPaths.size > 0"
+      class="flex items-center gap-2 px-3 py-2 bg-black/10 border-b border-white/10 shrink-0"
+    >
+      <span class="text-sm text-muted grow"
+        >{{ selectedPaths.size }} selected</span
+      >
+      <button
+        class="text-sm bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        title="Pre-transcode selected files"
+        @click="handlePreTranscode"
+      >
+        Pre-transcode
+      </button>
+      <button
+        class="text-sm text-muted hover:text-accent px-2 py-1.5 rounded transition-colors duration-200"
+        title="Clear selection"
+        @click="clearSelection"
+      >
+        Clear
+      </button>
     </div>
 
     <!-- Virtual Scroller Container -->

@@ -125,6 +125,29 @@ export class HlsManager {
     this.pinnedSessions.delete(id);
   }
 
+  waitForSession(sessionId: string): Promise<HlsSessionStatus> {
+    return new Promise((resolve) => {
+      const check = () => {
+        const session = this.sessions.get(sessionId);
+        if (!session) {
+          resolve(HlsSessionStatus.STOPPED);
+          return;
+        }
+        const { status } = session;
+        if (
+          status === HlsSessionStatus.COMPLETE ||
+          status === HlsSessionStatus.ERROR ||
+          status === HlsSessionStatus.STOPPED
+        ) {
+          resolve(status);
+          return;
+        }
+        setTimeout(check, 500);
+      };
+      check();
+    });
+  }
+
   async ensureSession(sessionId: string, filePath: string): Promise<string> {
     if (!this.cacheDir) {
       throw new Error('HlsManager: cacheDir not set');

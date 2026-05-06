@@ -4,7 +4,7 @@ import {
   updateTranscodeJobStatus,
   getPendingTranscodeJobs,
 } from './database.ts';
-import { HlsManager } from './hls-manager.ts';
+import { HlsManager, HlsSessionStatus } from './hls-manager.ts';
 import { generateSessionId } from './hls-handler.ts';
 
 export class TranscodeQueueManager {
@@ -43,6 +43,8 @@ export class TranscodeQueueManager {
 
   async cancel(filePath: string): Promise<void> {
     this.cancelled.add(filePath);
+    const sessionId = await generateSessionId(filePath);
+    await HlsManager.getInstance().stopSession(sessionId);
   }
 
   private scheduleJob(filePath: string): void {
@@ -57,11 +59,22 @@ export class TranscodeQueueManager {
     try {
       await updateTranscodeJobStatus(filePath, 'processing', null);
       const sessionId = await generateSessionId(filePath);
+      // Pin before starting so the exit handler marks it COMPLETE, not STOPPED
+      HlsManager.getInstance().pinSession(sessionId);
       await HlsManager.getInstance().ensureSessionUnthrottled(
         sessionId,
         filePath,
       );
-      HlsManager.getInstance().pinSession(sessionId);
+      // Wait for FFmpeg to actually finish (not just playlist ready)
+      const finalStatus =
+        await HlsManager.getInstance().waitForSession(sessionId);
+      if (this.cancelled.has(filePath)) {
+        this.cancelled.delete(filePath);
+        return; // DB row already removed by deleteTranscodeJob in the cancel handler
+      }
+      if (finalStatus === HlsSessionStatus.ERROR) {
+        throw new Error('Transcoding failed');
+      }
       await updateTranscodeJobStatus(filePath, 'done', null);
     } catch (err) {
       await updateTranscodeJobStatus(

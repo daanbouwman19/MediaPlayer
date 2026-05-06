@@ -119,12 +119,12 @@ describe('Coverage Fix 2 - Branch Coverage Boost', () => {
 
       // Mock fs.readFile to return content needing replacement
       const fs = await import('fs/promises');
-      vi.mocked(fs.default.readFile).mockResolvedValue('segment_001.ts');
+      vi.mocked(fs.default.readFile).mockResolvedValue('seg-001.ts');
 
       await serveHlsPlaylist(req, res, '/test.mp4');
 
       expect(res.send).toHaveBeenCalledWith(
-        expect.stringContaining('segment_001.ts?file='),
+        expect.stringContaining('seg-001.ts?file='),
       );
     });
   });

@@ -1147,7 +1147,7 @@ describe('MediaHandler Combined Tests', () => {
       expect(resPlaylist.text).toBe('Missing file parameter');
 
       // Missing file for segment (only segment provided via path)
-      const resSegment = await request(app).get('/api/hls/segment/0.ts');
+      const resSegment = await request(app).get('/api/hls/seg-000.ts');
       expect(resSegment.status).toBe(400);
       expect(resSegment.text).toBe('Missing file or segment parameter');
     });

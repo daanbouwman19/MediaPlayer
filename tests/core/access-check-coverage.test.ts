@@ -119,7 +119,7 @@ describe('Coverage Fix - HandleAccessCheck Integration', () => {
       mockValidateFileAccess.mockResolvedValue({ success: false });
       mockHandleAccessCheck.mockReturnValue(true);
 
-      await serveHlsSegment(req, res, '/test.mp4', 'segment_000.ts');
+      await serveHlsSegment(req, res, '/test.mp4', 'seg-000.ts');
 
       expect(mockHandleAccessCheck).toHaveBeenCalled();
       expect(res.sendFile).not.toHaveBeenCalled();

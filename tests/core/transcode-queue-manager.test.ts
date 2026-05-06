@@ -7,6 +7,8 @@ const {
   mockGetPendingTranscodeJobs,
   mockEnsureSessionUnthrottled,
   mockPinSession,
+  mockWaitForSession,
+  mockStopSession,
   mockGenerateSessionId,
 } = vi.hoisted(() => ({
   mockAddTranscodeJob: vi.fn().mockResolvedValue(undefined),
@@ -14,6 +16,8 @@ const {
   mockGetPendingTranscodeJobs: vi.fn().mockResolvedValue([]),
   mockEnsureSessionUnthrottled: vi.fn().mockResolvedValue('/hls/session.m3u8'),
   mockPinSession: vi.fn(),
+  mockWaitForSession: vi.fn().mockResolvedValue('complete'),
+  mockStopSession: vi.fn().mockResolvedValue(undefined),
   mockGenerateSessionId: vi.fn().mockResolvedValue('sess-abc'),
 }));
 
@@ -24,10 +28,19 @@ vi.mock('../../src/core/database.ts', () => ({
 }));
 
 vi.mock('../../src/core/hls-manager.ts', () => ({
+  HlsSessionStatus: {
+    STARTING: 'starting',
+    ACTIVE: 'active',
+    ERROR: 'error',
+    STOPPED: 'stopped',
+    COMPLETE: 'complete',
+  },
   HlsManager: {
     getInstance: vi.fn(() => ({
       ensureSessionUnthrottled: mockEnsureSessionUnthrottled,
       pinSession: mockPinSession,
+      waitForSession: mockWaitForSession,
+      stopSession: mockStopSession,
     })),
   },
 }));
@@ -44,6 +57,8 @@ describe('TranscodeQueueManager', () => {
     TranscodeQueueManager.resetInstance();
     mockGetPendingTranscodeJobs.mockResolvedValue([]);
     mockEnsureSessionUnthrottled.mockResolvedValue('/hls/session.m3u8');
+    mockWaitForSession.mockResolvedValue('complete');
+    mockStopSession.mockResolvedValue(undefined);
     mockGenerateSessionId.mockResolvedValue('sess-abc');
   });
 

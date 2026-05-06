@@ -118,7 +118,7 @@ describe('hls-handler', () => {
       // @ts-expect-error - Mocking static method
       HlsManager.getInstance.mockReturnValue(mockHlsManager);
 
-      vi.mocked(fs.readFile).mockResolvedValue('#EXTM3U\nsegment_000.ts');
+      vi.mocked(fs.readFile).mockResolvedValue('#EXTM3U\nseg-000.ts');
 
       await serveHlsPlaylist(req, res, '/path/to/video.mp4');
 
@@ -127,7 +127,7 @@ describe('hls-handler', () => {
         'application/vnd.apple.mpegurl',
       );
       expect(res.send).toHaveBeenCalledWith(
-        expect.stringContaining('segment_000.ts?file=%2Fpath%2Fto%2Fvideo.mp4'),
+        expect.stringContaining('seg-000.ts?file=%2Fpath%2Fto%2Fvideo.mp4'),
       );
       expect(mockHlsManager.touchSession).toHaveBeenCalledWith(
         'mock-session-id',
@@ -194,10 +194,10 @@ describe('hls-handler', () => {
       HlsManager.getInstance.mockReturnValue(mockHlsManager);
       vi.mocked(fs.access).mockResolvedValue(undefined);
 
-      await serveHlsSegment(req, res, '/path/to/video.mp4', 'segment_001.ts');
+      await serveHlsSegment(req, res, '/path/to/video.mp4', 'seg-001.ts');
 
       expect(res.sendFile).toHaveBeenCalledWith(
-        path.join('/tmp/hls/mock-session-id', 'segment_001.ts'),
+        path.join('/tmp/hls/mock-session-id', 'seg-001.ts'),
         expect.any(Function),
       );
     });
@@ -209,7 +209,7 @@ describe('hls-handler', () => {
         return true;
       });
 
-      await serveHlsSegment(req, res, '/path/to/video.mp4', 'segment_001.ts');
+      await serveHlsSegment(req, res, '/path/to/video.mp4', 'seg-001.ts');
 
       expect(res.status).toHaveBeenCalledWith(403);
       expect(res.send).toHaveBeenCalledWith('Access denied');
@@ -224,7 +224,7 @@ describe('hls-handler', () => {
 
       const invalidNames = [
         '../passwd',
-        'segment_001.ts.bak',
+        'seg-001.ts.bak',
         'segment_abc.ts',
         'other.txt',
         'segment_1.ts/',
@@ -252,7 +252,7 @@ describe('hls-handler', () => {
       // @ts-expect-error - Mocking static method
       HlsManager.getInstance.mockReturnValue(mockHlsManager);
 
-      await serveHlsSegment(req, res, '/path/to/video.mp4', 'segment_001.ts');
+      await serveHlsSegment(req, res, '/path/to/video.mp4', 'seg-001.ts');
 
       expect(res.status).toHaveBeenCalledWith(404);
       expect(res.send).toHaveBeenCalledWith(
@@ -281,7 +281,7 @@ describe('hls-handler', () => {
         },
       );
 
-      await serveHlsSegment(req, res, '/path/to/video.mp4', 'segment_001.ts');
+      await serveHlsSegment(req, res, '/path/to/video.mp4', 'seg-001.ts');
 
       expect(res.status).toHaveBeenCalledWith(404);
       expect(res.send).toHaveBeenCalledWith('Segment not found');

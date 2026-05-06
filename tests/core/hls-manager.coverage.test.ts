@@ -287,7 +287,10 @@ describe('HlsManager Coverage Boost', () => {
       killTimeout: null,
     });
 
-    const result = await hlsManager.ensureSessionUnthrottled(sessionId, '/v.mp4');
+    const result = await hlsManager.ensureSessionUnthrottled(
+      sessionId,
+      '/v.mp4',
+    );
     expect(result).toBe('/tmp/out/playlist.m3u8');
   });
 
@@ -304,7 +307,10 @@ describe('HlsManager Coverage Boost', () => {
       killTimeout: null,
     });
 
-    const result = await hlsManager.ensureSessionUnthrottled(sessionId, '/v.mp4');
+    const result = await hlsManager.ensureSessionUnthrottled(
+      sessionId,
+      '/v.mp4',
+    );
     expect(result).toBe('/tmp/out/playlist.m3u8');
   });
 

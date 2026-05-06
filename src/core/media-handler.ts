@@ -539,7 +539,7 @@ export function createMediaApp(options: MediaHandlerOptions) {
     await serveHlsPlaylist(req, res, filePath);
   });
 
-  app.get('/api/hls/segment/:segment', fileLimiter, async (req, res) => {
+  app.get('/api/hls/:segment', fileLimiter, async (req, res) => {
     const filePath = getQueryParam(req.query, 'file');
     const segment = req.params.segment;
     if (!filePath || !segment) {
