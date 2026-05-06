@@ -15,6 +15,7 @@ import { createTestMediaService } from '../utils/test-factory';
 vi.mock('../../src/core/database', () => ({
   isFileInLibrary: vi.fn(),
   getMediaDirectories: vi.fn(),
+  getPendingTranscodeJobs: vi.fn().mockResolvedValue([]),
 }));
 
 vi.mock('ffmpeg-static', () => ({ default: '/usr/bin/ffmpeg' }));

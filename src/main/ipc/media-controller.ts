@@ -14,7 +14,10 @@ import {
   recordMediaView,
   getMediaViewCounts,
   getRecentlyPlayed,
+  listTranscodeJobs,
+  deleteTranscodeJob,
 } from '../../core/database';
+import { TranscodeQueueManager } from '../../core/transcode-queue-manager';
 import { MediaService } from '../../core/media-service';
 import { isDrivePath, getDriveId } from '../../core/media-utils';
 import { MediaAnalyzer } from '../../core/analysis/media-analyzer';
@@ -188,4 +191,28 @@ export function registerMediaHandlers(mediaService: MediaService) {
       return null;
     }
   });
+
+  handleIpc(
+    IPC_CHANNELS.TRANSCODE_JOB_ADD,
+    async (_event: IpcMainInvokeEvent, filePaths: string[]) => {
+      const manager = TranscodeQueueManager.getInstance();
+      for (const filePath of filePaths) {
+        const authorized = await validatePathAccess(filePath);
+        await manager.enqueue(authorized);
+      }
+    },
+  );
+
+  handleIpc(IPC_CHANNELS.TRANSCODE_JOB_LIST, async () => {
+    return listTranscodeJobs();
+  });
+
+  handleIpc(
+    IPC_CHANNELS.TRANSCODE_JOB_CANCEL,
+    async (_event: IpcMainInvokeEvent, filePath: string) => {
+      const authorized = await validatePathAccess(filePath);
+      await TranscodeQueueManager.getInstance().cancel(authorized);
+      await deleteTranscodeJob(authorized);
+    },
+  );
 }

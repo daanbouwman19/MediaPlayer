@@ -291,4 +291,78 @@ describe('MediaGridItem.vue', () => {
     expect(wrapper.find('video').exists()).toBe(false);
     expect(wrapper.find('img').exists()).toBe(true);
   });
+
+  it('applies ring class when isSelected is true', () => {
+    const item = { path: 'test.jpg', name: 'test.jpg', rating: 0, duration: 0 };
+    const wrapper = mount(MediaGridItem, {
+      props: { ...defaultProps, item, isSelected: true },
+    });
+    expect(wrapper.find('button').classes()).toContain('ring-2');
+    expect(wrapper.find('button').classes()).toContain('ring-accent');
+  });
+
+  it('does not apply ring class when isSelected is false', () => {
+    const item = { path: 'test.jpg', name: 'test.jpg', rating: 0, duration: 0 };
+    const wrapper = mount(MediaGridItem, {
+      props: { ...defaultProps, item, isSelected: false },
+    });
+    expect(wrapper.find('button').classes()).not.toContain('ring-2');
+  });
+
+  it('shows transcode badge for pending status', () => {
+    const item = { path: 'test.mp4', name: 'test.mp4', rating: 0, duration: 0 };
+    const wrapper = mount(MediaGridItem, {
+      props: { ...defaultProps, item, transcodeStatus: 'pending' },
+    });
+    const badge = wrapper.find('[title="pending"]');
+    expect(badge.exists()).toBe(true);
+    expect(badge.classes()).toContain('bg-gray-500/80');
+  });
+
+  it('shows transcode badge for processing status', () => {
+    const item = { path: 'test.mp4', name: 'test.mp4', rating: 0, duration: 0 };
+    const wrapper = mount(MediaGridItem, {
+      props: { ...defaultProps, item, transcodeStatus: 'processing' },
+    });
+    const badge = wrapper.find('[title="processing"]');
+    expect(badge.exists()).toBe(true);
+    expect(badge.classes()).toContain('bg-green-500/80');
+  });
+
+  it('shows transcode badge for done status', () => {
+    const item = { path: 'test.mp4', name: 'test.mp4', rating: 0, duration: 0 };
+    const wrapper = mount(MediaGridItem, {
+      props: { ...defaultProps, item, transcodeStatus: 'done' },
+    });
+    const badge = wrapper.find('[title="done"]');
+    expect(badge.exists()).toBe(true);
+    expect(badge.classes()).toContain('bg-green-500/80');
+  });
+
+  it('shows transcode badge for failed status', () => {
+    const item = { path: 'test.mp4', name: 'test.mp4', rating: 0, duration: 0 };
+    const wrapper = mount(MediaGridItem, {
+      props: { ...defaultProps, item, transcodeStatus: 'failed' },
+    });
+    const badge = wrapper.find('[title="failed"]');
+    expect(badge.exists()).toBe(true);
+    expect(badge.classes()).toContain('bg-red-500/80');
+  });
+
+  it('does not show transcode badge when transcodeStatus is undefined', () => {
+    const item = { path: 'test.jpg', name: 'test.jpg', rating: 0, duration: 0 };
+    const wrapper = mount(MediaGridItem, { props: { ...defaultProps, item } });
+    expect(wrapper.find('[title="pending"]').exists()).toBe(false);
+    expect(wrapper.find('[title="done"]').exists()).toBe(false);
+  });
+
+  it('emits click event with item and mouse event', async () => {
+    const item = { path: 'test.jpg', name: 'test.jpg', rating: 0, duration: 0 };
+    const wrapper = mount(MediaGridItem, { props: { ...defaultProps, item } });
+    await wrapper.find('button').trigger('click');
+    const emitted = wrapper.emitted('click');
+    expect(emitted).toBeTruthy();
+    expect(emitted![0][0]).toEqual(item);
+    expect(emitted![0][1]).toBeInstanceOf(MouseEvent);
+  });
 });

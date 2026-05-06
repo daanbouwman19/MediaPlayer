@@ -27,6 +27,11 @@ import {
   isFileInLibrary,
   filterProcessingNeeded,
   setOperationTimeout,
+  addTranscodeJob,
+  listTranscodeJobs,
+  updateTranscodeJobStatus,
+  deleteTranscodeJob,
+  getPendingTranscodeJobs,
 } from '../../src/core/database';
 
 const mocks = vi.hoisted(() => {
@@ -468,6 +473,64 @@ describe('database.ts coverage', () => {
     await closeDatabase();
     // getClient() throws, but getAllMetadataAndStats catches it
     const result = await getAllMetadataAndStats();
+    expect(result).toEqual([]);
+  });
+
+  it('addTranscodeJob sends correct message', async () => {
+    await addTranscodeJob('/video.mp4');
+    expect(mocks.WorkerClientInstance.sendMessage).toHaveBeenCalledWith(
+      'addTranscodeJob',
+      { filePath: '/video.mp4' },
+    );
+  });
+
+  it('listTranscodeJobs sends correct message', async () => {
+    mocks.WorkerClientInstance.sendMessage.mockResolvedValueOnce([]);
+    const result = await listTranscodeJobs();
+    expect(mocks.WorkerClientInstance.sendMessage).toHaveBeenCalledWith(
+      'listTranscodeJobs',
+    );
+    expect(result).toEqual([]);
+  });
+
+  it('listTranscodeJobs returns empty on error', async () => {
+    mocks.WorkerClientInstance.sendMessage.mockRejectedValueOnce(
+      new Error('DB fail'),
+    );
+    const result = await listTranscodeJobs();
+    expect(result).toEqual([]);
+  });
+
+  it('updateTranscodeJobStatus sends correct message', async () => {
+    await updateTranscodeJobStatus('/video.mp4', 'done', null);
+    expect(mocks.WorkerClientInstance.sendMessage).toHaveBeenCalledWith(
+      'updateTranscodeJobStatus',
+      { filePath: '/video.mp4', status: 'done', error: null },
+    );
+  });
+
+  it('deleteTranscodeJob sends correct message', async () => {
+    await deleteTranscodeJob('/video.mp4');
+    expect(mocks.WorkerClientInstance.sendMessage).toHaveBeenCalledWith(
+      'deleteTranscodeJob',
+      { filePath: '/video.mp4' },
+    );
+  });
+
+  it('getPendingTranscodeJobs sends correct message', async () => {
+    mocks.WorkerClientInstance.sendMessage.mockResolvedValueOnce(['/a.mp4']);
+    const result = await getPendingTranscodeJobs();
+    expect(mocks.WorkerClientInstance.sendMessage).toHaveBeenCalledWith(
+      'getPendingTranscodeJobs',
+    );
+    expect(result).toEqual(['/a.mp4']);
+  });
+
+  it('getPendingTranscodeJobs returns empty on error', async () => {
+    mocks.WorkerClientInstance.sendMessage.mockRejectedValueOnce(
+      new Error('fail'),
+    );
+    const result = await getPendingTranscodeJobs();
     expect(result).toEqual([]);
   });
 });

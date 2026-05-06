@@ -209,8 +209,15 @@ export function useSlideshow() {
 
     libraryStore.state.globalMediaPoolForSelection = [...album.textures];
     playerStore.state.isSlideshowActive = true;
+
+    const filtered = filterMedia(album.textures);
+    const unwatched = filtered.filter((f) => !f.viewCount);
+    const pool = shuffleArray(unwatched.length > 0 ? unwatched : filtered);
+
     playlistStore.clearPlaylist();
-    await pickAndDisplayNextMediaItem();
+    playlistStore.setQueue(pool.slice(1));
+    playlistStore.playNext(pool[0]);
+    await displayMedia(playlistStore.state.currentItem);
   };
 
   const startHistorySlideshow = (historyMedia: MediaFile[]) => {

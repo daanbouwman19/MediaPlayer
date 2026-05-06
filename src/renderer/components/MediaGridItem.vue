@@ -2,9 +2,10 @@
   <button
     type="button"
     class="relative group grid-item cursor-pointer w-full h-full text-left bg-transparent border-0 p-0 block focus:outline-none focus:ring-2 focus:ring-accent rounded overflow-hidden"
+    :class="{ 'ring-2 ring-accent': isSelected }"
     :aria-label="ariaLabel"
     :title="displayName"
-    @click="$emit('click', item)"
+    @click="$emit('click', item, $event)"
     @mouseenter="handleMouseEnter"
     @mouseleave="handleMouseLeave"
     @focus="handleMouseEnter"
@@ -107,12 +108,91 @@
         {{ displayName }}
       </p>
     </div>
+    <!-- Transcode status badge -->
+    <div
+      v-if="transcodeStatus"
+      class="absolute bottom-2 right-2 flex items-center justify-center w-5 h-5 rounded-full pointer-events-none"
+      :class="{
+        'bg-gray-500/80': transcodeStatus === 'pending',
+        'bg-green-500/80':
+          transcodeStatus === 'processing' || transcodeStatus === 'done',
+        'bg-red-500/80': transcodeStatus === 'failed',
+      }"
+      :title="transcodeStatus"
+    >
+      <!-- pending: clock -->
+      <svg
+        v-if="transcodeStatus === 'pending'"
+        class="w-3 h-3 text-white"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+      >
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+        />
+      </svg>
+      <!-- processing: spinner -->
+      <svg
+        v-else-if="transcodeStatus === 'processing'"
+        class="w-3 h-3 text-white animate-spin"
+        fill="none"
+        viewBox="0 0 24 24"
+      >
+        <circle
+          class="opacity-25"
+          cx="12"
+          cy="12"
+          r="10"
+          stroke="currentColor"
+          stroke-width="4"
+        />
+        <path
+          class="opacity-75"
+          fill="currentColor"
+          d="M4 12a8 8 0 018-8v8H4z"
+        />
+      </svg>
+      <!-- done: checkmark -->
+      <svg
+        v-else-if="transcodeStatus === 'done'"
+        class="w-3 h-3 text-white"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+      >
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          d="M5 13l4 4L19 7"
+        />
+      </svg>
+      <!-- failed: X -->
+      <svg
+        v-else-if="transcodeStatus === 'failed'"
+        class="w-3 h-3 text-white"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+      >
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          d="M6 18L18 6M6 6l12 12"
+        />
+      </svg>
+    </div>
   </button>
 </template>
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
-import type { MediaFile } from '../../core/types';
+import type { MediaFile, TranscodeJob } from '../../core/types';
 import {
   getDisplayName,
   isMediaFileImage,
@@ -130,10 +210,12 @@ const props = defineProps<{
   mediaUrlGenerator: ((path: string) => string) | null;
   thumbnailUrlGenerator: ((path: string) => string) | null;
   failedImagePaths: Set<string>;
+  isSelected?: boolean;
+  transcodeStatus?: TranscodeJob['status'];
 }>();
 
 defineEmits<{
-  (e: 'click', item: MediaFile): void;
+  (e: 'click', item: MediaFile, event: MouseEvent): void;
   (e: 'image-error', item: MediaFile): void;
 }>();
 

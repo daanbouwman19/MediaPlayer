@@ -34,6 +34,9 @@ describe('ElectronAdapter', () => {
     addGoogleDriveSource: vi.fn(),
     listGoogleDriveDirectory: vi.fn(),
     getGoogleDriveParent: vi.fn(),
+    addTranscodeJobs: vi.fn(),
+    listTranscodeJobs: vi.fn(),
+    cancelTranscodeJob: vi.fn(),
   };
 
   beforeEach(() => {
@@ -140,5 +143,39 @@ describe('ElectronAdapter', () => {
     expect(url).toBe(
       'http://localhost:3000/api/hls/master.m3u8?file=C%3A%5Cpath%5Cto%5Cvideo.mp4',
     );
+  });
+
+  it('addTranscodeJobs delegates to bridge', async () => {
+    mockElectronAPI.addTranscodeJobs.mockResolvedValue({
+      success: true,
+      data: undefined,
+    });
+    const adapter = new ElectronAdapter(mockElectronAPI as any);
+    await adapter.addTranscodeJobs(['/a.mp4', '/b.mp4']);
+    expect(mockElectronAPI.addTranscodeJobs).toHaveBeenCalledWith([
+      '/a.mp4',
+      '/b.mp4',
+    ]);
+  });
+
+  it('listTranscodeJobs delegates to bridge', async () => {
+    const jobs = [{ file_path: '/a.mp4', status: 'done' }];
+    mockElectronAPI.listTranscodeJobs.mockResolvedValue({
+      success: true,
+      data: jobs,
+    });
+    const adapter = new ElectronAdapter(mockElectronAPI as any);
+    const result = await adapter.listTranscodeJobs();
+    expect(result).toEqual(jobs);
+  });
+
+  it('cancelTranscodeJob delegates to bridge', async () => {
+    mockElectronAPI.cancelTranscodeJob.mockResolvedValue({
+      success: true,
+      data: undefined,
+    });
+    const adapter = new ElectronAdapter(mockElectronAPI as any);
+    await adapter.cancelTranscodeJob('/a.mp4');
+    expect(mockElectronAPI.cancelTranscodeJob).toHaveBeenCalledWith('/a.mp4');
   });
 });

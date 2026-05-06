@@ -11,7 +11,10 @@ import {
   recordMediaView,
   setRating,
   upsertMetadata,
+  listTranscodeJobs,
+  deleteTranscodeJob,
 } from '../../core/database.ts';
+import { TranscodeQueueManager } from '../../core/transcode-queue-manager.ts';
 import {
   authorizeFilePath,
   filterAuthorizedPaths,
@@ -376,6 +379,51 @@ export function createMediaRoutes({
           }
         }
       }
+    }),
+  );
+
+  router.post(
+    '/api/transcode/jobs',
+    asyncHandler(async (req, res) => {
+      const { paths } = req.body as { paths?: unknown };
+      if (!Array.isArray(paths) || paths.length === 0) {
+        throw new AppError(400, 'paths must be a non-empty array');
+      }
+      const manager = TranscodeQueueManager.getInstance();
+      for (const p of paths) {
+        if (typeof p !== 'string') throw new AppError(400, 'Invalid path');
+        const auth = await authorizeFilePath(p);
+        if (!auth.isAllowed) {
+          return res.status(403).send(auth.message || 'Access denied');
+        }
+        await manager.enqueue(p);
+      }
+      res.status(204).send();
+    }),
+  );
+
+  router.get(
+    '/api/transcode/jobs',
+    asyncHandler(async (_req, res) => {
+      const jobs = await listTranscodeJobs();
+      res.json(jobs);
+    }),
+  );
+
+  router.delete(
+    '/api/transcode/jobs',
+    asyncHandler(async (req, res) => {
+      const { path: filePath } = req.body as { path?: unknown };
+      if (typeof filePath !== 'string' || !filePath) {
+        throw new AppError(400, 'path is required');
+      }
+      const auth = await authorizeFilePath(filePath);
+      if (!auth.isAllowed) {
+        return res.status(403).send(auth.message || 'Access denied');
+      }
+      await TranscodeQueueManager.getInstance().cancel(filePath);
+      await deleteTranscodeJob(filePath);
+      res.status(204).send();
     }),
   );
 

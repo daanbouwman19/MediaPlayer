@@ -6,12 +6,16 @@ import { api } from '../../../src/renderer/api';
 import { useLibraryStore } from '../../../src/renderer/composables/useLibraryStore';
 import { usePlayerStore } from '../../../src/renderer/composables/usePlayerStore';
 import { useUIStore } from '../../../src/renderer/composables/useUIStore';
+import { usePlaylistStore } from '../../../src/renderer/composables/usePlaylistStore';
+import { useTranscodeQueue } from '../../../src/renderer/composables/useTranscodeQueue';
 import VirtualScroller from '../../../src/renderer/components/VirtualScroller.vue';
 
 // Mock dependencies
 vi.mock('../../../src/renderer/composables/useLibraryStore');
 vi.mock('../../../src/renderer/composables/usePlayerStore');
 vi.mock('../../../src/renderer/composables/useUIStore');
+vi.mock('../../../src/renderer/composables/usePlaylistStore');
+vi.mock('../../../src/renderer/composables/useTranscodeQueue');
 vi.mock('../../../src/renderer/api');
 
 // Mock ResizeObserver
@@ -32,6 +36,9 @@ describe('MediaGrid.vue Coverage', () => {
   let mockLibraryState: any;
   let mockPlayerState: any;
   let mockUIState: any;
+  let mockAddJobs: any;
+  let mockStartPolling: any;
+  let mockStopPolling: any;
 
   beforeEach(() => {
     vi.resetAllMocks();
@@ -62,6 +69,10 @@ describe('MediaGrid.vue Coverage', () => {
       gridMediaFiles: [],
     });
 
+    mockStartPolling = vi.fn();
+    mockStopPolling = vi.fn();
+    mockAddJobs = vi.fn().mockResolvedValue(undefined);
+
     (useLibraryStore as Mock).mockReturnValue({
       state: mockLibraryState,
       ...toRefs(mockLibraryState),
@@ -75,6 +86,20 @@ describe('MediaGrid.vue Coverage', () => {
     (useUIStore as Mock).mockReturnValue({
       state: mockUIState,
       ...toRefs(mockUIState),
+    });
+
+    (usePlaylistStore as Mock).mockReturnValue({
+      setQueue: vi.fn(),
+      playNext: vi.fn(),
+      clearPlaylist: vi.fn(),
+      state: reactive({ queue: [], currentItem: null }),
+    });
+
+    (useTranscodeQueue as Mock).mockReturnValue({
+      jobStatusMap: new Map(),
+      startPolling: mockStartPolling,
+      stopPolling: mockStopPolling,
+      addJobs: mockAddJobs,
     });
 
     (api.getMediaUrlGenerator as any).mockResolvedValue(
@@ -417,5 +442,217 @@ describe('MediaGrid.vue Coverage', () => {
     await wrapper.find('button.grid-item').trigger('click');
     // expect(mockState.currentMediaItem.path).toBe('/img.jpg');
     // Check if the click handler was called or some state changed
+  });
+
+  it('calls startPolling on mount and stopPolling on unmount', async () => {
+    const wrapper = mountGrid();
+    await flushPromises();
+    expect(mockStartPolling).toHaveBeenCalled();
+    wrapper.unmount();
+    expect(mockStopPolling).toHaveBeenCalled();
+  });
+
+  it('ctrl+click selects an item and shows action bar', async () => {
+    const item = { name: 'img.jpg', path: '/img.jpg', viewCount: 0 };
+    mockUIState.gridMediaFiles = [item];
+    const wrapper = mountGrid();
+    await flushPromises();
+
+    const calls = (ResizeObserverMock as any).mock.calls;
+    for (const call of calls) {
+      call[0]([
+        {
+          contentRect: { width: 1000, height: 800 },
+          contentBoxSize: [{ inlineSize: 1000 }],
+        },
+      ]);
+    }
+    await wrapper.vm.$nextTick();
+
+    await wrapper.find('button.grid-item').trigger('click', { ctrlKey: true });
+    await wrapper.vm.$nextTick();
+
+    // Action bar should appear with "1 selected"
+    expect(wrapper.text()).toContain('1 selected');
+    expect(mockUIState.viewMode).toBe('grid'); // Did not navigate away
+  });
+
+  it('ctrl+click deselects already-selected item', async () => {
+    const item = { name: 'img.jpg', path: '/img.jpg', viewCount: 0 };
+    mockUIState.gridMediaFiles = [item];
+    const wrapper = mountGrid();
+    await flushPromises();
+
+    const calls = (ResizeObserverMock as any).mock.calls;
+    for (const call of calls) {
+      call[0]([
+        {
+          contentRect: { width: 1000, height: 800 },
+          contentBoxSize: [{ inlineSize: 1000 }],
+        },
+      ]);
+    }
+    await wrapper.vm.$nextTick();
+
+    // First ctrl+click selects
+    await wrapper.find('button.grid-item').trigger('click', { ctrlKey: true });
+    await wrapper.vm.$nextTick();
+    expect(wrapper.text()).toContain('1 selected');
+
+    // Second ctrl+click deselects
+    await wrapper.find('button.grid-item').trigger('click', { ctrlKey: true });
+    await wrapper.vm.$nextTick();
+    expect(
+      wrapper.find('[title="Pre-transcode selected files"]').exists(),
+    ).toBe(false);
+  });
+
+  it('shift+click range-selects items', async () => {
+    mockUIState.gridMediaFiles = [
+      { name: 'a.jpg', path: '/a.jpg', viewCount: 0 },
+      { name: 'b.jpg', path: '/b.jpg', viewCount: 0 },
+    ];
+    const wrapper = mountGrid();
+    await flushPromises();
+
+    const calls = (ResizeObserverMock as any).mock.calls;
+    for (const call of calls) {
+      call[0]([
+        {
+          contentRect: { width: 1000, height: 800 },
+          contentBoxSize: [{ inlineSize: 1000 }],
+        },
+      ]);
+    }
+    await wrapper.vm.$nextTick();
+
+    const buttons = wrapper.findAll('button.grid-item');
+    // Plain click on first item sets lastClickedIndex=0, clears selection
+    await buttons[0].trigger('click');
+    await wrapper.vm.$nextTick();
+
+    // Now shift+click on second item should range-select items 0 and 1
+    await buttons[1].trigger('click', { shiftKey: true });
+    await wrapper.vm.$nextTick();
+    expect(wrapper.text()).toContain('2 selected');
+  });
+
+  it('shift+click with no anchor falls through to plain click', async () => {
+    const item = { name: 'img.jpg', path: '/img.jpg', viewCount: 0 };
+    mockUIState.gridMediaFiles = [item];
+    const wrapper = mountGrid();
+    await flushPromises();
+
+    const calls = (ResizeObserverMock as any).mock.calls;
+    for (const call of calls) {
+      call[0]([
+        {
+          contentRect: { width: 1000, height: 800 },
+          contentBoxSize: [{ inlineSize: 1000 }],
+        },
+      ]);
+    }
+    await wrapper.vm.$nextTick();
+
+    // Shift+click on item 0 with no prior anchor (lastClickedIndex = -1)
+    await wrapper.find('button.grid-item').trigger('click', { shiftKey: true });
+    await wrapper.vm.$nextTick();
+
+    // Falls through to plain click → navigates
+    expect(mockUIState.viewMode).toBe('player');
+  });
+
+  it('pre-transcode button calls addJobs and clears selection', async () => {
+    const item = { name: 'img.jpg', path: '/img.jpg', viewCount: 0 };
+    mockUIState.gridMediaFiles = [item];
+    const wrapper = mountGrid();
+    await flushPromises();
+
+    const calls = (ResizeObserverMock as any).mock.calls;
+    for (const call of calls) {
+      call[0]([
+        {
+          contentRect: { width: 1000, height: 800 },
+          contentBoxSize: [{ inlineSize: 1000 }],
+        },
+      ]);
+    }
+    await wrapper.vm.$nextTick();
+
+    // Select an item
+    await wrapper.find('button.grid-item').trigger('click', { ctrlKey: true });
+    await wrapper.vm.$nextTick();
+    expect(wrapper.text()).toContain('1 selected');
+
+    // Click Pre-transcode
+    await wrapper
+      .find('[title="Pre-transcode selected files"]')
+      .trigger('click');
+    await flushPromises();
+
+    expect(mockAddJobs).toHaveBeenCalledWith(['/img.jpg']);
+    // Selection should be cleared
+    expect(
+      wrapper.find('[title="Pre-transcode selected files"]').exists(),
+    ).toBe(false);
+  });
+
+  it('clear selection button removes selected state', async () => {
+    const item = { name: 'img.jpg', path: '/img.jpg', viewCount: 0 };
+    mockUIState.gridMediaFiles = [item];
+    const wrapper = mountGrid();
+    await flushPromises();
+
+    const calls = (ResizeObserverMock as any).mock.calls;
+    for (const call of calls) {
+      call[0]([
+        {
+          contentRect: { width: 1000, height: 800 },
+          contentBoxSize: [{ inlineSize: 1000 }],
+        },
+      ]);
+    }
+    await wrapper.vm.$nextTick();
+
+    // Select an item
+    await wrapper.find('button.grid-item').trigger('click', { ctrlKey: true });
+    await wrapper.vm.$nextTick();
+    expect(wrapper.text()).toContain('1 selected');
+
+    // Click Clear
+    await wrapper.find('[title="Clear selection"]').trigger('click');
+    await wrapper.vm.$nextTick();
+    expect(wrapper.find('[title="Clear selection"]').exists()).toBe(false);
+  });
+
+  it('plain click after ctrl+click clears selection and navigates', async () => {
+    const item = { name: 'img.jpg', path: '/img.jpg', viewCount: 0 };
+    mockUIState.gridMediaFiles = [item];
+    const wrapper = mountGrid();
+    await flushPromises();
+
+    const calls = (ResizeObserverMock as any).mock.calls;
+    for (const call of calls) {
+      call[0]([
+        {
+          contentRect: { width: 1000, height: 800 },
+          contentBoxSize: [{ inlineSize: 1000 }],
+        },
+      ]);
+    }
+    await wrapper.vm.$nextTick();
+
+    // Ctrl+click to select
+    await wrapper.find('button.grid-item').trigger('click', { ctrlKey: true });
+    await wrapper.vm.$nextTick();
+    expect(wrapper.text()).toContain('1 selected');
+
+    // Plain click clears selection and plays
+    await wrapper.find('button.grid-item').trigger('click');
+    await wrapper.vm.$nextTick();
+    expect(mockUIState.viewMode).toBe('player');
+    expect(
+      wrapper.find('[title="Pre-transcode selected files"]').exists(),
+    ).toBe(false);
   });
 });

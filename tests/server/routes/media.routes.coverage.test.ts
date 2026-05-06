@@ -10,6 +10,17 @@ import { MAX_API_BATCH_SIZE } from '../../../src/core/constants';
 // Mocks
 vi.mock('../../../src/core/database');
 vi.mock('../../../src/core/security');
+
+const mockQueueManager = vi.hoisted(() => ({
+  enqueue: vi.fn().mockResolvedValue(undefined),
+  cancel: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock('../../../src/core/transcode-queue-manager', () => ({
+  TranscodeQueueManager: {
+    getInstance: vi.fn(() => mockQueueManager),
+  },
+}));
 vi.mock('../../../src/core/media-handler', () => ({
   MediaHandler: vi.fn(),
   serveRawStream: vi.fn(),
@@ -203,6 +214,80 @@ describe('Media Routes Coverage', () => {
       );
       const res = await request(app).get('/api/serve?path=/err');
       expect(res.status).toBe(500);
+    });
+  });
+
+  describe('Transcode Job Routes', () => {
+    it('POST /api/transcode/jobs enqueues paths', async () => {
+      vi.mocked(security.authorizeFilePath).mockResolvedValue({
+        isAllowed: true,
+      } as any);
+      const res = await request(app)
+        .post('/api/transcode/jobs')
+        .send({ paths: ['/a.mp4', '/b.mp4'] });
+      expect(res.status).toBe(204);
+      expect(mockQueueManager.enqueue).toHaveBeenCalledTimes(2);
+    });
+
+    it('POST /api/transcode/jobs returns 400 for missing paths', async () => {
+      const res = await request(app).post('/api/transcode/jobs').send({});
+      expect(res.status).toBe(400);
+    });
+
+    it('POST /api/transcode/jobs returns 400 for non-string path', async () => {
+      const res = await request(app)
+        .post('/api/transcode/jobs')
+        .send({ paths: [123] });
+      expect(res.status).toBe(400);
+    });
+
+    it('POST /api/transcode/jobs returns 403 if path not allowed', async () => {
+      vi.mocked(security.authorizeFilePath).mockResolvedValue({
+        isAllowed: false,
+        message: 'Forbidden',
+      } as any);
+      const res = await request(app)
+        .post('/api/transcode/jobs')
+        .send({ paths: ['/secret.mp4'] });
+      expect(res.status).toBe(403);
+    });
+
+    it('GET /api/transcode/jobs returns job list', async () => {
+      const { listTranscodeJobs } = await import('../../../src/core/database');
+      vi.mocked(listTranscodeJobs).mockResolvedValue([
+        { file_path: '/a.mp4', status: 'pending' } as any,
+      ]);
+      const res = await request(app).get('/api/transcode/jobs');
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual([{ file_path: '/a.mp4', status: 'pending' }]);
+    });
+
+    it('DELETE /api/transcode/jobs cancels a job', async () => {
+      vi.mocked(security.authorizeFilePath).mockResolvedValue({
+        isAllowed: true,
+      } as any);
+      const { deleteTranscodeJob } = await import('../../../src/core/database');
+      const res = await request(app)
+        .delete('/api/transcode/jobs')
+        .send({ path: '/a.mp4' });
+      expect(res.status).toBe(204);
+      expect(deleteTranscodeJob).toHaveBeenCalledWith('/a.mp4');
+    });
+
+    it('DELETE /api/transcode/jobs returns 400 for missing path', async () => {
+      const res = await request(app).delete('/api/transcode/jobs').send({});
+      expect(res.status).toBe(400);
+    });
+
+    it('DELETE /api/transcode/jobs returns 403 if path not allowed', async () => {
+      vi.mocked(security.authorizeFilePath).mockResolvedValue({
+        isAllowed: false,
+        message: 'Denied',
+      } as any);
+      const res = await request(app)
+        .delete('/api/transcode/jobs')
+        .send({ path: '/secret.mp4' });
+      expect(res.status).toBe(403);
     });
   });
 });

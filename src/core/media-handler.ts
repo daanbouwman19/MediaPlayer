@@ -30,6 +30,7 @@ import {
   generateSessionId,
 } from './hls-handler.ts';
 import { HlsManager } from './hls-manager.ts';
+import { TranscodeQueueManager } from './transcode-queue-manager.ts';
 import {
   DATA_URL_THRESHOLD_BYTES,
   RATE_LIMIT_FILE_WINDOW_MS,
@@ -462,6 +463,11 @@ export function createMediaApp(options: MediaHandlerOptions) {
 
   // Initialize MediaAnalyzer cache dir
   MediaAnalyzer.getInstance().setCacheDir(cacheDir);
+
+  // Fix: HlsManager.setCacheDir is not called elsewhere in Electron mode
+  const hlsCacheDir = path.join(path.dirname(cacheDir), 'hls');
+  HlsManager.getInstance().setCacheDir(hlsCacheDir);
+  TranscodeQueueManager.getInstance().start();
 
   const app = express();
 

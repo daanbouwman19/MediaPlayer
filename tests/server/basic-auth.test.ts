@@ -12,6 +12,13 @@ vi.mock('../../src/core/database', () => ({
   getAllMetadataAndStats: vi.fn(),
 }));
 
+vi.mock('../../src/core/transcode-queue-manager', () => ({
+  TranscodeQueueManager: {
+    getInstance: vi.fn(() => ({ start: vi.fn(), enqueue: vi.fn() })),
+    resetInstance: vi.fn(),
+  },
+}));
+
 vi.mock('../../src/core/worker-factory', () => ({
   WorkerFactory: {
     getWorkerPath: vi.fn().mockResolvedValue({ path: '', options: {} }),

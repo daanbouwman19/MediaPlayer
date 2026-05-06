@@ -5,6 +5,7 @@ import type {
   MediaMetadata,
   MediaLibraryItem,
   HeatmapData,
+  TranscodeJob,
 } from '../../core/types';
 import type { FileSystemEntry } from '../../core/file-system';
 
@@ -81,6 +82,11 @@ export interface IMediaBackend {
   getAllMetadataAndStats(): Promise<MediaLibraryItem[]>;
   getRecentlyPlayed(limit?: number): Promise<MediaLibraryItem[]>;
   extractMetadata(filePaths: string[]): Promise<void>;
+
+  // Transcode Jobs
+  addTranscodeJobs(paths: string[]): Promise<void>;
+  listTranscodeJobs(): Promise<TranscodeJob[]>;
+  cancelTranscodeJob(path: string): Promise<void>;
 
   // Google Drive
   checkGoogleDriveAuth(): Promise<boolean>;

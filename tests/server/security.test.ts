@@ -40,6 +40,13 @@ vi.mock('../../src/core/database', () => ({
   getAllMetadataAndStats: vi.fn().mockResolvedValue([]),
 }));
 
+vi.mock('../../src/core/transcode-queue-manager', () => ({
+  TranscodeQueueManager: {
+    getInstance: vi.fn(() => ({ start: vi.fn(), enqueue: vi.fn() })),
+    resetInstance: vi.fn(),
+  },
+}));
+
 vi.mock('../../src/main/drive-cache-manager', () => ({
   initializeDriveCacheManager: vi.fn(),
 }));

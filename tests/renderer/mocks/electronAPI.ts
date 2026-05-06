@@ -54,4 +54,7 @@ export const createMockElectronAPI = (): ElectronAPI => ({
     percent: 0,
   }),
   setTheme: vi.fn(),
+  addTranscodeJobs: vi.fn().mockResolvedValue(undefined),
+  listTranscodeJobs: vi.fn().mockResolvedValue([]),
+  cancelTranscodeJob: vi.fn().mockResolvedValue(undefined),
 });

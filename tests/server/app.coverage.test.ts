@@ -42,6 +42,13 @@ vi.mock('../../src/core/hls-manager.ts', () => ({
   },
 }));
 
+vi.mock('../../src/core/transcode-queue-manager', () => ({
+  TranscodeQueueManager: {
+    getInstance: vi.fn(() => ({ start: vi.fn(), enqueue: vi.fn() })),
+    resetInstance: vi.fn(),
+  },
+}));
+
 vi.mock('../../src/core/analysis/media-analyzer.ts', () => ({
   MediaAnalyzer: {
     getInstance: vi.fn(() => ({

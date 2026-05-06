@@ -22,6 +22,7 @@ import {
 import { registerSensitiveFile } from '../core/security.ts';
 import { initializeDriveCacheManager } from '../main/drive-cache-manager.ts';
 import { HlsManager } from '../core/hls-manager.ts';
+import { TranscodeQueueManager } from '../core/transcode-queue-manager.ts';
 import { MediaAnalyzer } from '../core/analysis/media-analyzer.ts';
 import { MediaHandler } from '../core/media-handler.ts';
 import { WorkerFactory } from '../core/worker-factory.ts';
@@ -181,6 +182,7 @@ export async function createApp(mediaService: MediaService) {
     initializeDriveCacheManager(DRIVE_CACHE_DIR);
 
     HlsManager.getInstance().setCacheDir(HLS_CACHE_DIR);
+    TranscodeQueueManager.getInstance().start();
 
     MediaAnalyzer.getInstance().setCacheDir(HEATMAP_DIR);
   } catch (e) {

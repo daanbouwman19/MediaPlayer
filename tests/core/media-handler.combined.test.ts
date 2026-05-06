@@ -133,13 +133,22 @@ vi.mock('../../src/core/fs-provider-factory', async (importOriginal) => {
 
 const mockHlsManagerInstance = {
   ensureSession: vi.fn(),
+  ensureSessionUnthrottled: vi.fn(),
   getSessionDir: vi.fn(),
   touchSession: vi.fn(),
+  setCacheDir: vi.fn(),
+  pinSession: vi.fn(),
 };
 
 vi.mock('../../src/core/hls-manager', () => ({
   HlsManager: {
     getInstance: vi.fn(() => mockHlsManagerInstance),
+  },
+}));
+
+vi.mock('../../src/core/transcode-queue-manager', () => ({
+  TranscodeQueueManager: {
+    getInstance: vi.fn(() => ({ start: vi.fn(), enqueue: vi.fn() })),
   },
 }));
 

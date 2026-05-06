@@ -6,6 +6,7 @@ import type {
   MediaMetadata,
   MediaLibraryItem,
   HeatmapData,
+  TranscodeJob,
 } from '../../core/types';
 import type { FileSystemEntry } from '../../core/file-system';
 
@@ -407,5 +408,23 @@ export class WebAdapter implements IMediaBackend {
     } catch {
       return null;
     }
+  }
+
+  async addTranscodeJobs(paths: string[]): Promise<void> {
+    await this.request<void>('/api/transcode/jobs', {
+      method: 'POST',
+      body: JSON.stringify({ paths }),
+    });
+  }
+
+  async listTranscodeJobs(): Promise<TranscodeJob[]> {
+    return this.request<TranscodeJob[]>('/api/transcode/jobs');
+  }
+
+  async cancelTranscodeJob(path: string): Promise<void> {
+    await this.request<void>('/api/transcode/jobs', {
+      method: 'DELETE',
+      body: JSON.stringify({ path }),
+    });
   }
 }

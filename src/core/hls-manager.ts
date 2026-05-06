@@ -28,6 +28,7 @@ export enum HlsSessionStatus {
   ACTIVE = 'active',
   ERROR = 'error',
   STOPPED = 'stopped',
+  COMPLETE = 'complete',
 }
 
 interface HlsSession {
@@ -52,6 +53,7 @@ export class HlsManager {
   private transcodeQueue = new PQueue({
     concurrency: MAX_CONCURRENT_TRANSCODES,
   });
+  private pinnedSessions: Set<string> = new Set();
   private cacheDir: string | null = null;
   private cleanupInterval: NodeJS.Timeout | null = null;
   private ffmpegCapabilities: Awaited<
@@ -87,6 +89,7 @@ export class HlsManager {
       HlsManager.instance.sessions.clear();
       HlsManager.instance.pendingSessions.clear();
       HlsManager.instance.transcodeQueue.clear();
+      HlsManager.instance.pinnedSessions.clear();
       HlsManager.instance = null;
     }
   }
@@ -114,16 +117,29 @@ export class HlsManager {
     this.cacheDir = dir;
   }
 
+  pinSession(id: string) {
+    this.pinnedSessions.add(id);
+  }
+
+  unpinSession(id: string) {
+    this.pinnedSessions.delete(id);
+  }
+
   async ensureSession(sessionId: string, filePath: string): Promise<string> {
     if (!this.cacheDir) {
       throw new Error('HlsManager: cacheDir not set');
     }
 
-    // Reuse existing session if active
+    // Reuse existing session if active or fully transcoded
     const existing = this.sessions.get(sessionId);
-    if (existing && existing.status === HlsSessionStatus.ACTIVE) {
-      this.touchSession(sessionId);
-      return existing.playlistPath;
+    if (existing) {
+      if (
+        existing.status === HlsSessionStatus.ACTIVE ||
+        existing.status === HlsSessionStatus.COMPLETE
+      ) {
+        this.touchSession(sessionId);
+        return existing.playlistPath;
+      }
     }
 
     // Avoid double-spawning the same session
@@ -137,6 +153,45 @@ export class HlsManager {
       throw new Error('Server too busy. Please try again later.');
     }
 
+    const spawnPromise = (async () => {
+      try {
+        await this.startSession(sessionId, filePath);
+      } finally {
+        this.pendingSessions.delete(sessionId);
+      }
+    })();
+
+    this.pendingSessions.set(sessionId, spawnPromise);
+    await spawnPromise;
+
+    return this.sessions.get(sessionId)!.playlistPath;
+  }
+
+  async ensureSessionUnthrottled(
+    sessionId: string,
+    filePath: string,
+  ): Promise<string> {
+    if (!this.cacheDir) {
+      throw new Error('HlsManager: cacheDir not set');
+    }
+
+    const existing = this.sessions.get(sessionId);
+    if (existing) {
+      if (
+        existing.status === HlsSessionStatus.ACTIVE ||
+        existing.status === HlsSessionStatus.COMPLETE
+      ) {
+        this.touchSession(sessionId);
+        return existing.playlistPath;
+      }
+    }
+
+    if (this.pendingSessions.has(sessionId)) {
+      await this.pendingSessions.get(sessionId);
+      return this.sessions.get(sessionId)!.playlistPath;
+    }
+
+    // No sessions.size guard — concurrency is controlled by TranscodeQueueManager's PQueue
     const spawnPromise = (async () => {
       try {
         await this.startSession(sessionId, filePath);
@@ -249,7 +304,9 @@ export class HlsManager {
         s.status = HlsSessionStatus.ERROR;
         s.error = new Error(`FFmpeg exited with code ${code}`);
       } else {
-        s.status = HlsSessionStatus.STOPPED;
+        s.status = this.pinnedSessions.has(session.id)
+          ? HlsSessionStatus.COMPLETE
+          : HlsSessionStatus.STOPPED;
         s.progress.percent = 100;
         if (s.progress.duration > 0) {
           s.progress.currentTime = s.progress.duration;
@@ -341,6 +398,7 @@ export class HlsManager {
   async stopSession(sessionId: string) {
     const session = this.sessions.get(sessionId);
     if (!session) return;
+    this.pinnedSessions.delete(sessionId);
 
     if (
       session.process &&
@@ -391,6 +449,7 @@ export class HlsManager {
   private async cleanup() {
     const now = Date.now();
     for (const [id, session] of this.sessions.entries()) {
+      if (this.pinnedSessions.has(id)) continue;
       if (now - session.lastAccess > SESSION_TIMEOUT_MS) {
         await this.stopSession(id);
       }

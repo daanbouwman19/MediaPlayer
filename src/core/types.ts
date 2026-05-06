@@ -65,3 +65,12 @@ export interface HeatmapData {
   motion: number[];
   points: number;
 }
+
+export interface TranscodeJob {
+  file_path: string;
+  file_path_hash: string;
+  status: 'pending' | 'processing' | 'done' | 'failed';
+  error: string | null;
+  created_at: string;
+  updated_at: string;
+}

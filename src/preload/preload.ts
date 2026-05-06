@@ -15,6 +15,7 @@ import type {
   SmartPlaylist,
   MediaMetadata,
   MediaLibraryItem,
+  TranscodeJob,
 } from '../core/types';
 
 import type { FileSystemEntry } from '../core/file-system';
@@ -117,6 +118,11 @@ export interface ElectronAPI {
 
   // Theme
   setTheme: (theme: string) => void;
+
+  // Transcode Jobs
+  addTranscodeJobs: (filePaths: string[]) => Promise<IpcResult<void>>;
+  listTranscodeJobs: () => Promise<IpcResult<TranscodeJob[]>>;
+  cancelTranscodeJob: (filePath: string) => Promise<IpcResult<void>>;
 }
 
 // Expose a controlled API to the renderer process via `window.electronAPI`.
@@ -243,6 +249,14 @@ const api: ElectronAPI = {
 
   setTheme: (theme: string) =>
     ipcRenderer.send(IPC_CHANNELS.THEME_CHANGED, theme),
+
+  addTranscodeJobs: (filePaths: string[]) =>
+    ipcRenderer.invoke(IPC_CHANNELS.TRANSCODE_JOB_ADD, filePaths),
+
+  listTranscodeJobs: () => ipcRenderer.invoke(IPC_CHANNELS.TRANSCODE_JOB_LIST),
+
+  cancelTranscodeJob: (filePath: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.TRANSCODE_JOB_CANCEL, filePath),
 };
 
 contextBridge.exposeInMainWorld('electronAPI', api);

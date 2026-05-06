@@ -6,6 +6,7 @@ import type {
   MediaMetadata,
   SmartPlaylist,
   HeatmapData,
+  TranscodeJob,
 } from '../core/types';
 import type { FileSystemEntry } from '../core/file-system';
 
@@ -165,5 +166,17 @@ export interface IpcContract {
   [IPC_CHANNELS.DRIVE_GET_PARENT]: {
     payload: [string];
     response: string | null;
+  };
+  [IPC_CHANNELS.TRANSCODE_JOB_ADD]: {
+    payload: [string[]];
+    response: void;
+  };
+  [IPC_CHANNELS.TRANSCODE_JOB_LIST]: {
+    payload: [];
+    response: TranscodeJob[];
+  };
+  [IPC_CHANNELS.TRANSCODE_JOB_CANCEL]: {
+    payload: [string];
+    response: void;
   };
 }

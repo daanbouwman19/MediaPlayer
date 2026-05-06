@@ -542,6 +542,14 @@ describe('Database Worker Coverage', () => {
       { type: 'getPendingMetadata', payload: {} },
       { type: 'filterProcessingNeeded', payload: { filePaths: [] } },
       { type: 'getMetadata', payload: { filePaths: [] } },
+      { type: 'addTranscodeJob', payload: { filePath: '/a.mp4' } },
+      { type: 'listTranscodeJobs', payload: {} },
+      {
+        type: 'updateTranscodeJobStatus',
+        payload: { filePath: '/a.mp4', status: 'done', error: null },
+      },
+      { type: 'deleteTranscodeJob', payload: { filePath: '/a.mp4' } },
+      { type: 'getPendingTranscodeJobs', payload: {} },
     ];
 
     for (const [index, msg] of messageTypes.entries()) {

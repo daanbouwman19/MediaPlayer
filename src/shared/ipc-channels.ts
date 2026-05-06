@@ -45,4 +45,9 @@ export const IPC_CHANNELS = {
 
   // Theme
   THEME_CHANGED: 'theme-changed',
+
+  // Transcode Jobs
+  TRANSCODE_JOB_ADD: 'transcode-job:add',
+  TRANSCODE_JOB_LIST: 'transcode-job:list',
+  TRANSCODE_JOB_CANCEL: 'transcode-job:cancel',
 } as const;
