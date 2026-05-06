@@ -63,10 +63,9 @@ describe('DriveCacheManager', () => {
     statMock().mockRejectedValue(
       Object.assign(new Error('Not Found'), { code: 'ENOENT' }),
     );
+    vi.mocked(fs.promises.unlink).mockResolvedValue(undefined);
+    vi.mocked(fs.promises.readdir).mockResolvedValue([]);
     driveCacheManager = initializeDriveCacheManager('drive-cache-test');
-    // Clear private maps if possible, but singleton persists.
-    // We rely on mocks to control flow per test.
-    // For activeDownloads we might need to be careful if previous tests left them hanging.
   });
 
   it('initializes cache directory', async () => {
@@ -313,6 +312,279 @@ describe('DriveCacheManager', () => {
 
     expect(consoleSpy).toHaveBeenCalledWith(
       expect.stringContaining('Failed to stat cache file'),
+      fileId,
+      expect.anything(),
+    );
+    consoleSpy.mockRestore();
+  });
+
+  it('stream error after ready deletes corrupt file and clears metadata', async () => {
+    const fileId = 'corrupt-file';
+    statMock().mockRejectedValue(
+      Object.assign(new Error('Not Found'), { code: 'ENOENT' }),
+    );
+    const driveService = await import('../../src/main/google-drive-service');
+    vi.mocked(driveService.getDriveFileMetadata).mockResolvedValue({
+      size: '100',
+      mimeType: 'video/mp4',
+    } as any);
+
+    const mockSourceStream = new EventEmitter();
+    (mockSourceStream as any).pipe = vi.fn();
+    vi.mocked(driveService.getDriveFileStream).mockResolvedValue(
+      mockSourceStream as any,
+    );
+
+    const writeStream = new EventEmitter();
+    (writeStream as any).close = vi.fn();
+    setupMockWriteStream(writeStream);
+
+    vi.mocked(fs.promises.unlink).mockResolvedValue(undefined);
+
+    await driveCacheManager.getCachedFilePath(fileId);
+
+    mockSourceStream.emit('error', new Error('Stream Dies'));
+
+    // Allow microtasks to flush
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(fs.promises.unlink).toHaveBeenCalledWith(
+      expect.stringContaining(fileId),
+    );
+  });
+
+  it('resume download is deduped via activeDownloads', async () => {
+    const fileId = 'partial-concurrent';
+    const driveService = await import('../../src/main/google-drive-service');
+    vi.mocked(driveService.getDriveFileMetadata).mockResolvedValue({
+      size: '2000',
+      mimeType: 'video/mp4',
+    } as any);
+
+    statMock().mockResolvedValue({ size: 500 } as any);
+
+    const writeStream = new EventEmitter();
+    (writeStream as any).path = '/tmp/cache/partial';
+    setupMockWriteStream(writeStream);
+
+    const mockStream = { pipe: vi.fn(), on: vi.fn() };
+    vi.mocked(driveService.getDriveFileStream).mockResolvedValue(
+      mockStream as any,
+    );
+
+    const [r1, r2] = await Promise.all([
+      driveCacheManager.getCachedFilePath(fileId),
+      driveCacheManager.getCachedFilePath(fileId),
+    ]);
+
+    // Allow the resume download to start
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(driveService.getDriveFileStream).toHaveBeenCalledTimes(1);
+    expect(r1.path).toBe(r2.path);
+  });
+
+  it('eviction guard prevents concurrent runs when multiple downloads finish together', async () => {
+    const driveService = await import('../../src/main/google-drive-service');
+    vi.mocked(driveService.getDriveFileMetadata).mockResolvedValue({
+      size: '100',
+      mimeType: 'video/mp4',
+    } as any);
+    vi.mocked(driveService.getDriveFileStream).mockResolvedValue({
+      pipe: vi.fn(),
+      on: vi.fn(),
+    } as any);
+
+    // Block readdir so the first eviction stays in-flight while the second fires
+    let unblockReaddir!: () => void;
+    vi.mocked(fs.promises.readdir).mockReturnValueOnce(
+      new Promise<string[]>((resolve) => {
+        unblockReaddir = () => resolve([]);
+      }) as any,
+    );
+
+    const writeStream1 = new EventEmitter();
+    const writeStream2 = new EventEmitter();
+    let streamCount = 0;
+    vi.mocked(fs.createWriteStream).mockImplementation(() => {
+      const ws = streamCount++ === 0 ? writeStream1 : writeStream2;
+      setTimeout(() => ws.emit('ready'), 0);
+      return ws as any;
+    });
+
+    const p1 = driveCacheManager.getCachedFilePath('guard-1');
+    const p2 = driveCacheManager.getCachedFilePath('guard-2');
+    await p1;
+    await p2;
+
+    // Both finish events fire synchronously — first sets evictionRunning=true,
+    // second sees the flag and returns immediately.
+    writeStream1.emit('finish');
+    writeStream2.emit('finish');
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    // readdir called exactly once; second eviction was a no-op
+    expect(fs.promises.readdir).toHaveBeenCalledTimes(1);
+
+    unblockReaddir();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+
+  it('evicts LRU files when cache exceeds limit', async () => {
+    const fileId = 'new-file';
+    const threeGB = 3 * 1024 ** 3;
+
+    statMock()
+      .mockRejectedValueOnce(
+        Object.assign(new Error('Not Found'), { code: 'ENOENT' }),
+      )
+      .mockResolvedValue({ size: threeGB, mtimeMs: 1000 } as any);
+
+    const driveService = await import('../../src/main/google-drive-service');
+    vi.mocked(driveService.getDriveFileMetadata).mockResolvedValue({
+      size: '100',
+      mimeType: 'video/mp4',
+    } as any);
+
+    const mockStream = { pipe: vi.fn(), on: vi.fn() };
+    vi.mocked(driveService.getDriveFileStream).mockResolvedValue(
+      mockStream as any,
+    );
+
+    const writeStream = new EventEmitter();
+    setupMockWriteStream(writeStream, { ready: true, finish: true });
+
+    vi.mocked(fs.promises.unlink).mockResolvedValue(undefined);
+    vi.mocked(fs.promises.readdir).mockResolvedValue([
+      'old-file',
+      fileId,
+    ] as any);
+
+    await driveCacheManager.getCachedFilePath(fileId);
+
+    // Allow finish event and enforceEviction to run
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    // old-file (LRU: no accessOrder entry, lowest mtimeMs) should have been evicted
+    expect(fs.promises.unlink).toHaveBeenCalledWith(
+      expect.stringContaining('old-file'),
+    );
+  });
+
+  it('invalidateFile removes file and clears metadata cache', async () => {
+    const fileId = 'file-to-invalidate';
+    const driveService = await import('../../src/main/google-drive-service');
+    vi.mocked(driveService.getDriveFileMetadata).mockResolvedValue({
+      size: '500',
+      mimeType: 'video/mp4',
+    } as any);
+    vi.mocked(fs.promises.unlink).mockResolvedValue(undefined);
+
+    // Populate metadata cache
+    statMock().mockResolvedValue({ size: 500 } as any);
+    await driveCacheManager.getCachedFilePath(fileId);
+    expect(driveService.getDriveFileMetadata).toHaveBeenCalledTimes(1);
+
+    await driveCacheManager.invalidateFile(fileId);
+
+    expect(fs.promises.unlink).toHaveBeenCalledWith(
+      expect.stringContaining(fileId),
+    );
+
+    // Metadata cache should be cleared — next call fetches fresh metadata
+    statMock().mockResolvedValue({ size: 500 } as any);
+    await driveCacheManager.getCachedFilePath(fileId);
+    expect(driveService.getDriveFileMetadata).toHaveBeenCalledTimes(2);
+  });
+
+  it('invalidateFile logs error when unlink fails with non-ENOENT error', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const fileId = 'locked-file';
+
+    vi.mocked(fs.promises.unlink).mockRejectedValueOnce(
+      Object.assign(new Error('Permission denied'), { code: 'EPERM' }),
+    );
+
+    await driveCacheManager.invalidateFile(fileId);
+
+    expect(consoleSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Failed to invalidate'),
+      fileId,
+      expect.anything(),
+    );
+    consoleSpy.mockRestore();
+  });
+
+  it('logs error when eviction unlink fails', async () => {
+    const fileId = 'evict-unlink-fail';
+    const threeGB = 3 * 1024 ** 3;
+
+    statMock()
+      .mockRejectedValueOnce(
+        Object.assign(new Error('Not Found'), { code: 'ENOENT' }),
+      )
+      .mockResolvedValue({ size: threeGB, mtimeMs: 1000 } as any);
+
+    const driveService = await import('../../src/main/google-drive-service');
+    vi.mocked(driveService.getDriveFileMetadata).mockResolvedValue({
+      size: '100',
+      mimeType: 'video/mp4',
+    } as any);
+
+    const mockStream = { pipe: vi.fn(), on: vi.fn() };
+    vi.mocked(driveService.getDriveFileStream).mockResolvedValue(
+      mockStream as any,
+    );
+
+    const writeStream = new EventEmitter();
+    setupMockWriteStream(writeStream, { ready: true, finish: true });
+
+    vi.mocked(fs.promises.readdir).mockResolvedValue([
+      'old-file',
+      fileId,
+    ] as any);
+    vi.mocked(fs.promises.unlink).mockRejectedValue(new Error('Cannot delete'));
+
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await driveCacheManager.getCachedFilePath(fileId);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(consoleSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Failed to evict'),
+      'old-file',
+      expect.anything(),
+    );
+    consoleSpy.mockRestore();
+  });
+
+  it('resume download failure is caught and cleans up activeDownloads', async () => {
+    const fileId = 'resume-fail-file';
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const driveService = await import('../../src/main/google-drive-service');
+    vi.mocked(driveService.getDriveFileMetadata).mockResolvedValue({
+      size: '2000',
+      mimeType: 'video/mp4',
+    } as any);
+
+    // Partial file exists
+    statMock().mockResolvedValue({ size: 500 } as any);
+
+    // Resume download fails before any write stream is set up
+    vi.mocked(driveService.getDriveFileStream).mockRejectedValue(
+      new Error('Resume failed'),
+    );
+
+    const result = await driveCacheManager.getCachedFilePath(fileId);
+    expect(result.path).toBeDefined();
+
+    // Allow the rejection and catch callback to run
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    expect(consoleSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Download failed'),
       fileId,
       expect.anything(),
     );

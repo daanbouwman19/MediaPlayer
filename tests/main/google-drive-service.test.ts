@@ -106,6 +106,44 @@ describe('Google Drive Service', () => {
         }),
       );
     });
+
+    it('limits recursive scan to MAX_SCAN_DEPTH levels', async () => {
+      (googleAuth.getOAuth2Client as any).mockReturnValue({
+        credentials: { refresh_token: 'valid' },
+      });
+
+      const listMock = mockDrive.files.list as any;
+      listMock.mockReset();
+
+      // Each of 5 levels makes 2 API calls (files + folders) = 10 total
+      for (let i = 0; i < 5; i++) {
+        listMock.mockResolvedValueOnce({
+          data: {
+            files: [
+              { id: `file${i}`, name: `img${i}.jpg`, mimeType: 'image/jpeg' },
+            ],
+          },
+        });
+        listMock.mockResolvedValueOnce({
+          data: {
+            files: [
+              {
+                id: `folder${i}`,
+                name: `Sub${i}`,
+                mimeType: 'application/vnd.google-apps.folder',
+              },
+            ],
+          },
+        });
+      }
+
+      // If depth-limiting fails, these calls would be made for the 6th level
+      listMock.mockResolvedValue({ data: { files: [] } });
+
+      await driveService.listDriveFiles('root');
+
+      expect(listMock).toHaveBeenCalledTimes(10);
+    });
   });
 
   describe('getDriveFileStream', () => {
@@ -383,6 +421,107 @@ describe('Google Drive Service', () => {
       await expect(driveService.listDriveDirectory('root')).rejects.toThrow(
         'API Error',
       );
+    });
+
+    it('follows nextPageToken until all pages are fetched', async () => {
+      (googleAuth.getOAuth2Client as any).mockReturnValue({
+        credentials: { refresh_token: 'valid' },
+      });
+
+      const listMock = mockDrive.files.list as any;
+      listMock.mockReset();
+
+      listMock
+        .mockResolvedValueOnce({
+          data: {
+            files: [{ id: 'f1', name: 'File1.jpg', mimeType: 'image/jpeg' }],
+            nextPageToken: 'token1',
+          },
+        })
+        .mockResolvedValueOnce({
+          data: {
+            files: [{ id: 'f2', name: 'File2.jpg', mimeType: 'image/jpeg' }],
+            nextPageToken: 'token2',
+          },
+        })
+        .mockResolvedValueOnce({
+          data: {
+            files: [{ id: 'f3', name: 'File3.jpg', mimeType: 'image/jpeg' }],
+          },
+        });
+
+      const result = await driveService.listDriveDirectory('root');
+
+      expect(result).toHaveLength(3);
+      expect(listMock).toHaveBeenCalledTimes(3);
+      expect(listMock).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({ pageToken: 'token1' }),
+      );
+      expect(listMock).toHaveBeenNthCalledWith(
+        3,
+        expect.objectContaining({ pageToken: 'token2' }),
+      );
+    });
+  });
+
+  describe('DRIVE_RETRY_OPTIONS', () => {
+    it('retries on 403 rateLimitExceeded', async () => {
+      vi.useFakeTimers();
+      (googleAuth.getOAuth2Client as any).mockReturnValue({
+        credentials: { refresh_token: 'valid' },
+      });
+
+      (mockDrive.files.get as any)
+        .mockRejectedValueOnce({
+          code: 403,
+          errors: [{ reason: 'rateLimitExceeded' }],
+        })
+        .mockResolvedValueOnce({ data: { id: 'fileId', size: '100' } });
+
+      const promise = driveService.getDriveFileMetadata('fileId');
+      await vi.advanceTimersByTimeAsync(2000);
+      await promise;
+
+      expect(mockDrive.files.get).toHaveBeenCalledTimes(2);
+      vi.useRealTimers();
+    });
+
+    it('retries on 403 userRateLimitExceeded', async () => {
+      vi.useFakeTimers();
+      (googleAuth.getOAuth2Client as any).mockReturnValue({
+        credentials: { refresh_token: 'valid' },
+      });
+
+      (mockDrive.files.get as any)
+        .mockRejectedValueOnce({
+          code: 403,
+          errors: [{ reason: 'userRateLimitExceeded' }],
+        })
+        .mockResolvedValueOnce({ data: { id: 'fileId', size: '100' } });
+
+      const promise = driveService.getDriveFileMetadata('fileId');
+      await vi.advanceTimersByTimeAsync(2000);
+      await promise;
+
+      expect(mockDrive.files.get).toHaveBeenCalledTimes(2);
+      vi.useRealTimers();
+    });
+
+    it('does not retry on plain 403 auth errors', async () => {
+      (googleAuth.getOAuth2Client as any).mockReturnValue({
+        credentials: { refresh_token: 'valid' },
+      });
+
+      (mockDrive.files.get as any).mockRejectedValue({
+        code: 403,
+        errors: [{ reason: 'forbidden' }],
+      });
+
+      await expect(driveService.getDriveFileMetadata('fileId')).rejects.toEqual(
+        expect.objectContaining({ code: 403 }),
+      );
+      expect(mockDrive.files.get).toHaveBeenCalledTimes(1);
     });
   });
 

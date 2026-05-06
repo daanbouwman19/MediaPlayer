@@ -5,11 +5,21 @@ import type { MediaFile, Album } from '../core/types.ts';
 import { createDrivePath } from '../core/media-utils.ts';
 import { callWithRetry } from '../core/utils/async-utils.ts';
 
+const MAX_SCAN_DEPTH = 5;
+
+function isDriveQuotaError(error: unknown): boolean {
+  const err = error as { code?: number; errors?: { reason?: string }[] };
+  if (err.code !== 403) return false;
+  const reason = err.errors?.[0]?.reason ?? '';
+  return reason === 'rateLimitExceeded' || reason === 'userRateLimitExceeded';
+}
+
 const DRIVE_RETRY_OPTIONS = {
   shouldRetry: (error: unknown) => {
     const err = error as { code?: number };
     return (
       err.code === 429 ||
+      isDriveQuotaError(error) ||
       (typeof err.code === 'number' && err.code >= 500 && err.code < 600)
     );
   },
@@ -102,7 +112,21 @@ function processDriveFile(f: drive_v3.Schema$File): MediaFile | null {
  * For recursive structures, we might need a more complex traversal.
  */
 // ... existing code ...
-export async function listDriveFiles(folderId: string): Promise<Album> {
+export async function listDriveFiles(
+  folderId: string,
+  depth = 0,
+): Promise<Album> {
+  if (depth >= MAX_SCAN_DEPTH) {
+    console.warn(
+      `[GoogleDrive] Max scan depth (${MAX_SCAN_DEPTH}) reached at folder ${folderId}, skipping subtree.`,
+    );
+    return {
+      id: folderId,
+      name: 'Google Drive Folder',
+      textures: [],
+      children: [],
+    };
+  }
   validateFolderId(folderId);
   const drive = await getDriveClient();
   const q = `'${folderId}' in parents and (mimeType contains 'image/' or mimeType contains 'video/' or mimeType = 'application/vnd.google-apps.shortcut') and trashed = false`;
@@ -170,10 +194,7 @@ export async function listDriveFiles(folderId: string): Promise<Album> {
     }
 
     if (targetId && isFolder) {
-      // Recursive call - be careful with depth/rate limits in production
-      // For MVP we might want to lazy load, but the app architecture expects a full tree scan.
-      // We will do a recursive scan.
-      const subAlbum = await listDriveFiles(targetId);
+      const subAlbum = await listDriveFiles(targetId, depth + 1);
       subAlbum.name = subfolder.name || 'Untitled Folder';
       children.push(subAlbum);
     }
@@ -202,20 +223,30 @@ export async function listDriveDirectory(
 
   const q = `'${queryId}' in parents and trashed = false`;
   try {
-    const res = await callWithRetry(
-      () =>
-        drive.files.list({
-          q,
-          fields: 'files(id, name, mimeType, shortcutDetails)',
-          pageSize: 100, // Pagination? For browsing we probably want more but let's start with 100
-          orderBy: 'folder,name',
-          supportsAllDrives: true,
-          includeItemsFromAllDrives: true,
-        }),
-      DRIVE_RETRY_OPTIONS,
-    );
+    let allFiles: drive_v3.Schema$File[] = [];
+    let pageToken: string | undefined = undefined;
 
-    const files = res.data.files || [];
+    do {
+      const res: { data: drive_v3.Schema$FileList } = await callWithRetry(
+        () =>
+          drive.files.list({
+            q,
+            fields: 'nextPageToken, files(id, name, mimeType, shortcutDetails)',
+            pageSize: 1000,
+            pageToken,
+            orderBy: 'folder,name',
+            supportsAllDrives: true,
+            includeItemsFromAllDrives: true,
+          }),
+        DRIVE_RETRY_OPTIONS,
+      );
+      if (res.data.files) {
+        allFiles = allFiles.concat(res.data.files);
+      }
+      pageToken = res.data.nextPageToken || undefined;
+    } while (pageToken);
+
+    const files = allFiles;
     console.log(
       `[GoogleDrive] listDriveDirectory '${queryId}' found ${files.length} items.`,
     );

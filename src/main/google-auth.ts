@@ -9,6 +9,7 @@ import {
 import { getSetting, saveSetting } from '../core/database.ts';
 import { GOOGLE_DRIVE_SCOPES, GOOGLE_TOKENS_KEY } from '../core/constants.ts';
 import { encrypt, decrypt } from '../core/utils/encryption.ts';
+import { callWithRetry } from '../core/utils/async-utils.ts';
 
 let oauth2Client: OAuth2Client | null = null;
 // Store the pending code verifier for PKCE flow.
@@ -45,9 +46,12 @@ export function getOAuth2Client(): OAuth2Client {
         ...initializedClient.credentials,
         ...tokens,
       });
-      saveCredentials(initializedClient).catch((err) => {
+      callWithRetry(() => saveCredentials(initializedClient), {
+        retries: 2,
+        initialDelay: 500,
+      }).catch((err) => {
         console.error(
-          '[GoogleAuth] Failed to auto-save refreshed tokens:',
+          '[GoogleAuth] Failed to auto-save refreshed tokens after retries:',
           err,
         );
       });
