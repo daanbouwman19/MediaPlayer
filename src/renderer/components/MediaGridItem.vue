@@ -2,7 +2,7 @@
   <button
     type="button"
     class="relative group grid-item cursor-pointer w-full h-full text-left bg-transparent border-0 p-0 block focus:outline-none focus:ring-2 focus:ring-accent rounded overflow-hidden"
-    :class="{ 'ring-2 ring-accent': isSelected }"
+    :class="{ 'ring-2 ring-inset ring-accent': isSelected }"
     :aria-label="ariaLabel"
     :title="displayName"
     @click="$emit('click', item, $event)"
@@ -111,81 +111,28 @@
     <!-- Transcode status badge -->
     <div
       v-if="transcodeStatus"
-      class="absolute bottom-2 right-2 flex items-center justify-center w-5 h-5 rounded-full pointer-events-none"
+      class="absolute bottom-2 right-2 flex items-center gap-1 px-1.5 py-0.5 rounded text-white text-[10px] font-semibold leading-none pointer-events-none"
       :class="{
-        'bg-gray-500/80': transcodeStatus === 'pending',
-        'bg-green-500/80':
-          transcodeStatus === 'processing' || transcodeStatus === 'done',
-        'bg-red-500/80': transcodeStatus === 'failed',
+        'bg-gray-600/90': transcodeStatus === 'pending',
+        'bg-blue-600/90': transcodeStatus === 'processing',
+        'bg-green-600/90': transcodeStatus === 'done',
+        'bg-red-600/90': transcodeStatus === 'failed',
       }"
-      :title="transcodeStatus"
+      :title="`Transcode: ${transcodeStatus}`"
     >
-      <!-- pending: clock -->
-      <svg
-        v-if="transcodeStatus === 'pending'"
-        class="w-3 h-3 text-white"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-      >
-        <path
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          stroke-width="2"
-          d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-        />
+      <svg v-if="transcodeStatus === 'pending'" class="w-2.5 h-2.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
       </svg>
-      <!-- processing: spinner -->
-      <svg
-        v-else-if="transcodeStatus === 'processing'"
-        class="w-3 h-3 text-white animate-spin"
-        fill="none"
-        viewBox="0 0 24 24"
-      >
-        <circle
-          class="opacity-25"
-          cx="12"
-          cy="12"
-          r="10"
-          stroke="currentColor"
-          stroke-width="4"
-        />
-        <path
-          class="opacity-75"
-          fill="currentColor"
-          d="M4 12a8 8 0 018-8v8H4z"
-        />
+      <svg v-else-if="transcodeStatus === 'processing'" class="w-2.5 h-2.5 shrink-0 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
       </svg>
-      <!-- done: checkmark -->
-      <svg
-        v-else-if="transcodeStatus === 'done'"
-        class="w-3 h-3 text-white"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-      >
-        <path
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          stroke-width="2"
-          d="M5 13l4 4L19 7"
-        />
+      <svg v-else-if="transcodeStatus === 'done'" class="w-2.5 h-2.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
       </svg>
-      <!-- failed: X -->
-      <svg
-        v-else-if="transcodeStatus === 'failed'"
-        class="w-3 h-3 text-white"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-      >
-        <path
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          stroke-width="2"
-          d="M6 18L18 6M6 6l12 12"
-        />
+      <svg v-else-if="transcodeStatus === 'failed'" class="w-2.5 h-2.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
       </svg>
+      <span>{{ transcodeStatus === 'processing' ? 'HLS' : transcodeStatus }}</span>
     </div>
   </button>
 </template>

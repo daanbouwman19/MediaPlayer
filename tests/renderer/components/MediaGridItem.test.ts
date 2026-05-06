@@ -314,9 +314,10 @@ describe('MediaGridItem.vue', () => {
     const wrapper = mount(MediaGridItem, {
       props: { ...defaultProps, item, transcodeStatus: 'pending' },
     });
-    const badge = wrapper.find('[title="pending"]');
+    const badge = wrapper.find('[title="Transcode: pending"]');
     expect(badge.exists()).toBe(true);
-    expect(badge.classes()).toContain('bg-gray-500/80');
+    expect(badge.classes()).toContain('bg-gray-600/90');
+    expect(badge.text()).toContain('pending');
   });
 
   it('shows transcode badge for processing status', () => {
@@ -324,9 +325,10 @@ describe('MediaGridItem.vue', () => {
     const wrapper = mount(MediaGridItem, {
       props: { ...defaultProps, item, transcodeStatus: 'processing' },
     });
-    const badge = wrapper.find('[title="processing"]');
+    const badge = wrapper.find('[title="Transcode: processing"]');
     expect(badge.exists()).toBe(true);
-    expect(badge.classes()).toContain('bg-green-500/80');
+    expect(badge.classes()).toContain('bg-blue-600/90');
+    expect(badge.text()).toContain('HLS');
   });
 
   it('shows transcode badge for done status', () => {
@@ -334,9 +336,10 @@ describe('MediaGridItem.vue', () => {
     const wrapper = mount(MediaGridItem, {
       props: { ...defaultProps, item, transcodeStatus: 'done' },
     });
-    const badge = wrapper.find('[title="done"]');
+    const badge = wrapper.find('[title="Transcode: done"]');
     expect(badge.exists()).toBe(true);
-    expect(badge.classes()).toContain('bg-green-500/80');
+    expect(badge.classes()).toContain('bg-green-600/90');
+    expect(badge.text()).toContain('done');
   });
 
   it('shows transcode badge for failed status', () => {
@@ -344,16 +347,16 @@ describe('MediaGridItem.vue', () => {
     const wrapper = mount(MediaGridItem, {
       props: { ...defaultProps, item, transcodeStatus: 'failed' },
     });
-    const badge = wrapper.find('[title="failed"]');
+    const badge = wrapper.find('[title="Transcode: failed"]');
     expect(badge.exists()).toBe(true);
-    expect(badge.classes()).toContain('bg-red-500/80');
+    expect(badge.classes()).toContain('bg-red-600/90');
+    expect(badge.text()).toContain('failed');
   });
 
   it('does not show transcode badge when transcodeStatus is undefined', () => {
     const item = { path: 'test.jpg', name: 'test.jpg', rating: 0, duration: 0 };
     const wrapper = mount(MediaGridItem, { props: { ...defaultProps, item } });
-    expect(wrapper.find('[title="pending"]').exists()).toBe(false);
-    expect(wrapper.find('[title="done"]').exists()).toBe(false);
+    expect(wrapper.find('[title^="Transcode:"]').exists()).toBe(false);
   });
 
   it('emits click event with item and mouse event', async () => {

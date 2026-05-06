@@ -403,6 +403,16 @@
             </div>
           </div>
 
+          <!-- Shuffle All Sources -->
+          <button
+            class="h-10 w-10 shrink-0 flex items-center justify-center rounded-lg text-muted hover:text-accent hover:bg-black/5 transition-colors"
+            title="Shuffle All Sources"
+            aria-label="Shuffle All Sources"
+            @click="slideshow.startSlideshow()"
+          >
+            <ShuffleIcon class="w-5 h-5" />
+          </button>
+
           <!-- Primary Play Action -->
           <button
             class="timer-button h-10 w-14 shrink-0 flex items-center justify-center rounded-lg glass-button-primary"
@@ -454,6 +464,7 @@ import AlbumTree from './AlbumTree.vue';
 import CloseIcon from './icons/CloseIcon.vue';
 import PlayIcon from './icons/PlayIcon.vue';
 import PauseIcon from './icons/PauseIcon.vue';
+import ShuffleIcon from './icons/ShuffleIcon.vue';
 import SettingsIcon from './icons/SettingsIcon.vue';
 import PlaylistAddIcon from './icons/PlaylistAddIcon.vue';
 import PlaylistIcon from './icons/PlaylistIcon.vue';
