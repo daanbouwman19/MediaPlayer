@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, Mock } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
-import { ref, reactive, computed } from 'vue';
+import { ref, reactive } from 'vue';
 import MediaDisplay from '@/components/MediaDisplay.vue';
 import MediaControls from '@/components/MediaControls.vue';
 import { useSlideshow } from '@/composables/useSlideshow';
