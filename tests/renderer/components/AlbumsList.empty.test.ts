@@ -1,5 +1,6 @@
 import { mount } from '@vue/test-utils';
 import { describe, it, expect, vi } from 'vitest';
+import { reactive } from 'vue';
 import AlbumsList from '../../../src/renderer/components/AlbumsList.vue';
 import { useLibraryStore } from '../../../src/renderer/composables/useLibraryStore';
 import { useUIStore } from '../../../src/renderer/composables/useUIStore';
@@ -75,7 +76,7 @@ vi.mock('../../../src/renderer/api', () => ({
 describe('AlbumsList Empty State', () => {
   it('renders the empty state button when no albums are present', async () => {
     // Setup store mocks
-    (useLibraryStore as any).mockReturnValue({
+    (useLibraryStore as unknown as any).mockReturnValue({
       allAlbums: [],
       albumsSelectedForSlideshow: {},
       smartPlaylists: [],
@@ -84,15 +85,19 @@ describe('AlbumsList Empty State', () => {
       mediaDirectories: [],
     });
 
-    const isSourcesModalVisible = { value: false };
-    (useUIStore as any).mockReturnValue({
-      isSourcesModalVisible,
-      isSmartPlaylistModalVisible: { value: false },
-      gridMediaFiles: { value: [] },
-      viewMode: { value: 'player' },
-      playlistToEdit: { value: null },
-      mediaFilter: { value: 'ALL' },
+    const mockUIStore = reactive({
+      isSourcesModalVisible: false,
+      isSmartPlaylistModalVisible: false,
+      gridMediaFiles: [],
+      viewMode: 'player',
+      playlistToEdit: null,
+      mediaFilter: 'All',
+      themeMode: 'system',
+      isSidebarVisible: true,
+      isHistoryMode: false,
+      isControlsVisible: true,
     });
+    (useUIStore as unknown as any).mockReturnValue(mockUIStore);
 
     const wrapper = mount(AlbumsList, {
       global: {
@@ -114,6 +119,6 @@ describe('AlbumsList Empty State', () => {
 
     // Verify interaction
     await emptyStateButton.trigger('click');
-    expect(isSourcesModalVisible.value).toBe(true);
+    expect(mockUIStore.isSourcesModalVisible).toBe(true);
   });
 });

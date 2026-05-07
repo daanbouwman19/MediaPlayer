@@ -1,4 +1,5 @@
 import { watch } from 'vue';
+import { storeToRefs } from 'pinia';
 import { useUIStore } from './useUIStore';
 import { AVAILABLE_THEMES } from '../../core/themes';
 
@@ -24,7 +25,7 @@ const updateDOM = (themeId: string) => {
 
 export function useTheme() {
   const uiStore = useUIStore();
-  const { themeMode } = uiStore;
+  const { themeMode } = storeToRefs(uiStore);
 
   const applyTheme = () => {
     const currentThemeId = themeMode.value;

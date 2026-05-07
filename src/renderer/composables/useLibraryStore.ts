@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { reactive, computed, watch, toRefs } from 'vue';
+import { ref, computed, watch } from 'vue';
 import type {
   Album,
   MediaDirectory,
@@ -8,44 +8,36 @@ import type {
 } from '../../core/types';
 import { api } from '../api';
 
-interface LibraryState {
-  isScanning: boolean;
-  allAlbums: Album[];
-  mediaDirectories: MediaDirectory[];
-  supportedExtensions: { images: string[]; videos: string[]; all: string[] };
-  smartPlaylists: SmartPlaylist[];
-  historyMedia: MediaFile[];
-  albumsSelectedForSlideshow: { [albumName: string]: boolean };
-  globalMediaPoolForSelection: MediaFile[];
-  totalMediaInPool: number;
-  mediaUrlGenerator: ((path: string) => string) | null;
-  thumbnailUrlGenerator: ((path: string) => string) | null;
-}
-
-export const usePiniaLibraryStore = defineStore('library', () => {
-  const state = reactive<LibraryState>({
-    isScanning: false,
-    allAlbums: [],
-    mediaDirectories: [],
-    supportedExtensions: { images: [], videos: [], all: [] },
-    smartPlaylists: [],
-    historyMedia: [],
-    albumsSelectedForSlideshow: {},
-    globalMediaPoolForSelection: [],
-    totalMediaInPool: 0,
-    mediaUrlGenerator: null,
-    thumbnailUrlGenerator: null,
+export const useLibraryStore = defineStore('library', () => {
+  const isScanning = ref(false);
+  const allAlbums = ref<Album[]>([]);
+  const mediaDirectories = ref<MediaDirectory[]>([]);
+  const supportedExtensions = ref<{
+    images: string[];
+    videos: string[];
+    all: string[];
+  }>({
+    images: [],
+    videos: [],
+    all: [],
   });
+  const smartPlaylists = ref<SmartPlaylist[]>([]);
+  const historyMedia = ref<MediaFile[]>([]);
+  const albumsSelectedForSlideshow = ref<{ [albumName: string]: boolean }>({});
+  const globalMediaPoolForSelection = ref<MediaFile[]>([]);
+  const totalMediaInPool = ref(0);
+  const mediaUrlGenerator = ref<((path: string) => string) | null>(null);
+  const thumbnailUrlGenerator = ref<((path: string) => string) | null>(null);
 
   const imageExtensionsSet = computed(
-    () => new Set(state.supportedExtensions.images),
+    () => new Set(supportedExtensions.value.images),
   );
   const videoExtensionsSet = computed(
-    () => new Set(state.supportedExtensions.videos),
+    () => new Set(supportedExtensions.value.videos),
   );
 
   watch(
-    () => state.albumsSelectedForSlideshow,
+    albumsSelectedForSlideshow,
     (newSelection: { [key: string]: boolean }) => {
       try {
         localStorage.setItem('albumSelection', JSON.stringify(newSelection));
@@ -57,7 +49,7 @@ export const usePiniaLibraryStore = defineStore('library', () => {
   );
 
   const selectAllAlbumsRecursively = (albums: Album[]) => {
-    const newSelection = { ...state.albumsSelectedForSlideshow };
+    const newSelection = { ...albumsSelectedForSlideshow.value };
     const stack = [...albums];
     while (stack.length > 0) {
       const album = stack.pop()!;
@@ -68,13 +60,13 @@ export const usePiniaLibraryStore = defineStore('library', () => {
         }
       }
     }
-    state.albumsSelectedForSlideshow = newSelection;
+    albumsSelectedForSlideshow.value = newSelection;
   };
 
   const fetchHistory = async (limit = 50) => {
     try {
       const items = await api.getRecentlyPlayed(limit);
-      state.historyMedia = items.map((item) => {
+      historyMedia.value = items.map((item) => {
         const name = item.file_path.split(/[\/\\]/).pop() || item.file_path;
         return {
           name,
@@ -105,23 +97,23 @@ export const usePiniaLibraryStore = defineStore('library', () => {
           api.getThumbnailUrlGenerator(),
         ]);
 
-      state.allAlbums = albums;
-      state.mediaDirectories = directories;
-      state.smartPlaylists = playlists;
-      state.supportedExtensions = extensions;
-      state.mediaUrlGenerator = mediaGen;
-      state.thumbnailUrlGenerator = thumbGen;
+      allAlbums.value = albums;
+      mediaDirectories.value = directories;
+      smartPlaylists.value = playlists;
+      supportedExtensions.value = extensions;
+      mediaUrlGenerator.value = mediaGen;
+      thumbnailUrlGenerator.value = thumbGen;
 
       const savedSelection = localStorage.getItem('albumSelection');
       if (savedSelection) {
         try {
-          state.albumsSelectedForSlideshow = JSON.parse(savedSelection);
+          albumsSelectedForSlideshow.value = JSON.parse(savedSelection);
         } catch (e) {
           console.error('Failed to parse saved album selection:', e);
-          selectAllAlbumsRecursively(state.allAlbums);
+          selectAllAlbumsRecursively(allAlbums.value);
         }
       } else {
-        selectAllAlbumsRecursively(state.allAlbums);
+        selectAllAlbumsRecursively(allAlbums.value);
       }
     } catch (error) {
       console.error('[useLibraryStore] Error during initial load:', error);
@@ -129,17 +121,27 @@ export const usePiniaLibraryStore = defineStore('library', () => {
   };
 
   const clearMediaPool = () => {
-    state.globalMediaPoolForSelection = [];
+    globalMediaPoolForSelection.value = [];
   };
 
   const resetLibraryState = () => {
-    state.globalMediaPoolForSelection = [];
-    state.albumsSelectedForSlideshow = {};
-    state.historyMedia = [];
+    globalMediaPoolForSelection.value = [];
+    albumsSelectedForSlideshow.value = {};
+    historyMedia.value = [];
   };
 
   return {
-    state,
+    isScanning,
+    allAlbums,
+    mediaDirectories,
+    supportedExtensions,
+    smartPlaylists,
+    historyMedia,
+    albumsSelectedForSlideshow,
+    globalMediaPoolForSelection,
+    totalMediaInPool,
+    mediaUrlGenerator,
+    thumbnailUrlGenerator,
     imageExtensionsSet,
     videoExtensionsSet,
     loadInitialData,
@@ -154,18 +156,3 @@ export const setupPersistenceWatcher = () => {
   // Provided for backward compatibility if any test explicitly imports it
   // The actual watcher is now initialized when the pinia store is created.
 };
-
-export function useLibraryStore() {
-  const store = usePiniaLibraryStore();
-  return {
-    ...toRefs(store.state),
-    state: store.state,
-    imageExtensionsSet: computed(() => store.imageExtensionsSet),
-    videoExtensionsSet: computed(() => store.videoExtensionsSet),
-    loadInitialData: store.loadInitialData,
-    selectAllAlbumsRecursively: store.selectAllAlbumsRecursively,
-    fetchHistory: store.fetchHistory,
-    clearMediaPool: store.clearMediaPool,
-    resetLibraryState: store.resetLibraryState,
-  };
-}

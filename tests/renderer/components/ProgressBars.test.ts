@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { mount } from '@vue/test-utils';
-import { nextTick, reactive, toRefs, computed, ref } from 'vue';
+import { nextTick, reactive, computed, ref } from 'vue';
 import AlbumsList from '@/components/AlbumsList.vue';
 import MediaDisplay from '@/components/MediaDisplay.vue';
 import ProgressBar from '@/components/ProgressBar.vue';
@@ -86,33 +86,26 @@ describe('Progress Bars', () => {
       themeMode: 'system',
     });
 
-    (useLibraryStore as Mock).mockReturnValue({
-      state: mockLibraryState,
-      ...toRefs(mockLibraryState),
-    });
+    (useLibraryStore as unknown as Mock).mockReturnValue(mockLibraryState);
 
-    (usePlayerStore as Mock).mockReturnValue({
-      state: mockPlayerState,
-      ...toRefs(mockPlayerState),
-      resetState: vi.fn(),
-    });
+    (usePlayerStore as unknown as Mock).mockReturnValue(
+      Object.assign(mockPlayerState, {
+        resetState: vi.fn(),
+      }),
+    );
 
-    (usePlaylistStore as Mock).mockReturnValue({
-      state: mockPlaylistState,
-      currentItem: computed(() => mockPlaylistState.currentItem),
-      hasPrevious: computed(() => mockPlaylistState.history.length > 0),
-      hasNext: computed(() => mockPlaylistState.queue.length > 0),
-      setQueue: vi.fn(),
-      playNext: vi.fn(),
-      playPrevious: vi.fn(),
-      clearPlaylist: vi.fn(),
-      ...toRefs(mockPlaylistState),
-    } as any);
+    (usePlaylistStore as unknown as Mock).mockReturnValue(
+      Object.assign(mockPlaylistState, {
+        hasPrevious: computed(() => mockPlaylistState.history.length > 0),
+        hasNext: computed(() => mockPlaylistState.queue.length > 0),
+        setQueue: vi.fn(),
+        playNext: vi.fn(),
+        playPrevious: vi.fn(),
+        clearPlaylist: vi.fn(),
+      }),
+    );
 
-    (useUIStore as Mock).mockReturnValue({
-      state: mockUIState,
-      ...toRefs(mockUIState),
-    });
+    (useUIStore as unknown as Mock).mockReturnValue(mockUIState);
 
     (useMediaLoader as Mock).mockReturnValue({
       mediaUrl: ref('http://media/video.mp4'),

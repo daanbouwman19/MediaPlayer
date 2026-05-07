@@ -51,7 +51,9 @@ describe('auth-views', () => {
   it('should use prod path in production environment', () => {
     process.env.NODE_ENV = 'production';
     vi.mocked(fs.existsSync).mockImplementation(
-      (p) => typeof p === 'string' && p.includes('client/index.html'),
+      (p) =>
+        typeof p === 'string' &&
+        p.replace(/\\/g, '/').includes('client/index.html'),
     );
     vi.mocked(fs.readFileSync).mockReturnValue(
       '<link rel="stylesheet" href="/assets/index-123.css" />',

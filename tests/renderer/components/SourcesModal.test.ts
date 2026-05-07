@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
-import { reactive, toRefs } from 'vue';
+import { reactive } from 'vue';
 import SourcesModal from '@/components/SourcesModal.vue';
 
 import { useLibraryStore } from '@/composables/useLibraryStore';
@@ -72,18 +72,9 @@ describe('SourcesModal.vue', () => {
       currentMediaItem: null,
     });
 
-    (useLibraryStore as Mock).mockReturnValue({
-      state: mockLibraryState,
-      ...toRefs(mockLibraryState),
-    });
-    (useUIStore as Mock).mockReturnValue({
-      state: mockUIState,
-      ...toRefs(mockUIState),
-    });
-    (usePlayerStore as Mock).mockReturnValue({
-      state: mockPlayerState,
-      ...toRefs(mockPlayerState),
-    });
+    (useLibraryStore as unknown as Mock).mockReturnValue(mockLibraryState);
+    (useUIStore as unknown as Mock).mockReturnValue(mockUIState);
+    (usePlayerStore as unknown as Mock).mockReturnValue(mockPlayerState);
 
     vi.clearAllMocks();
 

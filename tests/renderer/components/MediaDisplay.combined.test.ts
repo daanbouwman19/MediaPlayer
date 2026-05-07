@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, Mock } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
-import { ref, reactive, toRefs, computed } from 'vue';
+import { ref, reactive } from 'vue';
 import MediaDisplay from '@/components/MediaDisplay.vue';
 import MediaControls from '@/components/MediaControls.vue';
 import { useSlideshow } from '@/composables/useSlideshow';
@@ -101,25 +101,23 @@ describe('MediaDisplay Combined Tests', () => {
       isSourcesModalVisible: false,
     });
 
-    (useLibraryStore as Mock).mockReturnValue({
-      state: mockLibraryState,
-      ...toRefs(mockLibraryState),
-    });
+    (useLibraryStore as unknown as Mock).mockReturnValue(mockLibraryState);
 
-    (usePlayerStore as Mock).mockReturnValue({
-      state: mockPlayerState,
-      ...toRefs(mockPlayerState),
-      stopSlideshow: vi.fn(),
-    });
+    (usePlayerStore as unknown as Mock).mockReturnValue(
+      Object.assign(mockPlayerState, {
+        pauseTimerOnPlay: ref(false),
+        resetState: vi.fn(),
+        stopSlideshow: vi.fn(),
+      }),
+    );
 
-    (usePlaylistStore as Mock).mockReturnValue({
-      state: mockPlaylistState,
-      currentItem: toRefs(mockPlaylistState).currentItem,
-      hasPrevious: computed(() => mockPlaylistState.history.length > 0),
-      hasNext: computed(() => mockPlaylistState.queue.length > 0),
-      playNext: vi.fn(),
-      playPrevious: vi.fn(),
-    });
+    (usePlaylistStore as unknown as Mock).mockReturnValue(
+      Object.assign(mockPlaylistState, {
+        state: mockPlaylistState,
+        playNext: vi.fn(),
+        playPrevious: vi.fn(),
+      }) as any,
+    );
 
     mockMediaLoader = {
       mediaUrl: ref(null),
@@ -140,10 +138,7 @@ describe('MediaDisplay Combined Tests', () => {
     };
     (useTranscoder as Mock).mockReturnValue(mockTranscoder);
 
-    (useUIStore as Mock).mockReturnValue({
-      state: mockUIState,
-      ...toRefs(mockUIState),
-    });
+    (useUIStore as unknown as Mock).mockReturnValue(mockUIState);
 
     mockSlideshow = {
       navigateMedia: vi.fn(),

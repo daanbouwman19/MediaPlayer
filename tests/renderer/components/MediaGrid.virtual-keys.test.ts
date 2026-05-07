@@ -1,6 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
-import { reactive, toRefs } from 'vue';
+import { reactive } from 'vue';
 import MediaGrid from '../../../src/renderer/components/MediaGrid.vue';
 import MediaGridItem from '../../../src/renderer/components/MediaGridItem.vue';
 import { api } from '../../../src/renderer/api';
@@ -55,20 +55,11 @@ describe('MediaGrid.vue (Virtualization Keys)', () => {
       viewMode: 'grid',
     });
 
-    (useLibraryStore as any).mockReturnValue({
-      state: mockLibraryState,
-      ...toRefs(mockLibraryState),
-    });
+    (useLibraryStore as unknown as Mock).mockReturnValue(mockLibraryState);
 
-    (usePlayerStore as any).mockReturnValue({
-      state: mockPlayerState,
-      ...toRefs(mockPlayerState),
-    });
+    (usePlayerStore as unknown as Mock).mockReturnValue(mockPlayerState);
 
-    (useUIStore as any).mockReturnValue({
-      state: mockUIState,
-      ...toRefs(mockUIState),
-    });
+    (useUIStore as unknown as Mock).mockReturnValue(mockUIState);
 
     (api.getMediaUrlGenerator as any).mockResolvedValue(
       (path: string) => `url://${path}`,

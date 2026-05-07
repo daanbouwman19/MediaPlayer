@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
 import { mount } from '@vue/test-utils';
-import { reactive, toRefs, nextTick, computed } from 'vue';
+import { reactive, nextTick, computed } from 'vue';
 import App from '@/App.vue';
 import { useSlideshow } from '@/composables/useSlideshow';
 import { useLibraryStore } from '@/composables/useLibraryStore';
@@ -99,26 +99,27 @@ describe('App.vue', () => {
       themeMode: 'system',
     });
 
-    (useLibraryStore as Mock).mockReturnValue({
-      state: mockLibraryState,
-      ...toRefs(mockLibraryState),
-      loadInitialData: initializeApp,
-    });
+    (useLibraryStore as unknown as Mock).mockReturnValue(
+      Object.assign(mockLibraryState, {
+        loadInitialData: initializeApp,
+      }),
+    );
 
-    (usePlayerStore as Mock).mockReturnValue({
-      state: mockPlayerState,
-      ...toRefs(mockPlayerState),
-      isSlideshowActive: computed(() => mockPlayerState.isSlideshowActive),
-      stopSlideshow: vi.fn(),
-    });
+    (usePlayerStore as unknown as Mock).mockReturnValue(
+      Object.assign(mockPlayerState, {
+        stopSlideshow: vi.fn(),
+        pauseTimerOnPlay: { value: false },
+      }),
+    );
 
-    (useUIStore as Mock).mockReturnValue({
-      state: mockUIState,
-      ...toRefs(mockUIState),
-      setThemeMode: vi.fn(),
-    });
+    (useUIStore as unknown as Mock).mockReturnValue(
+      Object.assign(mockUIState, {
+        setThemeMode: vi.fn(),
+        themeMode: { value: 'system' },
+      }),
+    );
 
-    (useAuthStore as Mock).mockReturnValue({
+    (useAuthStore as unknown as Mock).mockReturnValue({
       isLocked: computed(() => false),
       isInitialized: computed(() => true),
       checkLockStatus: vi.fn().mockResolvedValue(undefined),

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
-import { reactive, toRefs } from 'vue';
+import { reactive } from 'vue';
 import SmartPlaylistModal from '@/components/SmartPlaylistModal.vue';
 import { useLibraryStore } from '@/composables/useLibraryStore';
 import { useUIStore } from '@/composables/useUIStore';
@@ -23,15 +23,9 @@ describe('SmartPlaylistModal Coverage', () => {
       isSmartPlaylistModalVisible: false,
     });
 
-    (useLibraryStore as Mock).mockReturnValue({
-      state: mockLibraryState,
-      ...toRefs(mockLibraryState),
-    });
+    (useLibraryStore as unknown as Mock).mockReturnValue(mockLibraryState);
 
-    (useUIStore as Mock).mockReturnValue({
-      state: mockUIState,
-      ...toRefs(mockUIState),
-    });
+    (useUIStore as unknown as Mock).mockReturnValue(mockUIState);
   });
 
   it('handles invalid JSON in criteria when populating form', async () => {

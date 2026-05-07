@@ -31,15 +31,15 @@ describe('useAuthStore', () => {
     vi.clearAllMocks();
     store = useAuthStore();
     // Reset state directly since it's a singleton reactive object
-    store.isEnabled.value = false;
-    store.isLocked.value = false;
-    store.isInitialized.value = false;
+    store.isEnabled = false;
+    store.isLocked = false;
+    store.isInitialized = false;
   });
 
   it('should initialize with default values', () => {
-    expect(store.isLocked.value).toBe(false);
-    expect(store.isInitialized.value).toBe(false);
-    expect(store.isEnabled.value).toBe(false);
+    expect(store.isLocked).toBe(false);
+    expect(store.isInitialized).toBe(false);
+    expect(store.isEnabled).toBe(false);
   });
 
   it('checkLockStatus updates state to locked when auth is required', async () => {
@@ -48,9 +48,9 @@ describe('useAuthStore', () => {
       isAuthenticated: false,
     });
     await store.checkLockStatus();
-    expect(store.isEnabled.value).toBe(true);
-    expect(store.isLocked.value).toBe(true);
-    expect(store.isInitialized.value).toBe(true);
+    expect(store.isEnabled).toBe(true);
+    expect(store.isLocked).toBe(true);
+    expect(store.isInitialized).toBe(true);
   });
 
   it('checkLockStatus updates state to unlocked when already authenticated', async () => {
@@ -59,9 +59,9 @@ describe('useAuthStore', () => {
       isAuthenticated: true,
     });
     await store.checkLockStatus();
-    expect(store.isEnabled.value).toBe(true);
-    expect(store.isLocked.value).toBe(false);
-    expect(store.isInitialized.value).toBe(true);
+    expect(store.isEnabled).toBe(true);
+    expect(store.isLocked).toBe(false);
+    expect(store.isInitialized).toBe(true);
   });
 
   it('checkLockStatus updates state correctly when password lock is disabled', async () => {
@@ -70,9 +70,9 @@ describe('useAuthStore', () => {
       isAuthenticated: true,
     });
     await store.checkLockStatus();
-    expect(store.isEnabled.value).toBe(false);
-    expect(store.isLocked.value).toBe(false);
-    expect(store.isInitialized.value).toBe(true);
+    expect(store.isEnabled).toBe(false);
+    expect(store.isLocked).toBe(false);
+    expect(store.isInitialized).toBe(true);
   });
 
   it('checkLockStatus handles errors by falling back to unlocked and initialized', async () => {
@@ -83,38 +83,38 @@ describe('useAuthStore', () => {
 
     await store.checkLockStatus();
 
-    expect(store.isInitialized.value).toBe(true);
+    expect(store.isInitialized).toBe(true);
     // Preserves original false values for lock attributes
-    expect(store.isEnabled.value).toBe(false);
-    expect(store.isLocked.value).toBe(false);
+    expect(store.isEnabled).toBe(false);
+    expect(store.isLocked).toBe(false);
 
     consoleSpy.mockRestore();
   });
 
   it('unlock successful sets isLocked to false', async () => {
-    store.isLocked.value = true;
+    store.isLocked = true;
     mockUnlock.mockResolvedValueOnce(true);
 
     const result = await store.unlock('correct-pwd');
 
     expect(result).toBe(true);
-    expect(store.isLocked.value).toBe(false);
+    expect(store.isLocked).toBe(false);
     expect(mockUnlock).toHaveBeenCalledWith('correct-pwd');
   });
 
   it('unlock failure returns false and keeps isLocked true', async () => {
-    store.isLocked.value = true;
+    store.isLocked = true;
     mockUnlock.mockResolvedValueOnce(false);
 
     const result = await store.unlock('wrong-pwd');
 
     expect(result).toBe(false);
-    expect(store.isLocked.value).toBe(true);
+    expect(store.isLocked).toBe(true);
     expect(mockUnlock).toHaveBeenCalledWith('wrong-pwd');
   });
 
   it('unlock handles errors gracefully and returns false', async () => {
-    store.isLocked.value = true;
+    store.isLocked = true;
     mockUnlock.mockRejectedValueOnce(new Error('Network error'));
 
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -122,7 +122,7 @@ describe('useAuthStore', () => {
     const result = await store.unlock('wrong-pwd');
 
     expect(result).toBe(false);
-    expect(store.isLocked.value).toBe(true);
+    expect(store.isLocked).toBe(true);
 
     consoleSpy.mockRestore();
   });

@@ -11,6 +11,19 @@ beforeEach(() => {
   setActivePinia(createPinia());
 });
 
+// Global mock for pinia's storeToRefs to behave like Vue's toRefs in tests
+vi.mock('pinia', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('pinia')>();
+  return {
+    ...actual,
+    storeToRefs: (store: any) => {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { toRefs, isReactive, reactive } = require('vue');
+      return toRefs(isReactive(store) ? store : reactive(store));
+    },
+  };
+});
+
 // Mock localStorage
 const localStorageMock = (function () {
   let store: Record<string, string> = {};

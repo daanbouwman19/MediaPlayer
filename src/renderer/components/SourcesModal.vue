@@ -13,7 +13,7 @@
       @click.self="closeModal"
     >
       <div
-        class="relative w-full max-w-2xl glass-panel md:rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[100dvh] md:max-h-[85vh] transition-all"
+        class="relative w-full max-w-2xl glass-panel md:rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-dvh md:max-h-[85vh] transition-all"
         role="dialog"
         aria-modal="true"
         aria-labelledby="modal-title"
@@ -454,6 +454,7 @@ import { usePlaylistStore } from '../composables/usePlaylistStore';
 import { selectAllAlbums } from '../utils/albumUtils';
 import { api } from '../api';
 import { ref, onMounted } from 'vue';
+import { storeToRefs } from 'pinia';
 import FileExplorer from './FileExplorer.vue';
 import CloseIcon from './icons/CloseIcon.vue';
 import { useEscapeKey } from '../composables/useEscapeKey';
@@ -463,8 +464,8 @@ const uiStore = useUIStore();
 const playerStore = usePlayerStore();
 const playlistStore = usePlaylistStore();
 
-const { isSourcesModalVisible } = uiStore;
-const { mediaDirectories } = libraryStore;
+const { isSourcesModalVisible } = storeToRefs(uiStore);
+const { mediaDirectories } = storeToRefs(libraryStore);
 const isFileExplorerOpen = ref(false);
 const fileExplorerMode = ref<'local' | 'google-drive'>('local');
 
@@ -559,9 +560,9 @@ const addDriveSource = async () => {
  * to the media library to prevent a broken state.
  */
 const resetSlideshowState = () => {
-  playerStore.state.isSlideshowActive = false;
+  playerStore.isSlideshowActive = false;
   playlistStore.clearPlaylist();
-  libraryStore.state.globalMediaPoolForSelection = [];
+  libraryStore.globalMediaPoolForSelection = [];
 };
 
 /**
@@ -647,21 +648,21 @@ const handleFileExplorerSelect = async (path: string) => {
  * Triggers a full re-scan and re-index of the media library.
  */
 const reindex = async () => {
-  libraryStore.state.isScanning = true;
+  libraryStore.isScanning = true;
   try {
     const updatedAlbums = await api.reindexMediaLibrary();
-    libraryStore.state.allAlbums = updatedAlbums;
-    libraryStore.state.mediaDirectories = await api.getMediaDirectories();
+    libraryStore.allAlbums = updatedAlbums;
+    libraryStore.mediaDirectories = await api.getMediaDirectories();
     selectAllAlbums(
       updatedAlbums,
-      libraryStore.state.albumsSelectedForSlideshow,
+      libraryStore.albumsSelectedForSlideshow,
       true,
     );
     resetSlideshowState();
   } catch (error) {
     console.error('Error re-indexing library:', error);
   } finally {
-    libraryStore.state.isScanning = false;
+    libraryStore.isScanning = false;
   }
 };
 

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
-import { reactive, toRefs } from 'vue';
+import { reactive } from 'vue';
 import SourcesModal from '@/components/SourcesModal.vue';
 import { useLibraryStore } from '@/composables/useLibraryStore';
 import { useUIStore } from '@/composables/useUIStore';
@@ -38,15 +38,9 @@ describe('Google Drive Integration in SourcesModal', () => {
       isSourcesModalVisible: true,
     });
 
-    (useLibraryStore as unknown as Mock).mockReturnValue({
-      state: mockLibraryState,
-      ...toRefs(mockLibraryState),
-    });
+    (useLibraryStore as unknown as Mock).mockReturnValue(mockLibraryState);
 
-    (useUIStore as unknown as Mock).mockReturnValue({
-      state: mockUIState,
-      ...toRefs(mockUIState),
-    });
+    (useUIStore as unknown as Mock).mockReturnValue(mockUIState);
 
     vi.clearAllMocks();
   });

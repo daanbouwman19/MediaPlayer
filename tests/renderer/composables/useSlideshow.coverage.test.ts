@@ -7,7 +7,7 @@ import {
   afterEach,
   type Mock,
 } from 'vitest';
-import { reactive, computed, toRefs } from 'vue';
+import { reactive, computed } from 'vue';
 import { useSlideshow } from '@/composables/useSlideshow';
 import { useLibraryStore } from '@/composables/useLibraryStore';
 import { usePlayerStore } from '@/composables/usePlayerStore';
@@ -73,17 +73,17 @@ describe('useSlideshow Coverage Boost', () => {
       () => new Set(mockLibraryState.supportedExtensions.videos),
     );
 
-    (useLibraryStore as Mock).mockReturnValue({
-      state: mockLibraryState,
-      clearMediaPool: vi.fn(),
-      imageExtensionsSet,
-      videoExtensionsSet,
-    });
+    (useLibraryStore as unknown as Mock).mockReturnValue(
+      Object.assign(mockLibraryState, {
+        clearMediaPool: vi.fn(),
+        imageExtensionsSet,
+        videoExtensionsSet,
+      }),
+    );
 
-    (usePlayerStore as Mock).mockReturnValue({
-      state: mockPlayerState,
-      stopSlideshow: vi.fn(),
-    });
+    (usePlayerStore as unknown as Mock).mockReturnValue(
+      Object.assign(mockPlayerState, { stopSlideshow: vi.fn() }),
+    );
 
     const playNext = vi.fn((item) => {
       if (item) {
@@ -115,21 +115,18 @@ describe('useSlideshow Coverage Boost', () => {
     const hasPrevious = computed(() => mockPlaylistState.history.length > 0);
     const hasNext = computed(() => mockPlaylistState.queue.length > 0);
 
-    const playlistStateRefs = toRefs(mockPlaylistState);
-    (usePlaylistStore as Mock).mockReturnValue({
-      state: mockPlaylistState,
-      currentItem: playlistStateRefs.currentItem,
-      playNext,
-      playPrevious,
-      clearPlaylist,
-      setQueue,
-      hasPrevious,
-      hasNext,
-    });
+    (usePlaylistStore as unknown as Mock).mockReturnValue(
+      Object.assign(mockPlaylistState, {
+        playNext,
+        playPrevious,
+        clearPlaylist,
+        setQueue,
+        hasPrevious,
+        hasNext,
+      }),
+    );
 
-    (useUIStore as Mock).mockReturnValue({
-      state: mockUIState,
-    });
+    (useUIStore as unknown as Mock).mockReturnValue(mockUIState);
   });
 
   afterEach(() => {

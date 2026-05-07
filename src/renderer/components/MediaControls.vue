@@ -2,7 +2,7 @@
   <Teleport to="body" :disabled="isDesktop">
     <div
       v-bind="$attrs"
-      class="fixed md:absolute bottom-0 left-0 w-full flex flex-col items-center pointer-events-none z-[100]"
+      class="fixed md:absolute bottom-0 left-0 w-full flex flex-col items-center pointer-events-none z-100"
     >
       <div
         ref="controlsBarRef"
@@ -11,7 +11,7 @@
         :style="containerPaddingStyle"
       >
         <!-- Progress Bar -->
-        <div class="w-full mb-4 px-2 md:px-0 max-w-screen-xl mx-auto">
+        <div class="w-full mb-4 px-2 md:px-0 max-w-7xl mx-auto">
           <ProgressBar
             :current-time="currentTime"
             :duration="duration"
@@ -273,6 +273,7 @@ import ProgressBar from './ProgressBar.vue';
 import type { MediaFile, HeatmapData } from '../../core/types';
 import { useUIStore } from '../composables/useUIStore';
 import { computed, ref, onMounted, onUnmounted, watch } from 'vue';
+import { storeToRefs } from 'pinia';
 import { formatTime } from '../utils/timeUtils';
 import { api } from '../api';
 
@@ -302,7 +303,7 @@ const props = withDefaults(
   },
 );
 
-const { isSidebarVisible } = useUIStore();
+const { isSidebarVisible } = storeToRefs(useUIStore());
 
 // Hover logic for rating stars
 const hoverRating = ref<number | null>(null);

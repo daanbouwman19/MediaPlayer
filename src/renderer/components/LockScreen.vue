@@ -1,6 +1,6 @@
 <template>
   <div
-    class="fixed inset-0 bg-black/90 flex items-center justify-center z-[3000] backdrop-blur-xl"
+    class="fixed inset-0 bg-black/90 flex items-center justify-center z-3000 backdrop-blur-xl"
     role="dialog"
     aria-modal="true"
   >
@@ -56,7 +56,6 @@ import { useLibraryStore } from '../composables/useLibraryStore';
 
 const authStore = useAuthStore();
 const libraryStore = useLibraryStore();
-const { unlock } = authStore;
 
 const password = ref('');
 const isUnlocking = ref(false);
@@ -69,7 +68,7 @@ const handleUnlock = async () => {
   isUnlocking.value = true;
 
   try {
-    const success = await unlock(password.value);
+    const success = await authStore.unlock(password.value);
     if (success) {
       // Reload initial data after successful unlock
       await libraryStore.loadInitialData();

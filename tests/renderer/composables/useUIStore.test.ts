@@ -7,27 +7,27 @@ describe('useUIStore', () => {
   beforeEach(() => {
     store = useUIStore();
     // No explicit reset, but we can manually reset if needed
-    store.viewMode.value = 'player';
-    store.mediaFilter.value = 'All';
+    store.viewMode = 'player';
+    store.mediaFilter = 'All';
   });
 
   it('should initialize with default values', () => {
-    expect(store.mediaFilter.value).toBe('All');
-    expect(store.viewMode.value).toBe('player');
-    expect(store.isSourcesModalVisible.value).toBe(false);
+    expect(store.mediaFilter).toBe('All');
+    expect(store.viewMode).toBe('player');
+    expect(store.isSourcesModalVisible).toBe(false);
   });
 
   it('should update state correctly', () => {
-    store.viewMode.value = 'grid';
-    expect(store.viewMode.value).toBe('grid');
+    store.viewMode = 'grid';
+    expect(store.viewMode).toBe('grid');
 
-    store.isSourcesModalVisible.value = true;
-    expect(store.isSourcesModalVisible.value).toBe(true);
+    store.isSourcesModalVisible = true;
+    expect(store.isSourcesModalVisible).toBe(true);
   });
 
   it('should update theme mode', () => {
     store.setThemeMode('dark');
-    expect(store.themeMode.value).toBe('dark');
+    expect(store.themeMode).toBe('dark');
   });
 
   describe('Theme Initialization', () => {
@@ -43,7 +43,7 @@ describe('useUIStore', () => {
         await import('../../../src/renderer/composables/useUIStore');
       const reloadedStore = useUIStoreReloaded();
 
-      expect(reloadedStore.themeMode.value).toBe('system');
+      expect(reloadedStore.themeMode).toBe('system');
     });
 
     it('should use system by default if localStorage is empty', async () => {
@@ -53,7 +53,7 @@ describe('useUIStore', () => {
         await import('../../../src/renderer/composables/useUIStore');
       const reloadedStore = useUIStoreReloaded();
 
-      expect(reloadedStore.themeMode.value).toBe('system');
+      expect(reloadedStore.themeMode).toBe('system');
     });
   });
 });

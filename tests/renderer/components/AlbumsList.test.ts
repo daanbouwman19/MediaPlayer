@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
-import { reactive, toRefs } from 'vue';
+import { reactive } from 'vue';
 import AlbumsList from '../../../src/renderer/components/AlbumsList.vue';
 import { collectTexturesRecursive } from '../../../src/renderer/utils/albumUtils';
 import { useLibraryStore } from '../../../src/renderer/composables/useLibraryStore';
@@ -120,21 +120,20 @@ describe('AlbumsList.vue', () => {
     mockPlayerState = playerState;
     mockUIState = uiState;
 
-    (useLibraryStore as Mock).mockReturnValue({
-      state: mockLibraryState,
-      ...toRefs(mockLibraryState),
-      fetchHistory: vi.fn(),
-    });
+    (useLibraryStore as unknown as Mock).mockReturnValue(
+      Object.assign(mockLibraryState, {
+        fetchHistory: vi.fn(),
+        historyMedia: [],
+      }),
+    );
 
-    (usePlayerStore as Mock).mockReturnValue({
-      state: mockPlayerState,
-      ...toRefs(mockPlayerState),
-    });
+    (usePlayerStore as unknown as Mock).mockReturnValue(
+      Object.assign(mockPlayerState, {}),
+    );
 
-    (useUIStore as Mock).mockReturnValue({
-      state: mockUIState,
-      ...toRefs(mockUIState),
-    });
+    (useUIStore as unknown as Mock).mockReturnValue(
+      Object.assign(mockUIState, {}),
+    );
 
     mockCycleTheme = vi.fn();
     (useTheme as Mock).mockReturnValue({

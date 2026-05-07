@@ -114,6 +114,7 @@
 </template>
 
 <script setup lang="ts">
+import { storeToRefs } from 'pinia';
 /**
  * @file Displays a grid of media items (images and videos).
  * Supports hover-to-preview for videos and click-to-play functionality.
@@ -153,10 +154,10 @@ const {
   videoExtensionsSet,
   mediaUrlGenerator,
   thumbnailUrlGenerator,
-} = libraryStore;
+} = storeToRefs(libraryStore);
 
 // Reactive reference to the full list from state
-const allMediaFiles = computed(() => uiStore.state.gridMediaFiles);
+const allMediaFiles = computed(() => uiStore.gridMediaFiles);
 
 // Extend Record<string, unknown> to satisfy VirtualScroller props
 interface GridRow extends Record<string, unknown> {
@@ -327,9 +328,9 @@ const handleItemClick = async (
   playlistStore.setQueue(mediaList.slice(index + 1));
   playlistStore.playNext(item);
 
-  uiStore.state.viewMode = 'player';
-  playerStore.state.isSlideshowActive = true;
-  playerStore.state.isTimerRunning = false;
+  uiStore.viewMode = 'player';
+  playerStore.isSlideshowActive = true;
+  playerStore.isTimerRunning = false;
 };
 
 const handlePreTranscode = async () => {
@@ -351,6 +352,6 @@ const clearSelection = () => {
 };
 
 const closeGrid = () => {
-  uiStore.state.viewMode = 'player';
+  uiStore.viewMode = 'player';
 };
 </script>

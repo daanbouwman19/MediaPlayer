@@ -9,6 +9,7 @@ import {
 } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
 import { reactive, toRefs, computed } from 'vue';
+
 import MediaGrid from '@/components/MediaGrid.vue';
 import { useLibraryStore } from '@/composables/useLibraryStore';
 import { usePlayerStore } from '@/composables/usePlayerStore';
@@ -84,18 +85,12 @@ describe('MediaGrid.vue', () => {
     vi.clearAllMocks();
     (ResizeObserverMock as any).mock.calls = [];
 
-    (useLibraryStore as Mock).mockReturnValue({
-      state: mockLibraryState,
-      ...toRefs(mockLibraryState),
-    });
+    (useLibraryStore as unknown as Mock).mockReturnValue(mockLibraryState);
 
-    (usePlayerStore as Mock).mockReturnValue({
-      state: mockPlayerState,
-      ...toRefs(mockPlayerState),
-    });
+    (usePlayerStore as unknown as Mock).mockReturnValue(mockPlayerState);
 
     const playlistStateRefs = toRefs(mockPlaylistState);
-    (usePlaylistStore as Mock).mockReturnValue({
+    (usePlaylistStore as unknown as Mock).mockReturnValue({
       state: mockPlaylistState,
       currentItem: playlistStateRefs.currentItem,
       hasPrevious: computed(() => mockPlaylistState.history.length > 0),
@@ -104,10 +99,7 @@ describe('MediaGrid.vue', () => {
       playNext: vi.fn(),
     });
 
-    (useUIStore as Mock).mockReturnValue({
-      state: mockUIState,
-      ...toRefs(mockUIState),
-    });
+    (useUIStore as unknown as Mock).mockReturnValue(mockUIState);
 
     (api.getMediaUrlGenerator as Mock).mockResolvedValue(
       (path: string) => `http://localhost:1234/${encodeURIComponent(path)}`,
@@ -174,9 +166,11 @@ describe('MediaGrid.vue', () => {
     const item = wrapper.find('.grid-item');
     await item.trigger('click');
 
-    const { setQueue, playNext } = usePlaylistStore();
-    expect(setQueue).toHaveBeenCalled();
-    expect(playNext).toHaveBeenCalledWith(expect.objectContaining(item1));
+    const playlistStore = usePlaylistStore();
+    expect(playlistStore.setQueue).toHaveBeenCalled();
+    expect(playlistStore.playNext).toHaveBeenCalledWith(
+      expect.objectContaining(item1),
+    );
     expect(mockUIState.viewMode).toBe('player');
     expect(mockPlayerState.isSlideshowActive).toBe(true);
   });

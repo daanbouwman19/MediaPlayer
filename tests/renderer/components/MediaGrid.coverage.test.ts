@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
-import { reactive, ref, nextTick, toRefs } from 'vue';
+import { reactive, ref, nextTick } from 'vue';
 import MediaGrid from '../../../src/renderer/components/MediaGrid.vue';
 import { api } from '../../../src/renderer/api';
 import { useLibraryStore } from '../../../src/renderer/composables/useLibraryStore';
@@ -75,22 +75,13 @@ describe('MediaGrid.vue Coverage', () => {
     mockAddJobs = vi.fn().mockResolvedValue(undefined);
     mockCancelJob = vi.fn().mockResolvedValue(undefined);
 
-    (useLibraryStore as Mock).mockReturnValue({
-      state: mockLibraryState,
-      ...toRefs(mockLibraryState),
-    });
+    (useLibraryStore as unknown as Mock).mockReturnValue(mockLibraryState);
 
-    (usePlayerStore as Mock).mockReturnValue({
-      state: mockPlayerState,
-      ...toRefs(mockPlayerState),
-    });
+    (usePlayerStore as unknown as Mock).mockReturnValue(mockPlayerState);
 
-    (useUIStore as Mock).mockReturnValue({
-      state: mockUIState,
-      ...toRefs(mockUIState),
-    });
+    (useUIStore as unknown as Mock).mockReturnValue(mockUIState);
 
-    (usePlaylistStore as Mock).mockReturnValue({
+    (usePlaylistStore as unknown as Mock).mockReturnValue({
       setQueue: vi.fn(),
       playNext: vi.fn(),
       clearPlaylist: vi.fn(),

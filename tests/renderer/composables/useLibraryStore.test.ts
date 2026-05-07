@@ -26,9 +26,9 @@ describe('useLibraryStore', () => {
   });
 
   it('should initialize with default values', () => {
-    expect(store.allAlbums.value).toEqual([]);
-    expect(store.mediaDirectories.value).toEqual([]);
-    expect(store.isScanning.value).toBe(false);
+    expect(store.allAlbums).toEqual([]);
+    expect(store.mediaDirectories).toEqual([]);
+    expect(store.isScanning).toBe(false);
   });
 
   it('should load initial data correctly', async () => {
@@ -44,11 +44,11 @@ describe('useLibraryStore', () => {
 
     await store.loadInitialData();
 
-    expect(store.allAlbums.value).toEqual(albums);
-    expect(store.mediaDirectories.value).toEqual(dirs);
-    expect(store.supportedExtensions.value).toEqual(exts);
-    expect(store.imageExtensionsSet.value.has('.jpg')).toBe(true);
-    expect(store.videoExtensionsSet.value.has('.mp4')).toBe(true);
+    expect(store.allAlbums).toEqual(albums);
+    expect(store.mediaDirectories).toEqual(dirs);
+    expect(store.supportedExtensions).toEqual(exts);
+    expect(store.imageExtensionsSet.has('.jpg')).toBe(true);
+    expect(store.videoExtensionsSet.has('.mp4')).toBe(true);
   });
 
   it('should handle loadInitialData errors gracefully', async () => {
@@ -70,32 +70,32 @@ describe('useLibraryStore', () => {
       { id: '1', name: 'A1', children: [{ id: '1.1', name: 'A1.1' }] },
       { id: '2', name: 'A2' },
     ] as any;
-    store.allAlbums.value = albums;
+    store.allAlbums = albums;
 
     store.selectAllAlbumsRecursively(albums);
 
-    expect(store.albumsSelectedForSlideshow.value['1']).toBe(true);
-    expect(store.albumsSelectedForSlideshow.value['1.1']).toBe(true);
-    expect(store.albumsSelectedForSlideshow.value['2']).toBe(true);
+    expect(store.albumsSelectedForSlideshow['1']).toBe(true);
+    expect(store.albumsSelectedForSlideshow['1.1']).toBe(true);
+    expect(store.albumsSelectedForSlideshow['2']).toBe(true);
   });
 
   it('should reset library state', () => {
-    store.globalMediaPoolForSelection.value = [{ path: 'test' } as any];
-    store.albumsSelectedForSlideshow.value = { '1': true };
+    store.globalMediaPoolForSelection = [{ path: 'test' } as any];
+    store.albumsSelectedForSlideshow = { '1': true };
 
     store.resetLibraryState();
 
-    expect(store.globalMediaPoolForSelection.value).toEqual([]);
-    expect(store.albumsSelectedForSlideshow.value).toEqual({});
+    expect(store.globalMediaPoolForSelection).toEqual([]);
+    expect(store.albumsSelectedForSlideshow).toEqual({});
   });
 
   it('should clear only media pool', () => {
-    store.globalMediaPoolForSelection.value = [{ path: 'test' } as any];
-    store.albumsSelectedForSlideshow.value = { '1': true };
+    store.globalMediaPoolForSelection = [{ path: 'test' } as any];
+    store.albumsSelectedForSlideshow = { '1': true };
 
     store.clearMediaPool();
 
-    expect(store.globalMediaPoolForSelection.value).toEqual([]);
-    expect(store.albumsSelectedForSlideshow.value).toEqual({ '1': true });
+    expect(store.globalMediaPoolForSelection).toEqual([]);
+    expect(store.albumsSelectedForSlideshow).toEqual({ '1': true });
   });
 });
