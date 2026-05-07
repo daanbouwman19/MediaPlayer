@@ -4,7 +4,6 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
-import cookieParser from 'cookie-parser';
 import cookieSession from 'cookie-session';
 import helmet from 'helmet';
 import lusca from 'lusca';
@@ -112,8 +111,6 @@ export async function createApp(mediaService: MediaService) {
 
   app.get('/favicon.ico', (_req, res) => res.status(204).end());
 
-  app.use(cookieParser());
-
   const sessionSecret = process.env.SESSION_SECRET;
   if (!isDev && !sessionSecret) {
     console.error(
@@ -127,18 +124,14 @@ export async function createApp(mediaService: MediaService) {
       name: 'session',
       keys: [sessionSecret || 'media-player-dev-secret-do-not-use-in-prod'],
       maxAge: 24 * 60 * 60 * 1000, // 24 hours
-      secure: true, // Require HTTPS for session cookies
+      secure: true,
+      httpOnly: true,
       sameSite: 'lax',
     }),
   );
 
   if (process.env.NODE_ENV !== 'test') {
-    app.use(
-      lusca.csrf({
-        angular: true,
-        allowlist: ['/api/auth/unlock'],
-      }),
-    ); // Sets XSRF-TOKEN cookie and expects X-XSRF-TOKEN header
+    app.use(lusca.csrf({ angular: true })); // Sets XSRF-TOKEN cookie and expects X-XSRF-TOKEN header
   }
 
   const limiters = createRateLimiters();

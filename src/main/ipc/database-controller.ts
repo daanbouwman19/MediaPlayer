@@ -13,6 +13,7 @@ import {
   deleteSmartPlaylist,
   updateSmartPlaylist,
   updateWatchedSegments,
+  updatePlaybackPosition,
   executeSmartPlaylist,
   getAllMetadataAndStats,
 } from '../../core/database';
@@ -83,6 +84,20 @@ export function registerDatabaseHandlers() {
     IPC_CHANNELS.DB_UPDATE_WATCHED_SEGMENTS,
     async (_event: IpcMainInvokeEvent, { filePath, segmentsJson }) => {
       await updateWatchedSegments(filePath, segmentsJson);
+    },
+    {
+      validators: [
+        async ({ filePath }) => {
+          await validatePathAccess(filePath);
+        },
+      ],
+    },
+  );
+
+  handleIpc(
+    IPC_CHANNELS.DB_UPDATE_PLAYBACK_POSITION,
+    async (_event: IpcMainInvokeEvent, { filePath, position }) => {
+      await updatePlaybackPosition(filePath, position);
     },
     {
       validators: [

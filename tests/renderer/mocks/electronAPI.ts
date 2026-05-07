@@ -33,6 +33,9 @@ export const createMockElectronAPI = (): ElectronAPI => ({
   updateWatchedSegments: vi
     .fn()
     .mockResolvedValue({ success: true, data: undefined }),
+  updatePlaybackPosition: vi
+    .fn()
+    .mockResolvedValue({ success: true, data: undefined }),
 
   executeSmartPlaylist: vi.fn().mockResolvedValue([]),
   getAllMetadataAndStats: vi.fn().mockResolvedValue([]),

@@ -53,6 +53,7 @@ describe('hls-handler', () => {
       sendFile: vi.fn((_path: string, cb: (err?: any) => void) => {
         if (cb) cb();
       }),
+      on: vi.fn(),
       headersSent: false,
     };
   });
@@ -114,6 +115,8 @@ describe('hls-handler', () => {
         ensureSession: vi.fn().mockResolvedValue(undefined),
         getSessionDir: vi.fn().mockReturnValue('/tmp/hls/mock-session-id'),
         touchSession: vi.fn(),
+        acquireSession: vi.fn(),
+        releaseSession: vi.fn(),
       };
       // @ts-expect-error - Mocking static method
       HlsManager.getInstance.mockReturnValue(mockHlsManager);
@@ -157,6 +160,8 @@ describe('hls-handler', () => {
       const mockHlsManager = {
         ensureSession: vi.fn().mockResolvedValue(undefined),
         getSessionDir: vi.fn().mockReturnValue(undefined), // Simulating null/undefined return
+        acquireSession: vi.fn(),
+        releaseSession: vi.fn(),
       };
       // @ts-expect-error - Mocking static method
       HlsManager.getInstance.mockReturnValue(mockHlsManager);
@@ -189,6 +194,8 @@ describe('hls-handler', () => {
       const mockHlsManager = {
         getSessionDir: vi.fn().mockReturnValue('/tmp/hls/mock-session-id'),
         touchSession: vi.fn(),
+        acquireSession: vi.fn(),
+        releaseSession: vi.fn(),
       };
       // @ts-expect-error - Mocking static method
       HlsManager.getInstance.mockReturnValue(mockHlsManager);
@@ -270,6 +277,8 @@ describe('hls-handler', () => {
       const mockHlsManager = {
         getSessionDir: vi.fn().mockReturnValue('/tmp/hls/mock-session-id'),
         touchSession: vi.fn(),
+        acquireSession: vi.fn(),
+        releaseSession: vi.fn(),
       };
       // @ts-expect-error - Mocking static method
       HlsManager.getInstance.mockReturnValue(mockHlsManager);

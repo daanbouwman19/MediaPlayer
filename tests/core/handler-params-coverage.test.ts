@@ -22,6 +22,8 @@ vi.mock('../../src/core/hls-manager', () => ({
       ensureSession: vi.fn(),
       getSessionDir: vi.fn().mockReturnValue('/tmp/session'),
       touchSession: vi.fn(),
+      acquireSession: vi.fn(),
+      releaseSession: vi.fn(),
     }),
   },
 }));
@@ -87,6 +89,7 @@ describe('Coverage Fix 2 - Branch Coverage Boost', () => {
       json: vi.fn().mockReturnThis(),
       set: vi.fn().mockReturnThis(),
       sendFile: vi.fn(),
+      on: vi.fn(),
       headersSent: false,
     };
   });

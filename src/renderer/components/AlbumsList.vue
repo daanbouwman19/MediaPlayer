@@ -639,6 +639,7 @@ const getMediaForPlaylist = async (
         viewCount: item.view_count || 0,
         rating: item.rating || 0,
         duration: item.duration || 0,
+        playbackPosition: item.playback_position || 0,
       });
     }
   }

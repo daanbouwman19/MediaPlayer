@@ -238,6 +238,13 @@ export class ElectronAdapter implements IMediaBackend {
     );
   }
 
+  async updatePlaybackPosition(
+    filePath: string,
+    position: number,
+  ): Promise<void> {
+    return this.invoke(this.bridge.updatePlaybackPosition(filePath, position));
+  }
+
   async executeSmartPlaylist(criteria: string): Promise<MediaLibraryItem[]> {
     return this.invoke(this.bridge.executeSmartPlaylist(criteria));
   }

@@ -4,7 +4,6 @@ import express from 'express';
 import { createAuthRoutes } from '../../src/server/routes/auth.routes';
 import { globalPasswordMiddleware } from '../../src/server/middleware/global-password';
 
-import cookieParser from 'cookie-parser';
 import cookieSession from 'cookie-session';
 
 const mockLimiters = {
@@ -19,11 +18,11 @@ describe('Global Password Auth Routes & Middleware', () => {
   beforeEach(() => {
     app = express();
     app.use(express.json());
-    app.use(cookieParser());
     app.use(
       cookieSession({
         name: 'session',
         keys: ['test-secret'],
+        httpOnly: true,
       }),
     );
     app.use(globalPasswordMiddleware);
@@ -173,7 +172,7 @@ describe('Global Password Auth Routes & Middleware', () => {
     expect(res.body.error).toBe('Invalid password');
   });
 
-  it('cookie-parser coverage: handles multiple cookies correctly', async () => {
+  it('cookie-session handles multiple cookies correctly', async () => {
     process.env.GLOBAL_PASSWORD = 'test';
     const loginRes = await request(app)
       .post('/api/auth/unlock')
@@ -192,7 +191,7 @@ describe('Global Password Auth Routes & Middleware', () => {
     expect(res.body).toEqual({ enabled: true, isAuthenticated: true });
   });
 
-  it('cookie-parser coverage: handles missing cookie header gracefully', async () => {
+  it('cookie-session handles missing cookie header gracefully', async () => {
     // Already covered by tests that don't send a cookie, but explicit check
     process.env.GLOBAL_PASSWORD = 'test';
     const res = await request(app).get('/api/auth/lock-status');

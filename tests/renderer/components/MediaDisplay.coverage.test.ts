@@ -60,7 +60,16 @@ vi.mock('@/components/VideoPlayer.vue', () => ({
   },
 }));
 
+// Note: defineAsyncComponent in MediaDisplay calls `import('./VRVideoPlayer.vue')`
+// and then probes the returned module for `__esModule`, `__isTeleport`,
+// `__asyncLoader`, etc. Vitest's strict mock mode throws on access to undefined
+// exports, so we declare those flags explicitly alongside the stub.
 vi.mock('@/components/VRVideoPlayer.vue', () => ({
+  __esModule: true,
+  __isTeleport: false,
+  __isKeepAlive: false,
+  __asyncLoader: undefined,
+  __asyncResolved: undefined,
   default: {
     name: 'VRVideoPlayer',
     template: '<div class="vr-video-player-mock"></div>',
@@ -441,6 +450,80 @@ describe('MediaDisplay Coverage Boost', () => {
     await (wrapper.vm as any).persistWatchedSegments();
     expect(consoleSpy).toHaveBeenCalled();
     consoleSpy.mockRestore();
+  });
+
+  it('restores saved playback position on video load', async () => {
+    mockLibrary.imageExtensionsSet.value = new Set(['.jpg']);
+    (api.getMetadata as Mock).mockResolvedValue({
+      'v.mp4': { playbackPosition: 42, duration: 100 },
+    });
+    mockPlaylist.currentItem.value = { name: 'v.mp4', path: 'v.mp4' };
+    const wrapper = mount(MediaDisplay);
+    await flushPromises();
+    expect(api.getMetadata).toHaveBeenCalledWith(['v.mp4']);
+    expect((wrapper.vm as any).savedCurrentTime).toBe(42);
+  });
+
+  it('does not restore position if file is effectively finished (>=95%)', async () => {
+    (api.getMetadata as Mock).mockResolvedValue({
+      'v.mp4': { playbackPosition: 99, duration: 100 },
+    });
+    mockPlaylist.currentItem.value = { name: 'v.mp4', path: 'v.mp4' };
+    const wrapper = mount(MediaDisplay);
+    await flushPromises();
+    expect((wrapper.vm as any).savedCurrentTime).toBe(0);
+  });
+
+  it('skips metadata fetch for image media items', async () => {
+    mockLibrary.imageExtensionsSet.value = new Set(['.jpg']);
+    mockPlaylist.currentItem.value = { name: 'photo.jpg', path: 'photo.jpg' };
+    mount(MediaDisplay);
+    await flushPromises();
+    expect(api.getMetadata).not.toHaveBeenCalled();
+  });
+
+  it('persists playback position when video is paused', async () => {
+    mockPlaylist.currentItem.value = { name: 'v.mp4', path: 'v.mp4' };
+    mockMediaLoader.mediaUrl.value = 'url';
+    const wrapper = mount(MediaDisplay);
+    await flushPromises();
+
+    (wrapper.vm as any).savedCurrentTime = 17;
+    const videoPlayer = wrapper.findComponent(VideoPlayer);
+    await videoPlayer.vm.$emit('pause');
+    expect(api.updatePlaybackPosition).toHaveBeenCalledWith('v.mp4', 17);
+  });
+
+  it('persistPlaybackPosition swallows errors gracefully', async () => {
+    mockPlaylist.currentItem.value = { name: 'v.mp4', path: 'v.mp4' };
+    const wrapper = mount(MediaDisplay);
+    await flushPromises();
+
+    (api.updatePlaybackPosition as Mock).mockRejectedValueOnce(
+      new Error('boom'),
+    );
+    const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    await (wrapper.vm as any).persistPlaybackPosition(20);
+    expect(consoleSpy).toHaveBeenCalled();
+    consoleSpy.mockRestore();
+  });
+
+  it('persistPlaybackPosition is a no-op when no current item', async () => {
+    mockPlaylist.currentItem.value = null;
+    const wrapper = mount(MediaDisplay);
+    await flushPromises();
+    await (wrapper.vm as any).persistPlaybackPosition(15);
+    expect(api.updatePlaybackPosition).not.toHaveBeenCalled();
+  });
+
+  it('persistPlaybackPosition rejects non-finite values', async () => {
+    mockPlaylist.currentItem.value = { name: 'v.mp4', path: 'v.mp4' };
+    const wrapper = mount(MediaDisplay);
+    await flushPromises();
+    (api.updatePlaybackPosition as Mock).mockClear();
+    await (wrapper.vm as any).persistPlaybackPosition(Number.NaN);
+    await (wrapper.vm as any).persistPlaybackPosition(-1);
+    expect(api.updatePlaybackPosition).not.toHaveBeenCalled();
   });
 
   it('updates video element muted state when isMuted changes', async () => {

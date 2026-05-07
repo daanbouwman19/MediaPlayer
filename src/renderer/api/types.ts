@@ -76,6 +76,7 @@ export interface IMediaBackend {
     criteria: string,
   ): Promise<void>;
   updateWatchedSegments(filePath: string, segmentsJson: string): Promise<void>;
+  updatePlaybackPosition(filePath: string, position: number): Promise<void>;
 
   executeSmartPlaylist(criteria: string): Promise<MediaLibraryItem[]>;
 

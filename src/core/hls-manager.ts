@@ -42,10 +42,28 @@ interface HlsSession {
   error?: Error;
   progress: HlsProgress;
   killTimeout?: NodeJS.Timeout;
+  /**
+   * Number of in-flight HTTP requests (playlist + segment) currently
+   * holding the session open. While > 0 the idle timer is cleared.
+   * Decremented on response 'close'.
+   */
+  consumers: number;
+  /**
+   * Per-session idle timer. Set when consumers drops to 0; calls
+   * stopSession() after EAGER_IDLE_GRACE_MS unless the session is
+   * re-acquired in the meantime.
+   */
+  idleTimer?: NodeJS.Timeout;
 }
 
-const SESSION_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes inactivity timeout
-const CLEANUP_INTERVAL_MS = 60 * 1000; // 1 minute cleanup check
+const SESSION_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes inactivity timeout (safety net)
+const CLEANUP_INTERVAL_MS = 60 * 1000; // 1 minute cleanup check (safety net)
+/**
+ * Time to wait after the last consumer disconnects before tearing down
+ * an HLS session. Short enough that a closed tab releases ffmpeg + segment
+ * dirs quickly; long enough to absorb brief player buffering pauses.
+ */
+const EAGER_IDLE_GRACE_MS = 30 * 1000;
 
 export class HlsManager {
   private static instance: HlsManager | null = null;
@@ -72,6 +90,9 @@ export class HlsManager {
       HlsManager.instance.sessions.forEach((s) => {
         if (s.killTimeout) {
           clearTimeout(s.killTimeout);
+        }
+        if (s.idleTimer) {
+          clearTimeout(s.idleTimer);
         }
         if (
           s.process &&
@@ -280,6 +301,7 @@ export class HlsManager {
         outputDir,
         playlistPath,
         status: HlsSessionStatus.STARTING,
+        consumers: 0,
         progress: {
           currentTime: 0,
           duration: 0,
@@ -428,10 +450,62 @@ export class HlsManager {
     }
   }
 
+  /**
+   * Mark that a request handler is actively using this session. While at
+   * least one consumer is held the session won't be torn down by the
+   * eager-idle timer. Pair with releaseSession() in res.on('close').
+   */
+  acquireSession(sessionId: string) {
+    const session = this.sessions.get(sessionId);
+    if (!session) return;
+    session.consumers++;
+    if (session.idleTimer) {
+      clearTimeout(session.idleTimer);
+      session.idleTimer = undefined;
+    }
+    session.lastAccess = Date.now();
+  }
+
+  /**
+   * Release one consumer. When the count reaches zero (and the session
+   * is not pinned for offline transcoding) schedule a teardown after a
+   * short grace period. The grace absorbs brief HLS player pauses so we
+   * don't churn ffmpeg processes for normal buffering behaviour.
+   */
+  releaseSession(sessionId: string) {
+    const session = this.sessions.get(sessionId);
+    if (!session) return;
+    if (session.consumers > 0) {
+      session.consumers--;
+    }
+    if (session.consumers > 0) return;
+    if (this.pinnedSessions.has(sessionId)) return;
+    if (session.idleTimer) {
+      clearTimeout(session.idleTimer);
+    }
+    session.idleTimer = setTimeout(() => {
+      // Re-check at fire time: another consumer may have arrived since.
+      const current = this.sessions.get(sessionId);
+      if (!current) return;
+      if (current.consumers > 0) return;
+      if (this.pinnedSessions.has(sessionId)) return;
+      void this.stopSession(sessionId);
+    }, EAGER_IDLE_GRACE_MS);
+    // Don't keep the event loop alive solely for cleanup.
+    if (typeof session.idleTimer.unref === 'function') {
+      session.idleTimer.unref();
+    }
+  }
+
   async stopSession(sessionId: string) {
     const session = this.sessions.get(sessionId);
     if (!session) return;
     this.pinnedSessions.delete(sessionId);
+
+    if (session.idleTimer) {
+      clearTimeout(session.idleTimer);
+      session.idleTimer = undefined;
+    }
 
     if (
       session.process &&

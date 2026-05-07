@@ -224,6 +224,7 @@ import {
   onMounted,
   onUnmounted,
   onBeforeUnmount,
+  defineAsyncComponent,
 } from 'vue';
 import { useLibraryStore } from '../composables/useLibraryStore';
 import { usePlayerStore } from '../composables/usePlayerStore';
@@ -241,8 +242,12 @@ import VlcIcon from './icons/VlcIcon.vue';
 import MediaControls from './MediaControls.vue';
 import TranscodingStatus from './TranscodingStatus.vue';
 import VideoPlayer from './VideoPlayer.vue';
-import VRVideoPlayer from './VRVideoPlayer.vue';
+// VRVideoPlayer + Three.js (~700KB) live in their own chunk loaded only when
+// the user opens VR mode. Importing the type statically is free at runtime.
+import type VRVideoPlayerType from './VRVideoPlayer.vue';
+const VRVideoPlayer = defineAsyncComponent(() => import('./VRVideoPlayer.vue'));
 import { isMediaFileImage } from '../utils/mediaUtils';
+import { WATCHED_THRESHOLD } from '../utils/playbackUtils';
 
 defineEmits(['open-shortcuts']);
 const libraryStore = useLibraryStore();
@@ -280,7 +285,7 @@ const { isLoading, mediaUrl, error, isVideoSupported, loadMedia } = mediaLoader;
 
 const videoElement = ref<HTMLVideoElement | null>(null);
 const videoPlayerRef = ref<InstanceType<typeof VideoPlayer> | null>(null);
-const vrPlayerRef = ref<InstanceType<typeof VRVideoPlayer> | null>(null);
+const vrPlayerRef = ref<InstanceType<typeof VRVideoPlayerType> | null>(null);
 
 const isVrMode = ref(false);
 const savedCurrentTime = ref(0);
@@ -374,8 +379,10 @@ const tryTranscoding = async (startTime = 0, requestId?: number) => {
 
 const lastTrackedTime = ref(-1);
 const lastSegmentsUpdate = ref(Date.now());
+const lastPositionUpdate = ref(0);
 const SEEK_DETECTION_THRESHOLD_S = 5;
 const UPDATE_INTERVAL_MS = 5000;
+const POSITION_PERSIST_INTERVAL_MS = 5000;
 const mediaControlsRef = ref<InstanceType<typeof MediaControls> | null>(null);
 
 const handleTimeUpdate = (time: number) => {
@@ -402,6 +409,11 @@ const handleTimeUpdate = (time: number) => {
   if (Date.now() - lastSegmentsUpdate.value > UPDATE_INTERVAL_MS) {
     persistWatchedSegments();
     lastSegmentsUpdate.value = Date.now();
+  }
+
+  if (Date.now() - lastPositionUpdate.value > POSITION_PERSIST_INTERVAL_MS) {
+    persistPlaybackPosition(realCurrentTime);
+    lastPositionUpdate.value = Date.now();
   }
 };
 
@@ -440,15 +452,44 @@ const persistWatchedSegments = async () => {
   }
 };
 
+const persistPlaybackPosition = async (position: number) => {
+  if (!currentMediaItem.value || isImage.value) return;
+  if (!Number.isFinite(position) || position < 0) return;
+  try {
+    await api.updatePlaybackPosition(currentMediaItem.value.path, position);
+  } catch (e) {
+    console.warn('Failed to persist playback position', e);
+  }
+};
+
 onBeforeUnmount(() => {
   persistWatchedSegments();
+  if (
+    currentMediaItem.value &&
+    !isImage.value &&
+    Number.isFinite(savedCurrentTime.value)
+  ) {
+    persistPlaybackPosition(savedCurrentTime.value);
+  }
   stopTranscodingProgressPoll();
 });
 
 watch(
   currentMediaItem,
-  async (newItem) => {
+  async (newItem, oldItem) => {
+    // Persist final position from the previous file before swapping.
+    if (
+      oldItem &&
+      !isMediaFileImage(oldItem, imageExtensionsSet.value) &&
+      Number.isFinite(savedCurrentTime.value) &&
+      savedCurrentTime.value > 0
+    ) {
+      persistPlaybackPosition(savedCurrentTime.value);
+    }
+
     lastTrackedTime.value = -1;
+    lastPositionUpdate.value = 0;
+    savedCurrentTime.value = 0;
     resetTranscoderState();
     if (videoPlayerRef.value) {
       videoPlayerRef.value.reset();
@@ -459,6 +500,28 @@ watch(
     }
 
     if (newItem) {
+      const isVideo = !isMediaFileImage(newItem, imageExtensionsSet.value);
+      if (isVideo) {
+        try {
+          const meta = await api.getMetadata([newItem.path]);
+          const saved = meta[newItem.path]?.playbackPosition;
+          const duration = meta[newItem.path]?.duration ?? 0;
+          // Resume only if there's a non-trivial saved position and we
+          // haven't crossed the shared watched threshold (which would
+          // restart the file from the beginning to match the WATCHED
+          // badge in MediaGridItem).
+          if (
+            typeof saved === 'number' &&
+            saved > 5 &&
+            (duration === 0 || saved / duration < WATCHED_THRESHOLD)
+          ) {
+            savedCurrentTime.value = saved;
+          }
+        } catch (e) {
+          console.warn('Failed to load saved playback position', e);
+        }
+      }
+
       await loadMedia(newItem, (_, reqId) => tryTranscoding(0, reqId));
       if (isImage.value && !isTimerRunning.value) {
         resumeSlideshowTimer();
@@ -532,6 +595,10 @@ const handleVideoPause = () => {
     resumeSlideshowTimer();
   }
   isPlaying.value = false;
+  if (Number.isFinite(savedCurrentTime.value) && savedCurrentTime.value > 0) {
+    persistPlaybackPosition(savedCurrentTime.value);
+    lastPositionUpdate.value = Date.now();
+  }
 };
 
 const handleVideoPlaying = () => {

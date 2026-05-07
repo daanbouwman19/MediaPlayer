@@ -64,10 +64,20 @@ export async function serveHlsPlaylist(
   if (!authorizedPath) return;
 
   const sessionId = await generateSessionId(authorizedPath);
+  const hlsManager = HlsManager.getInstance();
+  let acquired = false;
+  const release = () => {
+    if (acquired) {
+      acquired = false;
+      hlsManager.releaseSession(sessionId);
+    }
+  };
+  res.on('close', release);
 
   try {
-    const hlsManager = HlsManager.getInstance();
     await hlsManager.ensureSession(sessionId, authorizedPath);
+    hlsManager.acquireSession(sessionId);
+    acquired = true;
 
     const sessionDir = hlsManager.getSessionDir(sessionId);
     if (!sessionDir) throw new Error('Session dir not found');
@@ -94,7 +104,10 @@ export async function serveHlsPlaylist(
     hlsManager.touchSession(sessionId);
   } catch (err) {
     console.error('[HLS] Playlist error:', err);
-    res.status(500).send('HLS Generation failed');
+    if (!res.headersSent) {
+      res.status(500).send('HLS Generation failed');
+    }
+    release();
   }
 }
 
@@ -128,6 +141,15 @@ export async function serveHlsSegment(
     return;
   }
 
+  hlsManager.acquireSession(sessionId);
+  let released = false;
+  const release = () => {
+    if (released) return;
+    released = true;
+    hlsManager.releaseSession(sessionId);
+  };
+  res.on('close', release);
+
   const segmentPath = path.join(sessionDir, segmentName);
 
   try {
@@ -144,5 +166,6 @@ export async function serveHlsSegment(
     if (!res.headersSent) {
       res.status(404).send('Segment not found');
     }
+    release();
   }
 }
