@@ -2,7 +2,7 @@
   <div class="app-container min-h-screen flex flex-col relative">
     <a
       href="#main-content"
-      class="absolute top-4 left-4 z-100 translate-y-[150%] focus:translate-y-0 transition-transform bg-indigo-600 text-white px-4 py-2 rounded-md font-bold shadow-lg focus:outline-none focus:ring-2 focus:ring-white"
+      class="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-100 focus:bg-indigo-600 focus:text-white focus:px-4 focus:py-2 focus:rounded-md focus:font-bold focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-white"
     >
       Skip to content
     </a>
