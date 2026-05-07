@@ -243,7 +243,7 @@ export function canStreamCopy(
   videoCodec?: string,
   audioCodec?: string,
 ): { copyVideo: boolean; copyAudio: boolean } {
-  const copyVideo = videoCodec === 'h264' || videoCodec === 'hevc';
+  const copyVideo = videoCodec === 'h264';
   const copyAudio = audioCodec === 'aac' || audioCodec === 'mp3';
   return { copyVideo, copyAudio };
 }
@@ -259,6 +259,7 @@ export function getHlsTranscodeArgs(
     copyAudio?: boolean;
     preset?: string;
     crf?: string;
+    threads?: string;
   } = {},
 ): string[] {
   const {
@@ -267,6 +268,7 @@ export function getHlsTranscodeArgs(
     copyAudio = false,
     preset = FFMPEG_TRANSCODE_PRESET,
     crf = FFMPEG_TRANSCODE_CRF,
+    threads = '2',
   } = options;
 
   const args = [
@@ -283,7 +285,7 @@ export function getHlsTranscodeArgs(
   if (!copyVideo) {
     args.push('-preset', preset, '-pix_fmt', 'yuv420p');
     if (hwCodec === 'libx264') {
-      args.push('-crf', crf, '-threads', '2');
+      args.push('-crf', crf, '-threads', threads);
     }
   }
 

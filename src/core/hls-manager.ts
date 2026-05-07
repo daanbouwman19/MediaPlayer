@@ -170,9 +170,7 @@ export class HlsManager {
       return this.sessions.get(sessionId)!.playlistPath;
     }
 
-    if (!this.cleanupInterval) {
-      this.startCleanupInterval();
-    }
+    this.startCleanupInterval();
 
     // [SECURITY] Hard limit on concurrent transcodes to prevent CPU exhaustion
     if (this.sessions.size >= MAX_CONCURRENT_TRANSCODES) {
@@ -212,9 +210,7 @@ export class HlsManager {
       }
     }
 
-    if (!this.cleanupInterval) {
-      this.startCleanupInterval();
-    }
+    this.startCleanupInterval();
 
     if (this.pendingSessions.has(sessionId)) {
       await this.pendingSessions.get(sessionId);
@@ -475,9 +471,11 @@ export class HlsManager {
   }
 
   private startCleanupInterval() {
-    this.cleanupInterval = setInterval(() => {
-      this.cleanup();
-    }, CLEANUP_INTERVAL_MS);
+    if (!this.cleanupInterval) {
+      this.cleanupInterval = setInterval(() => {
+        this.cleanup();
+      }, CLEANUP_INTERVAL_MS);
+    }
   }
 
   stopCleanupInterval() {
