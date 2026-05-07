@@ -219,6 +219,7 @@ import {
   isMediaFileVideo,
 } from '../utils/mediaUtils';
 import { formatTime, formatDurationForA11y } from '../utils/timeUtils';
+import { isWatched as isWatchedThreshold } from '../utils/playbackUtils';
 import ImageIcon from './icons/ImageIcon.vue';
 import PlayIcon from './icons/PlayIcon.vue';
 import StarIcon from './icons/StarIcon.vue';
@@ -251,10 +252,7 @@ const isVideo = computed(() =>
 
 const isWatched = computed(() => {
   if (!isVideo.value) return false;
-  const pos = props.item.playbackPosition;
-  const dur = props.item.duration;
-  if (!pos || !dur || dur <= 0) return false;
-  return pos / dur >= 0.9;
+  return isWatchedThreshold(props.item.playbackPosition, props.item.duration);
 });
 
 const mediaUrl = computed(() => {

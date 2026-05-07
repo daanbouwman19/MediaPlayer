@@ -247,6 +247,7 @@ import VideoPlayer from './VideoPlayer.vue';
 import type VRVideoPlayerType from './VRVideoPlayer.vue';
 const VRVideoPlayer = defineAsyncComponent(() => import('./VRVideoPlayer.vue'));
 import { isMediaFileImage } from '../utils/mediaUtils';
+import { WATCHED_THRESHOLD } from '../utils/playbackUtils';
 
 defineEmits(['open-shortcuts']);
 const libraryStore = useLibraryStore();
@@ -505,12 +506,14 @@ watch(
           const meta = await api.getMetadata([newItem.path]);
           const saved = meta[newItem.path]?.playbackPosition;
           const duration = meta[newItem.path]?.duration ?? 0;
-          // Resume only if there's a non-trivial saved position and we haven't
-          // effectively finished the file (>=95% counts as watched, restart).
+          // Resume only if there's a non-trivial saved position and we
+          // haven't crossed the shared watched threshold (which would
+          // restart the file from the beginning to match the WATCHED
+          // badge in MediaGridItem).
           if (
             typeof saved === 'number' &&
             saved > 5 &&
-            (duration === 0 || saved < duration * 0.95)
+            (duration === 0 || saved / duration < WATCHED_THRESHOLD)
           ) {
             savedCurrentTime.value = saved;
           }
