@@ -151,7 +151,7 @@ export function useSlideshow() {
     playerStore.state.timerProgress = 100;
 
     const duration = playerStore.state.timerDuration * 1000;
-    const interval = 50;
+    const interval = 200;
     let elapsed = 0;
 
     playerStore.state.slideshowTimerId = setInterval(() => {

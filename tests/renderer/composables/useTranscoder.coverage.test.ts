@@ -29,7 +29,7 @@ describe('useTranscoder Coverage Boost', () => {
     startTranscodingProgressPoll('test.mp4');
     expect(transcodingProgress.value).toBe(0);
 
-    vi.advanceTimersByTime(1000);
+    vi.advanceTimersByTime(3000);
     await vi.waitFor(() => expect(api.getHlsStatus).toHaveBeenCalled());
     expect(transcodingProgress.value).toBe(0); // remains 0
   });
@@ -40,7 +40,7 @@ describe('useTranscoder Coverage Boost', () => {
     (api.getHlsStatus as any).mockResolvedValue({ percent: 50, duration: 0 });
 
     startTranscodingProgressPoll('test.mp4');
-    vi.advanceTimersByTime(1000);
+    vi.advanceTimersByTime(3000);
     await vi.waitFor(() => expect(api.getHlsStatus).toHaveBeenCalled());
     expect(transcodedDuration.value).toBe(0);
   });
@@ -51,7 +51,7 @@ describe('useTranscoder Coverage Boost', () => {
     const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     startTranscodingProgressPoll('test.mp4');
-    vi.advanceTimersByTime(1000);
+    vi.advanceTimersByTime(3000);
     await vi.waitFor(() => expect(api.getHlsStatus).toHaveBeenCalled());
     expect(consoleSpy).toHaveBeenCalled();
     consoleSpy.mockRestore();

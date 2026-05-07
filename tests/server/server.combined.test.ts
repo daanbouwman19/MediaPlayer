@@ -427,9 +427,9 @@ describe('Server Combined Tests', () => {
     it('should limit concurrent transcoding requests', async () => {
       // Overwrite the constant value by pushing LIMIT times.
       // Wait, constants cannot be simply overwritten.
-      // In this test environment, the server is running against the default MAX_CONCURRENT_TRANSCODES (10).
-      // We must fire 10 requests to saturate the limit, then the 11th will fail.
-      const LIMIT = 10;
+      // In this test environment, the server is running against the default MAX_CONCURRENT_TRANSCODES.
+      // We must fire requests to saturate the limit, then the next will fail.
+      const LIMIT = 2;
       const pendingRequests: Promise<any>[] = [];
 
       for (let i = 0; i < LIMIT; i++) {

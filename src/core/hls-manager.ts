@@ -7,6 +7,7 @@ import {
   detectFFmpegCapabilities,
   getHardwareCodec,
   getFFmpegStreams,
+  canStreamCopy,
 } from './utils/ffmpeg-utils.ts';
 import { createMediaSource } from './media-source.ts';
 import {
@@ -60,9 +61,7 @@ export class HlsManager {
     ReturnType<typeof detectFFmpegCapabilities>
   > | null = null;
 
-  private constructor() {
-    this.startCleanupInterval();
-  }
+  private constructor() {}
 
   /**
    * Resets the singleton instance for testing purposes.
@@ -171,6 +170,10 @@ export class HlsManager {
       return this.sessions.get(sessionId)!.playlistPath;
     }
 
+    if (!this.cleanupInterval) {
+      this.startCleanupInterval();
+    }
+
     // [SECURITY] Hard limit on concurrent transcodes to prevent CPU exhaustion
     if (this.sessions.size >= MAX_CONCURRENT_TRANSCODES) {
       throw new Error('Server too busy. Please try again later.');
@@ -209,6 +212,10 @@ export class HlsManager {
       }
     }
 
+    if (!this.cleanupInterval) {
+      this.startCleanupInterval();
+    }
+
     if (this.pendingSessions.has(sessionId)) {
       await this.pendingSessions.get(sessionId);
       return this.sessions.get(sessionId)!.playlistPath;
@@ -245,8 +252,13 @@ export class HlsManager {
       const mediaSource = createMediaSource(filePath);
       const ffmpegInput = await mediaSource.getFFmpegInput();
 
-      await getFFmpegStreams(ffmpegInput, ffmpegPath);
+      const streamsInfo = await getFFmpegStreams(ffmpegInput, ffmpegPath);
       const hardwareCodec = getHardwareCodec(this.ffmpegCapabilities!);
+
+      const { copyVideo, copyAudio } = canStreamCopy(
+        streamsInfo.videoCodec,
+        streamsInfo.audioCodec,
+      );
 
       const outputSegmentPath = path.join(outputDir, 'seg-%03d.ts');
       const args = getHlsTranscodeArgs(
@@ -256,6 +268,8 @@ export class HlsManager {
         HLS_SEGMENT_DURATION,
         {
           hwCodec: hardwareCodec,
+          copyVideo,
+          copyAudio,
         },
       );
 
@@ -448,6 +462,10 @@ export class HlsManager {
     }
 
     this.sessions.delete(sessionId);
+
+    if (this.sessions.size === 0) {
+      this.stopCleanupInterval();
+    }
 
     try {
       await fs.rm(session.outputDir, { recursive: true, force: true });

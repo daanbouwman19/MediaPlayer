@@ -14,7 +14,9 @@ describe('useTranscodeQueue', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.useFakeTimers();
-    (api.listTranscodeJobs as any).mockResolvedValue([]);
+    (api.listTranscodeJobs as any).mockResolvedValue([
+      { file_path: '/test.mp4', status: 'pending' },
+    ]);
     (api.addTranscodeJobs as any).mockResolvedValue(undefined);
     (api.cancelTranscodeJob as any).mockResolvedValue(undefined);
   });
