@@ -100,7 +100,6 @@
   },
   "dependencies": {
     "better-sqlite3": "^12.9.0",
-    "cookie-parser": "^1.4.7",
     "cookie-session": "^2.1.1",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
@@ -120,7 +119,6 @@
     "@playwright/test": "^1.59.1",
     "@tailwindcss/vite": "^4.2.4",
     "@types/better-sqlite3": "^7.6.13",
-    "@types/cookie-parser": "^1.4.10",
     "@types/cookie-session": "^2.0.49",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
