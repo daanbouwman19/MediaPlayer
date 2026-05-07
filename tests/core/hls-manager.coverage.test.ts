@@ -131,7 +131,10 @@ describe('HlsManager Coverage Boost', () => {
     await vi.advanceTimersByTimeAsync(1);
 
     mockProcess.stderr.emit('data', 'Duration: 00:01:40.00\ntime=00:00:1');
-    mockProcess.stderr.emit('data', '0.00\nfps=30\n');
+    mockProcess.stderr.emit(
+      'data',
+      "0.00\nfps=30\nOpening 'playlist.m3u8' for writing\n",
+    );
 
     await vi.advanceTimersByTimeAsync(500);
     await promise;
@@ -149,6 +152,7 @@ describe('HlsManager Coverage Boost', () => {
 
     const promise = hlsManager.ensureSession(sessionId, '/test.mp4');
     await vi.advanceTimersByTimeAsync(500);
+    mockProcess.stderr.emit('data', "Opening 'playlist.m3u8' for writing\n");
     await promise;
 
     await hlsManager.stopSession(sessionId);
@@ -166,6 +170,7 @@ describe('HlsManager Coverage Boost', () => {
 
     const promise = hlsManager.ensureSession(sessionId, '/test.mp4');
     await vi.advanceTimersByTimeAsync(500);
+    mockProcess.stderr.emit('data', "Opening 'playlist.m3u8' for writing\n");
     await promise;
 
     await hlsManager.stopSession(sessionId);
@@ -371,13 +376,82 @@ describe('HlsManager Coverage Boost', () => {
     expect(session.status).toBe('complete');
   });
 
+  it('ensureSession throws when MAX_CONCURRENT_TRANSCODES is reached', async () => {
+    // Fill up sessions to max (assuming MAX_CONCURRENT_TRANSCODES = 10 from constants.ts)
+    for (let i = 0; i < 10; i++) {
+      (hlsManager as any).sessions.set(`dummy-${i}`, {
+        status: 'active',
+        playlistPath: '/dummy',
+        progress: {},
+      });
+    }
+    await expect(hlsManager.ensureSession('new-id', '/v.mp4')).rejects.toThrow(
+      'Server too busy. Please try again later.',
+    );
+  });
+
+  it('ensureSessionUnthrottled reuses existing COMPLETE session', async () => {
+    const sessionId = 'unthrottled-complete-reuse';
+    (hlsManager as any).sessions.set(sessionId, {
+      status: 'complete',
+      playlistPath: '/tmp/out/playlist.m3u8',
+      progress: {},
+    });
+    const result = await hlsManager.ensureSessionUnthrottled(
+      sessionId,
+      '/v.mp4',
+    );
+    expect(result).toBe('/tmp/out/playlist.m3u8');
+  });
+
+  it('stopSession handles fs.rm error safely in catch block', async () => {
+    const sessionId = 'stop-rm-error';
+    const mockProcess = createMockProcess();
+    (hlsManager as any).sessions.set(sessionId, {
+      id: sessionId,
+      process: mockProcess,
+      lastAccess: Date.now(),
+      outputDir: '/tmp/error-out',
+      playlistPath: '/tmp/error-out/playlist.m3u8',
+      status: 'active',
+      progress: {},
+    });
+
+    mockFsRm.mockRejectedValueOnce(new Error('Permission denied'));
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await hlsManager.stopSession(sessionId);
+
+    expect(consoleSpy).toHaveBeenCalledWith(
+      '[HLS] Failed to clean up /tmp/error-out:',
+      expect.any(Error),
+    );
+    consoleSpy.mockRestore();
+  });
+
+  it('waitForPlaylist rejects if FFmpeg exits normally but no playlist is found', async () => {
+    const sessionId = 'no-playlist-exit';
+    const mockProcess = createMockProcess();
+    mockSpawn.mockReturnValue(mockProcess);
+
+    mockFsStat.mockRejectedValue(new Error('ENOENT'));
+
+    const promise = hlsManager.ensureSession(sessionId, '/test.mp4');
+    await vi.advanceTimersByTimeAsync(500);
+
+    // Simulate FFmpeg exiting cleanly without creating the playlist
+    mockProcess.emit('exit', 0, null);
+
+    await expect(promise).rejects.toThrow(
+      'HLS session finished but playlist not found',
+    );
+  });
+
   it('resetInstance cleans up active processes', () => {
     const sessionId = 'reset-test';
     const mockProcess = createMockProcess();
     mockSpawn.mockReturnValue(mockProcess);
 
-    // We need to bypass some things to get a session in there without full async flow if possible,
-    // or just run a full one.
     (hlsManager as any).sessions.set(sessionId, {
       id: sessionId,
       process: mockProcess,
@@ -391,5 +465,39 @@ describe('HlsManager Coverage Boost', () => {
 
     HlsManager.resetInstance();
     expect(mockProcess.kill).toHaveBeenCalledWith('SIGKILL');
+  });
+
+  it('waitForSession returns STOPPED if session does not exist', async () => {
+    const status = await hlsManager.waitForSession('non-existent');
+    expect(status).toBe('stopped');
+  });
+
+  it('waitForSession returns current status if already COMPLETE, ERROR, or STOPPED', async () => {
+    const statuses = ['complete', 'error', 'stopped'];
+    for (const status of statuses) {
+      (hlsManager as any).sessions.set(`test-${status}`, {
+        status: status,
+      });
+      const result = await hlsManager.waitForSession(`test-${status}`);
+      expect(result).toBe(status);
+    }
+  });
+
+  it('waitForSession waits for status event if session is ACTIVE or STARTING', async () => {
+    const sessionId = 'wait-for-status';
+    (hlsManager as any).sessions.set(sessionId, {
+      status: 'active',
+    });
+
+    const promise = hlsManager.waitForSession(sessionId);
+
+    // Emit an intermediate status, should not resolve yet
+    (hlsManager as any).emit(`status:${sessionId}`, 'starting');
+
+    // Emit final status
+    (hlsManager as any).emit(`status:${sessionId}`, 'complete');
+
+    const result = await promise;
+    expect(result).toBe('complete');
   });
 });

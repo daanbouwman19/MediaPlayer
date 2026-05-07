@@ -1,3 +1,4 @@
+import { defineStore } from 'pinia';
 import { reactive, toRefs } from 'vue';
 import { WebAdapter } from '../api/WebAdapter';
 import { ElectronAdapter } from '../api/ElectronAdapter';
@@ -15,13 +16,13 @@ interface AuthState {
   isEnabled: boolean;
 }
 
-const state = reactive<AuthState>({
-  isLocked: false,
-  isInitialized: false,
-  isEnabled: false,
-});
+const usePiniaAuthStore = defineStore('auth', () => {
+  const state = reactive<AuthState>({
+    isLocked: false,
+    isInitialized: false,
+    isEnabled: false,
+  });
 
-export function useAuthStore() {
   async function checkLockStatus() {
     try {
       const status = await backend.getLockStatus();
@@ -49,9 +50,14 @@ export function useAuthStore() {
     }
   }
 
+  return { state, checkLockStatus, unlock };
+});
+
+export function useAuthStore() {
+  const store = usePiniaAuthStore();
   return {
-    ...toRefs(state),
-    checkLockStatus,
-    unlock,
+    ...toRefs(store.state),
+    checkLockStatus: store.checkLockStatus,
+    unlock: store.unlock,
   };
 }

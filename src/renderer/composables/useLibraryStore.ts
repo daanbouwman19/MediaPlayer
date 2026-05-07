@@ -1,3 +1,4 @@
+import { defineStore } from 'pinia';
 import { reactive, computed, watch, toRefs } from 'vue';
 import type {
   Album,
@@ -21,32 +22,28 @@ interface LibraryState {
   thumbnailUrlGenerator: ((path: string) => string) | null;
 }
 
-const state = reactive<LibraryState>({
-  isScanning: false,
-  allAlbums: [],
-  mediaDirectories: [],
-  supportedExtensions: { images: [], videos: [], all: [] },
-  smartPlaylists: [],
-  historyMedia: [],
-  albumsSelectedForSlideshow: {},
-  globalMediaPoolForSelection: [],
-  totalMediaInPool: 0,
-  mediaUrlGenerator: null,
-  thumbnailUrlGenerator: null,
-});
+export const usePiniaLibraryStore = defineStore('library', () => {
+  const state = reactive<LibraryState>({
+    isScanning: false,
+    allAlbums: [],
+    mediaDirectories: [],
+    supportedExtensions: { images: [], videos: [], all: [] },
+    smartPlaylists: [],
+    historyMedia: [],
+    albumsSelectedForSlideshow: {},
+    globalMediaPoolForSelection: [],
+    totalMediaInPool: 0,
+    mediaUrlGenerator: null,
+    thumbnailUrlGenerator: null,
+  });
 
-// Computed sets for O(1) extension lookups
-const imageExtensionsSet = computed(
-  () => new Set(state.supportedExtensions.images),
-);
-const videoExtensionsSet = computed(
-  () => new Set(state.supportedExtensions.videos),
-);
+  const imageExtensionsSet = computed(
+    () => new Set(state.supportedExtensions.images),
+  );
+  const videoExtensionsSet = computed(
+    () => new Set(state.supportedExtensions.videos),
+  );
 
-let isWatcherInitialized = false;
-
-export const setupPersistenceWatcher = () => {
-  if (isWatcherInitialized) return;
   watch(
     () => state.albumsSelectedForSlideshow,
     (newSelection: { [key: string]: boolean }) => {
@@ -58,56 +55,25 @@ export const setupPersistenceWatcher = () => {
     },
     { deep: true },
   );
-  isWatcherInitialized = true;
-};
 
-// Start watcher immediately
-setupPersistenceWatcher();
-
-export function useLibraryStore() {
-  /**
-   * Recursively selects all albums in the provided list.
-   * Optimized to minimize reactive updates by building the selection map first
-   * and assigning it in a single operation.
-   * Also uses iterative traversal to avoid stack overflow on deep trees.
-   * @param albums - The list of albums to select.
-   */
   const selectAllAlbumsRecursively = (albums: Album[]) => {
-    // Start with current selection to preserve existing keys if this is additive
-    // (though usually 'selectAll' implies setting state for the provided tree)
-    // The previous implementation was additive.
-    // However, since we are assigning to state.albumsSelectedForSlideshow, we should decide if we replace or merge.
-    // The previous implementation:
-    // state.albumsSelectedForSlideshow[album.id] = true;
-    // This preserves existing keys that are NOT in the new list.
-    // So we should clone the current state.
-
-    // If we are selecting *all* albums available (state.allAlbums), we might as well just create a new object if we want to clean up.
-    // But let's stick to the additive behavior to be safe and consistent with previous logic.
     const newSelection = { ...state.albumsSelectedForSlideshow };
-
-    // Iterative stack-based traversal
     const stack = [...albums];
     while (stack.length > 0) {
       const album = stack.pop()!;
       newSelection[album.id] = true;
-
       if (album.children && album.children.length > 0) {
-        // Push children in reverse order to maintain traversal order (though order doesn't matter for set)
         for (let i = album.children.length - 1; i >= 0; i--) {
           stack.push(album.children[i]);
         }
       }
     }
-
-    // Single reactive update
     state.albumsSelectedForSlideshow = newSelection;
   };
 
   const fetchHistory = async (limit = 50) => {
     try {
       const items = await api.getRecentlyPlayed(limit);
-      // API returns items ordered by last_viewed DESC (most recent first)
       state.historyMedia = items.map((item) => {
         const name = item.file_path.split(/[\/\\]/).pop() || item.file_path;
         return {
@@ -129,8 +95,6 @@ export function useLibraryStore() {
 
   const loadInitialData = async () => {
     try {
-      // Bolt Optimization: Parallelize independent fetches for better startup performance
-      // and cache URL generators to avoid repeated IPC calls in components.
       const [albums, directories, playlists, extensions, mediaGen, thumbGen] =
         await Promise.all([
           api.getAlbumsWithViewCounts(),
@@ -164,21 +128,44 @@ export function useLibraryStore() {
     }
   };
 
+  const clearMediaPool = () => {
+    state.globalMediaPoolForSelection = [];
+  };
+
+  const resetLibraryState = () => {
+    state.globalMediaPoolForSelection = [];
+    state.albumsSelectedForSlideshow = {};
+    state.historyMedia = [];
+  };
+
   return {
-    ...toRefs(state),
-    state, // Expose raw state for direct access if needed
+    state,
     imageExtensionsSet,
     videoExtensionsSet,
     loadInitialData,
     selectAllAlbumsRecursively,
     fetchHistory,
-    clearMediaPool: () => {
-      state.globalMediaPoolForSelection = [];
-    },
-    resetLibraryState: () => {
-      state.globalMediaPoolForSelection = [];
-      state.albumsSelectedForSlideshow = {};
-      state.historyMedia = [];
-    },
+    clearMediaPool,
+    resetLibraryState,
+  };
+});
+
+export const setupPersistenceWatcher = () => {
+  // Provided for backward compatibility if any test explicitly imports it
+  // The actual watcher is now initialized when the pinia store is created.
+};
+
+export function useLibraryStore() {
+  const store = usePiniaLibraryStore();
+  return {
+    ...toRefs(store.state),
+    state: store.state,
+    imageExtensionsSet: computed(() => store.imageExtensionsSet),
+    videoExtensionsSet: computed(() => store.videoExtensionsSet),
+    loadInitialData: store.loadInitialData,
+    selectAllAlbumsRecursively: store.selectAllAlbumsRecursively,
+    fetchHistory: store.fetchHistory,
+    clearMediaPool: store.clearMediaPool,
+    resetLibraryState: store.resetLibraryState,
   };
 }

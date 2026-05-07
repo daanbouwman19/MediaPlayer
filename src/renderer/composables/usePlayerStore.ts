@@ -1,3 +1,4 @@
+import { defineStore } from 'pinia';
 import { reactive, toRefs } from 'vue';
 
 interface PlayerState {
@@ -10,20 +11,19 @@ interface PlayerState {
   mainVideoElement: HTMLVideoElement | null;
 }
 
-const state = reactive<PlayerState>({
-  isSlideshowActive: false,
-  slideshowTimerId: null,
-  timerDuration: 5,
-  isTimerRunning: false,
-  timerProgress: 0,
-  pauseTimerOnPlay: false,
-  mainVideoElement: null,
-});
+const usePiniaPlayerStore = defineStore('player', () => {
+  const state = reactive<PlayerState>({
+    isSlideshowActive: false,
+    slideshowTimerId: null,
+    timerDuration: 5,
+    isTimerRunning: false,
+    timerProgress: 0,
+    pauseTimerOnPlay: false,
+    mainVideoElement: null,
+  });
 
-export function usePlayerStore() {
   const resetPlayerState = () => {
     state.isSlideshowActive = false;
-    // We don't reset pauseTimerOnPlay/timerDuration as they are user preferences
   };
 
   const stopSlideshow = () => {
@@ -34,10 +34,15 @@ export function usePlayerStore() {
     state.isTimerRunning = false;
   };
 
+  return { state, resetPlayerState, stopSlideshow };
+});
+
+export function usePlayerStore() {
+  const store = usePiniaPlayerStore();
   return {
-    ...toRefs(state),
-    state,
-    resetPlayerState,
-    stopSlideshow,
+    ...toRefs(store.state),
+    state: store.state,
+    resetPlayerState: store.resetPlayerState,
+    stopSlideshow: store.stopSlideshow,
   };
 }
