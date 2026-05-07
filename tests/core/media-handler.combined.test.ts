@@ -1249,6 +1249,7 @@ describe('MediaHandler Combined Tests', () => {
         json: vi.fn().mockReturnThis(),
         set: vi.fn().mockReturnThis(),
         end: vi.fn(),
+        on: vi.fn(),
       };
       res.sendFile = vi.fn(
         (_path: string, optOrCb: any | (() => void), cb?: () => void) => {
