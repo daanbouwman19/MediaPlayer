@@ -408,6 +408,7 @@ describe('Database Worker Coverage', () => {
       null, // rating
       null, // status
       null, // watchedSegments
+      null, // playbackPosition
     );
   });
 
@@ -428,7 +429,8 @@ describe('Database Worker Coverage', () => {
       null, // createdAt
       null, // rating
       null, // status
-      null,
+      null, // watchedSegments
+      null, // playbackPosition
     );
   });
 

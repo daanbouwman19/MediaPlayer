@@ -123,6 +123,10 @@ export interface IpcContract {
     payload: [{ filePath: string; segmentsJson: string }];
     response: void;
   };
+  [IPC_CHANNELS.DB_UPDATE_PLAYBACK_POSITION]: {
+    payload: [{ filePath: string; position: number }];
+    response: void;
+  };
   [IPC_CHANNELS.DB_EXECUTE_SMART_PLAYLIST]: {
     payload: [string];
     response: MediaLibraryItem[];

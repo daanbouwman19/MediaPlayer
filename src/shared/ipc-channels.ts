@@ -27,6 +27,7 @@ export const IPC_CHANNELS = {
   DB_DELETE_SMART_PLAYLIST: 'db:delete-smart-playlist',
   DB_UPDATE_SMART_PLAYLIST: 'db:update-smart-playlist',
   DB_UPDATE_WATCHED_SEGMENTS: 'db:update-watched-segments',
+  DB_UPDATE_PLAYBACK_POSITION: 'db:update-playback-position',
   DB_EXECUTE_SMART_PLAYLIST: 'db:execute-smart-playlist',
   DB_GET_ALL_METADATA_AND_STATS: 'db:get-all-metadata-and-stats',
   DB_GET_RECENTLY_PLAYED: 'db:get-recently-played',

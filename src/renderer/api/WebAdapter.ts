@@ -332,6 +332,16 @@ export class WebAdapter implements IMediaBackend {
     return;
   }
 
+  async updatePlaybackPosition(
+    filePath: string,
+    position: number,
+  ): Promise<void> {
+    await this.request<void>('/api/media/playback-position', {
+      method: 'POST',
+      body: JSON.stringify({ filePath, position }),
+    });
+  }
+
   async executeSmartPlaylist(criteria: string): Promise<MediaLibraryItem[]> {
     void criteria;
     // For web version, fallback to fetching all and filtering client-side if needed,

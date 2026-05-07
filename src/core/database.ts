@@ -333,6 +333,26 @@ async function updateWatchedSegments(
 }
 
 /**
+ * Updates the last-known playback position for a file (in seconds).
+ * Errors are logged but never re-thrown — saving a resume point is best-effort.
+ */
+async function updatePlaybackPosition(
+  filePath: string,
+  position: number,
+): Promise<void> {
+  try {
+    await getClient().sendMessage<void>('updatePlaybackPosition', {
+      filePath,
+      position,
+    });
+  } catch (error) {
+    safeWarn(
+      `[database.js] Error updating playback position for ${filePath}: ${(error as Error).message}`,
+    );
+  }
+}
+
+/**
  * Retrieves metadata for a list of files.
  */
 async function getMetadata(
@@ -571,6 +591,7 @@ export {
   deleteSmartPlaylist,
   updateSmartPlaylist,
   updateWatchedSegments,
+  updatePlaybackPosition,
   saveSetting,
   getSetting,
   executeSmartPlaylist,

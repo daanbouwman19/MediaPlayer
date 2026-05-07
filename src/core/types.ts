@@ -9,6 +9,8 @@ export interface MediaFile {
   rating?: number;
   lastViewed?: number;
   duration?: number;
+  /** Last saved playback position in seconds, used to derive a watched indicator. */
+  playbackPosition?: number;
 }
 
 export interface Album {
@@ -42,6 +44,8 @@ export interface MediaMetadata {
   createdAt?: string; // ISO date
   status?: string; // 'pending' | 'processing' | 'success' | 'failed'
   watchedSegments?: string; // JSON string of {start, end}[]
+  /** Last known playback time in seconds, used to resume on replay. */
+  playbackPosition?: number;
 }
 
 export interface MediaLibraryItem {
@@ -54,6 +58,7 @@ export interface MediaLibraryItem {
   view_count: number | null;
   last_viewed: string | null;
   watched_segments?: string | null;
+  playback_position?: number | null;
 }
 
 export type IpcResult<T = unknown> =

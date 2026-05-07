@@ -36,7 +36,8 @@ export const DB_SCHEMA = {
     created_at TEXT,
     rating INTEGER DEFAULT 0,
     extraction_status TEXT DEFAULT 'pending',
-    watched_segments TEXT
+    watched_segments TEXT,
+    playback_position REAL DEFAULT 0
   )`,
 
   SMART_PLAYLISTS: `CREATE TABLE IF NOT EXISTS smart_playlists (
@@ -157,6 +158,7 @@ export function migrateMediaMetadata(db: Database.Database): void {
       { name: 'rating', type: 'INTEGER DEFAULT 0' },
       { name: 'extraction_status', type: "TEXT DEFAULT 'pending'" },
       { name: 'watched_segments', type: 'TEXT' },
+      { name: 'playback_position', type: 'REAL DEFAULT 0' },
     ];
 
     for (const col of migrations) {

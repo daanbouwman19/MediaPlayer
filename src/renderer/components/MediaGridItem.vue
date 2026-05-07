@@ -101,6 +101,28 @@
       {{ item.rating }}
     </div>
     <div
+      v-if="isWatched"
+      class="absolute top-2 right-2 -translate-y-0.5 bg-green-600/90 text-white text-[10px] font-semibold px-1.5 py-0.5 rounded flex items-center gap-1 pointer-events-none"
+      title="Watched"
+      aria-label="Watched"
+    >
+      <svg
+        class="w-2.5 h-2.5"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        stroke-width="3"
+        aria-hidden="true"
+      >
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          d="M5 13l4 4L19 7"
+        />
+      </svg>
+      WATCHED
+    </div>
+    <div
       class="absolute bottom-0 left-0 right-0 bg-linear-to-t from-black/80 to-transparent p-2 opacity-0 group-hover:opacity-100 group-focus:opacity-100 group-focus-visible:opacity-100 transition-opacity duration-200 pointer-events-none"
     >
       <p class="text-white text-xs truncate">
@@ -226,6 +248,14 @@ const isImage = computed(() =>
 const isVideo = computed(() =>
   isMediaFileVideo(props.item, props.videoExtensionsSet),
 );
+
+const isWatched = computed(() => {
+  if (!isVideo.value) return false;
+  const pos = props.item.playbackPosition;
+  const dur = props.item.duration;
+  if (!pos || !dur || dur <= 0) return false;
+  return pos / dur >= 0.9;
+});
 
 const mediaUrl = computed(() => {
   if (!props.mediaUrlGenerator) return '';

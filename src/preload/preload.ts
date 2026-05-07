@@ -95,6 +95,10 @@ export interface ElectronAPI {
     filePath: string,
     segmentsJson: string,
   ) => Promise<IpcResult<void>>;
+  updatePlaybackPosition: (
+    filePath: string,
+    position: number,
+  ) => Promise<IpcResult<void>>;
 
   executeSmartPlaylist: (
     criteria: string,
@@ -217,6 +221,11 @@ const api: ElectronAPI = {
     ipcRenderer.invoke(IPC_CHANNELS.DB_UPDATE_WATCHED_SEGMENTS, {
       filePath,
       segmentsJson,
+    }),
+  updatePlaybackPosition: (filePath: string, position: number) =>
+    ipcRenderer.invoke(IPC_CHANNELS.DB_UPDATE_PLAYBACK_POSITION, {
+      filePath,
+      position,
     }),
 
   executeSmartPlaylist: (criteria: string) =>

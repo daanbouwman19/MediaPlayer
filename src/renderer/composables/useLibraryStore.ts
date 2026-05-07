@@ -119,6 +119,7 @@ export function useLibraryStore() {
             ? new Date(item.last_viewed).getTime()
             : undefined,
           duration: item.duration || 0,
+          playbackPosition: item.playback_position || 0,
         };
       });
     } catch (e) {

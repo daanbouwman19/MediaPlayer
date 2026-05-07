@@ -129,6 +129,51 @@ describe('Media Routes Coverage', () => {
       expect(res.status).toBe(400);
     });
 
+    it('POST /api/media/playback-position missing arguments', async () => {
+      const res = await request(app)
+        .post('/api/media/playback-position')
+        .send({ filePath: '/f.mp4' }); // missing position
+      expect(res.status).toBe(400);
+    });
+
+    it('POST /api/media/playback-position rejects non-finite position', async () => {
+      const res = await request(app)
+        .post('/api/media/playback-position')
+        .send({ filePath: '/f.mp4', position: 'oops' });
+      expect(res.status).toBe(400);
+    });
+
+    it('POST /api/media/playback-position access denied', async () => {
+      vi.mocked(security.authorizeFilePath).mockResolvedValueOnce({
+        isAllowed: false,
+        message: 'nope',
+      } as any);
+      const res = await request(app)
+        .post('/api/media/playback-position')
+        .send({ filePath: '/f.mp4', position: 12 });
+      expect(res.status).toBe(403);
+    });
+
+    it('POST /api/media/playback-position succeeds with valid input', async () => {
+      const db = await import('../../../src/core/database');
+      vi.mocked(db.updatePlaybackPosition).mockResolvedValue(undefined);
+      const res = await request(app)
+        .post('/api/media/playback-position')
+        .send({ filePath: '/f.mp4', position: 30.5 });
+      expect(res.status).toBe(200);
+      expect(db.updatePlaybackPosition).toHaveBeenCalledWith('/f.mp4', 30.5);
+    });
+
+    it('POST /api/media/playback-position clamps negative positions to 0', async () => {
+      const db = await import('../../../src/core/database');
+      vi.mocked(db.updatePlaybackPosition).mockResolvedValue(undefined);
+      const res = await request(app)
+        .post('/api/media/playback-position')
+        .send({ filePath: '/f.mp4', position: -5 });
+      expect(res.status).toBe(200);
+      expect(db.updatePlaybackPosition).toHaveBeenCalledWith('/f.mp4', 0);
+    });
+
     it('POST /api/media/metadata missing arguments', async () => {
       const res = await request(app)
         .post('/api/media/metadata')

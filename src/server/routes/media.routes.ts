@@ -10,6 +10,7 @@ import {
   getRecentlyPlayed,
   recordMediaView,
   setRating,
+  updatePlaybackPosition,
   upsertMetadata,
   listTranscodeJobs,
   deleteTranscodeJob,
@@ -128,6 +129,30 @@ export function createMediaRoutes({
       }
 
       await setRating(filePath, rating);
+      res.sendStatus(200);
+    }),
+  );
+
+  router.post(
+    '/api/media/playback-position',
+    writeLimiter,
+    asyncHandler(async (req, res) => {
+      const { filePath, position } = req.body;
+      if (
+        !filePath ||
+        typeof filePath !== 'string' ||
+        typeof position !== 'number' ||
+        !Number.isFinite(position)
+      ) {
+        throw new AppError(400, 'Missing filePath or position');
+      }
+
+      const auth = await authorizeFilePath(filePath);
+      if (!auth.isAllowed) {
+        return res.status(403).send(auth.message || 'Access denied');
+      }
+
+      await updatePlaybackPosition(filePath, Math.max(0, position));
       res.sendStatus(200);
     }),
   );

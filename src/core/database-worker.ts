@@ -289,8 +289,8 @@ export function initDatabase(dbPath: string): WorkerResult {
       'UPDATE media_directories SET is_active = ? WHERE path = ?',
     );
     statements.upsertMetadata = db.prepare(
-      `INSERT INTO media_metadata (file_path_hash, file_path, duration, size, created_at, rating, extraction_status, watched_segments)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO media_metadata (file_path_hash, file_path, duration, size, created_at, rating, extraction_status, watched_segments, playback_position)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(file_path_hash) DO UPDATE SET
        file_path = excluded.file_path,
        duration = COALESCE(excluded.duration, media_metadata.duration),
@@ -298,7 +298,8 @@ export function initDatabase(dbPath: string): WorkerResult {
        created_at = COALESCE(excluded.created_at, media_metadata.created_at),
        rating = COALESCE(excluded.rating, media_metadata.rating),
        extraction_status = COALESCE(excluded.extraction_status, media_metadata.extraction_status),
-       watched_segments = COALESCE(excluded.watched_segments, media_metadata.watched_segments)`,
+       watched_segments = COALESCE(excluded.watched_segments, media_metadata.watched_segments),
+       playback_position = COALESCE(excluded.playback_position, media_metadata.playback_position)`,
     );
     statements.getPendingMetadata = db.prepare(
       `SELECT file_path FROM media_metadata WHERE (extraction_status = 'pending' OR extraction_status IS NULL) AND file_path IS NOT NULL LIMIT 100`,
@@ -313,6 +314,10 @@ export function initDatabase(dbPath: string): WorkerResult {
     statements.updateWatchedSegments = db.prepare(
       `INSERT INTO media_metadata (file_path_hash, watched_segments) VALUES (?, ?)
        ON CONFLICT(file_path_hash) DO UPDATE SET watched_segments = excluded.watched_segments`,
+    );
+    statements.updatePlaybackPosition = db.prepare(
+      `INSERT INTO media_metadata (file_path_hash, playback_position) VALUES (?, ?)
+       ON CONFLICT(file_path_hash) DO UPDATE SET playback_position = excluded.playback_position`,
     );
     statements.createSmartPlaylist = db.prepare(
       'INSERT INTO smart_playlists (name, criteria) VALUES (?, ?)',
@@ -358,7 +363,8 @@ export function initDatabase(dbPath: string): WorkerResult {
         m.rating,
         m.created_at,
         COALESCE(v.view_count, 0) as view_count,
-        v.last_viewed
+        v.last_viewed,
+        m.playback_position
       FROM media_metadata m
       LEFT JOIN media_views v ON m.file_path_hash = v.file_path_hash
       WHERE m.file_path IS NOT NULL
@@ -392,7 +398,8 @@ export function initDatabase(dbPath: string): WorkerResult {
         created_at as createdAt,
         rating,
         extraction_status as status,
-        watched_segments as watchedSegments
+        watched_segments as watchedSegments,
+        playback_position as playbackPosition
        FROM media_metadata WHERE file_path_hash IN (${placeholders})`,
     );
     // Optimization: Select only necessary columns and alias them to match MediaMetadata interface
@@ -404,7 +411,8 @@ export function initDatabase(dbPath: string): WorkerResult {
         created_at as createdAt,
         rating,
         extraction_status as status,
-        watched_segments as watchedSegments
+        watched_segments as watchedSegments,
+        playback_position as playbackPosition
        FROM media_metadata WHERE file_path IS NOT NULL`,
     );
 
@@ -444,6 +452,7 @@ interface MetadataPayload {
   rating?: number;
   status?: string;
   watchedSegments?: string;
+  playbackPosition?: number;
 }
 
 /**
@@ -464,6 +473,7 @@ export async function upsertMetadata(
       payload.rating === undefined ? null : payload.rating,
       payload.status === undefined ? null : payload.status,
       payload.watchedSegments === undefined ? null : payload.watchedSegments,
+      payload.playbackPosition === undefined ? null : payload.playbackPosition,
     );
     return { success: true };
   } catch (error: unknown) {
@@ -499,6 +509,27 @@ export async function updateWatchedSegments(
   try {
     const fileId = await getExistingIdOrGenerate(filePath);
     statements.updateWatchedSegments.run(fileId, segmentsJson);
+    return { success: true };
+  } catch (error: unknown) {
+    return { success: false, error: (error as Error).message };
+  }
+}
+
+/**
+ * Updates the last-known playback position for a file. Used to power
+ * resume-on-replay in the renderer.
+ */
+export async function updatePlaybackPosition(
+  filePath: string,
+  position: number,
+): Promise<WorkerResult> {
+  if (!db) return { success: false, error: 'Database not initialized' };
+  try {
+    const fileId = await getExistingIdOrGenerate(filePath);
+    statements.updatePlaybackPosition.run(
+      fileId,
+      Number.isFinite(position) ? Math.max(0, position) : 0,
+    );
     return { success: true };
   } catch (error: unknown) {
     return { success: false, error: (error as Error).message };
@@ -573,6 +604,7 @@ export async function bulkUpsertMetadata(
           item.rating === undefined ? null : item.rating,
           item.status === undefined ? null : item.status,
           item.watchedSegments === undefined ? null : item.watchedSegments,
+          item.playbackPosition === undefined ? null : item.playbackPosition,
         );
       }
     });
@@ -1317,6 +1349,12 @@ if (parentPort) {
           result = await updateWatchedSegments(
             payload.filePath,
             payload.segmentsJson,
+          );
+          break;
+        case 'updatePlaybackPosition':
+          result = await updatePlaybackPosition(
+            payload.filePath,
+            payload.position,
           );
           break;
         case 'getAllMetadata':
