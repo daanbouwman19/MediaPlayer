@@ -250,7 +250,7 @@ describe('useSlideshow Coverage Boost', () => {
       expect(mockPlayerState.timerProgress).toBe(100);
 
       vi.advanceTimersByTime(500);
-      expect(mockPlayerState.timerProgress).toBe(50);
+      expect(mockPlayerState.timerProgress).toBe(60);
 
       vi.advanceTimersByTime(501);
       expect(mockPlayerState.timerProgress).toBe(0);

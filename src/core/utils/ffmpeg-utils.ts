@@ -213,12 +213,39 @@ export async function getFFmpegDuration(
 export async function getFFmpegStreams(
   filePath: string,
   ffmpegPath: string,
-): Promise<{ hasVideo: boolean; hasAudio: boolean }> {
+): Promise<{
+  hasVideo: boolean;
+  hasAudio: boolean;
+  videoCodec?: string;
+  audioCodec?: string;
+}> {
   const { stderr } = await runFFmpeg(ffmpegPath, ['-i', filePath]);
   // FFmpeg typically outputs stream info to stderr
   const hasVideo = /Stream #\d+:\d+(?:.*): Video:/.test(stderr);
   const hasAudio = /Stream #\d+:\d+(?:.*): Audio:/.test(stderr);
-  return { hasVideo, hasAudio };
+
+  const videoMatch = stderr.match(
+    /Stream #\d+:\d+(?:.*): Video:\s*([a-zA-Z0-9_-]+)/,
+  );
+  const audioMatch = stderr.match(
+    /Stream #\d+:\d+(?:.*): Audio:\s*([a-zA-Z0-9_-]+)/,
+  );
+
+  return {
+    hasVideo,
+    hasAudio,
+    videoCodec: videoMatch ? videoMatch[1] : undefined,
+    audioCodec: audioMatch ? audioMatch[1] : undefined,
+  };
+}
+
+export function canStreamCopy(
+  videoCodec?: string,
+  audioCodec?: string,
+): { copyVideo: boolean; copyAudio: boolean } {
+  const copyVideo = videoCodec === 'h264';
+  const copyAudio = audioCodec === 'aac' || audioCodec === 'mp3';
+  return { copyVideo, copyAudio };
 }
 
 export function getHlsTranscodeArgs(
@@ -228,16 +255,20 @@ export function getHlsTranscodeArgs(
   segmentDuration: number,
   options: {
     hwCodec?: string;
+    copyVideo?: boolean;
     copyAudio?: boolean;
     preset?: string;
     crf?: string;
+    threads?: string;
   } = {},
 ): string[] {
   const {
     hwCodec = 'libx264',
+    copyVideo = false,
     copyAudio = false,
     preset = FFMPEG_TRANSCODE_PRESET,
     crf = FFMPEG_TRANSCODE_CRF,
+    threads = '2',
   } = options;
 
   const args = [
@@ -246,17 +277,16 @@ export function getHlsTranscodeArgs(
     '-i',
     inputPath,
     '-c:v',
-    hwCodec,
+    copyVideo ? 'copy' : hwCodec,
     '-c:a',
     copyAudio ? 'copy' : 'aac',
-    '-preset',
-    preset,
-    '-pix_fmt',
-    'yuv420p',
   ];
 
-  if (hwCodec === 'libx264') {
-    args.push('-crf', crf);
+  if (!copyVideo) {
+    args.push('-preset', preset, '-pix_fmt', 'yuv420p');
+    if (hwCodec === 'libx264') {
+      args.push('-crf', crf, '-threads', threads);
+    }
   }
 
   args.push(

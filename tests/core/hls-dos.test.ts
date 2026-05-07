@@ -46,9 +46,13 @@ vi.mock('../../src/core/utils/ffmpeg-utils.ts', () => ({
     vaapi: false,
   }),
   getHardwareCodec: vi.fn().mockReturnValue(null),
-  getFFmpegStreams: vi
-    .fn()
-    .mockResolvedValue({ hasVideo: true, hasAudio: true }),
+  getFFmpegStreams: vi.fn().mockResolvedValue({
+    hasVideo: true,
+    hasAudio: true,
+    videoCodec: 'h264',
+    audioCodec: 'aac',
+  }),
+  canStreamCopy: vi.fn().mockReturnValue({ copyVideo: true, copyAudio: true }),
 }));
 
 describe('HlsManager DOS Protection', () => {

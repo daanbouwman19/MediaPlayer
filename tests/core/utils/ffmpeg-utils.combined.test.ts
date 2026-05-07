@@ -324,7 +324,12 @@ describe('FFmpeg Utils Combined Tests', () => {
       mockProcess.emit('exit', 0, null);
 
       const streams = await promise;
-      expect(streams).toEqual({ hasVideo: true, hasAudio: true });
+      expect(streams).toEqual({
+        hasVideo: true,
+        hasAudio: true,
+        videoCodec: 'h264',
+        audioCodec: 'aac',
+      });
     });
 
     it('returns false for video if missing', async () => {
@@ -337,7 +342,12 @@ describe('FFmpeg Utils Combined Tests', () => {
       mockProcess.emit('exit', 0, null);
 
       const streams = await promise;
-      expect(streams).toEqual({ hasVideo: false, hasAudio: true });
+      expect(streams).toEqual({
+        hasVideo: false,
+        hasAudio: true,
+        videoCodec: undefined,
+        audioCodec: 'aac',
+      });
     });
 
     it('returns false for audio if missing', async () => {
@@ -350,7 +360,12 @@ describe('FFmpeg Utils Combined Tests', () => {
       mockProcess.emit('exit', 0, null);
 
       const streams = await promise;
-      expect(streams).toEqual({ hasVideo: true, hasAudio: false });
+      expect(streams).toEqual({
+        hasVideo: true,
+        hasAudio: false,
+        videoCodec: 'h264',
+        audioCodec: undefined,
+      });
     });
 
     it('handles garbage output', async () => {

@@ -38,7 +38,7 @@ describe('useTranscoder', () => {
     expect(url).toBe('http://hls/url');
 
     // Fast-forward 1s for poll
-    vi.advanceTimersByTime(1000);
+    vi.advanceTimersByTime(3000);
     await vi.waitFor(() => expect(api.getHlsStatus).toHaveBeenCalled());
 
     expect(transcodingProgress.value).toBe(50);
@@ -53,7 +53,7 @@ describe('useTranscoder', () => {
     });
 
     await startTranscoding('test.mp4');
-    vi.advanceTimersByTime(1000);
+    vi.advanceTimersByTime(3000);
 
     await vi.waitFor(() => expect(isTranscodingLoading.value).toBe(false));
   });

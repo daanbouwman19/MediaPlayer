@@ -39,7 +39,7 @@ export function useTranscoder() {
       } catch (e) {
         console.warn('Failed to poll transcoding progress', e);
       }
-    }, 1000);
+    }, 3000);
   };
 
   const resetTranscoderState = () => {

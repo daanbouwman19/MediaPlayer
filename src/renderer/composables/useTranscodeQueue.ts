@@ -10,14 +10,23 @@ export function useTranscodeQueue() {
     try {
       const jobs = await api.listTranscodeJobs();
       jobStatusMap.value = new Map(jobs.map((j) => [j.file_path, j.status]));
+
+      const allDone = jobs.every(
+        (j) => j.status === 'done' || j.status === 'failed',
+      );
+      if (allDone || jobs.length === 0) {
+        stopPolling();
+      }
     } catch {
       // Swallow polling errors to avoid noise
     }
   };
 
   const startPolling = () => {
-    poll();
-    pollTimer = setInterval(poll, 2000);
+    if (!pollTimer) {
+      poll();
+      pollTimer = setInterval(poll, 2000);
+    }
   };
 
   const stopPolling = () => {
@@ -29,7 +38,7 @@ export function useTranscodeQueue() {
 
   const addJobs = async (paths: string[]) => {
     await api.addTranscodeJobs(paths);
-    poll();
+    startPolling();
   };
 
   const cancelJob = async (path: string) => {
