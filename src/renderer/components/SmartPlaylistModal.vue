@@ -19,7 +19,7 @@
       >
         <!-- Decorative top gradient (Indigo/Violet) -->
         <div
-          class="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-accent via-accent-secondary to-accent"
+          class="absolute top-0 left-0 right-0 h-1 bg-linear-to-r from-accent via-accent-secondary to-accent"
         ></div>
 
         <div class="p-8">
@@ -196,6 +196,7 @@
 
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue';
+import { storeToRefs } from 'pinia';
 import { useUIStore } from '../composables/useUIStore';
 import { useLibraryStore } from '../composables/useLibraryStore';
 import { useToast } from '../composables/useToast';
@@ -217,8 +218,8 @@ const uiStore = useUIStore();
 const libraryStore = useLibraryStore();
 const toast = useToast();
 
-const { isSmartPlaylistModalVisible } = uiStore;
-const { smartPlaylists } = libraryStore;
+const { isSmartPlaylistModalVisible } = storeToRefs(uiStore);
+const { smartPlaylists } = storeToRefs(libraryStore);
 
 const name = ref('');
 const minRating = ref(0);

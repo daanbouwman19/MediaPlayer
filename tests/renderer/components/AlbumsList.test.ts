@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
-import { reactive, toRefs } from 'vue';
+import { reactive } from 'vue';
 import AlbumsList from '../../../src/renderer/components/AlbumsList.vue';
 import { collectTexturesRecursive } from '../../../src/renderer/utils/albumUtils';
 import { useLibraryStore } from '../../../src/renderer/composables/useLibraryStore';
@@ -120,21 +120,14 @@ describe('AlbumsList.vue', () => {
     mockPlayerState = playerState;
     mockUIState = uiState;
 
-    (useLibraryStore as Mock).mockReturnValue({
-      state: mockLibraryState,
-      ...toRefs(mockLibraryState),
+    (useLibraryStore as unknown as Mock).mockReturnValue(Object.assign(mockLibraryState, {
       fetchHistory: vi.fn(),
-    });
+      historyMedia: [],
+    }));
 
-    (usePlayerStore as Mock).mockReturnValue({
-      state: mockPlayerState,
-      ...toRefs(mockPlayerState),
-    });
+    (usePlayerStore as unknown as Mock).mockReturnValue(Object.assign(mockPlayerState, {}));
 
-    (useUIStore as Mock).mockReturnValue({
-      state: mockUIState,
-      ...toRefs(mockUIState),
-    });
+    (useUIStore as unknown as Mock).mockReturnValue(Object.assign(mockUIState, {}));
 
     mockCycleTheme = vi.fn();
     (useTheme as Mock).mockReturnValue({
@@ -424,7 +417,7 @@ describe('AlbumsList.vue', () => {
     it('logs error if no history found', async () => {
       const consoleSpy = vi
         .spyOn(console, 'error')
-        .mockImplementation(() => {});
+        .mockImplementation(() => { });
       const wrapper = mount(AlbumsList);
       const historyBtn = wrapper.find(
         'button[aria-label="Recently Played Slideshow"]',
@@ -483,7 +476,7 @@ describe('AlbumsList.vue', () => {
       );
       const consoleSpy = vi
         .spyOn(console, 'error')
-        .mockImplementation(() => {});
+        .mockImplementation(() => { });
 
       const wrapper = mount(AlbumsList);
       await wrapper.vm.$nextTick();
@@ -509,7 +502,7 @@ describe('AlbumsList.vue', () => {
 
       const consoleSpy = vi
         .spyOn(console, 'error')
-        .mockImplementation(() => {});
+        .mockImplementation(() => { });
       const wrapper = mount(AlbumsList);
 
       const gridBtn = wrapper.find('button[aria-label="Open History in Grid"]');

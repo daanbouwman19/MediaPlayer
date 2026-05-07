@@ -2,7 +2,7 @@
   <div class="app-container min-h-screen flex flex-col relative">
     <a
       href="#main-content"
-      class="absolute top-4 left-4 z-[100] -translate-y-[150%] focus:translate-y-0 transition-transform bg-indigo-600 text-white px-4 py-2 rounded-md font-bold shadow-lg focus:outline-none focus:ring-2 focus:ring-white"
+      class="absolute top-4 left-4 z-100 translate-y-[150%] focus:translate-y-0 transition-transform bg-indigo-600 text-white px-4 py-2 rounded-md font-bold shadow-lg focus:outline-none focus:ring-2 focus:ring-white"
     >
       Skip to content
     </a>
@@ -10,7 +10,7 @@
 
     <!-- Main Content Layer -->
     <main
-      class="relative z-10 grow flex flex-col md:flex-row p-0 md:p-6 gap-0 md:gap-6 overflow-hidden h-[100dvh] transition-all duration-300 ease-in-out"
+      class="relative z-10 grow flex flex-col md:flex-row p-0 md:p-6 gap-0 md:gap-6 overflow-hidden h-dvh transition-all duration-300 ease-in-out"
     >
       <!-- Sidebar (Collapsible/Floating) -->
       <!-- Mobile: Fixed Overlay, Desktop: Static Sidebar with Width Transition -->
@@ -110,6 +110,7 @@
  * and handles global keyboard shortcuts for media navigation.
  */
 import { onMounted, onBeforeUnmount, watch, ref } from 'vue';
+import { storeToRefs } from 'pinia';
 import AmbientBackground from './components/AmbientBackground.vue';
 import AlbumsList from './components/AlbumsList.vue';
 import MediaDisplay from './components/MediaDisplay.vue';
@@ -136,12 +137,12 @@ const uiStore = useUIStore();
 const playerStore = usePlayerStore(); // Call the store to get the instance
 const playlistStore = usePlaylistStore();
 const authStore = useAuthStore();
-const { isScanning } = libraryStore;
+const { isScanning } = storeToRefs(libraryStore);
 const { viewMode, playlistToEdit, isControlsVisible, isSidebarVisible } =
-  uiStore;
-const { isSlideshowActive, mainVideoElement } = playerStore; // Destructure from the instance
-const { currentItem: currentMediaItem } = playlistStore;
-const { isLocked, isInitialized: isAuthInitialized } = authStore;
+  storeToRefs(uiStore);
+const { isSlideshowActive, mainVideoElement } = storeToRefs(playerStore); // Destructure from the instance
+const { currentItem: currentMediaItem } = storeToRefs(playlistStore);
+const { isLocked, isInitialized: isAuthInitialized } = storeToRefs(authStore);
 const initializeApp = libraryStore.loadInitialData;
 const { navigateMedia, toggleSlideshowTimer } = useSlideshow();
 const { initTheme, cleanupTheme } = useTheme();

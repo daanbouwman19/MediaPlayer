@@ -4,6 +4,7 @@ import {
   _resetThemeModule,
 } from '../../../src/renderer/composables/useTheme';
 import { useUIStore } from '../../../src/renderer/composables/useUIStore';
+import { ref, reactive, toRefs } from 'vue';
 
 vi.mock('../../../src/renderer/composables/useUIStore');
 
@@ -15,10 +16,10 @@ describe('useTheme', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    mockThemeMode = { value: 'system' };
+    mockThemeMode = ref('system');
 
-    (useUIStore as any).mockReturnValue({
-      themeMode: mockThemeMode,
+    (useUIStore as unknown as any).mockReturnValue({
+      ...toRefs(reactive({ themeMode: mockThemeMode })),
     });
 
     sharedMockMQ = {

@@ -13,6 +13,7 @@
  * heavy blur and saturation filters to create an immersive atmosphere.
  */
 import { ref, watch, onUnmounted, computed } from 'vue';
+import { storeToRefs } from 'pinia';
 import { usePlayerStore } from '../composables/usePlayerStore';
 import { usePlaylistStore } from '../composables/usePlaylistStore';
 import { useLibraryStore } from '../composables/useLibraryStore';
@@ -22,11 +23,9 @@ const playerStore = usePlayerStore();
 const playlistStore = usePlaylistStore();
 const libraryStore = useLibraryStore();
 
-const { mainVideoElement } = playerStore;
-const { currentItem: currentMediaItem } = playlistStore;
-const supportedExtensions = computed(
-  () => libraryStore.state.supportedExtensions,
-);
+const { mainVideoElement } = storeToRefs(playerStore);
+const { currentItem: currentMediaItem } = storeToRefs(playlistStore);
+const supportedExtensions = computed(() => libraryStore.supportedExtensions);
 
 const canvas = ref<HTMLCanvasElement | null>(null);
 const mediaUrl = ref<string | null>(null);

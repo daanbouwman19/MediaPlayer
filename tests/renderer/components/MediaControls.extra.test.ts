@@ -29,7 +29,7 @@ describe('MediaControls Extra Coverage', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.clearAllMocks();
-    (useUIStore as Mock).mockReturnValue({
+    (useUIStore as unknown as Mock).mockReturnValue({
       isSidebarVisible: { value: true },
     });
   });

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, Mock } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
-import { ref, reactive } from 'vue';
+import { ref, reactive, computed } from 'vue';
 import MediaDisplay from '@/components/MediaDisplay.vue';
 import MediaControls from '@/components/MediaControls.vue';
 import VideoPlayer from '@/components/VideoPlayer.vue';
@@ -104,38 +104,44 @@ describe('MediaDisplay Coverage Boost', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    mockLibrary = {
-      imageExtensionsSet: ref(new Set(['.jpg', '.png'])),
-      mediaDirectories: ref([]),
-      thumbnailUrlGenerator: ref((path: string) => `thumb://${path}`),
-    };
-    (useLibraryStore as Mock).mockReturnValue(mockLibrary);
+    mockLibrary = reactive({
+      imageExtensionsSet: new Set(['.jpg', '.png']),
+      mediaDirectories: [],
+      thumbnailUrlGenerator: (path: string) => `thumb://${path}`,
+    });
+    (useLibraryStore as unknown as Mock).mockReturnValue(mockLibrary);
 
-    mockPlayer = {
-      pauseTimerOnPlay: ref(false),
-      isTimerRunning: ref(false),
-      mainVideoElement: ref(null),
-      state: {
-        isSlideshowActive: false,
-        timerDuration: 5,
-      },
-    };
-    (usePlayerStore as Mock).mockReturnValue(mockPlayer);
+    mockPlayer = reactive({
+      pauseTimerOnPlay: false,
+      isTimerRunning: false,
+      mainVideoElement: null,
+      isSlideshowActive: false,
+      timerDuration: 5,
+    });
+    (usePlayerStore as unknown as Mock).mockReturnValue(mockPlayer);
 
-    mockPlaylist = {
-      currentItem: ref(null),
-      state: reactive({ queue: [] }),
-      hasNext: ref(false),
-      hasPrevious: ref(false),
-    };
-    (usePlaylistStore as Mock).mockReturnValue(mockPlaylist);
+    mockPlaylist = reactive({
+      currentItem: null,
+      queue: [],
+      history: [],
+    });
+    (usePlaylistStore as unknown as Mock).mockReturnValue(
+      Object.assign(mockPlaylist, {
+        hasNext: computed(() => mockPlaylist.queue.length > 0),
+        hasPrevious: computed(() => mockPlaylist.history.length > 0),
+        playNext: vi.fn(),
+        playPrevious: vi.fn(),
+        clearPlaylist: vi.fn(),
+        setQueue: vi.fn(),
+      }),
+    );
 
-    mockUI = {
-      isControlsVisible: ref(true),
-      isSourcesModalVisible: ref(false),
-      isSidebarVisible: ref(true),
-    };
-    (useUIStore as Mock).mockReturnValue(mockUI);
+    mockUI = reactive({
+      isControlsVisible: true,
+      isSourcesModalVisible: false,
+      isSidebarVisible: true,
+    });
+    (useUIStore as unknown as Mock).mockReturnValue(mockUI);
 
     mockSlideshow = {
       navigateMedia: vi.fn(),
@@ -181,30 +187,30 @@ describe('MediaDisplay Coverage Boost', () => {
     const wrapper = mount(MediaDisplay);
     expect(wrapper.text()).toContain('Welcome to Media Player');
     await wrapper.find('button.glass-button').trigger('click');
-    expect(mockUI.isSourcesModalVisible.value).toBe(true);
+    expect(mockUI.isSourcesModalVisible).toBe(true);
   });
 
   it('shows library empty screen when media directories exist but no item selected', async () => {
-    mockLibrary.mediaDirectories.value = ['/path'];
+    mockLibrary.mediaDirectories = ['/path'];
     const wrapper = mount(MediaDisplay);
     expect(wrapper.text()).toContain('Select an album to start playback');
 
-    mockUI.isSidebarVisible.value = false;
+    mockUI.isSidebarVisible = false;
     await flushPromises();
     expect(wrapper.text()).toContain('Open Library');
     await wrapper.find('button.glass-button').trigger('click');
-    expect(mockUI.isSidebarVisible.value).toBe(true);
+    expect(mockUI.isSidebarVisible).toBe(true);
   });
 
   it('shows error message', async () => {
-    mockPlaylist.currentItem.value = { path: 'p' };
+    mockPlaylist.currentItem = { path: 'p' };
     mockMediaLoader.error.value = 'Failed to load';
     const wrapper = mount(MediaDisplay);
     expect(wrapper.text()).toContain('Failed to load');
   });
 
   it('shows unsupported format message', async () => {
-    mockPlaylist.currentItem.value = { path: 'video.hevc' };
+    mockPlaylist.currentItem = { path: 'video.hevc' };
     mockMediaLoader.isVideoSupported.value = false;
     const wrapper = mount(MediaDisplay);
     expect(wrapper.text()).toContain('Video Format Not Supported');
@@ -215,7 +221,7 @@ describe('MediaDisplay Coverage Boost', () => {
   });
 
   it('handles try transcoding button', async () => {
-    mockPlaylist.currentItem.value = { path: 'video.hevc' };
+    mockPlaylist.currentItem = { path: 'video.hevc' };
     mockMediaLoader.isVideoSupported.value = false;
     const wrapper = mount(MediaDisplay);
 
@@ -227,7 +233,7 @@ describe('MediaDisplay Coverage Boost', () => {
   });
 
   it('handles video player events', async () => {
-    mockPlaylist.currentItem.value = { path: 'video.mp4' };
+    mockPlaylist.currentItem = { path: 'video.mp4' };
     mockMediaLoader.mediaUrl.value = 'video-url';
     const wrapper = mount(MediaDisplay);
     await flushPromises();
@@ -236,7 +242,7 @@ describe('MediaDisplay Coverage Boost', () => {
 
     // Play
     await videoPlayer.vm.$emit('play');
-    expect(mockPlayer.pauseTimerOnPlay.value).toBe(false); // Default is false
+    expect(mockPlayer.pauseTimerOnPlay).toBe(false); // Default is false
 
     // Pause
     await videoPlayer.vm.$emit('pause');
@@ -264,7 +270,7 @@ describe('MediaDisplay Coverage Boost', () => {
   });
 
   it('handles global keyboard shortcuts', async () => {
-    mockPlaylist.currentItem.value = { path: 'video.mp4' };
+    mockPlaylist.currentItem = { path: 'video.mp4' };
     mockMediaLoader.mediaUrl.value = 'video-url';
     mount(MediaDisplay);
     await flushPromises();
@@ -288,8 +294,8 @@ describe('MediaDisplay Coverage Boost', () => {
   });
 
   it('handles image slideshow', async () => {
-    mockPlaylist.currentItem.value = { path: 'img.jpg' };
-    mockLibrary.imageExtensionsSet.value = new Set(['.jpg']);
+    mockPlaylist.currentItem = { path: 'img.jpg' };
+    mockLibrary.imageExtensionsSet = new Set(['.jpg']);
     mockMediaLoader.mediaUrl.value = 'img-url';
 
     mount(MediaDisplay);
@@ -302,7 +308,7 @@ describe('MediaDisplay Coverage Boost', () => {
   });
 
   it('handles rating and mute toggles', async () => {
-    mockPlaylist.currentItem.value = { path: 'v.mp4', rating: 1 };
+    mockPlaylist.currentItem = { path: 'v.mp4', rating: 1 };
     mockMediaLoader.mediaUrl.value = 'url';
     const wrapper = mount(MediaDisplay);
     await flushPromises();
@@ -326,7 +332,7 @@ describe('MediaDisplay Coverage Boost', () => {
   });
 
   it('handles VR mode', async () => {
-    mockPlaylist.currentItem.value = { path: 'v.mp4' };
+    mockPlaylist.currentItem = { path: 'v.mp4' };
     mockMediaLoader.mediaUrl.value = 'url';
     const wrapper = mount(MediaDisplay);
     await flushPromises();
@@ -344,7 +350,7 @@ describe('MediaDisplay Coverage Boost', () => {
   });
 
   it('handles media error and auto-transcode', async () => {
-    mockPlaylist.currentItem.value = { path: 'broken.mp4' };
+    mockPlaylist.currentItem = { path: 'broken.mp4' };
     mockMediaLoader.mediaUrl.value = 'url';
     const wrapper = mount(MediaDisplay);
     await flushPromises();
@@ -360,7 +366,7 @@ describe('MediaDisplay Coverage Boost', () => {
   });
 
   it('handles rating error', async () => {
-    mockPlaylist.currentItem.value = { path: 'v.mp4', rating: 1 };
+    mockPlaylist.currentItem = { path: 'v.mp4', rating: 1 };
     const wrapper = mount(MediaDisplay);
     await flushPromises();
 
@@ -380,7 +386,7 @@ describe('MediaDisplay Coverage Boost', () => {
   });
 
   it('handles fullscreen toggle with video element', async () => {
-    mockPlaylist.currentItem.value = { path: 'v.mp4' };
+    mockPlaylist.currentItem = { path: 'v.mp4' };
     mockMediaLoader.mediaUrl.value = 'url';
     const wrapper = mount(MediaDisplay);
     await flushPromises();
@@ -411,7 +417,7 @@ describe('MediaDisplay Coverage Boost', () => {
   });
 
   it('handles tryTranscoding error', async () => {
-    mockPlaylist.currentItem.value = { path: 'v.mp4' };
+    mockPlaylist.currentItem = { path: 'v.mp4' };
     const wrapper = mount(MediaDisplay);
     mockTranscoder.startTranscoding.mockRejectedValue(new Error('Fail'));
 
@@ -420,7 +426,7 @@ describe('MediaDisplay Coverage Boost', () => {
   });
 
   it('handles keyboard seek boundaries', async () => {
-    mockPlaylist.currentItem.value = { path: 'v.mp4' };
+    mockPlaylist.currentItem = { path: 'v.mp4' };
     mockMediaLoader.mediaUrl.value = 'url';
     mockTranscoder.isTranscodingMode.value = true;
     mockTranscoder.transcodedDuration.value = 100;
@@ -440,7 +446,7 @@ describe('MediaDisplay Coverage Boost', () => {
   });
 
   it('handles persistWatchedSegments error', async () => {
-    mockPlaylist.currentItem.value = { path: 'v.mp4' };
+    mockPlaylist.currentItem = { path: 'v.mp4' };
     const wrapper = mount(MediaDisplay);
     await flushPromises();
 
@@ -453,11 +459,11 @@ describe('MediaDisplay Coverage Boost', () => {
   });
 
   it('restores saved playback position on video load', async () => {
-    mockLibrary.imageExtensionsSet.value = new Set(['.jpg']);
+    mockLibrary.imageExtensionsSet = new Set(['.jpg']);
     (api.getMetadata as Mock).mockResolvedValue({
       'v.mp4': { playbackPosition: 42, duration: 100 },
     });
-    mockPlaylist.currentItem.value = { name: 'v.mp4', path: 'v.mp4' };
+    mockPlaylist.currentItem = { name: 'v.mp4', path: 'v.mp4' };
     const wrapper = mount(MediaDisplay);
     await flushPromises();
     expect(api.getMetadata).toHaveBeenCalledWith(['v.mp4']);
@@ -468,22 +474,22 @@ describe('MediaDisplay Coverage Boost', () => {
     (api.getMetadata as Mock).mockResolvedValue({
       'v.mp4': { playbackPosition: 99, duration: 100 },
     });
-    mockPlaylist.currentItem.value = { name: 'v.mp4', path: 'v.mp4' };
+    mockPlaylist.currentItem = { name: 'v.mp4', path: 'v.mp4' };
     const wrapper = mount(MediaDisplay);
     await flushPromises();
     expect((wrapper.vm as any).savedCurrentTime).toBe(0);
   });
 
   it('skips metadata fetch for image media items', async () => {
-    mockLibrary.imageExtensionsSet.value = new Set(['.jpg']);
-    mockPlaylist.currentItem.value = { name: 'photo.jpg', path: 'photo.jpg' };
+    mockLibrary.imageExtensionsSet = new Set(['.jpg']);
+    mockPlaylist.currentItem = { name: 'photo.jpg', path: 'photo.jpg' };
     mount(MediaDisplay);
     await flushPromises();
     expect(api.getMetadata).not.toHaveBeenCalled();
   });
 
   it('persists playback position when video is paused', async () => {
-    mockPlaylist.currentItem.value = { name: 'v.mp4', path: 'v.mp4' };
+    mockPlaylist.currentItem = { name: 'v.mp4', path: 'v.mp4' };
     mockMediaLoader.mediaUrl.value = 'url';
     const wrapper = mount(MediaDisplay);
     await flushPromises();
@@ -495,7 +501,7 @@ describe('MediaDisplay Coverage Boost', () => {
   });
 
   it('persistPlaybackPosition swallows errors gracefully', async () => {
-    mockPlaylist.currentItem.value = { name: 'v.mp4', path: 'v.mp4' };
+    mockPlaylist.currentItem = { name: 'v.mp4', path: 'v.mp4' };
     const wrapper = mount(MediaDisplay);
     await flushPromises();
 
@@ -509,7 +515,7 @@ describe('MediaDisplay Coverage Boost', () => {
   });
 
   it('persistPlaybackPosition is a no-op when no current item', async () => {
-    mockPlaylist.currentItem.value = null;
+    mockPlaylist.currentItem = null;
     const wrapper = mount(MediaDisplay);
     await flushPromises();
     await (wrapper.vm as any).persistPlaybackPosition(15);
@@ -517,7 +523,7 @@ describe('MediaDisplay Coverage Boost', () => {
   });
 
   it('persistPlaybackPosition rejects non-finite values', async () => {
-    mockPlaylist.currentItem.value = { name: 'v.mp4', path: 'v.mp4' };
+    mockPlaylist.currentItem = { name: 'v.mp4', path: 'v.mp4' };
     const wrapper = mount(MediaDisplay);
     await flushPromises();
     (api.updatePlaybackPosition as Mock).mockClear();
@@ -527,7 +533,7 @@ describe('MediaDisplay Coverage Boost', () => {
   });
 
   it('updates video element muted state when isMuted changes', async () => {
-    mockPlaylist.currentItem.value = { path: 'v.mp4' };
+    mockPlaylist.currentItem = { path: 'v.mp4' };
     mockMediaLoader.mediaUrl.value = 'url';
     const wrapper = mount(MediaDisplay);
     await flushPromises();
@@ -542,7 +548,7 @@ describe('MediaDisplay Coverage Boost', () => {
   });
 
   it('handles video playing event to clear loading states', async () => {
-    mockPlaylist.currentItem.value = { path: 'v.mp4' };
+    mockPlaylist.currentItem = { path: 'v.mp4' };
     mockMediaLoader.mediaUrl.value = 'url';
     const wrapper = mount(MediaDisplay);
     await flushPromises();
@@ -559,8 +565,8 @@ describe('MediaDisplay Coverage Boost', () => {
   });
 
   it('handles image media error', async () => {
-    mockPlaylist.currentItem.value = { path: 'img.jpg' };
-    mockLibrary.imageExtensionsSet.value = new Set(['.jpg']);
+    mockPlaylist.currentItem = { path: 'img.jpg' };
+    mockLibrary.imageExtensionsSet = new Set(['.jpg']);
     const wrapper = mount(MediaDisplay);
     await flushPromises();
 
@@ -572,11 +578,11 @@ describe('MediaDisplay Coverage Boost', () => {
     const wrapper = mount(MediaDisplay);
     const mockEl = { id: 'test-video' } as any;
     (wrapper.vm as any).handleVideoElementUpdate(mockEl);
-    expect(mockPlayer.mainVideoElement.value).toStrictEqual(mockEl);
+    expect(mockPlayer.mainVideoElement).toStrictEqual(mockEl);
   });
 
   it('handles segment merging logic', async () => {
-    mockPlaylist.currentItem.value = { path: 'v.mp4' };
+    mockPlaylist.currentItem = { path: 'v.mp4' };
     const wrapper = mount(MediaDisplay);
     await flushPromises();
 
@@ -602,7 +608,7 @@ describe('MediaDisplay Coverage Boost', () => {
   });
 
   it('handles video buffering event', async () => {
-    mockPlaylist.currentItem.value = { path: 'v.mp4' };
+    mockPlaylist.currentItem = { path: 'v.mp4' };
     mockMediaLoader.mediaUrl.value = 'url';
     const wrapper = mount(MediaDisplay);
     await flushPromises();
@@ -612,7 +618,7 @@ describe('MediaDisplay Coverage Boost', () => {
   });
 
   it('handles time update without controls ref', async () => {
-    mockPlaylist.currentItem.value = { path: 'v.mp4' };
+    mockPlaylist.currentItem = { path: 'v.mp4' };
     const wrapper = mount(MediaDisplay);
     (wrapper.vm as any).mediaControlsRef = null;
     await (wrapper.vm as any).handleTimeUpdate(10);
@@ -635,7 +641,7 @@ describe('MediaDisplay Coverage Boost', () => {
   it('handles video element update with null', async () => {
     const wrapper = mount(MediaDisplay);
     (wrapper.vm as any).handleVideoElementUpdate(null);
-    expect(mockPlayer.mainVideoElement.value).toBeNull();
+    expect(mockPlayer.mainVideoElement).toBeNull();
   });
 
   it('handles handleNext directly', () => {
@@ -645,7 +651,7 @@ describe('MediaDisplay Coverage Boost', () => {
   });
 
   it('handles trigger-transcode event', async () => {
-    mockPlaylist.currentItem.value = { path: 'v.mp4' };
+    mockPlaylist.currentItem = { path: 'v.mp4' };
     mockMediaLoader.mediaUrl.value = 'url';
     const wrapper = mount(MediaDisplay);
     await flushPromises();
@@ -655,7 +661,7 @@ describe('MediaDisplay Coverage Boost', () => {
   });
 
   it('handles openInVlc error', async () => {
-    mockPlaylist.currentItem.value = { path: 'v.mp4' };
+    mockPlaylist.currentItem = { path: 'v.mp4' };
     mockMediaLoader.isVideoSupported.value = false;
     const wrapper = mount(MediaDisplay);
     await flushPromises();
@@ -669,7 +675,7 @@ describe('MediaDisplay Coverage Boost', () => {
   });
 
   it('handles seek when not transcoding and video exists', async () => {
-    mockPlaylist.currentItem.value = { path: 'v.mp4' };
+    mockPlaylist.currentItem = { path: 'v.mp4' };
     mockMediaLoader.mediaUrl.value = 'url';
     const wrapper = mount(MediaDisplay);
     await flushPromises();
@@ -682,7 +688,7 @@ describe('MediaDisplay Coverage Boost', () => {
   });
 
   it('handles openInVlc when already opening', async () => {
-    mockPlaylist.currentItem.value = { path: 'v.mp4' };
+    mockPlaylist.currentItem = { path: 'v.mp4' };
     mockMediaLoader.isVideoSupported.value = false;
     const wrapper = mount(MediaDisplay);
     await flushPromises();

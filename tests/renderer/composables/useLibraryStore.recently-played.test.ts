@@ -60,19 +60,19 @@ describe('useLibraryStore - Recently Played', () => {
     await store.fetchHistory(10);
 
     expect(api.getRecentlyPlayed).toHaveBeenCalledWith(10);
-    expect(store.state.historyMedia).toHaveLength(2);
+    expect(store.historyMedia).toHaveLength(2);
     // Unchanged order: the component passes through the DB order directly now
-    expect(store.state.historyMedia[0].name).toBe('video.mp4');
-    expect(store.state.historyMedia[0].viewCount).toBe(5);
-    expect(store.state.historyMedia[0].rating).toBe(4);
-    expect(store.state.historyMedia[0].lastViewed).toBe(
+    expect(store.historyMedia[0].name).toBe('video.mp4');
+    expect(store.historyMedia[0].viewCount).toBe(5);
+    expect(store.historyMedia[0].rating).toBe(4);
+    expect(store.historyMedia[0].lastViewed).toBe(
       new Date('2023-01-01T12:00:00.000Z').getTime(),
     );
 
-    expect(store.state.historyMedia[1].name).toBe('image.jpg');
-    expect(store.state.historyMedia[1].viewCount).toBe(1);
-    expect(store.state.historyMedia[1].rating).toBe(0);
-    expect(store.state.historyMedia[1].lastViewed).toBe(
+    expect(store.historyMedia[1].name).toBe('image.jpg');
+    expect(store.historyMedia[1].viewCount).toBe(1);
+    expect(store.historyMedia[1].rating).toBe(0);
+    expect(store.historyMedia[1].lastViewed).toBe(
       new Date('2023-01-02T12:00:00.000Z').getTime(),
     );
   });
@@ -85,7 +85,7 @@ describe('useLibraryStore - Recently Played', () => {
 
     await store.fetchHistory();
 
-    expect(store.state.historyMedia).toHaveLength(0);
+    expect(store.historyMedia).toHaveLength(0);
     expect(consoleSpy).toHaveBeenCalled();
   });
 });

@@ -88,13 +88,13 @@ describe('MediaGrid.vue (Virtual Scrolling)', () => {
       state: {},
     } as unknown as ReturnType<typeof useLibraryStore>);
 
-    vi.mocked(usePlayerStore).mockReturnValue({
-      state: mockPlayerState,
-    } as unknown as ReturnType<typeof usePlayerStore>);
+    vi.mocked(usePlayerStore).mockReturnValue(
+      mockPlayerState as unknown as ReturnType<typeof usePlayerStore>,
+    );
 
-    vi.mocked(useUIStore).mockReturnValue({
-      state: mockUIState,
-    } as unknown as ReturnType<typeof useUIStore>);
+    vi.mocked(useUIStore).mockReturnValue(
+      mockUIState as unknown as ReturnType<typeof useUIStore>,
+    );
 
     vi.mocked(usePlaylistStore).mockReturnValue({
       setQueue: vi.fn(),

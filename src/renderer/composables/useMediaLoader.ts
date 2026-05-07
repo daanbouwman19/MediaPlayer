@@ -1,11 +1,12 @@
 import { ref } from 'vue';
+import { storeToRefs } from 'pinia';
 import type { MediaFile } from '../../core/types';
 import { LEGACY_VIDEO_EXTENSIONS } from '../../core/constants';
 import { useLibraryStore } from './useLibraryStore';
 
 export function useMediaLoader() {
   const libraryStore = useLibraryStore();
-  const { mediaUrlGenerator } = libraryStore;
+  const { mediaUrlGenerator } = storeToRefs(libraryStore);
 
   const currentLoadRequestId = ref(0);
   const isLoading = ref(false);

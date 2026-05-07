@@ -1,64 +1,58 @@
 import { defineStore } from 'pinia';
-import { reactive, toRefs, computed } from 'vue';
+import { ref, computed } from 'vue';
 import type { MediaFile } from '../../core/types';
 
-interface PlaylistState {
-  history: MediaFile[];
-  queue: MediaFile[];
-  currentItem: MediaFile | null;
-}
-
-const usePiniaPlaylistStore = defineStore('playlist', () => {
-  const state = reactive<PlaylistState>({
-    history: [],
-    queue: [],
-    currentItem: null,
-  });
+export const usePlaylistStore = defineStore('playlist', () => {
+  const history = ref<MediaFile[]>([]);
+  const queue = ref<MediaFile[]>([]);
+  const currentItem = ref<MediaFile | null>(null);
 
   const setQueue = (items: MediaFile[]) => {
-    state.queue = [...items];
-    state.history = [];
-    state.currentItem = null;
+    queue.value = [...items];
+    history.value = [];
+    currentItem.value = null;
   };
 
   const clearPlaylist = () => {
-    state.queue = [];
-    state.history = [];
-    state.currentItem = null;
+    queue.value = [];
+    history.value = [];
+    currentItem.value = null;
   };
 
   const playNext = (nextItem?: MediaFile) => {
-    if (state.currentItem) {
-      if (state.history.length >= 100) {
-        state.history.shift();
+    if (currentItem.value) {
+      if (history.value.length >= 100) {
+        history.value.shift();
       }
-      state.history.push(state.currentItem);
+      history.value.push(currentItem.value);
     }
 
     if (nextItem) {
-      state.currentItem = nextItem;
-    } else if (state.queue.length > 0) {
-      state.currentItem = state.queue.shift() || null;
+      currentItem.value = nextItem;
+    } else if (queue.value.length > 0) {
+      currentItem.value = queue.value.shift() || null;
     } else {
-      state.currentItem = null;
+      currentItem.value = null;
     }
   };
 
   const playPrevious = () => {
-    if (state.history.length === 0) return;
+    if (history.value.length === 0) return;
 
-    if (state.currentItem) {
-      state.queue.unshift(state.currentItem);
+    if (currentItem.value) {
+      queue.value.unshift(currentItem.value);
     }
 
-    state.currentItem = state.history.pop() || null;
+    currentItem.value = history.value.pop() || null;
   };
 
-  const hasPrevious = computed(() => state.history.length > 0);
-  const hasNext = computed(() => state.queue.length > 0);
+  const hasPrevious = computed(() => history.value.length > 0);
+  const hasNext = computed(() => queue.value.length > 0);
 
   return {
-    state,
+    history,
+    queue,
+    currentItem,
     setQueue,
     clearPlaylist,
     playNext,
@@ -67,17 +61,3 @@ const usePiniaPlaylistStore = defineStore('playlist', () => {
     hasNext,
   };
 });
-
-export function usePlaylistStore() {
-  const store = usePiniaPlaylistStore();
-  return {
-    ...toRefs(store.state),
-    state: store.state,
-    setQueue: store.setQueue,
-    clearPlaylist: store.clearPlaylist,
-    playNext: store.playNext,
-    playPrevious: store.playPrevious,
-    hasPrevious: computed(() => store.hasPrevious),
-    hasNext: computed(() => store.hasNext),
-  };
-}

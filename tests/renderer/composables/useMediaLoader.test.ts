@@ -13,7 +13,7 @@ describe('useMediaLoader', () => {
     mockLibraryStore = {
       mediaUrlGenerator: ref((path: string) => `http://media/${path}`),
     };
-    (useLibraryStore as any).mockReturnValue(mockLibraryStore);
+    (useLibraryStore as unknown as any).mockReturnValue(mockLibraryStore);
   });
 
   it('should load image media using generator', async () => {

@@ -1,56 +1,44 @@
 import { defineStore } from 'pinia';
-import { reactive, toRefs } from 'vue';
+import { ref } from 'vue';
 import type { SmartPlaylist, MediaFile } from '../../core/types';
 import type { MediaFilter } from '../../core/constants';
 import type { ThemeId } from '../../core/themes';
 import { AVAILABLE_THEMES } from '../../core/themes';
 
-interface UIState {
-  mediaFilter: MediaFilter;
-  viewMode: 'player' | 'grid';
-  gridMediaFiles: MediaFile[];
-  isSourcesModalVisible: boolean;
-  isSmartPlaylistModalVisible: boolean;
-  playlistToEdit: SmartPlaylist | null;
-  isControlsVisible: boolean;
-  isSidebarVisible: boolean;
-  isHistoryMode: boolean;
-  themeMode: ThemeId;
-}
-
 const savedTheme = (localStorage.getItem('themeMode') as ThemeId) || 'system';
 
 // Validate saved theme against current available themes
-const themeMode = AVAILABLE_THEMES.find((t) => t.id === savedTheme)
+const initialThemeMode = AVAILABLE_THEMES.find((t) => t.id === savedTheme)
   ? savedTheme
   : 'system';
 
-const usePiniaUIStore = defineStore('ui', () => {
-  const state = reactive<UIState>({
-    mediaFilter: 'All',
-    viewMode: 'player',
-    gridMediaFiles: [],
-    isSourcesModalVisible: false,
-    isSmartPlaylistModalVisible: false,
-    playlistToEdit: null,
-    isControlsVisible: true,
-    isSidebarVisible: true,
-    isHistoryMode: false,
-    themeMode,
-  });
+export const useUIStore = defineStore('ui', () => {
+  const mediaFilter = ref<MediaFilter>('All');
+  const viewMode = ref<'player' | 'grid'>('player');
+  const gridMediaFiles = ref<MediaFile[]>([]);
+  const isSourcesModalVisible = ref(false);
+  const isSmartPlaylistModalVisible = ref(false);
+  const playlistToEdit = ref<SmartPlaylist | null>(null);
+  const isControlsVisible = ref(true);
+  const isSidebarVisible = ref(true);
+  const isHistoryMode = ref(false);
+  const themeMode = ref<ThemeId>(initialThemeMode);
 
   const setThemeMode = (mode: ThemeId) => {
-    state.themeMode = mode;
+    themeMode.value = mode;
   };
 
-  return { state, setThemeMode };
-});
-
-export function useUIStore() {
-  const store = usePiniaUIStore();
   return {
-    ...toRefs(store.state),
-    state: store.state,
-    setThemeMode: store.setThemeMode,
+    mediaFilter,
+    viewMode,
+    gridMediaFiles,
+    isSourcesModalVisible,
+    isSmartPlaylistModalVisible,
+    playlistToEdit,
+    isControlsVisible,
+    isSidebarVisible,
+    isHistoryMode,
+    themeMode,
+    setThemeMode,
   };
-}
+});

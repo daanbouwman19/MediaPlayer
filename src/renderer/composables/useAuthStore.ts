@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { reactive, toRefs } from 'vue';
+import { ref } from 'vue';
 import { WebAdapter } from '../api/WebAdapter';
 import { ElectronAdapter } from '../api/ElectronAdapter';
 import type { IMediaBackend } from '../api/types';
@@ -10,29 +10,21 @@ const backend: IMediaBackend = isElectron
   ? new ElectronAdapter()
   : new WebAdapter();
 
-interface AuthState {
-  isLocked: boolean;
-  isInitialized: boolean;
-  isEnabled: boolean;
-}
-
-const usePiniaAuthStore = defineStore('auth', () => {
-  const state = reactive<AuthState>({
-    isLocked: false,
-    isInitialized: false,
-    isEnabled: false,
-  });
+export const useAuthStore = defineStore('auth', () => {
+  const isLocked = ref(false);
+  const isInitialized = ref(false);
+  const isEnabled = ref(false);
 
   async function checkLockStatus() {
     try {
       const status = await backend.getLockStatus();
-      state.isEnabled = status.enabled;
-      state.isLocked = status.enabled && !status.isAuthenticated;
-      state.isInitialized = true;
+      isEnabled.value = status.enabled;
+      isLocked.value = status.enabled && !status.isAuthenticated;
+      isInitialized.value = true;
     } catch (error) {
       console.error('Failed to check lock status:', error);
       // Fallback to unlocked
-      state.isInitialized = true;
+      isInitialized.value = true;
     }
   }
 
@@ -40,7 +32,7 @@ const usePiniaAuthStore = defineStore('auth', () => {
     try {
       const success = await backend.unlock(password);
       if (success) {
-        state.isLocked = false;
+        isLocked.value = false;
         return true;
       }
       return false;
@@ -50,14 +42,11 @@ const usePiniaAuthStore = defineStore('auth', () => {
     }
   }
 
-  return { state, checkLockStatus, unlock };
-});
-
-export function useAuthStore() {
-  const store = usePiniaAuthStore();
   return {
-    ...toRefs(store.state),
-    checkLockStatus: store.checkLockStatus,
-    unlock: store.unlock,
+    isLocked,
+    isInitialized,
+    isEnabled,
+    checkLockStatus,
+    unlock,
   };
-}
+});

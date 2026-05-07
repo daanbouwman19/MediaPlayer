@@ -13,7 +13,7 @@ describe('useMediaLoader Coverage Boost', () => {
     mockLibraryStore = {
       mediaUrlGenerator: ref((path: string) => `http://media/${path}`),
     };
-    (useLibraryStore as any).mockReturnValue(mockLibraryStore);
+    (useLibraryStore as unknown as any).mockReturnValue(mockLibraryStore);
   });
 
   it('handles null item', async () => {
@@ -30,7 +30,7 @@ describe('useMediaLoader Coverage Boost', () => {
   });
 
   it('handles missing mediaUrlGenerator', async () => {
-    mockLibraryStore.mediaUrlGenerator.value = null;
+    mockLibraryStore.mediaUrlGenerator = null;
     const { loadMedia, error, isLoading } = useMediaLoader();
     const item = { path: 'test.mp4' } as any;
 
@@ -40,7 +40,7 @@ describe('useMediaLoader Coverage Boost', () => {
   });
 
   it('handles error in mediaUrlGenerator', async () => {
-    mockLibraryStore.mediaUrlGenerator.value = () => {
+    mockLibraryStore.mediaUrlGenerator = () => {
       throw new Error('Fail');
     };
     const { loadMedia, error } = useMediaLoader();
@@ -54,7 +54,7 @@ describe('useMediaLoader Coverage Boost', () => {
     const { loadMedia, error, currentLoadRequestId } = useMediaLoader();
     const item = { path: 'test.mp4' } as any;
 
-    mockLibraryStore.mediaUrlGenerator.value = async () => {
+    mockLibraryStore.mediaUrlGenerator = async () => {
       // Simulate a new request starting while this one is pending
       currentLoadRequestId.value++;
       throw new Error('Async Fail');

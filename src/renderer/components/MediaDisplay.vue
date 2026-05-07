@@ -216,6 +216,7 @@
 </template>
 
 <script setup lang="ts">
+import { storeToRefs } from 'pinia';
 import {
   ref,
   computed,
@@ -257,10 +258,12 @@ const uiStore = useUIStore();
 const toast = useToast();
 
 const { imageExtensionsSet, mediaDirectories, thumbnailUrlGenerator } =
-  libraryStore;
-const { pauseTimerOnPlay, isTimerRunning, mainVideoElement } = playerStore;
-const { currentItem: currentMediaItem } = playlistStore;
-const { isControlsVisible, isSourcesModalVisible, isSidebarVisible } = uiStore;
+  storeToRefs(libraryStore);
+const { pauseTimerOnPlay, isTimerRunning, mainVideoElement } =
+  storeToRefs(playerStore);
+const { currentItem: currentMediaItem } = storeToRefs(playlistStore);
+const { isControlsVisible, isSourcesModalVisible, isSidebarVisible } =
+  storeToRefs(uiStore);
 const {
   navigateMedia,
   pauseSlideshowTimer,
@@ -330,10 +333,10 @@ const isImage = computed(() => {
 });
 
 const canNavigate = computed(() => {
-  return playlistStore.hasNext.value || playlistStore.state.queue.length > 0;
+  return playlistStore.hasNext || playlistStore.queue.length > 0;
 });
 
-const canGoPrevious = computed(() => playlistStore.hasPrevious.value);
+const canGoPrevious = computed(() => playlistStore.hasPrevious);
 
 const toggleFullscreen = () => {
   if (isVrMode.value && vrPlayerRef.value) {
@@ -583,7 +586,7 @@ const checkAndPauseTimerIfLongVideo = () => {
       const nativeDuration = videoElement.value?.duration || 0;
       const videoDuration = transcodedDuration.value || nativeDuration;
 
-      if (videoDuration > playerStore.state.timerDuration) {
+      if (videoDuration > playerStore.timerDuration) {
         pauseSlideshowTimer();
       }
     }

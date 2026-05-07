@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
-import { reactive, toRefs } from 'vue';
+import { reactive } from 'vue';
 import SourcesModal from '@/components/SourcesModal.vue';
 import { useLibraryStore } from '@/composables/useLibraryStore';
 import { usePlayerStore } from '@/composables/usePlayerStore';
@@ -53,20 +53,11 @@ describe('SourcesModal A11y', () => {
       mediaFilter: 'All',
     });
 
-    (useLibraryStore as Mock).mockReturnValue({
-      state: mockLibraryState,
-      ...toRefs(mockLibraryState),
-    });
+    (useLibraryStore as unknown as Mock).mockReturnValue(mockLibraryState);
 
-    (usePlayerStore as Mock).mockReturnValue({
-      state: mockPlayerState,
-      ...toRefs(mockPlayerState),
-    });
+    (usePlayerStore as unknown as Mock).mockReturnValue(mockPlayerState);
 
-    (useUIStore as Mock).mockReturnValue({
-      state: mockUIState,
-      ...toRefs(mockUIState),
-    });
+    (useUIStore as unknown as Mock).mockReturnValue(mockUIState);
   });
 
   it('Google Drive Auth inputs should have accessible labels', async () => {

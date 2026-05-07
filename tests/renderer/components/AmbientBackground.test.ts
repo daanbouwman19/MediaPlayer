@@ -40,20 +40,14 @@ describe('AmbientBackground.vue', () => {
       supportedExtensions: { images: ['.jpg', '.png'], videos: ['.mp4'] },
     });
 
-    (usePlayerStore as Mock).mockReturnValue({
-      state: mockPlayerState,
-      ...toRefs(mockPlayerState),
-    });
-    (usePlaylistStore as Mock).mockReturnValue({
+    (usePlayerStore as unknown as Mock).mockReturnValue(mockPlayerState);
+    (usePlaylistStore as unknown as Mock).mockReturnValue({
       state: mockPlaylistState,
       currentItem: toRefs(mockPlaylistState).currentItem,
       hasPrevious: computed(() => mockPlaylistState.history.length > 0),
       hasNext: computed(() => mockPlaylistState.queue.length > 0),
     });
-    (useLibraryStore as Mock).mockReturnValue({
-      state: mockLibraryState,
-      ...toRefs(mockLibraryState),
-    });
+    (useLibraryStore as unknown as Mock).mockReturnValue(mockLibraryState);
 
     // Mock API
     vi.mocked(api.loadFileAsDataURL).mockResolvedValue({

@@ -1,48 +1,36 @@
 import { defineStore } from 'pinia';
-import { reactive, toRefs } from 'vue';
+import { ref } from 'vue';
 
-interface PlayerState {
-  isSlideshowActive: boolean;
-  slideshowTimerId: NodeJS.Timeout | null;
-  timerDuration: number;
-  isTimerRunning: boolean;
-  timerProgress: number;
-  pauseTimerOnPlay: boolean;
-  mainVideoElement: HTMLVideoElement | null;
-}
-
-const usePiniaPlayerStore = defineStore('player', () => {
-  const state = reactive<PlayerState>({
-    isSlideshowActive: false,
-    slideshowTimerId: null,
-    timerDuration: 5,
-    isTimerRunning: false,
-    timerProgress: 0,
-    pauseTimerOnPlay: false,
-    mainVideoElement: null,
-  });
+export const usePlayerStore = defineStore('player', () => {
+  const isSlideshowActive = ref(false);
+  const slideshowTimerId = ref<NodeJS.Timeout | null>(null);
+  const timerDuration = ref(5);
+  const isTimerRunning = ref(false);
+  const timerProgress = ref(0);
+  const pauseTimerOnPlay = ref(false);
+  const mainVideoElement = ref<HTMLVideoElement | null>(null);
 
   const resetPlayerState = () => {
-    state.isSlideshowActive = false;
+    isSlideshowActive.value = false;
   };
 
   const stopSlideshow = () => {
-    if (state.slideshowTimerId) {
-      clearInterval(state.slideshowTimerId);
-      state.slideshowTimerId = null;
+    if (slideshowTimerId.value) {
+      clearInterval(slideshowTimerId.value);
+      slideshowTimerId.value = null;
     }
-    state.isTimerRunning = false;
+    isTimerRunning.value = false;
   };
 
-  return { state, resetPlayerState, stopSlideshow };
-});
-
-export function usePlayerStore() {
-  const store = usePiniaPlayerStore();
   return {
-    ...toRefs(store.state),
-    state: store.state,
-    resetPlayerState: store.resetPlayerState,
-    stopSlideshow: store.stopSlideshow,
+    isSlideshowActive,
+    slideshowTimerId,
+    timerDuration,
+    isTimerRunning,
+    timerProgress,
+    pauseTimerOnPlay,
+    mainVideoElement,
+    resetPlayerState,
+    stopSlideshow,
   };
-}
+});

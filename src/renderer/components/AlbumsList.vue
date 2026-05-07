@@ -454,6 +454,7 @@
  * Clicking on an album's name starts a slideshow for that specific album and its sub-albums.
  */
 import { nextTick, ref, onMounted, onBeforeUnmount } from 'vue';
+import { storeToRefs } from 'pinia';
 import { AVAILABLE_THEMES, type ThemeId } from '../../core/themes';
 import { useLibraryStore } from '../composables/useLibraryStore';
 import { usePlayerStore } from '../composables/usePlayerStore';
@@ -485,7 +486,7 @@ import { RECENTLY_PLAYED_FETCH_LIMIT } from '../../core/constants';
 const libraryStore = useLibraryStore();
 const playerStore = usePlayerStore();
 const uiStore = useUIStore();
-const { themeMode } = uiStore;
+const { themeMode } = storeToRefs(uiStore);
 
 const isThemeDropdownOpen = ref(false);
 const themeDropdownRef = ref<HTMLElement | null>(null);
@@ -518,7 +519,7 @@ const {
   albumsSelectedForSlideshow,
   smartPlaylists,
   mediaDirectories,
-} = libraryStore;
+} = storeToRefs(libraryStore);
 
 const {
   timerDuration,
@@ -526,7 +527,7 @@ const {
   timerProgress,
   isSlideshowActive,
   pauseTimerOnPlay,
-} = playerStore;
+} = storeToRefs(playerStore);
 
 const {
   isSourcesModalVisible,
@@ -536,7 +537,7 @@ const {
   playlistToEdit,
   mediaFilter,
   isHistoryMode,
-} = uiStore;
+} = storeToRefs(uiStore);
 
 const loadingAction = ref<string | null>(null);
 
@@ -714,7 +715,7 @@ const editPlaylist = (playlist: SmartPlaylist) => {
 const loadHistory = async () => {
   await libraryStore.fetchHistory(RECENTLY_PLAYED_FETCH_LIMIT);
   // Ensure we have actual media files
-  if (libraryStore.state.historyMedia.length === 0) {
+  if (libraryStore.historyMedia.length === 0) {
     throw new Error('No history items found');
   }
 };
@@ -724,7 +725,7 @@ const handleHistoryGrid = async () => {
   loadingAction.value = 'history-grid';
   try {
     await loadHistory();
-    gridMediaFiles.value = libraryStore.state.historyMedia;
+    gridMediaFiles.value = libraryStore.historyMedia;
     await nextTick();
     isHistoryMode.value = true;
     viewMode.value = 'grid';
@@ -748,7 +749,7 @@ const handleHistorySlideshow = async () => {
   loadingAction.value = 'history-slideshow';
   try {
     await loadHistory();
-    const historyMedia = libraryStore.state.historyMedia;
+    const historyMedia = libraryStore.historyMedia;
     slideshow.startHistorySlideshow(historyMedia);
   } catch (e) {
     console.error('Error starting history slideshow', e);

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
 import { mount } from '@vue/test-utils';
-import { reactive, toRefs, computed, ref } from 'vue';
+import { reactive, computed, ref } from 'vue';
 import { usePlaylistStore } from '@/composables/usePlaylistStore';
 import { useMediaLoader } from '@/composables/useMediaLoader';
 import MediaDisplay from '@/components/MediaDisplay.vue';
@@ -87,6 +87,7 @@ describe('Palette Accessibility Improvements', () => {
       isPlaying: false,
       isSlideshowActive: false,
       isTimerRunning: false,
+      pauseTimerOnPlay: false,
       mainVideoElement: null,
       slideshowTimerId: null,
       currentMediaItem: { name: 'test.mp4', path: '/test.mp4' },
@@ -100,36 +101,25 @@ describe('Palette Accessibility Improvements', () => {
       gridMediaFiles: [], // Add this to prevent GridView crash
     });
 
-    (useLibraryStore as Mock).mockReturnValue({
-      ...toRefs(mockLibraryState),
-      imageExtensionsSet: computed(() => mockLibraryState.imageExtensionsSet),
-      mediaDirectories: computed(() => mockLibraryState.mediaDirectories),
-    });
+    (useLibraryStore as unknown as Mock).mockReturnValue(mockLibraryState);
 
-    (usePlayerStore as Mock).mockReturnValue({
-      ...toRefs(mockPlayerState),
-      pauseTimerOnPlay: ref(false),
-      isTimerRunning: computed(() => mockPlayerState.isTimerRunning),
-    });
+    mockPlayerState.pauseTimerOnPlay = false;
+    (usePlayerStore as unknown as Mock).mockReturnValue(mockPlayerState);
 
-    (useUIStore as Mock).mockReturnValue({
-      ...toRefs(mockUIState),
-      state: mockUIState, // Add state object for GridView
-    });
+    (useUIStore as unknown as Mock).mockReturnValue(mockUIState);
 
-    (usePlaylistStore as Mock).mockReturnValue({
-      currentItem: computed(() => mockPlaylistState.currentItem),
-      hasPrevious: computed(() => mockPlaylistState.history.length > 0),
-      hasNext: computed(() => mockPlaylistState.queue.length > 0),
-      setQueue: vi.fn(),
-      playNext: vi.fn((item: any) => {
-        mockPlayerState.currentMediaItem = item;
+    (usePlaylistStore as unknown as Mock).mockReturnValue(
+      Object.assign(mockPlaylistState, {
+        hasPrevious: computed(() => mockPlaylistState.history.length > 0),
+        hasNext: computed(() => mockPlaylistState.queue.length > 0),
+        setQueue: vi.fn(),
+        playNext: vi.fn((item: any) => {
+          mockPlayerState.currentMediaItem = item;
+        }),
+        playPrevious: vi.fn(),
+        clearPlaylist: vi.fn(),
       }),
-      playPrevious: vi.fn(),
-      clearPlaylist: vi.fn(),
-      state: mockPlaylistState,
-      ...toRefs(mockPlaylistState),
-    });
+    );
 
     (useSlideshow as Mock).mockReturnValue({
       navigateMedia: vi.fn(),

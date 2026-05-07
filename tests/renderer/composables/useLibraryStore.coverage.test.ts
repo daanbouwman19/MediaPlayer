@@ -62,7 +62,7 @@ describe('useLibraryStore Coverage', () => {
       setupPersistenceWatcher();
 
       // Trigger change
-      store.state.albumsSelectedForSlideshow = { valid: true };
+      store.albumsSelectedForSlideshow = { valid: true };
 
       await vi.waitFor(() => {
         // The watcher should try to call localStorage.setItem and catch the error
@@ -97,7 +97,7 @@ describe('useLibraryStore Coverage', () => {
 
       await store.loadInitialData();
 
-      expect(store.state.albumsSelectedForSlideshow).toEqual({ saved: true });
+      expect(store.albumsSelectedForSlideshow).toEqual({ saved: true });
     });
 
     it('should handle invalid JSON in saved selection and fallback to selectAll', async () => {
@@ -123,7 +123,7 @@ describe('useLibraryStore Coverage', () => {
         'Failed to parse saved album selection:',
         expect.any(Error),
       );
-      expect(store.state.albumsSelectedForSlideshow['1']).toBe(true);
+      expect(store.albumsSelectedForSlideshow['1']).toBe(true);
 
       consoleSpy.mockRestore();
     });
@@ -144,7 +144,7 @@ describe('useLibraryStore Coverage', () => {
 
       await store.loadInitialData();
 
-      expect(store.state.albumsSelectedForSlideshow['2']).toBe(true);
+      expect(store.albumsSelectedForSlideshow['2']).toBe(true);
     });
   });
 
@@ -160,7 +160,7 @@ describe('useLibraryStore Coverage', () => {
       ] as any);
 
       await store.fetchHistory();
-      expect(store.state.historyMedia[0].lastViewed).toBeUndefined();
+      expect(store.historyMedia[0].lastViewed).toBeUndefined();
     });
 
     it('should handle history items with explicit last_viewed string', async () => {
@@ -173,7 +173,7 @@ describe('useLibraryStore Coverage', () => {
       ] as any);
 
       await store.fetchHistory();
-      expect(store.state.historyMedia[0].lastViewed).toBe(now.getTime());
+      expect(store.historyMedia[0].lastViewed).toBe(now.getTime());
     });
 
     it('should derive name from path if needed', async () => {
@@ -184,7 +184,7 @@ describe('useLibraryStore Coverage', () => {
       ] as any);
 
       await store.fetchHistory();
-      expect(store.state.historyMedia[0].name).toBe('image.png');
+      expect(store.historyMedia[0].name).toBe('image.png');
     });
 
     it('should derive name using fallback if split fails (empty case)', async () => {
@@ -195,7 +195,7 @@ describe('useLibraryStore Coverage', () => {
       ] as any);
 
       await store.fetchHistory();
-      expect(store.state.historyMedia[0].name).toBe('simple');
+      expect(store.historyMedia[0].name).toBe('simple');
     });
 
     it('should handle fetch errors', async () => {
@@ -225,12 +225,12 @@ describe('useLibraryStore Coverage', () => {
           { id: 'c1', name: 'c1', children: [{ id: 'c2', name: 'c2' }] },
         ],
       };
-      store.state.allAlbums = [deepAlbums as any];
+      store.allAlbums = [deepAlbums as any];
       store.selectAllAlbumsRecursively([deepAlbums as any]);
 
-      expect(store.state.albumsSelectedForSlideshow['root']).toBe(true);
-      expect(store.state.albumsSelectedForSlideshow['c1']).toBe(true);
-      expect(store.state.albumsSelectedForSlideshow['c2']).toBe(true);
+      expect(store.albumsSelectedForSlideshow['root']).toBe(true);
+      expect(store.albumsSelectedForSlideshow['c1']).toBe(true);
+      expect(store.albumsSelectedForSlideshow['c2']).toBe(true);
     });
   });
 });

@@ -85,7 +85,7 @@ const updateThemeColors = () => {
 
 // Update colors when theme changes
 if (uiStore.themeMode) {
-  watch(() => uiStore.themeMode.value, updateThemeColors);
+  watch(() => uiStore.themeMode, updateThemeColors);
 }
 
 const HEATMAP_MOTION_SCALE = 0.8; // Adjust based on data range
