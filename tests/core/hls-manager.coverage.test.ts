@@ -131,7 +131,7 @@ describe('HlsManager Coverage Boost', () => {
     await vi.advanceTimersByTimeAsync(1);
 
     mockProcess.stderr.emit('data', 'Duration: 00:01:40.00\ntime=00:00:1');
-    mockProcess.stderr.emit('data', '0.00\nfps=30\n');
+    mockProcess.stderr.emit('data', '0.00\nfps=30\nOpening \'playlist.m3u8\' for writing\n');
 
     await vi.advanceTimersByTimeAsync(500);
     await promise;
@@ -149,6 +149,7 @@ describe('HlsManager Coverage Boost', () => {
 
     const promise = hlsManager.ensureSession(sessionId, '/test.mp4');
     await vi.advanceTimersByTimeAsync(500);
+    mockProcess.stderr.emit('data', 'Opening \'playlist.m3u8\' for writing\n');
     await promise;
 
     await hlsManager.stopSession(sessionId);
@@ -166,6 +167,7 @@ describe('HlsManager Coverage Boost', () => {
 
     const promise = hlsManager.ensureSession(sessionId, '/test.mp4');
     await vi.advanceTimersByTimeAsync(500);
+    mockProcess.stderr.emit('data', 'Opening \'playlist.m3u8\' for writing\n');
     await promise;
 
     await hlsManager.stopSession(sessionId);

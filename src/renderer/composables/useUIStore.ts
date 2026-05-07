@@ -1,3 +1,4 @@
+import { defineStore } from 'pinia';
 import { reactive, toRefs } from 'vue';
 import type { SmartPlaylist, MediaFile } from '../../core/types';
 import type { MediaFilter } from '../../core/constants';
@@ -24,25 +25,32 @@ const themeMode = AVAILABLE_THEMES.find((t) => t.id === savedTheme)
   ? savedTheme
   : 'system';
 
-const state = reactive<UIState>({
-  mediaFilter: 'All',
-  viewMode: 'player',
-  gridMediaFiles: [],
-  isSourcesModalVisible: false,
-  isSmartPlaylistModalVisible: false,
-  playlistToEdit: null,
-  isControlsVisible: true,
-  isSidebarVisible: true,
-  isHistoryMode: false,
-  themeMode,
+const usePiniaUIStore = defineStore('ui', () => {
+  const state = reactive<UIState>({
+    mediaFilter: 'All',
+    viewMode: 'player',
+    gridMediaFiles: [],
+    isSourcesModalVisible: false,
+    isSmartPlaylistModalVisible: false,
+    playlistToEdit: null,
+    isControlsVisible: true,
+    isSidebarVisible: true,
+    isHistoryMode: false,
+    themeMode,
+  });
+
+  const setThemeMode = (mode: ThemeId) => {
+    state.themeMode = mode;
+  };
+
+  return { state, setThemeMode };
 });
 
 export function useUIStore() {
+  const store = usePiniaUIStore();
   return {
-    ...toRefs(state),
-    state,
-    setThemeMode: (mode: ThemeId) => {
-      state.themeMode = mode;
-    },
+    ...toRefs(store.state),
+    state: store.state,
+    setThemeMode: store.setThemeMode,
   };
 }

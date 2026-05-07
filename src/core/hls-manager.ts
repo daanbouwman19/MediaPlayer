@@ -2,6 +2,7 @@ import { spawn, type ChildProcess } from 'child_process';
 import path from 'path';
 import fs from 'fs/promises';
 import PQueue from 'p-queue';
+import { EventEmitter } from 'events';
 import {
   getHlsTranscodeArgs,
   detectFFmpegCapabilities,
@@ -42,30 +43,15 @@ interface HlsSession {
   error?: Error;
   progress: HlsProgress;
   killTimeout?: NodeJS.Timeout;
-  /**
-   * Number of in-flight HTTP requests (playlist + segment) currently
-   * holding the session open. While > 0 the idle timer is cleared.
-   * Decremented on response 'close'.
-   */
   consumers: number;
-  /**
-   * Per-session idle timer. Set when consumers drops to 0; calls
-   * stopSession() after EAGER_IDLE_GRACE_MS unless the session is
-   * re-acquired in the meantime.
-   */
   idleTimer?: NodeJS.Timeout;
 }
 
-const SESSION_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes inactivity timeout (safety net)
-const CLEANUP_INTERVAL_MS = 60 * 1000; // 1 minute cleanup check (safety net)
-/**
- * Time to wait after the last consumer disconnects before tearing down
- * an HLS session. Short enough that a closed tab releases ffmpeg + segment
- * dirs quickly; long enough to absorb brief player buffering pauses.
- */
+const SESSION_TIMEOUT_MS = 5 * 60 * 1000;
+const CLEANUP_INTERVAL_MS = 60 * 1000;
 const EAGER_IDLE_GRACE_MS = 30 * 1000;
 
-export class HlsManager {
+export class HlsManager extends EventEmitter {
   private static instance: HlsManager | null = null;
   private sessions: Map<string, HlsSession> = new Map();
   private pendingSessions: Map<string, Promise<void>> = new Map();
@@ -79,11 +65,10 @@ export class HlsManager {
     ReturnType<typeof detectFFmpegCapabilities>
   > | null = null;
 
-  private constructor() {}
+  private constructor() {
+    super();
+  }
 
-  /**
-   * Resets the singleton instance for testing purposes.
-   */
   public static resetInstance() {
     if (HlsManager.instance) {
       HlsManager.instance.stopCleanupInterval();
@@ -110,6 +95,7 @@ export class HlsManager {
       HlsManager.instance.pendingSessions.clear();
       HlsManager.instance.transcodeQueue.clear();
       HlsManager.instance.pinnedSessions.clear();
+      HlsManager.instance.removeAllListeners();
       HlsManager.instance = null;
     }
   }
@@ -121,9 +107,11 @@ export class HlsManager {
     return HlsManager.instance;
   }
 
-  /**
-   * Initializes the manager and cleans up any orphaned session directories.
-   */
+  private setSessionStatus(session: HlsSession, status: HlsSessionStatus) {
+    session.status = status;
+    this.emit(`status:${session.id}`, status);
+  }
+
   async init(cacheDir: string) {
     this.cacheDir = cacheDir;
     const ffmpegPath = getFFmpegStaticPath();
@@ -146,25 +134,30 @@ export class HlsManager {
   }
 
   waitForSession(sessionId: string): Promise<HlsSessionStatus> {
+    const session = this.sessions.get(sessionId);
+    if (!session) {
+      return Promise.resolve(HlsSessionStatus.STOPPED);
+    }
+    if (
+      session.status === HlsSessionStatus.COMPLETE ||
+      session.status === HlsSessionStatus.ERROR ||
+      session.status === HlsSessionStatus.STOPPED
+    ) {
+      return Promise.resolve(session.status);
+    }
+
     return new Promise((resolve) => {
-      const check = () => {
-        const session = this.sessions.get(sessionId);
-        if (!session) {
-          resolve(HlsSessionStatus.STOPPED);
-          return;
-        }
-        const { status } = session;
+      const onStatus = (status: HlsSessionStatus) => {
         if (
           status === HlsSessionStatus.COMPLETE ||
           status === HlsSessionStatus.ERROR ||
           status === HlsSessionStatus.STOPPED
         ) {
+          this.removeListener(`status:${sessionId}`, onStatus);
           resolve(status);
-          return;
         }
-        setTimeout(check, 500);
       };
-      check();
+      this.on(`status:${sessionId}`, onStatus);
     });
   }
 
@@ -173,7 +166,6 @@ export class HlsManager {
       throw new Error('HlsManager: cacheDir not set');
     }
 
-    // Reuse existing session if active or fully transcoded
     const existing = this.sessions.get(sessionId);
     if (existing) {
       if (
@@ -185,7 +177,6 @@ export class HlsManager {
       }
     }
 
-    // Avoid double-spawning the same session
     if (this.pendingSessions.has(sessionId)) {
       await this.pendingSessions.get(sessionId);
       return this.sessions.get(sessionId)!.playlistPath;
@@ -193,7 +184,6 @@ export class HlsManager {
 
     this.startCleanupInterval();
 
-    // [SECURITY] Hard limit on concurrent transcodes to prevent CPU exhaustion
     if (this.sessions.size >= MAX_CONCURRENT_TRANSCODES) {
       throw new Error('Server too busy. Please try again later.');
     }
@@ -238,7 +228,6 @@ export class HlsManager {
       return this.sessions.get(sessionId)!.playlistPath;
     }
 
-    // No sessions.size guard — concurrency is controlled by TranscodeQueueManager's PQueue
     const spawnPromise = (async () => {
       try {
         await this.startSession(sessionId, filePath);
@@ -257,11 +246,9 @@ export class HlsManager {
     const outputDir = path.join(this.cacheDir!, sessionId);
     const playlistPath = path.join(outputDir, 'playlist.m3u8');
 
-    // [SECURITY] Clean up old dir if exists to prevent stale segments
     await fs.rm(outputDir, { recursive: true, force: true });
     await fs.mkdir(outputDir, { recursive: true });
 
-    // Use p-queue to limit CPU load during startup
     await this.transcodeQueue.add(async () => {
       const ffmpegPath = getFFmpegStaticPath();
       if (!ffmpegPath) throw new Error('FFmpeg not found');
@@ -317,7 +304,7 @@ export class HlsManager {
 
       try {
         await this.waitForPlaylist(session);
-        session.status = HlsSessionStatus.ACTIVE;
+        this.setSessionStatus(session, HlsSessionStatus.ACTIVE);
       } catch (err) {
         this.stopSession(sessionId);
         throw err;
@@ -332,7 +319,6 @@ export class HlsManager {
       if (!s) return;
 
       stderrBuffer += data.toString();
-      // Split by newline or carriage return (FFmpeg progress updates)
       const lines = stderrBuffer.split(/[\r\n]+/);
       stderrBuffer = lines.pop() || '';
 
@@ -344,8 +330,8 @@ export class HlsManager {
     proc.on('error', (err) => {
       const s = this.sessions.get(session.id);
       if (!s) return;
-      s.status = HlsSessionStatus.ERROR;
       s.error = err;
+      this.setSessionStatus(s, HlsSessionStatus.ERROR);
     });
 
     proc.on('exit', (code, signal) => {
@@ -356,23 +342,27 @@ export class HlsManager {
         console.error(
           `[HLS] Session ${session.id} exited with code ${code} (signal: ${signal})`,
         );
-        s.status = HlsSessionStatus.ERROR;
         s.error = new Error(`FFmpeg exited with code ${code}`);
+        this.setSessionStatus(s, HlsSessionStatus.ERROR);
       } else {
-        s.status = this.pinnedSessions.has(session.id)
+        const finalStatus = this.pinnedSessions.has(session.id)
           ? HlsSessionStatus.COMPLETE
           : HlsSessionStatus.STOPPED;
         s.progress.percent = 100;
         if (s.progress.duration > 0) {
           s.progress.currentTime = s.progress.duration;
         }
+        this.setSessionStatus(s, finalStatus);
       }
       s.process = null;
     });
   }
 
   private parseStderrLine(session: HlsSession, line: string) {
-    // Duration: 00:01:40.00
+    if (line.includes('Opening') && line.includes('playlist.m3u8')) {
+      this.emit(`playlistReady:${session.id}`);
+    }
+
     if (session.progress.duration === 0) {
       const durMatch = line.match(/Duration: (\d+):(\d+):(\d+)\.(\d+)/);
       if (durMatch) {
@@ -383,7 +373,6 @@ export class HlsManager {
       }
     }
 
-    // frame=  100 fps= 25 q=28.0 size=  1024kB time=00:00:10.00 bitrate= 838.9kbits/s speed=1.0x
     const timeMatch = line.match(/time=(\d+):(\d+):(\d+)\.(\d+)/);
     if (timeMatch) {
       const h = parseInt(timeMatch[1], 10);
@@ -409,27 +398,67 @@ export class HlsManager {
     }
   }
 
-  private async waitForPlaylist(session: HlsSession) {
-    const maxAttempts = 20;
-    let attempts = 0;
+  private async waitForPlaylist(session: HlsSession): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        cleanup();
+        reject(new Error('Timeout waiting for HLS playlist'));
+      }, 10000);
 
-    while (attempts < maxAttempts) {
-      if (session.status === HlsSessionStatus.ERROR) {
-        throw session.error || new Error('HLS session failed');
-      }
+      let checkInterval: NodeJS.Timeout | null = null;
 
-      try {
-        const stats = await fs.stat(session.playlistPath);
-        if (stats.size > 0) return;
-      } catch {
-        // file might not exist yet
-      }
+      const cleanup = () => {
+        clearTimeout(timeout);
+        if (checkInterval) clearInterval(checkInterval);
+        this.removeListener(`playlistReady:${session.id}`, onReady);
+        this.removeListener(`status:${session.id}`, onStatus);
+      };
 
-      attempts++;
-      await new Promise((resolve) => setTimeout(resolve, 500));
-    }
+      const onReady = () => {
+        cleanup();
+        resolve();
+      };
 
-    throw new Error('Timeout waiting for HLS playlist');
+      const checkFile = async () => {
+        try {
+          const stats = await fs.stat(session.playlistPath);
+          if (stats.size > 0) {
+            onReady();
+            return true;
+          }
+        } catch {
+          // not ready
+        }
+        return false;
+      };
+
+      const onStatus = async (status: HlsSessionStatus) => {
+        if (status === HlsSessionStatus.ERROR) {
+          cleanup();
+          reject(
+            session.error ||
+              new Error('HLS session failed before playlist ready'),
+          );
+        } else if (
+          status === HlsSessionStatus.STOPPED ||
+          status === HlsSessionStatus.COMPLETE
+        ) {
+          // If stopped/completed naturally, check one last time before rejecting
+          const isReady = await checkFile();
+          if (!isReady) {
+            cleanup();
+            reject(new Error('HLS session finished but playlist not found'));
+          }
+        }
+      };
+
+      this.on(`playlistReady:${session.id}`, onReady);
+      this.on(`status:${session.id}`, onStatus);
+
+      // Safety check and periodic fallback for cases where FFmpeg misses logging or size=0
+      checkFile();
+      checkInterval = setInterval(checkFile, 500);
+    });
   }
 
   getSessionDir(sessionId: string) {
@@ -450,11 +479,6 @@ export class HlsManager {
     }
   }
 
-  /**
-   * Mark that a request handler is actively using this session. While at
-   * least one consumer is held the session won't be torn down by the
-   * eager-idle timer. Pair with releaseSession() in res.on('close').
-   */
   acquireSession(sessionId: string) {
     const session = this.sessions.get(sessionId);
     if (!session) return;
@@ -466,12 +490,6 @@ export class HlsManager {
     session.lastAccess = Date.now();
   }
 
-  /**
-   * Release one consumer. When the count reaches zero (and the session
-   * is not pinned for offline transcoding) schedule a teardown after a
-   * short grace period. The grace absorbs brief HLS player pauses so we
-   * don't churn ffmpeg processes for normal buffering behaviour.
-   */
   releaseSession(sessionId: string) {
     const session = this.sessions.get(sessionId);
     if (!session) return;
@@ -484,14 +502,12 @@ export class HlsManager {
       clearTimeout(session.idleTimer);
     }
     session.idleTimer = setTimeout(() => {
-      // Re-check at fire time: another consumer may have arrived since.
       const current = this.sessions.get(sessionId);
       if (!current) return;
       if (current.consumers > 0) return;
       if (this.pinnedSessions.has(sessionId)) return;
       void this.stopSession(sessionId);
     }, EAGER_IDLE_GRACE_MS);
-    // Don't keep the event loop alive solely for cleanup.
     if (typeof session.idleTimer.unref === 'function') {
       session.idleTimer.unref();
     }
@@ -513,9 +529,7 @@ export class HlsManager {
       !session.process.killed
     ) {
       session.process.kill('SIGTERM');
-      // Give it a chance to exit gracefully, then kill if it hangs
       session.killTimeout = setTimeout(() => {
-        // Double check session still exists and process is valid
         if (
           session.process &&
           typeof session.process.kill === 'function' &&
@@ -532,6 +546,8 @@ export class HlsManager {
     }
 
     this.sessions.delete(sessionId);
+    this.removeAllListeners(`status:${sessionId}`);
+    this.removeAllListeners(`playlistReady:${sessionId}`);
 
     if (this.sessions.size === 0) {
       this.stopCleanupInterval();

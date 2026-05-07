@@ -21,9 +21,10 @@ const localStorageMock = {
 global.localStorage = localStorageMock as any;
 
 describe('useLibraryStore - Recently Played', () => {
-  const store = useLibraryStore();
+  let store: ReturnType<typeof useLibraryStore>;
 
   beforeEach(() => {
+    store = useLibraryStore();
     vi.clearAllMocks();
     store.resetLibraryState();
   });

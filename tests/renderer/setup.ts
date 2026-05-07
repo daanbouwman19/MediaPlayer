@@ -1,10 +1,15 @@
-import { vi } from 'vitest';
+import { vi, beforeEach } from 'vitest';
+import { setActivePinia, createPinia } from 'pinia';
 
 process.env.GLOBAL_PASSWORD = '';
 
 /**
  * Global setup for renderer tests.
  */
+
+beforeEach(() => {
+  setActivePinia(createPinia());
+});
 
 // Mock localStorage
 const localStorageMock = (function () {
