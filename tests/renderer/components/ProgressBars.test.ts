@@ -88,9 +88,11 @@ describe('Progress Bars', () => {
 
     (useLibraryStore as unknown as Mock).mockReturnValue(mockLibraryState);
 
-    (usePlayerStore as unknown as Mock).mockReturnValue(Object.assign(mockPlayerState, {
-      resetState: vi.fn(),
-    }));
+    (usePlayerStore as unknown as Mock).mockReturnValue(
+      Object.assign(mockPlayerState, {
+        resetState: vi.fn(),
+      }),
+    );
 
     (usePlaylistStore as unknown as Mock).mockReturnValue(
       Object.assign(mockPlaylistState, {

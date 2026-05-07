@@ -120,14 +120,20 @@ describe('AlbumsList.vue', () => {
     mockPlayerState = playerState;
     mockUIState = uiState;
 
-    (useLibraryStore as unknown as Mock).mockReturnValue(Object.assign(mockLibraryState, {
-      fetchHistory: vi.fn(),
-      historyMedia: [],
-    }));
+    (useLibraryStore as unknown as Mock).mockReturnValue(
+      Object.assign(mockLibraryState, {
+        fetchHistory: vi.fn(),
+        historyMedia: [],
+      }),
+    );
 
-    (usePlayerStore as unknown as Mock).mockReturnValue(Object.assign(mockPlayerState, {}));
+    (usePlayerStore as unknown as Mock).mockReturnValue(
+      Object.assign(mockPlayerState, {}),
+    );
 
-    (useUIStore as unknown as Mock).mockReturnValue(Object.assign(mockUIState, {}));
+    (useUIStore as unknown as Mock).mockReturnValue(
+      Object.assign(mockUIState, {}),
+    );
 
     mockCycleTheme = vi.fn();
     (useTheme as Mock).mockReturnValue({
@@ -417,7 +423,7 @@ describe('AlbumsList.vue', () => {
     it('logs error if no history found', async () => {
       const consoleSpy = vi
         .spyOn(console, 'error')
-        .mockImplementation(() => { });
+        .mockImplementation(() => {});
       const wrapper = mount(AlbumsList);
       const historyBtn = wrapper.find(
         'button[aria-label="Recently Played Slideshow"]',
@@ -476,7 +482,7 @@ describe('AlbumsList.vue', () => {
       );
       const consoleSpy = vi
         .spyOn(console, 'error')
-        .mockImplementation(() => { });
+        .mockImplementation(() => {});
 
       const wrapper = mount(AlbumsList);
       await wrapper.vm.$nextTick();
@@ -502,7 +508,7 @@ describe('AlbumsList.vue', () => {
 
       const consoleSpy = vi
         .spyOn(console, 'error')
-        .mockImplementation(() => { });
+        .mockImplementation(() => {});
       const wrapper = mount(AlbumsList);
 
       const gridBtn = wrapper.find('button[aria-label="Open History in Grid"]');

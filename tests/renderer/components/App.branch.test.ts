@@ -86,16 +86,22 @@ describe('App.vue', () => {
       themeMode: 'system',
     });
 
-    (useLibraryStore as unknown as Mock).mockReturnValue(Object.assign(mockLibraryState, {
-      loadInitialData: mockInitializeApp,
-      loadAlbum: mockLoadAlbum,
-    }));
+    (useLibraryStore as unknown as Mock).mockReturnValue(
+      Object.assign(mockLibraryState, {
+        loadInitialData: mockInitializeApp,
+        loadAlbum: mockLoadAlbum,
+      }),
+    );
 
-    (usePlayerStore as unknown as Mock).mockReturnValue(Object.assign(mockPlayerState, {
-      stopSlideshow: vi.fn(),
-    }));
+    (usePlayerStore as unknown as Mock).mockReturnValue(
+      Object.assign(mockPlayerState, {
+        stopSlideshow: vi.fn(),
+      }),
+    );
 
-    (useUIStore as unknown as Mock).mockReturnValue(Object.assign(mockUIState, {}));
+    (useUIStore as unknown as Mock).mockReturnValue(
+      Object.assign(mockUIState, {}),
+    );
 
     (useAuthStore as unknown as Mock).mockReturnValue({
       isLocked: ref(false),

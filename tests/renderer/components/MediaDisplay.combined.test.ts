@@ -103,17 +103,21 @@ describe('MediaDisplay Combined Tests', () => {
 
     (useLibraryStore as unknown as Mock).mockReturnValue(mockLibraryState);
 
-    (usePlayerStore as unknown as Mock).mockReturnValue(Object.assign(mockPlayerState, {
-      pauseTimerOnPlay: ref(false),
-      resetState: vi.fn(),
-      stopSlideshow: vi.fn(),
-    }));
+    (usePlayerStore as unknown as Mock).mockReturnValue(
+      Object.assign(mockPlayerState, {
+        pauseTimerOnPlay: ref(false),
+        resetState: vi.fn(),
+        stopSlideshow: vi.fn(),
+      }),
+    );
 
-    (usePlaylistStore as unknown as Mock).mockReturnValue(Object.assign(mockPlaylistState, {
-      state: mockPlaylistState,
-      playNext: vi.fn(),
-      playPrevious: vi.fn(),
-    }) as any);
+    (usePlaylistStore as unknown as Mock).mockReturnValue(
+      Object.assign(mockPlaylistState, {
+        state: mockPlaylistState,
+        playNext: vi.fn(),
+        playPrevious: vi.fn(),
+      }) as any,
+    );
 
     mockMediaLoader = {
       mediaUrl: ref(null),

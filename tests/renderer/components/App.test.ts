@@ -99,19 +99,25 @@ describe('App.vue', () => {
       themeMode: 'system',
     });
 
-    (useLibraryStore as unknown as Mock).mockReturnValue(Object.assign(mockLibraryState, {
-      loadInitialData: initializeApp,
-    }));
+    (useLibraryStore as unknown as Mock).mockReturnValue(
+      Object.assign(mockLibraryState, {
+        loadInitialData: initializeApp,
+      }),
+    );
 
-    (usePlayerStore as unknown as Mock).mockReturnValue(Object.assign(mockPlayerState, {
-      stopSlideshow: vi.fn(),
-      pauseTimerOnPlay: { value: false },
-    }));
+    (usePlayerStore as unknown as Mock).mockReturnValue(
+      Object.assign(mockPlayerState, {
+        stopSlideshow: vi.fn(),
+        pauseTimerOnPlay: { value: false },
+      }),
+    );
 
-    (useUIStore as unknown as Mock).mockReturnValue(Object.assign(mockUIState, {
-      setThemeMode: vi.fn(),
-      themeMode: { value: 'system' },
-    }));
+    (useUIStore as unknown as Mock).mockReturnValue(
+      Object.assign(mockUIState, {
+        setThemeMode: vi.fn(),
+        themeMode: { value: 'system' },
+      }),
+    );
 
     (useAuthStore as unknown as Mock).mockReturnValue({
       isLocked: computed(() => false),
