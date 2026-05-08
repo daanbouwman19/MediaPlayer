@@ -50,7 +50,17 @@ const localStorageMock = (() => {
 
 vi.stubGlobal('localStorage', localStorageMock);
 
-vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) =>
-  setTimeout(() => cb(performance.now()), 0),
-);
-vi.stubGlobal('cancelAnimationFrame', (id: NodeJS.Timeout) => clearTimeout(id));
+const rafMock = (cb: FrameRequestCallback) =>
+  setTimeout(() => cb(performance.now()), 0);
+
+const cafMock = (id: NodeJS.Timeout) => clearTimeout(id);
+
+vi.stubGlobal('requestAnimationFrame', rafMock);
+vi.stubGlobal('cancelAnimationFrame', cafMock);
+
+if (typeof window !== 'undefined') {
+  window.requestAnimationFrame =
+    rafMock as unknown as typeof window.requestAnimationFrame;
+  window.cancelAnimationFrame =
+    cafMock as unknown as typeof window.cancelAnimationFrame;
+}

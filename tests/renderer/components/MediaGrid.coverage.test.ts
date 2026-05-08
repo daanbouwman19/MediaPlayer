@@ -257,7 +257,8 @@ describe('MediaGrid.vue Coverage', () => {
     await wrapper.vm.$nextTick();
     await wrapper.vm.$nextTick();
 
-    const columnCount = (wrapper.vm as any).columnCount;
+    const vm = wrapper.vm as typeof wrapper.vm & { columnCount: number };
+    const columnCount = vm.columnCount;
     const expectedLength = Math.ceil(50 / columnCount);
 
     expect(wrapper.findComponent(VirtualScroller).props('items')).toHaveLength(

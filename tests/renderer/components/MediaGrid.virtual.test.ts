@@ -129,7 +129,7 @@ describe('MediaGrid.vue (Virtual Scrolling)', () => {
     await new Promise((resolve) => setTimeout(resolve, 50));
     await wrapper.vm.$nextTick(); // wait for computed
 
-    const vm = wrapper.vm as any;
+    const vm = wrapper.vm as typeof wrapper.vm & { columnCount: number };
     expect(vm.columnCount).toBe(3);
   });
 
