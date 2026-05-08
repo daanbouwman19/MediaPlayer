@@ -97,10 +97,15 @@ describe('VRVideoPlayer Visibility', () => {
     // Set isControlsVisible to false
     await wrapper.setProps({ isControlsVisible: false });
     await wrapper.vm.$nextTick();
+    await wrapper.vm.$nextTick();
 
-    // Check style directly to confirm display: none is applied
-    expect((controlsContainer.element as HTMLElement).style.display).toBe(
-      'none',
+    // Wait for Vue's transition/render cycle
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    await wrapper.vm.$nextTick();
+
+    // Check if the element exists
+    expect(wrapper.find('[data-testid="vr-controls-container"]').exists()).toBe(
+      false,
     );
   });
 });

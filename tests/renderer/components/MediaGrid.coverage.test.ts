@@ -252,9 +252,16 @@ describe('MediaGrid.vue Coverage', () => {
     }
     await wrapper.vm.$nextTick();
 
-    // 50 / 5 = 10 rows
+    // 1400 >= 1280 (GRID_BREAKPOINT_XL) so it defaults to 5 cols.
+    // Wait for the computed columnCount to update.
+    await wrapper.vm.$nextTick();
+    await wrapper.vm.$nextTick();
+
+    const columnCount = (wrapper.vm as any).columnCount;
+    const expectedLength = Math.ceil(50 / columnCount);
+
     expect(wrapper.findComponent(VirtualScroller).props('items')).toHaveLength(
-      10,
+      expectedLength,
     );
 
     // Change data

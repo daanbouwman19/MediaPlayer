@@ -94,6 +94,8 @@ describe('MediaGrid.vue (Virtualization Keys)', () => {
       },
     ]);
     await wrapper.vm.$nextTick();
+    await wrapper.vm.$nextTick(); // wait for columnCount to update
+    await new Promise((resolve) => setTimeout(resolve, 50)); // wait for VirtualScroller watchEffect
 
     // VirtualScroller renders visible items.
     // Container height 800. Row height ~328.
@@ -135,7 +137,8 @@ describe('MediaGrid.vue (Virtualization Keys)', () => {
     element.scrollTop = 1000;
     await scroller.trigger('scroll');
 
-    // Wait for update
+    // Wait for update (and wait for setTimeout in VirtualScroller's requestAnimationFrame stub)
+    await new Promise((resolve) => setTimeout(resolve, 50));
     await wrapper.vm.$nextTick();
     await flushPromises();
 
