@@ -53,11 +53,6 @@ describe('MediaGrid.vue', () => {
       videos: ['.mp4', '.webm'],
       all: ['.jpg', '.png', '.mp4', '.webm'],
     };
-    useLibraryStore().supportedExtensions = {
-      images: ['.jpg', '.png'],
-      videos: ['.mp4', '.webm'],
-      all: ['.jpg', '.png', '.mp4', '.webm'],
-    };
     useLibraryStore().mediaUrlGenerator = ((path: string) =>
       `http://localhost:1234/${encodeURIComponent(path)}`) as any;
     useLibraryStore().thumbnailUrlGenerator = ((path: string) =>

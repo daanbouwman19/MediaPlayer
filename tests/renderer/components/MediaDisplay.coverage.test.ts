@@ -165,6 +165,10 @@ describe('MediaDisplay Coverage Boost', () => {
     (useToast as Mock).mockReturnValue(mockToast);
   });
 
+  afterEach(() => {
+    (api.getMetadata as Mock).mockClear();
+  });
+
   it('shows welcome screen when no media directories', async () => {
     const wrapper = mount(MediaDisplay);
     expect(wrapper.text()).toContain('Welcome to Media Player');

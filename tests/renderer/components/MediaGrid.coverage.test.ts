@@ -48,11 +48,6 @@ describe('MediaGrid.vue Coverage', () => {
       videos: ['.mp4', '.mkv'],
       all: ['.jpg', '.png', '.mp4', '.mkv'],
     };
-    useLibraryStore().supportedExtensions = {
-      images: ['.jpg', '.png'],
-      videos: ['.mp4', '.mkv'],
-      all: ['.jpg', '.png', '.mp4', '.mkv'],
-    };
     useLibraryStore().mediaUrlGenerator = ((path: string) =>
       `url://${path}`) as any;
     useLibraryStore().thumbnailUrlGenerator = ((path: string) =>

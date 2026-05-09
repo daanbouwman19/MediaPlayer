@@ -1,13 +1,9 @@
 import { mount } from '@vue/test-utils';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { setActivePinia } from 'pinia';
+import { createTestingPinia } from '@pinia/testing';
 import MediaControls from '../../src/renderer/components/MediaControls.vue';
-
-// Mock the store
-vi.mock('../../src/renderer/composables/useUIStore', () => ({
-  useUIStore: () => ({
-    isSidebarVisible: { value: false },
-  }),
-}));
+import { useUIStore } from '../../src/renderer/composables/useUIStore';
 
 // Mock API
 vi.mock('../../src/renderer/api', () => ({
@@ -19,6 +15,11 @@ vi.mock('../../src/renderer/api', () => ({
 }));
 
 describe('MediaControls', () => {
+  beforeEach(() => {
+    setActivePinia(createTestingPinia({ createSpy: vi.fn }));
+    useUIStore().isSidebarVisible = false;
+  });
+
   it('renders VLC button with loading state when isOpeningVlc is true', async () => {
     // Mock desktop size
     vi.stubGlobal('innerWidth', 1024);

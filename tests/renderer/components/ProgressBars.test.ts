@@ -54,11 +54,6 @@ describe('Progress Bars', () => {
       videos: ['.mp4'],
       all: ['.jpg', '.mp4'],
     };
-    useLibraryStore().supportedExtensions = {
-      images: ['.jpg'],
-      videos: ['.mp4'],
-      all: ['.jpg', '.mp4'],
-    };
     useLibraryStore().mediaDirectories = [];
     useLibraryStore().mediaUrlGenerator = ((p: string) =>
       `http://localhost/media${p}`) as any;
