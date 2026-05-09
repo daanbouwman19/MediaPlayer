@@ -32,8 +32,11 @@ describe('MediaGrid.vue (Virtualization Keys)', () => {
     setActivePinia(createTestingPinia({ createSpy: vi.fn }));
 
     // Set Pinia store state
-    useLibraryStore().imageExtensionsSet = new Set(['.jpg', '.png']) as any;
-    useLibraryStore().videoExtensionsSet = new Set(['.mp4']) as any;
+    useLibraryStore().supportedExtensions = {
+      images: ['.jpg', '.png'],
+      videos: ['.mp4'],
+      all: ['.jpg', '.png', '.mp4'],
+    };
     useLibraryStore().mediaUrlGenerator = ((path: string) =>
       `url://${path}`) as any;
     useLibraryStore().thumbnailUrlGenerator = ((path: string) =>

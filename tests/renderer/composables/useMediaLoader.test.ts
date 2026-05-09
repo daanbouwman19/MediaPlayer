@@ -8,7 +8,8 @@ describe('useMediaLoader', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     setActivePinia(createTestingPinia({ createSpy: vi.fn }));
-    useLibraryStore().mediaUrlGenerator = (path: string) => `http://media/${path}`;
+    useLibraryStore().mediaUrlGenerator = (path: string) =>
+      `http://media/${path}`;
   });
 
   it('should load image media using generator', async () => {

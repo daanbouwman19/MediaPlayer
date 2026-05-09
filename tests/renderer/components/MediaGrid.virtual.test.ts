@@ -56,10 +56,14 @@ describe('MediaGrid.vue (Virtual Scrolling)', () => {
     setActivePinia(createTestingPinia({ createSpy: vi.fn }));
 
     // Set Pinia store state
-    useLibraryStore().imageExtensionsSet = new Set(['.jpg', '.png']) as any;
-    useLibraryStore().videoExtensionsSet = new Set(['.mp4']) as any;
+    useLibraryStore().supportedExtensions = {
+      images: ['.jpg', '.png'],
+      videos: ['.mp4'],
+      all: ['.jpg', '.png', '.mp4'],
+    };
     useLibraryStore().mediaUrlGenerator = ((p: string) => `url://${p}`) as any;
-    useLibraryStore().thumbnailUrlGenerator = ((p: string) => `thumb://${p}`) as any;
+    useLibraryStore().thumbnailUrlGenerator = ((p: string) =>
+      `thumb://${p}`) as any;
 
     usePlayerStore().isSlideshowActive = false;
     usePlayerStore().isTimerRunning = false;

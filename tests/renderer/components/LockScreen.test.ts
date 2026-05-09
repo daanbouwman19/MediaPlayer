@@ -10,8 +10,8 @@ describe('LockScreen.vue', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     setActivePinia(createTestingPinia({ createSpy: vi.fn }));
-    useAuthStore().unlock.mockResolvedValue(true);
-    useLibraryStore().loadInitialData.mockResolvedValue(undefined);
+    vi.mocked(useAuthStore().unlock).mockResolvedValue(true);
+    vi.mocked(useLibraryStore().loadInitialData).mockResolvedValue(undefined);
   });
 
   it('renders correctly', () => {
@@ -34,7 +34,7 @@ describe('LockScreen.vue', () => {
   });
 
   it('handles failed unlock and shows error message', async () => {
-    useAuthStore().unlock.mockResolvedValueOnce(false);
+    vi.mocked(useAuthStore().unlock).mockResolvedValueOnce(false);
     const wrapper = mount(LockScreen);
 
     const input = wrapper.find('input[type="password"]');
@@ -51,7 +51,9 @@ describe('LockScreen.vue', () => {
   });
 
   it('handles error during unlock', async () => {
-    useAuthStore().unlock.mockRejectedValueOnce(new Error('Network error'));
+    vi.mocked(useAuthStore().unlock).mockRejectedValueOnce(
+      new Error('Network error'),
+    );
     const wrapper = mount(LockScreen);
 
     const input = wrapper.find('input[type="password"]');

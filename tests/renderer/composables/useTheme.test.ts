@@ -13,7 +13,9 @@ describe('useTheme', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    setActivePinia(createTestingPinia({ stubActions: false, createSpy: vi.fn }));
+    setActivePinia(
+      createTestingPinia({ stubActions: false, createSpy: vi.fn }),
+    );
 
     useUIStore().themeMode = 'system';
 

@@ -1,4 +1,12 @@
-import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest';
+import {
+  describe,
+  it,
+  expect,
+  vi,
+  beforeAll,
+  afterAll,
+  beforeEach,
+} from 'vitest';
 import { mount } from '@vue/test-utils';
 import { setActivePinia } from 'pinia';
 import { createTestingPinia } from '@pinia/testing';

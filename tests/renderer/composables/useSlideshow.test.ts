@@ -16,7 +16,9 @@ global.window.electronAPI = createMockElectronAPI();
 describe('useSlideshow', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    setActivePinia(createTestingPinia({ stubActions: false, createSpy: vi.fn }));
+    setActivePinia(
+      createTestingPinia({ stubActions: false, createSpy: vi.fn }),
+    );
     useLibraryStore().supportedExtensions = {
       videos: ['.mp4', '.webm'],
       images: ['.png', '.jpg', '.jpeg'],
