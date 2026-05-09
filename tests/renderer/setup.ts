@@ -11,8 +11,7 @@ beforeEach(() => {
   setActivePinia(createPinia());
 });
 
-// happy-dom's localStorage is non-functional in this configuration
-// (node warns about --localstorage-file), so we provide a simple in-memory mock.
+// Mock localStorage with existence check for robustness
 const localStorageMock = (() => {
   let store: Record<string, string> = {};
   return {
@@ -33,55 +32,42 @@ const localStorageMock = (() => {
   };
 })();
 
-vi.stubGlobal('localStorage', localStorageMock);
-
-// Synchronous requestAnimationFrame stub with recursion guard.
-// Executes the callback immediately so tests don't need to advance timers.
-let rafDepth = 0;
-const rafStub = (cb: FrameRequestCallback): number => {
-  if (rafDepth > 10) {
-    // Prevent infinite recursion in animation loops by deferring.
-    return setTimeout(() => {
-      try {
-        cb(Date.now());
-      } catch {
-        // Swallow errors during environment disposal.
-      }
-    }, 0) as unknown as number;
-  }
-  rafDepth++;
-  try {
-    cb(Date.now());
-  } catch (err) {
-    // Swallow disposal-related errors that occur after the test environment
-    // has been torn down (e.g. recursive RAF loops or late canvas calls).
-    if (
-      (err instanceof ReferenceError &&
-        err.message.includes('requestAnimationFrame')) ||
-      (err instanceof Error &&
-        (err.message.includes('canvas') || err.message.includes('context')))
-    ) {
-      return 1;
+// Helper to safely stub global properties
+const stubGlobalSafely = (prop: string, value: any) => {
+  if (typeof window !== 'undefined') {
+    // In happy-dom/jsdom, we might need to override existing but broken/partial implementations
+    try {
+      vi.stubGlobal(prop, value);
+    } catch (e) {
+      // Fallback for environments where stubGlobal fails
+      (window as any)[prop] = value;
     }
-    throw err;
-  } finally {
-    rafDepth--;
-  }
-  return 1;
-};
-
-const cafStub = (id: number) => {
-  if (id > 1) {
-    clearTimeout(id);
+  } else {
+    vi.stubGlobal(prop, value);
   }
 };
 
-vi.stubGlobal('requestAnimationFrame', rafStub);
-vi.stubGlobal('cancelAnimationFrame', cafStub);
+stubGlobalSafely('localStorage', localStorageMock);
 
+// Streamlined asynchronous requestAnimationFrame polyfill
+const rafMock = (cb: FrameRequestCallback) =>
+  setTimeout(() => {
+    cb(typeof performance !== 'undefined' ? performance.now() : Date.now());
+  }, 0);
+
+const cafMock = (id: any) => clearTimeout(id);
+
+stubGlobalSafely('requestAnimationFrame', rafMock);
+stubGlobalSafely('cancelAnimationFrame', cafMock);
+
+// Ensure window properties are also set if window exists but properties don't
 if (typeof window !== 'undefined') {
-  window.requestAnimationFrame =
-    rafStub as unknown as typeof window.requestAnimationFrame;
-  window.cancelAnimationFrame =
-    cafStub as unknown as typeof window.cancelAnimationFrame;
+  if (!window.requestAnimationFrame) {
+    (window as any).requestAnimationFrame = rafMock;
+  }
+  if (!window.cancelAnimationFrame) {
+    (window as any).cancelAnimationFrame = cafMock;
+  }
+  // Force override localStorage in case it exists but is non-functional
+  (window as any).localStorage = localStorageMock;
 }
