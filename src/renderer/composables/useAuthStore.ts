@@ -4,13 +4,13 @@ import { WebAdapter } from '../api/WebAdapter';
 import { ElectronAdapter } from '../api/ElectronAdapter';
 import type { IMediaBackend } from '../api/types';
 
-// Detect environment
-const isElectron = !!(window && window.electronAPI);
-const backend: IMediaBackend = isElectron
-  ? new ElectronAdapter()
-  : new WebAdapter();
-
 export const useAuthStore = defineStore('auth', () => {
+  // Detect environment inside factory to allow easier mocking/stubbing in tests
+  const isElectron = !!(window && window.electronAPI);
+  const backend: IMediaBackend = isElectron
+    ? new ElectronAdapter()
+    : new WebAdapter();
+
   const isLocked = ref(false);
   const isInitialized = ref(false);
   const isEnabled = ref(false);

@@ -11,21 +11,6 @@ beforeEach(() => {
   setActivePinia(createPinia());
 });
 
-// Global mock for pinia's storeToRefs to behave like Vue's toRefs in tests.
-// This is necessary because test stores are plain reactive objects, not real
-// Pinia store instances, so the real storeToRefs would skip non-ref properties.
-vi.mock('pinia', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('pinia')>();
-  return {
-    ...actual,
-    storeToRefs: (store: any) => {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { toRefs, isReactive, reactive } = require('vue');
-      return toRefs(isReactive(store) ? store : reactive(store));
-    },
-  };
-});
-
 // Synchronous requestAnimationFrame stub with recursion guard.
 // Executes the callback immediately so tests don't need to advance timers.
 let rafDepth = 0;

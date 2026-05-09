@@ -5,14 +5,14 @@ import type { MediaFilter } from '../../core/constants';
 import type { ThemeId } from '../../core/themes';
 import { AVAILABLE_THEMES } from '../../core/themes';
 
-const savedTheme = (localStorage.getItem('themeMode') as ThemeId) || 'system';
-
-// Validate saved theme against current available themes
-const initialThemeMode = AVAILABLE_THEMES.find((t) => t.id === savedTheme)
-  ? savedTheme
-  : 'system';
-
 export const useUIStore = defineStore('ui', () => {
+  const savedTheme = (localStorage.getItem('themeMode') as ThemeId) || 'system';
+
+  // Validate saved theme against current available themes
+  const initialThemeMode = AVAILABLE_THEMES.find((t) => t.id === savedTheme)
+    ? savedTheme
+    : 'system';
+
   const mediaFilter = ref<MediaFilter>('All');
   const viewMode = ref<'player' | 'grid'>('player');
   const gridMediaFiles = ref<MediaFile[]>([]);
