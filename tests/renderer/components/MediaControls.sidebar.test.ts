@@ -1,8 +1,10 @@
-import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, vi, beforeAll, beforeEach, afterAll } from 'vitest';
 import { mount } from '@vue/test-utils';
+import { setActivePinia } from 'pinia';
+import { createTestingPinia } from '@pinia/testing';
 import MediaControls from '@/components/MediaControls.vue';
+import { useUIStore } from '@/composables/useUIStore';
 
-// Mock Icons
 vi.mock('@/components/icons/VlcIcon.vue', () => ({
   default: { template: '<svg></svg>' },
 }));
@@ -28,13 +30,6 @@ vi.mock('@/components/icons/VRIcon.vue', () => ({
   default: { template: '<svg></svg>' },
 }));
 
-// Mock UI Store with sidebar visible
-vi.mock('@/composables/useUIStore', () => ({
-  useUIStore: () => ({
-    isSidebarVisible: { value: true },
-  }),
-}));
-
 describe('MediaControls.vue Responsiveness', () => {
   const defaultProps = {
     currentMediaItem: { name: 'test.jpg', path: '/test.jpg', rating: 3 },
@@ -50,8 +45,12 @@ describe('MediaControls.vue Responsiveness', () => {
   let observeMock: any;
   let resizeCallback: any;
 
+  beforeEach(() => {
+    setActivePinia(createTestingPinia({ createSpy: vi.fn }));
+    useUIStore().isSidebarVisible = true;
+  });
+
   beforeAll(() => {
-    // Mock ResizeObserver
     disconnectMock = vi.fn();
     observeMock = vi.fn();
 
@@ -76,7 +75,6 @@ describe('MediaControls.vue Responsiveness', () => {
   };
 
   it('should show stars and time when width is large (Desktop)', async () => {
-    // Mock window width to be desktop size
     window.innerWidth = 1024;
 
     const wrapper = mount(MediaControls, {
@@ -84,14 +82,11 @@ describe('MediaControls.vue Responsiveness', () => {
       attachTo: document.body,
     });
 
-    // Simulate wide container
     triggerResize(800);
     await wrapper.vm.$nextTick();
 
     const stars = wrapper.findAll('button[aria-label*="Rate"]');
     expect(stars.length).toBe(5);
-    // NOTE: isImage is true in defaultProps, and time is hidden for images usually.
-    // Let's check with image=false
     await wrapper.setProps({ isImage: false });
 
     const timeDisplayVideo = wrapper.find('.font-mono');
@@ -106,15 +101,13 @@ describe('MediaControls.vue Responsiveness', () => {
       attachTo: document.body,
     });
 
-    // Simulate medium container (e.g. 500px - between 450 and 650)
     triggerResize(500);
     await wrapper.vm.$nextTick();
 
     const stars = wrapper.findAll('button[aria-label*="Rate"]');
-    expect(stars.length).toBe(0); // Hidden
+    expect(stars.length).toBe(0);
 
-    // Time shows if width > threshold (450).
-    expect(wrapper.find('.font-mono').exists()).toBe(true); // Visible
+    expect(wrapper.find('.font-mono').exists()).toBe(true);
   });
 
   it('should hide stars and time when width is very small', async () => {
@@ -124,7 +117,6 @@ describe('MediaControls.vue Responsiveness', () => {
       attachTo: document.body,
     });
 
-    // Simulate small container
     triggerResize(200);
     await wrapper.vm.$nextTick();
 
@@ -136,28 +128,20 @@ describe('MediaControls.vue Responsiveness', () => {
   });
 
   it('should hide stars but show time on mobile with a wide container', async () => {
-    // Mock window width to be mobile size
     window.innerWidth = 500;
-    window.dispatchEvent(new Event('resize')); // Trigger component resize listener
+    window.dispatchEvent(new Event('resize'));
 
     const wrapper = mount(MediaControls, {
       props: { ...defaultProps, isImage: false },
       attachTo: document.body,
     });
 
-    // Even if container reports wide width
     triggerResize(800);
     await wrapper.vm.$nextTick();
 
-    // When isDesktop is false, Teleport is active.
-    // The content is moved to body. wrapper.find() might not see it depending on VTU version/setup.
-    // We check document.body directly for the class.
-
-    // Stars should be hidden
     const stars = document.body.querySelectorAll('button[aria-label*="Rate"]');
     expect(stars.length).toBe(0);
 
-    // Time should be visible
     const timeDisplay = document.body.querySelector('.font-mono');
     expect(timeDisplay).not.toBeNull();
   });

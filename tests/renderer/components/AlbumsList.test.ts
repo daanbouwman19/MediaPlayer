@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
-import { reactive } from 'vue';
+import { setActivePinia } from 'pinia';
+import { createTestingPinia } from '@pinia/testing';
 import AlbumsList from '../../../src/renderer/components/AlbumsList.vue';
 import { collectTexturesRecursive } from '../../../src/renderer/utils/albumUtils';
 import { useLibraryStore } from '../../../src/renderer/composables/useLibraryStore';
@@ -41,9 +42,6 @@ vi.mock('../../../src/renderer/api', () => ({
   },
 }));
 
-vi.mock('../../../src/renderer/composables/useLibraryStore');
-vi.mock('../../../src/renderer/composables/usePlayerStore');
-vi.mock('../../../src/renderer/composables/useUIStore');
 vi.mock('../../../src/renderer/composables/useTheme');
 // --- End New Mocking Strategy ---
 
@@ -72,41 +70,7 @@ function createMockAlbums() {
   ];
 }
 
-function createMockState() {
-  const libraryState = reactive({
-    allAlbums: createMockAlbums(),
-    albumsSelectedForSlideshow: { Album1: true },
-    smartPlaylists: [],
-    historyMedia: [],
-    mediaDirectories: [{ path: '/test', isActive: true }], // Default to having sources
-  });
-
-  const playerState = reactive({
-    timerDuration: 5,
-    isTimerRunning: false,
-    timerProgress: 0,
-    isSlideshowActive: false,
-    pauseTimerOnPlay: false,
-  });
-
-  const uiState = reactive({
-    isSourcesModalVisible: false,
-    isSmartPlaylistModalVisible: false,
-    gridMediaFiles: [],
-    viewMode: 'player',
-    playlistToEdit: null,
-    mediaFilter: 'All',
-    isHistoryMode: false,
-    themeMode: 'system',
-  });
-
-  return { libraryState, playerState, uiState };
-}
-
 describe('AlbumsList.vue', () => {
-  let mockLibraryState: any;
-  let mockPlayerState: any;
-  let mockUIState: any;
   let mockCycleTheme: Mock;
 
   // We keep a reference to default mock albums for assertions that rely on the initial structure
@@ -115,25 +79,29 @@ describe('AlbumsList.vue', () => {
   beforeEach(() => {
     vi.resetAllMocks();
 
-    const { libraryState, playerState, uiState } = createMockState();
-    mockLibraryState = libraryState;
-    mockPlayerState = playerState;
-    mockUIState = uiState;
+    setActivePinia(createTestingPinia({ createSpy: vi.fn }));
 
-    (useLibraryStore as unknown as Mock).mockReturnValue(
-      Object.assign(mockLibraryState, {
-        fetchHistory: vi.fn(),
-        historyMedia: [],
-      }),
-    );
+    // Set initial store state
+    useLibraryStore().allAlbums = createMockAlbums() as any;
+    useLibraryStore().albumsSelectedForSlideshow = { Album1: true };
+    useLibraryStore().smartPlaylists = [];
+    useLibraryStore().historyMedia = [];
+    useLibraryStore().mediaDirectories = [{ path: '/test', isActive: true }] as any;
 
-    (usePlayerStore as unknown as Mock).mockReturnValue(
-      Object.assign(mockPlayerState, {}),
-    );
+    usePlayerStore().timerDuration = 5;
+    usePlayerStore().isTimerRunning = false;
+    usePlayerStore().timerProgress = 0;
+    usePlayerStore().isSlideshowActive = false;
+    usePlayerStore().pauseTimerOnPlay = false;
 
-    (useUIStore as unknown as Mock).mockReturnValue(
-      Object.assign(mockUIState, {}),
-    );
+    useUIStore().isSourcesModalVisible = false;
+    useUIStore().isSmartPlaylistModalVisible = false;
+    useUIStore().gridMediaFiles = [];
+    useUIStore().viewMode = 'player';
+    useUIStore().playlistToEdit = null;
+    useUIStore().mediaFilter = 'All';
+    useUIStore().isHistoryMode = false;
+    useUIStore().themeMode = 'system';
 
     mockCycleTheme = vi.fn();
     (useTheme as Mock).mockReturnValue({
@@ -161,8 +129,8 @@ describe('AlbumsList.vue', () => {
   });
 
   it('shows "Add your first source" when no sources are configured', async () => {
-    mockLibraryState.mediaDirectories = [];
-    mockLibraryState.allAlbums = [];
+    useLibraryStore().mediaDirectories = [];
+    useLibraryStore().allAlbums = [];
     const wrapper = mount(AlbumsList);
     await wrapper.vm.$nextTick();
     expect(wrapper.text()).toContain('Add your first source...');
@@ -170,8 +138,8 @@ describe('AlbumsList.vue', () => {
   });
 
   it('shows "No albums found" when sources exist but no albums are loaded', async () => {
-    mockLibraryState.mediaDirectories = [{ path: '/foo' }];
-    mockLibraryState.allAlbums = [];
+    useLibraryStore().mediaDirectories = [{ path: '/foo' }] as any;
+    useLibraryStore().allAlbums = [];
     const wrapper = mount(AlbumsList);
     await wrapper.vm.$nextTick();
     expect(wrapper.text()).toContain('No albums found in your sources');
@@ -188,7 +156,7 @@ describe('AlbumsList.vue', () => {
   });
 
   it('calls only toggleSlideshowTimer when the global start button is clicked and a slideshow is already active', async () => {
-    mockPlayerState.isSlideshowActive = true;
+    usePlayerStore().isSlideshowActive = true;
     const wrapper = mount(AlbumsList);
     await wrapper.vm.$nextTick();
     const startButton = wrapper.find('[data-testid="timer-button"]');
@@ -201,7 +169,7 @@ describe('AlbumsList.vue', () => {
     const wrapper = mount(AlbumsList);
     const manageButton = wrapper.find('button[title="Manage Sources"]');
     await manageButton.trigger('click');
-    expect(mockUIState.isSourcesModalVisible).toBe(true);
+    expect(useUIStore().isSourcesModalVisible).toBe(true);
   });
 
   it('handles the albumClick event from AlbumTree', async () => {
@@ -223,7 +191,7 @@ describe('AlbumsList.vue', () => {
 
   it('selects all children when a partially selected parent is toggled', async () => {
     // Set initial state to partially selected
-    mockLibraryState.albumsSelectedForSlideshow = { Album1: true };
+    useLibraryStore().albumsSelectedForSlideshow = { Album1: true };
     const wrapper = mount(AlbumsList);
     const albumTree = wrapper.findComponent({ name: 'AlbumTree' });
 
@@ -242,7 +210,7 @@ describe('AlbumsList.vue', () => {
 
   it('deselects all children when a fully selected parent is toggled', async () => {
     // Set initial state to fully selected
-    mockLibraryState.albumsSelectedForSlideshow = {
+    useLibraryStore().albumsSelectedForSlideshow = {
       Album1: true,
       SubAlbum1: true,
     };
@@ -278,7 +246,7 @@ describe('AlbumsList.vue', () => {
 
     expect(timerButton.attributes('aria-label')).toBe('Start/Resume Slideshow');
 
-    mockPlayerState.isTimerRunning = true;
+    usePlayerStore().isTimerRunning = true;
     await wrapper.vm.$nextTick();
 
     expect(timerButton.attributes('aria-label')).toBe('Pause Slideshow');
@@ -289,28 +257,28 @@ describe('AlbumsList.vue', () => {
       const wrapper = mount(AlbumsList);
       const btn = wrapper.find('button[title="Add Playlist"]');
       await btn.trigger('click');
-      expect(mockUIState.isSmartPlaylistModalVisible).toBe(true);
+      expect(useUIStore().isSmartPlaylistModalVisible).toBe(true);
     });
 
     it('renders smart playlists', async () => {
-      mockLibraryState.smartPlaylists = [
+      useLibraryStore().smartPlaylists = [
         { id: 1, name: 'My List', criteria: '{}' },
-      ];
+      ] as any;
       const wrapper = mount(AlbumsList);
       await wrapper.vm.$nextTick();
       expect(wrapper.text()).toContain('My List');
     });
 
     it('handles playlist click and filtering', async () => {
-      mockLibraryState.smartPlaylists = [
+      useLibraryStore().smartPlaylists = [
         {
           id: 1,
           name: 'Rated 5',
           criteria: JSON.stringify({ minRating: 5 }),
         },
-      ];
+      ] as any;
       // Mock allAlbums to contain valid files
-      mockLibraryState.allAlbums = [
+      useLibraryStore().allAlbums = [
         {
           id: 'Root',
           name: 'Root',
@@ -320,7 +288,7 @@ describe('AlbumsList.vue', () => {
             { path: '/file2.jpg', name: 'file2.jpg' },
           ],
         },
-      ];
+      ] as any;
 
       // The DB is expected to return only matching items
       const mockItems = [{ file_path: '/file1.jpg', rating: 5, view_count: 0 }];
@@ -340,15 +308,15 @@ describe('AlbumsList.vue', () => {
 
       expect(api.executeSmartPlaylist).toHaveBeenCalled();
       // Should filter to only file1
-      expect(mockUIState.gridMediaFiles).toHaveLength(1);
-      expect(mockUIState.gridMediaFiles[0].path).toBe('/file1.jpg');
-      expect(mockUIState.viewMode).toBe('grid');
+      expect(useUIStore().gridMediaFiles).toHaveLength(1);
+      expect(useUIStore().gridMediaFiles[0].path).toBe('/file1.jpg');
+      expect(useUIStore().viewMode).toBe('grid');
     });
 
     it('deletes playlist upon confirmation', async () => {
-      mockLibraryState.smartPlaylists = [
+      useLibraryStore().smartPlaylists = [
         { id: 1, name: 'Delete Me', criteria: '{}' },
-      ];
+      ] as any;
       // Mock confirm
       global.confirm = vi.fn(() => true);
       (api.deleteSmartPlaylist as Mock).mockResolvedValue(undefined);
@@ -369,17 +337,16 @@ describe('AlbumsList.vue', () => {
 
     it('opens edit modal on edit click', async () => {
       const playlist = { id: 1, name: 'Edit Me', criteria: '{}' };
-      mockLibraryState.smartPlaylists = [playlist];
+      useLibraryStore().smartPlaylists = [playlist] as any;
       const wrapper = mount(AlbumsList);
       await wrapper.vm.$nextTick();
 
       const editBtn = wrapper.findAll('button[title="Edit"]')[0];
       // Edit button is hidden by default (opacity 0), but click should still work in test env
-      // or we trigger the handler directly if visibility is blocked by CSS (but vue-test-utils usually ignores CSS visibility for interaction unless using strict visibility checks)
       await editBtn.trigger('click');
 
-      expect(mockUIState.playlistToEdit).toEqual(playlist);
-      expect(mockUIState.isSmartPlaylistModalVisible).toBe(true);
+      expect(useUIStore().playlistToEdit).toEqual(playlist);
+      expect(useUIStore().isSmartPlaylistModalVisible).toBe(true);
     });
   });
 
@@ -390,16 +357,14 @@ describe('AlbumsList.vue', () => {
         'button[aria-label="Open History in Grid"]',
       );
 
-      mockLibraryState.historyMedia = [{ path: '/history.jpg' }];
+      useLibraryStore().historyMedia = [{ path: '/history.jpg' }] as any;
 
       await historyItem.trigger('click');
       await wrapper.vm.$nextTick();
 
-      // Need to access the store returned by useLibraryStore to check calls
-      const libraryStoreMock = useLibraryStore();
-      expect(libraryStoreMock.fetchHistory).toHaveBeenCalledWith(100);
-      expect(mockUIState.gridMediaFiles).toHaveLength(1);
-      expect(mockUIState.viewMode).toBe('grid');
+      expect(useLibraryStore().fetchHistory).toHaveBeenCalledWith(100);
+      expect(useUIStore().gridMediaFiles).toHaveLength(1);
+      expect(useUIStore().viewMode).toBe('grid');
     });
 
     it('handles history slideshow click', async () => {
@@ -408,13 +373,12 @@ describe('AlbumsList.vue', () => {
         'button[aria-label="Recently Played Slideshow"]',
       );
 
-      mockLibraryState.historyMedia = [{ path: '/history.jpg' }];
+      useLibraryStore().historyMedia = [{ path: '/history.jpg' }] as any;
 
       await historyBtn.trigger('click');
       await wrapper.vm.$nextTick();
 
-      const libraryStoreMock = useLibraryStore();
-      expect(libraryStoreMock.fetchHistory).toHaveBeenCalledWith(100);
+      expect(useLibraryStore().fetchHistory).toHaveBeenCalledWith(100);
       expect(mocks.mockStartHistorySlideshow).toHaveBeenCalledWith([
         { path: '/history.jpg' },
       ]);
@@ -429,7 +393,7 @@ describe('AlbumsList.vue', () => {
         'button[aria-label="Recently Played Slideshow"]',
       );
 
-      mockLibraryState.historyMedia = [];
+      useLibraryStore().historyMedia = [];
 
       await historyBtn.trigger('click');
 
@@ -456,7 +420,7 @@ describe('AlbumsList.vue', () => {
       const pauseTimerCheckbox = checkboxes[0]; // There is only one now
 
       await pauseTimerCheckbox.setValue(true);
-      expect(mockPlayerState.pauseTimerOnPlay).toBe(true);
+      expect(usePlayerStore().pauseTimerOnPlay).toBe(true);
     });
 
     it('sets media filter', async () => {
@@ -469,13 +433,13 @@ describe('AlbumsList.vue', () => {
       await flushPromises();
 
       expect(mocks.mockReapplyFilter).toHaveBeenCalled();
-      expect(mockUIState.mediaFilter).toBe('Images');
+      expect(useUIStore().mediaFilter).toBe('Images');
     });
 
     it('handles delete playlist error', async () => {
-      mockLibraryState.smartPlaylists = [
+      useLibraryStore().smartPlaylists = [
         { id: 1, name: 'Fail', criteria: '{}' },
-      ];
+      ] as any;
       global.confirm = vi.fn(() => true);
       (api.deleteSmartPlaylist as Mock).mockRejectedValue(
         new Error('Delete failed'),
@@ -498,11 +462,9 @@ describe('AlbumsList.vue', () => {
     });
 
     it('handles history grid error', async () => {
-      mockLibraryState.historyMedia = [{ path: '/history.jpg' }];
-      // Mock fetchHistory to throw? Or useLibraryStore mock?
-      // The component calls `await loadHistory()`, which calls `libraryStore.fetchHistory`.
-      const libraryStoreMock = useLibraryStore();
-      (libraryStoreMock.fetchHistory as Mock).mockRejectedValue(
+      useLibraryStore().historyMedia = [{ path: '/history.jpg' }] as any;
+      // Mock fetchHistory to throw
+      (useLibraryStore().fetchHistory as Mock).mockRejectedValue(
         new Error('Fetch failed'),
       );
 
@@ -520,6 +482,7 @@ describe('AlbumsList.vue', () => {
       );
       consoleSpy.mockRestore();
     });
+
     it('opens theme selector when theme button is clicked', async () => {
       const wrapper = mount(AlbumsList);
       const themeBtn = wrapper.find('button[aria-label="Select Theme"]');

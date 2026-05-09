@@ -1,36 +1,27 @@
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
-import { reactive } from 'vue';
+import { setActivePinia } from 'pinia';
+import { createTestingPinia } from '@pinia/testing';
 import SmartPlaylistModal from '@/components/SmartPlaylistModal.vue';
 import { useLibraryStore } from '@/composables/useLibraryStore';
 import { useUIStore } from '@/composables/useUIStore';
 import { api } from '@/api';
 
-vi.mock('@/composables/useLibraryStore');
-vi.mock('@/composables/useUIStore');
 vi.mock('@/api');
 
 describe('SmartPlaylistModal Coverage', () => {
-  let mockLibraryState: any;
-  let mockUIState: any;
-
   beforeEach(() => {
     vi.resetAllMocks();
-    mockLibraryState = reactive({
-      smartPlaylists: [],
-    });
-    mockUIState = reactive({
-      isSmartPlaylistModalVisible: false,
-    });
 
-    (useLibraryStore as unknown as Mock).mockReturnValue(mockLibraryState);
+    setActivePinia(createTestingPinia({ createSpy: vi.fn }));
 
-    (useUIStore as unknown as Mock).mockReturnValue(mockUIState);
+    useLibraryStore().smartPlaylists = [];
+    useUIStore().isSmartPlaylistModalVisible = false;
   });
 
   it('handles invalid JSON in criteria when populating form', async () => {
     // Start invisible
-    mockUIState.isSmartPlaylistModalVisible = false;
+    useUIStore().isSmartPlaylistModalVisible = false;
 
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     const playlistToEdit = {
@@ -44,7 +35,7 @@ describe('SmartPlaylistModal Coverage', () => {
     });
 
     // Trigger watcher
-    mockUIState.isSmartPlaylistModalVisible = true;
+    useUIStore().isSmartPlaylistModalVisible = true;
     await wrapper.vm.$nextTick();
 
     expect(consoleSpy).toHaveBeenCalledWith(
@@ -56,7 +47,7 @@ describe('SmartPlaylistModal Coverage', () => {
   });
 
   it('save does nothing if name is empty', async () => {
-    mockUIState.isSmartPlaylistModalVisible = true;
+    useUIStore().isSmartPlaylistModalVisible = true;
     const wrapper = mount(SmartPlaylistModal);
     await wrapper.vm.$nextTick();
 
@@ -72,7 +63,7 @@ describe('SmartPlaylistModal Coverage', () => {
   });
 
   it('save builds criteria correctly (undefined for 0s)', async () => {
-    mockUIState.isSmartPlaylistModalVisible = true;
+    useUIStore().isSmartPlaylistModalVisible = true;
     const wrapper = mount(SmartPlaylistModal);
     await wrapper.vm.$nextTick();
 
@@ -92,11 +83,11 @@ describe('SmartPlaylistModal Coverage', () => {
   });
 
   it('handles API error during updates', async () => {
-    mockUIState.isSmartPlaylistModalVisible = false;
+    useUIStore().isSmartPlaylistModalVisible = false;
     const playlistToEdit = { id: 1, name: 'Upd', criteria: '{}' };
     const wrapper = mount(SmartPlaylistModal, { props: { playlistToEdit } });
 
-    mockUIState.isSmartPlaylistModalVisible = true;
+    useUIStore().isSmartPlaylistModalVisible = true;
     await wrapper.vm.$nextTick();
 
     (api.updateSmartPlaylist as Mock).mockRejectedValue(
@@ -118,7 +109,7 @@ describe('SmartPlaylistModal Coverage', () => {
   });
 
   it('close function sets modal visibility to false (Cancel button)', async () => {
-    mockUIState.isSmartPlaylistModalVisible = true;
+    useUIStore().isSmartPlaylistModalVisible = true;
     const wrapper = mount(SmartPlaylistModal);
     await wrapper.vm.$nextTick();
 
@@ -126,22 +117,22 @@ describe('SmartPlaylistModal Coverage', () => {
     const btn = wrapper.findAll('button').find((b) => b.text() === 'Cancel');
     await btn?.trigger('click');
 
-    expect(mockUIState.isSmartPlaylistModalVisible).toBe(false);
+    expect(useUIStore().isSmartPlaylistModalVisible).toBe(false);
   });
 
   it('close function sets modal visibility to false (Backdrop click)', async () => {
-    mockUIState.isSmartPlaylistModalVisible = true;
+    useUIStore().isSmartPlaylistModalVisible = true;
     const wrapper = mount(SmartPlaylistModal);
     await wrapper.vm.$nextTick();
 
     // Click backdrop (root element)
     await wrapper.find('.fixed').trigger('click');
 
-    expect(mockUIState.isSmartPlaylistModalVisible).toBe(false);
+    expect(useUIStore().isSmartPlaylistModalVisible).toBe(false);
   });
 
   it('close function sets modal visibility to false (Close icon)', async () => {
-    mockUIState.isSmartPlaylistModalVisible = true;
+    useUIStore().isSmartPlaylistModalVisible = true;
     const wrapper = mount(SmartPlaylistModal);
     await wrapper.vm.$nextTick();
 
@@ -149,13 +140,13 @@ describe('SmartPlaylistModal Coverage', () => {
     const btn = wrapper.find('button[aria-label="Close"]');
     await btn?.trigger('click');
 
-    expect(mockUIState.isSmartPlaylistModalVisible).toBe(false);
+    expect(useUIStore().isSmartPlaylistModalVisible).toBe(false);
   });
 
   it('watcher resets form when modal closes', async () => {
     vi.useFakeTimers();
     try {
-      mockUIState.isSmartPlaylistModalVisible = true;
+      useUIStore().isSmartPlaylistModalVisible = true;
       const wrapper = mount(SmartPlaylistModal);
       await wrapper.vm.$nextTick();
 
@@ -164,7 +155,7 @@ describe('SmartPlaylistModal Coverage', () => {
       (wrapper.vm as any).minRating = 5;
 
       // Close modal
-      mockUIState.isSmartPlaylistModalVisible = false;
+      useUIStore().isSmartPlaylistModalVisible = false;
       await wrapper.vm.$nextTick();
 
       // Wait for setTimeout to execute
@@ -195,7 +186,7 @@ describe('SmartPlaylistModal Coverage', () => {
   });
 
   it('watcher populates form with duration conversion', async () => {
-    mockUIState.isSmartPlaylistModalVisible = false;
+    useUIStore().isSmartPlaylistModalVisible = false;
     const playlistToEdit = {
       id: 1,
       name: 'Duration Test',
@@ -203,14 +194,14 @@ describe('SmartPlaylistModal Coverage', () => {
     };
     const wrapper = mount(SmartPlaylistModal, { props: { playlistToEdit } });
 
-    mockUIState.isSmartPlaylistModalVisible = true;
+    useUIStore().isSmartPlaylistModalVisible = true;
     await wrapper.vm.$nextTick();
 
     expect((wrapper.vm as any).minDurationMinutes).toBe(3);
   });
 
   it('successfully updates an existing playlist', async () => {
-    mockUIState.isSmartPlaylistModalVisible = true;
+    useUIStore().isSmartPlaylistModalVisible = true;
     const playlistToEdit = { id: 123, name: 'Old Name', criteria: '{}' };
 
     // Mock successful update
@@ -238,10 +229,11 @@ describe('SmartPlaylistModal Coverage', () => {
       expect.any(String),
     );
     expect(api.getSmartPlaylists).toHaveBeenCalled();
-    expect(mockUIState.isSmartPlaylistModalVisible).toBe(false);
+    expect(useUIStore().isSmartPlaylistModalVisible).toBe(false);
   });
+
   it('save passes all non-zero criteria correctly', async () => {
-    mockUIState.isSmartPlaylistModalVisible = true;
+    useUIStore().isSmartPlaylistModalVisible = true;
     (api.createSmartPlaylist as Mock).mockResolvedValue({ id: 10 });
     (api.getSmartPlaylists as Mock).mockResolvedValue([]);
 
@@ -281,7 +273,7 @@ describe('SmartPlaylistModal Coverage', () => {
   });
 
   it('watcher populates all fields correctly from existing playlist', async () => {
-    mockUIState.isSmartPlaylistModalVisible = false;
+    useUIStore().isSmartPlaylistModalVisible = false;
     const criteria = {
       minRating: 3,
       minDuration: 120, // 2 mins
@@ -298,7 +290,7 @@ describe('SmartPlaylistModal Coverage', () => {
     const wrapper = mount(SmartPlaylistModal, { props: { playlistToEdit } });
 
     // Trigger open
-    mockUIState.isSmartPlaylistModalVisible = true;
+    useUIStore().isSmartPlaylistModalVisible = true;
     await wrapper.vm.$nextTick();
 
     expect((wrapper.vm as any).name).toBe('Detail Test');
@@ -310,10 +302,10 @@ describe('SmartPlaylistModal Coverage', () => {
   });
 
   it('opening modal in create mode does not populate form', async () => {
-    mockUIState.isSmartPlaylistModalVisible = false;
+    useUIStore().isSmartPlaylistModalVisible = false;
     const wrapper = mount(SmartPlaylistModal); // No playlistToEdit
 
-    mockUIState.isSmartPlaylistModalVisible = true;
+    useUIStore().isSmartPlaylistModalVisible = true;
     await wrapper.vm.$nextTick();
 
     expect((wrapper.vm as any).name).toBe('');

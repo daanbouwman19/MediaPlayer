@@ -1,6 +1,9 @@
-import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest';
 import { mount } from '@vue/test-utils';
+import { setActivePinia } from 'pinia';
+import { createTestingPinia } from '@pinia/testing';
 import MediaControls from '@/components/MediaControls.vue';
+import { useUIStore } from '@/composables/useUIStore';
 import { api } from '@/api';
 
 vi.mock('@/api', () => ({
@@ -18,7 +21,6 @@ const observeMock = vi.fn();
 beforeAll(() => {
   global.ResizeObserver = class ResizeObserver {
     constructor(callback: any) {
-      // Immediate callback invocation to simulate initial size
       callback([{ contentRect: { width: 1000 } }]);
     }
     observe = observeMock;
@@ -66,7 +68,6 @@ vi.mock('@/components/icons/SpinnerIcon.vue', () => ({
   default: { template: '<svg class="spinner-icon-mock"></svg>' },
 }));
 
-// Mock ProgressBar to avoid deep rendering issues or to simplify
 vi.mock('@/components/ProgressBar.vue', () => ({
   default: {
     template:
@@ -75,13 +76,12 @@ vi.mock('@/components/ProgressBar.vue', () => ({
   },
 }));
 
-vi.mock('@/composables/useUIStore', () => ({
-  useUIStore: () => ({
-    isSidebarVisible: { value: false },
-  }),
-}));
-
 describe('MediaControls.vue', () => {
+  beforeEach(() => {
+    setActivePinia(createTestingPinia({ createSpy: vi.fn }));
+    useUIStore().isSidebarVisible = false;
+  });
+
   // Mock getBoundingClientRect
   beforeAll(() => {
     Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', {
@@ -168,7 +168,6 @@ describe('MediaControls.vue', () => {
     expect(prevButton.attributes('disabled')).toBeDefined();
     expect(prevButton.attributes('aria-label')).toBe('No previous media');
 
-    // Ensure the 'next' button is not disabled
     const nextButton = wrapper.find('button[title="Next media (X)"]');
     expect(nextButton.attributes('disabled')).toBeUndefined();
   });
@@ -196,11 +195,9 @@ describe('MediaControls.vue', () => {
       props: { ...defaultProps, isImage: false },
     });
 
-    // Initially paused
     const playBtn = wrapper.find('button[aria-label="Play video (Space)"]');
     expect(playBtn.attributes('title')).toBe('Play video (Space)');
 
-    // Update to playing
     await wrapper.setProps({ isPlaying: true });
     const pauseBtn = wrapper.find('button[aria-label="Pause video (Space)"]');
     expect(pauseBtn.attributes('title')).toBe('Pause video (Space)');
@@ -221,13 +218,10 @@ describe('MediaControls.vue', () => {
   it('should have accessible attributes on heatmap loading indicator', async () => {
     vi.useFakeTimers();
 
-    // Mock getHeatmap to hang/resolve slowly so isHeatmapLoading stays true long enough
     vi.mocked(api.getHeatmap).mockImplementation(() => new Promise(() => {}));
 
     const wrapper = mount(MediaControls, { props: defaultProps });
 
-    // Trigger the watcher (fetchHeatmap is called immediately)
-    // Advance time past the 1000ms debounce
     await vi.advanceTimersByTimeAsync(1100);
     await wrapper.vm.$nextTick();
 
@@ -256,21 +250,13 @@ describe('MediaControls.vue', () => {
 
     const wrapper = mount(MediaControls, { props: defaultProps });
 
-    // Advance past debounce
     await vi.advanceTimersByTimeAsync(1100);
 
-    // Check if api calls were made
     expect(api.getHeatmap).toHaveBeenCalledWith('/test.jpg', 100);
     expect(api.getMetadata).toHaveBeenCalledWith(['/test.jpg']);
 
-    // Advance polling interval
     await vi.advanceTimersByTimeAsync(2100);
 
-    // Check progress polling (might happen if loading takes time, but here we resolved immediately)
-    // Actually getHeatmap resolved immediately in this test, so isHeatmapLoading becomes false.
-    // So polling loop might exit or not trigger depending on microtasks order.
-
-    // Verify watched segments updated
     expect((wrapper.vm as any).watchedSegments).toEqual([
       { start: 0, end: 10 },
     ]);
@@ -291,18 +277,11 @@ describe('MediaControls.vue', () => {
   it('updates layout on resize', async () => {
     const wrapper = mount(MediaControls, { props: defaultProps });
 
-    // Simulate resize
     global.innerWidth = 500;
-    global.innerHeight = 800; // Portrait
+    global.innerHeight = 800;
     global.dispatchEvent(new Event('resize'));
 
     await wrapper.vm.$nextTick();
-
-    // Check if classes updated (implicit check via snapshot or class presence)
-    // Ideally we would access component state, but <script setup> makes it closed by default.
-    // We rely on checking rendered output if possible.
-    // e.g. checking navButtonClass changes.
-    // But since logic is inside computed props and applied to classes, we assume it works if no error.
   });
 
   it('handles heatmap fetch error', async () => {

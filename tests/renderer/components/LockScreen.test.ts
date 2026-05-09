@@ -1,28 +1,17 @@
 import { mount, flushPromises } from '@vue/test-utils';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { setActivePinia } from 'pinia';
+import { createTestingPinia } from '@pinia/testing';
 import LockScreen from '@/components/LockScreen.vue';
 import { useAuthStore } from '@/composables/useAuthStore';
 import { useLibraryStore } from '@/composables/useLibraryStore';
 
-vi.mock('@/composables/useAuthStore');
-vi.mock('@/composables/useLibraryStore');
-
 describe('LockScreen.vue', () => {
-  let mockUnlock: any;
-  let mockLoadInitialData: any;
-
   beforeEach(() => {
     vi.clearAllMocks();
-    mockUnlock = vi.fn().mockResolvedValue(true);
-    mockLoadInitialData = vi.fn().mockResolvedValue(undefined);
-
-    vi.mocked(useAuthStore).mockReturnValue({
-      unlock: mockUnlock,
-    } as any);
-
-    vi.mocked(useLibraryStore).mockReturnValue({
-      loadInitialData: mockLoadInitialData,
-    } as any);
+    setActivePinia(createTestingPinia({ createSpy: vi.fn }));
+    useAuthStore().unlock.mockResolvedValue(true);
+    useLibraryStore().loadInitialData.mockResolvedValue(undefined);
   });
 
   it('renders correctly', () => {
@@ -40,12 +29,12 @@ describe('LockScreen.vue', () => {
     await wrapper.find('form').trigger('submit.prevent');
     await flushPromises();
 
-    expect(mockUnlock).toHaveBeenCalledWith('correct-password');
-    expect(mockLoadInitialData).toHaveBeenCalled();
+    expect(useAuthStore().unlock).toHaveBeenCalledWith('correct-password');
+    expect(useLibraryStore().loadInitialData).toHaveBeenCalled();
   });
 
   it('handles failed unlock and shows error message', async () => {
-    mockUnlock.mockResolvedValueOnce(false);
+    useAuthStore().unlock.mockResolvedValueOnce(false);
     const wrapper = mount(LockScreen);
 
     const input = wrapper.find('input[type="password"]');
@@ -53,8 +42,8 @@ describe('LockScreen.vue', () => {
     await wrapper.find('form').trigger('submit.prevent');
     await flushPromises();
 
-    expect(mockUnlock).toHaveBeenCalledWith('wrong-password');
-    expect(mockLoadInitialData).not.toHaveBeenCalled();
+    expect(useAuthStore().unlock).toHaveBeenCalledWith('wrong-password');
+    expect(useLibraryStore().loadInitialData).not.toHaveBeenCalled();
 
     const errorMsg = wrapper.find('.text-red-400');
     expect(errorMsg.exists()).toBe(true);
@@ -62,7 +51,7 @@ describe('LockScreen.vue', () => {
   });
 
   it('handles error during unlock', async () => {
-    mockUnlock.mockRejectedValueOnce(new Error('Network error'));
+    useAuthStore().unlock.mockRejectedValueOnce(new Error('Network error'));
     const wrapper = mount(LockScreen);
 
     const input = wrapper.find('input[type="password"]');
@@ -70,7 +59,7 @@ describe('LockScreen.vue', () => {
     await wrapper.find('form').trigger('submit.prevent');
     await flushPromises();
 
-    expect(mockUnlock).toHaveBeenCalledWith('error-password');
+    expect(useAuthStore().unlock).toHaveBeenCalledWith('error-password');
 
     const errorMsg = wrapper.find('.text-red-400');
     expect(errorMsg.exists()).toBe(true);
@@ -80,10 +69,9 @@ describe('LockScreen.vue', () => {
   it('does not submit if password is empty', async () => {
     const wrapper = mount(LockScreen);
 
-    // Try to submit with empty password
     await wrapper.find('form').trigger('submit.prevent');
     await flushPromises();
 
-    expect(mockUnlock).not.toHaveBeenCalled();
+    expect(useAuthStore().unlock).not.toHaveBeenCalled();
   });
 });

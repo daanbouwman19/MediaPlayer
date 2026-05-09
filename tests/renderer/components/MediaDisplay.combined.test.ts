@@ -1,6 +1,8 @@
-import { describe, it, expect, vi, beforeEach, Mock } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
-import { ref, reactive } from 'vue';
+import { ref } from 'vue';
+import { setActivePinia } from 'pinia';
+import { createTestingPinia } from '@pinia/testing';
 import MediaDisplay from '@/components/MediaDisplay.vue';
 import MediaControls from '@/components/MediaControls.vue';
 import { useSlideshow } from '@/composables/useSlideshow';
@@ -53,19 +55,12 @@ vi.mock('@/components/VideoPlayer.vue', () => ({
 
 vi.mock('@/api');
 
+// Keep non-Pinia composables mocked
 vi.mock('@/composables/useSlideshow');
-vi.mock('@/composables/useLibraryStore');
-vi.mock('@/composables/usePlayerStore');
-vi.mock('@/composables/useUIStore');
-vi.mock('@/composables/usePlaylistStore');
 vi.mock('@/composables/useMediaLoader');
 vi.mock('@/composables/useTranscoder');
 
 describe('MediaDisplay Combined Tests', () => {
-  let mockLibraryState: any;
-  let mockPlayerState: any;
-  let mockPlaylistState: any;
-  let mockUIState: any;
   let mockSlideshow: any;
   let mockMediaLoader: any;
   let mockTranscoder: any;
@@ -73,51 +68,28 @@ describe('MediaDisplay Combined Tests', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    mockLibraryState = reactive({
-      imageExtensionsSet: new Set(['.jpg', '.png']),
-      videoExtensionsSet: new Set(['.mp4']),
-      mediaUrlGenerator: (path: string) => `media://${path}`,
-      mediaDirectories: [],
-    });
+    setActivePinia(createTestingPinia({ createSpy: vi.fn }));
 
-    mockPlayerState = reactive({
-      isSlideshowActive: false,
-      isTimerRunning: false,
-      mainVideoElement: null,
-      pauseTimerOnPlay: false,
-    });
+    // Set Pinia store state
+    useLibraryStore().imageExtensionsSet = new Set(['.jpg', '.png']) as any;
+    useLibraryStore().videoExtensionsSet = new Set(['.mp4']) as any;
+    useLibraryStore().mediaUrlGenerator = ((path: string) => `media://${path}`) as any;
+    useLibraryStore().mediaDirectories = [];
 
-    mockPlaylistState = reactive({
-      currentItem: null,
-      history: [],
-      queue: [],
-    });
+    usePlayerStore().isSlideshowActive = false;
+    usePlayerStore().isTimerRunning = false;
+    usePlayerStore().mainVideoElement = null;
+    usePlayerStore().pauseTimerOnPlay = false;
 
-    mockUIState = reactive({
-      mediaFilter: 'All',
-      viewMode: 'player',
-      isControlsVisible: true,
-      isSidebarVisible: true,
-      isSourcesModalVisible: false,
-    });
+    usePlaylistStore().currentItem = null;
+    usePlaylistStore().history = [];
+    usePlaylistStore().queue = [];
 
-    (useLibraryStore as unknown as Mock).mockReturnValue(mockLibraryState);
-
-    (usePlayerStore as unknown as Mock).mockReturnValue(
-      Object.assign(mockPlayerState, {
-        pauseTimerOnPlay: ref(false),
-        resetState: vi.fn(),
-        stopSlideshow: vi.fn(),
-      }),
-    );
-
-    (usePlaylistStore as unknown as Mock).mockReturnValue(
-      Object.assign(mockPlaylistState, {
-        state: mockPlaylistState,
-        playNext: vi.fn(),
-        playPrevious: vi.fn(),
-      }) as any,
-    );
+    useUIStore().mediaFilter = 'All';
+    useUIStore().viewMode = 'player';
+    useUIStore().isControlsVisible = true;
+    useUIStore().isSidebarVisible = true;
+    useUIStore().isSourcesModalVisible = false;
 
     mockMediaLoader = {
       mediaUrl: ref(null),
@@ -138,8 +110,6 @@ describe('MediaDisplay Combined Tests', () => {
     };
     (useTranscoder as Mock).mockReturnValue(mockTranscoder);
 
-    (useUIStore as unknown as Mock).mockReturnValue(mockUIState);
-
     mockSlideshow = {
       navigateMedia: vi.fn(),
       resumeSlideshowTimer: vi.fn(),
@@ -155,13 +125,13 @@ describe('MediaDisplay Combined Tests', () => {
 
   it('loads media when currentItem changes', async () => {
     mount(MediaDisplay);
-    mockPlaylistState.currentItem = { path: '/test.jpg' };
+    usePlaylistStore().currentItem = { path: '/test.jpg' } as any;
     await flushPromises();
     expect(mockMediaLoader.loadMedia).toHaveBeenCalled();
   });
 
   it('updates rating', async () => {
-    mockPlaylistState.currentItem = { path: '/test.jpg', rating: 0 };
+    usePlaylistStore().currentItem = { path: '/test.jpg', rating: 0 } as any;
     const wrapper = mount(MediaDisplay);
     await flushPromises();
     const controls = wrapper.findComponent(MediaControls);
@@ -178,8 +148,8 @@ describe('MediaDisplay Combined Tests', () => {
 
   describe('Slideshow Video Handling', () => {
     it('should navigate to next slide if video ends and timer is NOT running', async () => {
-      mockPlayerState.isTimerRunning = false;
-      mockPlaylistState.currentItem = { path: '/test.mp4' };
+      usePlayerStore().isTimerRunning = false;
+      usePlaylistStore().currentItem = { path: '/test.mp4' } as any;
       mockMediaLoader.mediaUrl.value = 'media://test.mp4';
       mockMediaLoader.isLoading.value = false;
 
@@ -193,8 +163,8 @@ describe('MediaDisplay Combined Tests', () => {
     });
 
     it('should loop video if video ends and timer IS running (short video)', async () => {
-      mockPlayerState.isTimerRunning = true;
-      mockPlaylistState.currentItem = { path: '/test.mp4' };
+      usePlayerStore().isTimerRunning = true;
+      usePlaylistStore().currentItem = { path: '/test.mp4' } as any;
       mockMediaLoader.mediaUrl.value = 'media://test.mp4';
       mockMediaLoader.isLoading.value = false;
 
@@ -206,15 +176,13 @@ describe('MediaDisplay Combined Tests', () => {
 
       // Navigate should NOT be called, instead it should loop the video (play)
       expect(mockSlideshow.navigateMedia).not.toHaveBeenCalled();
-      // Test mock doesn't easily expose the videoElement ref through to test without jumping through hoops,
-      // but we know it's not calling navigateMedia which is the most important part.
     });
 
     it('should pause timer if video duration is longer than timer duration and we dont pause on play automatically', async () => {
-      mockPlayerState.isTimerRunning = true;
-      mockPlayerState.pauseTimerOnPlay = false; // Add this explicitly to hit the else branch
-      mockPlayerState.timerDuration = 5;
-      mockPlaylistState.currentItem = { path: '/test.mp4' };
+      usePlayerStore().isTimerRunning = true;
+      usePlayerStore().pauseTimerOnPlay = false;
+      usePlayerStore().timerDuration = 5;
+      usePlaylistStore().currentItem = { path: '/test.mp4' } as any;
       mockMediaLoader.mediaUrl.value = 'media://test.mp4';
       mockMediaLoader.isLoading.value = false;
 

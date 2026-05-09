@@ -8,7 +8,8 @@ import {
   type Mock,
 } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
-import { reactive, toRefs, computed } from 'vue';
+import { setActivePinia } from 'pinia';
+import { createTestingPinia } from '@pinia/testing';
 
 import MediaGrid from '@/components/MediaGrid.vue';
 import { useLibraryStore } from '@/composables/useLibraryStore';
@@ -16,12 +17,6 @@ import { usePlayerStore } from '@/composables/usePlayerStore';
 import { usePlaylistStore } from '@/composables/usePlaylistStore';
 import { useUIStore } from '@/composables/useUIStore';
 import { api } from '@/api';
-
-// Mock stores
-vi.mock('@/composables/useLibraryStore');
-vi.mock('@/composables/usePlayerStore');
-vi.mock('@/composables/usePlaylistStore');
-vi.mock('@/composables/useUIStore');
 
 // Mock api
 vi.mock('@/api', () => ({
@@ -46,60 +41,34 @@ class ResizeObserverMock {
 global.ResizeObserver = ResizeObserverMock as any;
 
 describe('MediaGrid.vue', () => {
-  let mockLibraryState: any;
-  let mockPlayerState: any;
-  let mockPlaylistState: any;
-  let mockUIState: any;
-
   beforeEach(() => {
-    mockLibraryState = reactive({
-      imageExtensionsSet: new Set(['.jpg', '.png']),
-      videoExtensionsSet: new Set(['.mp4', '.webm']),
-      supportedExtensions: {
-        images: ['.jpg', '.png'],
-        videos: ['.mp4', '.webm'],
-      },
-      mediaUrlGenerator: (path: string) =>
-        `http://localhost:1234/${encodeURIComponent(path)}`,
-      thumbnailUrlGenerator: (path: string) =>
-        `http://localhost:1234/thumb/${encodeURIComponent(path)}`,
-      gridMediaFiles: [],
-    });
-
-    mockPlayerState = reactive({
-      isSlideshowActive: false,
-      isTimerRunning: false,
-    });
-
-    mockPlaylistState = reactive({
-      history: [],
-      queue: [],
-      currentItem: null,
-    });
-
-    mockUIState = reactive({
-      viewMode: 'grid',
-      gridMediaFiles: [],
-    });
+    setActivePinia(createTestingPinia({ createSpy: vi.fn }));
 
     vi.clearAllMocks();
     (ResizeObserverMock as any).mock.calls = [];
 
-    (useLibraryStore as unknown as Mock).mockReturnValue(mockLibraryState);
+    // Set Pinia store state
+    useLibraryStore().imageExtensionsSet = new Set(['.jpg', '.png']) as any;
+    useLibraryStore().videoExtensionsSet = new Set(['.mp4', '.webm']) as any;
+    useLibraryStore().supportedExtensions = {
+      images: ['.jpg', '.png'],
+      videos: ['.mp4', '.webm'],
+      all: ['.jpg', '.png', '.mp4', '.webm'],
+    };
+    useLibraryStore().mediaUrlGenerator = ((path: string) =>
+      `http://localhost:1234/${encodeURIComponent(path)}`) as any;
+    useLibraryStore().thumbnailUrlGenerator = ((path: string) =>
+      `http://localhost:1234/thumb/${encodeURIComponent(path)}`) as any;
 
-    (usePlayerStore as unknown as Mock).mockReturnValue(mockPlayerState);
+    usePlayerStore().isSlideshowActive = false;
+    usePlayerStore().isTimerRunning = false;
 
-    const playlistStateRefs = toRefs(mockPlaylistState);
-    (usePlaylistStore as unknown as Mock).mockReturnValue({
-      state: mockPlaylistState,
-      currentItem: playlistStateRefs.currentItem,
-      hasPrevious: computed(() => mockPlaylistState.history.length > 0),
-      hasNext: computed(() => mockPlaylistState.queue.length > 0),
-      setQueue: vi.fn(),
-      playNext: vi.fn(),
-    });
+    usePlaylistStore().history = [];
+    usePlaylistStore().queue = [];
+    usePlaylistStore().currentItem = null;
 
-    (useUIStore as unknown as Mock).mockReturnValue(mockUIState);
+    useUIStore().viewMode = 'grid';
+    useUIStore().gridMediaFiles = [];
 
     (api.getMediaUrlGenerator as Mock).mockResolvedValue(
       (path: string) => `http://localhost:1234/${encodeURIComponent(path)}`,
@@ -131,10 +100,10 @@ describe('MediaGrid.vue', () => {
   });
 
   it('renders grid items when gridMediaFiles has items', async () => {
-    mockUIState.gridMediaFiles = [
+    useUIStore().gridMediaFiles = [
       { path: '/path/to/image1.jpg', name: 'image1.jpg' },
       { path: '/path/to/video1.mp4', name: 'video1.mp4' },
-    ];
+    ] as any;
 
     const wrapper = mountGrid();
     await flushPromises();
@@ -152,7 +121,7 @@ describe('MediaGrid.vue', () => {
 
   it('handles item click correctly', async () => {
     const item1 = { path: '/path/to/image1.jpg', name: 'image1.jpg' };
-    mockUIState.gridMediaFiles = [item1];
+    useUIStore().gridMediaFiles = [item1] as any;
 
     const wrapper = mountGrid();
     await flushPromises();
@@ -171,7 +140,7 @@ describe('MediaGrid.vue', () => {
     expect(playlistStore.playNext).toHaveBeenCalledWith(
       expect.objectContaining(item1),
     );
-    expect(mockUIState.viewMode).toBe('player');
-    expect(mockPlayerState.isSlideshowActive).toBe(true);
+    expect(useUIStore().viewMode).toBe('player');
+    expect(usePlayerStore().isSlideshowActive).toBe(true);
   });
 });

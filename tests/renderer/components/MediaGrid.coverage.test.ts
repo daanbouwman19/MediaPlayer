@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
-import { reactive, ref, nextTick } from 'vue';
+import { ref, nextTick } from 'vue';
+import { setActivePinia } from 'pinia';
+import { createTestingPinia } from '@pinia/testing';
 import MediaGrid from '../../../src/renderer/components/MediaGrid.vue';
 import { api } from '../../../src/renderer/api';
 import { useLibraryStore } from '../../../src/renderer/composables/useLibraryStore';
@@ -10,11 +12,7 @@ import { usePlaylistStore } from '../../../src/renderer/composables/usePlaylistS
 import { useTranscodeQueue } from '../../../src/renderer/composables/useTranscodeQueue';
 import VirtualScroller from '../../../src/renderer/components/VirtualScroller.vue';
 
-// Mock dependencies
-vi.mock('../../../src/renderer/composables/useLibraryStore');
-vi.mock('../../../src/renderer/composables/usePlayerStore');
-vi.mock('../../../src/renderer/composables/useUIStore');
-vi.mock('../../../src/renderer/composables/usePlaylistStore');
+// Keep non-Pinia composables mocked
 vi.mock('../../../src/renderer/composables/useTranscodeQueue');
 vi.mock('../../../src/renderer/api');
 
@@ -33,9 +31,6 @@ class ResizeObserverMock {
 global.ResizeObserver = ResizeObserverMock as any;
 
 describe('MediaGrid.vue Coverage', () => {
-  let mockLibraryState: any;
-  let mockPlayerState: any;
-  let mockUIState: any;
   let mockAddJobs: any;
   let mockCancelJob: any;
   let mockStartPolling: any;
@@ -45,48 +40,32 @@ describe('MediaGrid.vue Coverage', () => {
     vi.resetAllMocks();
     (ResizeObserverMock as any).mock.calls = []; // Reset static mock calls
 
-    mockLibraryState = reactive({
-      supportedExtensions: {
-        images: ['.jpg', '.png'],
-        videos: ['.mp4', '.mkv'],
-        all: ['.jpg', '.png', '.mp4', '.mkv'],
-      },
-      imageExtensionsSet: new Set(['.jpg', '.png']),
-      videoExtensionsSet: new Set(['.mp4', '.mkv']),
-      mediaUrlGenerator: (path: string) => `url://${path}`,
-      thumbnailUrlGenerator: (path: string) => `thumb://${path}`,
-    });
+    setActivePinia(createTestingPinia({ createSpy: vi.fn }));
 
-    mockPlayerState = reactive({
-      displayedMediaFiles: [],
-      currentMediaIndex: -1,
-      currentMediaItem: null,
-      isSlideshowActive: false,
-      isTimerRunning: false,
-    });
+    // Set Pinia store state
+    useLibraryStore().supportedExtensions = {
+      images: ['.jpg', '.png'],
+      videos: ['.mp4', '.mkv'],
+      all: ['.jpg', '.png', '.mp4', '.mkv'],
+    };
+    useLibraryStore().imageExtensionsSet = new Set(['.jpg', '.png']) as any;
+    useLibraryStore().videoExtensionsSet = new Set(['.mp4', '.mkv']) as any;
+    useLibraryStore().mediaUrlGenerator = ((path: string) => `url://${path}`) as any;
+    useLibraryStore().thumbnailUrlGenerator = ((path: string) => `thumb://${path}`) as any;
 
-    mockUIState = reactive({
-      viewMode: 'grid',
-      gridMediaFiles: [],
-    });
+    usePlayerStore().isSlideshowActive = false;
+    usePlayerStore().isTimerRunning = false;
+
+    useUIStore().viewMode = 'grid';
+    useUIStore().gridMediaFiles = [];
+
+    usePlaylistStore().queue = [];
+    usePlaylistStore().currentItem = null;
 
     mockStartPolling = vi.fn();
     mockStopPolling = vi.fn();
     mockAddJobs = vi.fn().mockResolvedValue(undefined);
     mockCancelJob = vi.fn().mockResolvedValue(undefined);
-
-    (useLibraryStore as unknown as Mock).mockReturnValue(mockLibraryState);
-
-    (usePlayerStore as unknown as Mock).mockReturnValue(mockPlayerState);
-
-    (useUIStore as unknown as Mock).mockReturnValue(mockUIState);
-
-    (usePlaylistStore as unknown as Mock).mockReturnValue({
-      setQueue: vi.fn(),
-      playNext: vi.fn(),
-      clearPlaylist: vi.fn(),
-      state: reactive({ queue: [], currentItem: null }),
-    });
 
     (useTranscodeQueue as Mock).mockReturnValue({
       jobStatusMap: ref(new Map()),
@@ -107,9 +86,9 @@ describe('MediaGrid.vue Coverage', () => {
   const mountGrid = () => mount(MediaGrid);
 
   it('getExtension edge cases: no dot', async () => {
-    mockUIState.gridMediaFiles = [
+    useUIStore().gridMediaFiles = [
       { name: 'file-no-ext', path: '/path/to/file-no-ext', viewCount: 0 },
-    ];
+    ] as any;
     const wrapper = mountGrid();
     await flushPromises();
 
@@ -130,9 +109,9 @@ describe('MediaGrid.vue Coverage', () => {
   });
 
   it('getExtension edge cases: dot in directory name', async () => {
-    mockUIState.gridMediaFiles = [
+    useUIStore().gridMediaFiles = [
       { name: 'file', path: '/path.with.dot/file', viewCount: 0 },
-    ];
+    ] as any;
     const wrapper = mountGrid();
     await flushPromises();
 
@@ -152,9 +131,9 @@ describe('MediaGrid.vue Coverage', () => {
   });
 
   it('getExtension edge cases: dotfile', async () => {
-    mockUIState.gridMediaFiles = [
+    useUIStore().gridMediaFiles = [
       { name: '.gitignore', path: '/.gitignore', viewCount: 0 },
-    ];
+    ] as any;
     const wrapper = mountGrid();
     await flushPromises();
 
@@ -175,7 +154,7 @@ describe('MediaGrid.vue Coverage', () => {
 
   it('handleItemClick sets state correctly', async () => {
     const item = { name: 'img.jpg', path: '/img.jpg', viewCount: 0 };
-    mockUIState.gridMediaFiles = [item];
+    useUIStore().gridMediaFiles = [item] as any;
     const wrapper = mountGrid();
     await flushPromises();
 
@@ -193,22 +172,21 @@ describe('MediaGrid.vue Coverage', () => {
 
     await wrapper.find('button.grid-item').trigger('click');
 
-    expect(mockUIState.viewMode).toBe('player');
-    expect(mockPlayerState.isSlideshowActive).toBe(true);
-    // expect(mockPlayerState.currentMediaItem.path).toEqual(item.path);
+    expect(useUIStore().viewMode).toBe('player');
+    expect(usePlayerStore().isSlideshowActive).toBe(true);
   });
 
   it('closeGrid sets viewMode to player', async () => {
     const wrapper = mountGrid();
     await wrapper.find('button[title="Close Grid View"]').trigger('click');
-    expect(mockUIState.viewMode).toBe('player');
+    expect(useUIStore().viewMode).toBe('player');
   });
 
   it('uses getPosterUrl for videos', async () => {
     const item = { name: 'vid.mp4', path: '/vid.mp4', viewCount: 0 };
-    mockUIState.gridMediaFiles = [item];
+    useUIStore().gridMediaFiles = [item] as any;
     const mockThumbGen = vi.fn().mockReturnValue('thumb.jpg');
-    mockLibraryState.thumbnailUrlGenerator = mockThumbGen;
+    useLibraryStore().thumbnailUrlGenerator = mockThumbGen as any;
 
     const wrapper = mountGrid();
     await flushPromises();
@@ -233,10 +211,10 @@ describe('MediaGrid.vue Coverage', () => {
   });
 
   it('updates chunking when allMediaFiles changes', async () => {
-    mockUIState.gridMediaFiles = Array.from({ length: 50 }, (_, i) => ({
+    useUIStore().gridMediaFiles = Array.from({ length: 50 }, (_, i) => ({
       name: `${i}.jpg`,
       path: `${i}.jpg`,
-    }));
+    })) as any;
     const wrapper = mountGrid();
     await flushPromises();
 
@@ -258,9 +236,9 @@ describe('MediaGrid.vue Coverage', () => {
     );
 
     // Change data
-    mockUIState.gridMediaFiles = [
+    useUIStore().gridMediaFiles = [
       { name: 'new.jpg', path: 'new.jpg', viewCount: 0 },
-    ];
+    ] as any;
     await nextTick();
 
     // 1 item / 5 cols = 1 row
@@ -271,9 +249,9 @@ describe('MediaGrid.vue Coverage', () => {
 
   it('getMediaUrl returns empty if generator not ready', async () => {
     // Simulate delayed generator availability in store
-    mockLibraryState.mediaUrlGenerator = null;
+    useLibraryStore().mediaUrlGenerator = null as any;
 
-    mockUIState.gridMediaFiles = [{ name: 'img.jpg', path: '/img.jpg' }];
+    useUIStore().gridMediaFiles = [{ name: 'img.jpg', path: '/img.jpg' }] as any;
     const wrapper = mountGrid();
     await flushPromises();
 
@@ -293,14 +271,14 @@ describe('MediaGrid.vue Coverage', () => {
     expect(wrapper.find('img').attributes('src')).toBe('');
 
     // Update store state
-    mockLibraryState.mediaUrlGenerator = (path: string) => `thumb://${path}`;
+    useLibraryStore().mediaUrlGenerator = ((path: string) => `thumb://${path}`) as any;
     await nextTick();
 
     expect(wrapper.find('img').attributes('src')).toBe('thumb:///img.jpg');
   });
 
   it('handleImageError fallback to full URL', async () => {
-    mockUIState.gridMediaFiles = [{ name: 'img.jpg', path: '/img.jpg' }];
+    useUIStore().gridMediaFiles = [{ name: 'img.jpg', path: '/img.jpg' }] as any;
     const wrapper = mountGrid();
     await flushPromises();
 
@@ -323,14 +301,12 @@ describe('MediaGrid.vue Coverage', () => {
     await img.trigger('error');
 
     // Since handleImageError modifies the DOM element directly, we check the element property
-    // However, jsdom might not update 'attributes' via vue-test-utils automatically for direct DOM manip.
-    // Let's check the element's src property directly.
     expect(img.element.src).toBe('url:///img.jpg');
   });
 
   it('getDisplayName fallback to path parsing', async () => {
     const item = { path: '/some/path/file.jpg' } as any;
-    mockUIState.gridMediaFiles = [item];
+    useUIStore().gridMediaFiles = [item] as any;
     const wrapper = mountGrid();
     await flushPromises();
 
@@ -351,7 +327,7 @@ describe('MediaGrid.vue Coverage', () => {
 
   it('handleImageError final failure state', async () => {
     const item = { name: 'img.jpg', path: '/img.jpg' };
-    mockUIState.gridMediaFiles = [item];
+    useUIStore().gridMediaFiles = [item] as any;
     const wrapper = mountGrid();
     await flushPromises();
 
@@ -380,7 +356,7 @@ describe('MediaGrid.vue Coverage', () => {
 
   it('renders rating overlay when present', async () => {
     const item = { name: 'img.jpg', path: '/img.jpg', rating: 5 };
-    mockUIState.gridMediaFiles = [item];
+    useUIStore().gridMediaFiles = [item] as any;
     const wrapper = mountGrid();
     await flushPromises();
 
@@ -411,7 +387,7 @@ describe('MediaGrid.vue Coverage', () => {
 
   it('handleItemClick works even if image failed', async () => {
     const item = { name: 'img.jpg', path: '/img.jpg' };
-    mockUIState.gridMediaFiles = [item];
+    useUIStore().gridMediaFiles = [item] as any;
     const wrapper = mountGrid();
     await flushPromises();
 
@@ -434,8 +410,6 @@ describe('MediaGrid.vue Coverage', () => {
 
     // Click the failed item (which is now represented by the fallback div)
     await wrapper.find('button.grid-item').trigger('click');
-    // expect(mockState.currentMediaItem.path).toBe('/img.jpg');
-    // Check if the click handler was called or some state changed
   });
 
   it('calls startPolling on mount and stopPolling on unmount', async () => {
@@ -448,7 +422,7 @@ describe('MediaGrid.vue Coverage', () => {
 
   it('ctrl+click selects an item and shows action bar', async () => {
     const item = { name: 'img.jpg', path: '/img.jpg', viewCount: 0 };
-    mockUIState.gridMediaFiles = [item];
+    useUIStore().gridMediaFiles = [item] as any;
     const wrapper = mountGrid();
     await flushPromises();
 
@@ -468,12 +442,12 @@ describe('MediaGrid.vue Coverage', () => {
 
     // Action bar should appear with "1 selected"
     expect(wrapper.text()).toContain('1 selected');
-    expect(mockUIState.viewMode).toBe('grid'); // Did not navigate away
+    expect(useUIStore().viewMode).toBe('grid'); // Did not navigate away
   });
 
   it('ctrl+click deselects already-selected item', async () => {
     const item = { name: 'img.jpg', path: '/img.jpg', viewCount: 0 };
-    mockUIState.gridMediaFiles = [item];
+    useUIStore().gridMediaFiles = [item] as any;
     const wrapper = mountGrid();
     await flushPromises();
 
@@ -502,10 +476,10 @@ describe('MediaGrid.vue Coverage', () => {
   });
 
   it('shift+click range-selects items', async () => {
-    mockUIState.gridMediaFiles = [
+    useUIStore().gridMediaFiles = [
       { name: 'a.jpg', path: '/a.jpg', viewCount: 0 },
       { name: 'b.jpg', path: '/b.jpg', viewCount: 0 },
-    ];
+    ] as any;
     const wrapper = mountGrid();
     await flushPromises();
 
@@ -533,7 +507,7 @@ describe('MediaGrid.vue Coverage', () => {
 
   it('shift+click with no anchor falls through to plain click', async () => {
     const item = { name: 'img.jpg', path: '/img.jpg', viewCount: 0 };
-    mockUIState.gridMediaFiles = [item];
+    useUIStore().gridMediaFiles = [item] as any;
     const wrapper = mountGrid();
     await flushPromises();
 
@@ -553,12 +527,12 @@ describe('MediaGrid.vue Coverage', () => {
     await wrapper.vm.$nextTick();
 
     // Falls through to plain click → navigates
-    expect(mockUIState.viewMode).toBe('player');
+    expect(useUIStore().viewMode).toBe('player');
   });
 
   it('pre-transcode button calls addJobs and clears selection', async () => {
     const item = { name: 'img.jpg', path: '/img.jpg', viewCount: 0 };
-    mockUIState.gridMediaFiles = [item];
+    useUIStore().gridMediaFiles = [item] as any;
     const wrapper = mountGrid();
     await flushPromises();
 
@@ -593,7 +567,7 @@ describe('MediaGrid.vue Coverage', () => {
 
   it('clear selection button removes selected state', async () => {
     const item = { name: 'img.jpg', path: '/img.jpg', viewCount: 0 };
-    mockUIState.gridMediaFiles = [item];
+    useUIStore().gridMediaFiles = [item] as any;
     const wrapper = mountGrid();
     await flushPromises();
 
@@ -621,7 +595,7 @@ describe('MediaGrid.vue Coverage', () => {
 
   it('clear HLS button calls cancelJob for items with transcode jobs', async () => {
     const item = { name: 'vid.mp4', path: '/vid.mp4', viewCount: 0 };
-    mockUIState.gridMediaFiles = [item];
+    useUIStore().gridMediaFiles = [item] as any;
     const jobStatusMap = ref(new Map([['/vid.mp4', 'done']]));
     (useTranscodeQueue as Mock).mockReturnValue({
       jobStatusMap,
@@ -670,7 +644,7 @@ describe('MediaGrid.vue Coverage', () => {
 
   it('plain click after ctrl+click clears selection and navigates', async () => {
     const item = { name: 'img.jpg', path: '/img.jpg', viewCount: 0 };
-    mockUIState.gridMediaFiles = [item];
+    useUIStore().gridMediaFiles = [item] as any;
     const wrapper = mountGrid();
     await flushPromises();
 
@@ -693,7 +667,7 @@ describe('MediaGrid.vue Coverage', () => {
     // Plain click clears selection and plays
     await wrapper.find('button.grid-item').trigger('click');
     await wrapper.vm.$nextTick();
-    expect(mockUIState.viewMode).toBe('player');
+    expect(useUIStore().viewMode).toBe('player');
     expect(
       wrapper.find('[title="Pre-transcode selected files"]').exists(),
     ).toBe(false);

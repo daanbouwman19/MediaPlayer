@@ -1,15 +1,12 @@
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { mount } from '@vue/test-utils';
-import { reactive } from 'vue';
+import { setActivePinia } from 'pinia';
+import { createTestingPinia } from '@pinia/testing';
 import AlbumsList from '../../../src/renderer/components/AlbumsList.vue';
 import { useLibraryStore } from '../../../src/renderer/composables/useLibraryStore';
 import { usePlayerStore } from '../../../src/renderer/composables/usePlayerStore';
 import { useUIStore } from '../../../src/renderer/composables/useUIStore';
 import { api } from '../../../src/renderer/api';
-
-vi.mock('../../../src/renderer/composables/useLibraryStore');
-vi.mock('../../../src/renderer/composables/usePlayerStore');
-vi.mock('../../../src/renderer/composables/useUIStore');
 
 vi.mock('../../../src/renderer/composables/useSlideshow', () => ({
   useSlideshow: () => ({
@@ -30,41 +27,27 @@ vi.mock('../../../src/renderer/api', () => ({
 }));
 
 describe('AlbumsList Coverage (Filtering)', () => {
-  let mockLibraryState: any;
-  let mockPlayerState: any;
-  let mockUIState: any;
-
   beforeEach(() => {
     vi.resetAllMocks();
 
-    mockLibraryState = reactive({
-      allAlbums: [],
-      albumsSelectedForSlideshow: {},
-      smartPlaylists: [],
-      historyMedia: [],
-      mediaDirectories: [],
-    });
+    setActivePinia(createTestingPinia({ createSpy: vi.fn }));
 
-    mockPlayerState = reactive({
-      timerDuration: 5,
-      isTimerRunning: false,
-      timerProgress: 0,
-      isSlideshowActive: false,
-    });
+    useLibraryStore().allAlbums = [];
+    useLibraryStore().albumsSelectedForSlideshow = {};
+    useLibraryStore().smartPlaylists = [];
+    useLibraryStore().historyMedia = [];
+    useLibraryStore().mediaDirectories = [];
 
-    mockUIState = reactive({
-      isSourcesModalVisible: false,
-      isSmartPlaylistModalVisible: false,
-      gridMediaFiles: [],
-      viewMode: 'player',
-      playlistToEdit: null,
-    });
+    usePlayerStore().timerDuration = 5;
+    usePlayerStore().isTimerRunning = false;
+    usePlayerStore().timerProgress = 0;
+    usePlayerStore().isSlideshowActive = false;
 
-    (useLibraryStore as unknown as Mock).mockReturnValue(mockLibraryState);
-
-    (usePlayerStore as unknown as Mock).mockReturnValue(mockPlayerState);
-
-    (useUIStore as unknown as Mock).mockReturnValue(mockUIState);
+    useUIStore().isSourcesModalVisible = false;
+    useUIStore().isSmartPlaylistModalVisible = false;
+    useUIStore().gridMediaFiles = [];
+    useUIStore().viewMode = 'player';
+    useUIStore().playlistToEdit = null;
 
     (api.getSmartPlaylists as Mock).mockResolvedValue([]);
   });
@@ -72,11 +55,11 @@ describe('AlbumsList Coverage (Filtering)', () => {
   const mountList = () => mount(AlbumsList);
 
   it('filters by minDuration', async () => {
-    mockLibraryState.smartPlaylists = [
+    useLibraryStore().smartPlaylists = [
       { id: 1, name: 'Long', criteria: JSON.stringify({ minDuration: 60 }) },
-    ];
+    ] as any;
     // Mock allAlbums to contain the files we are testing
-    mockLibraryState.allAlbums = [
+    useLibraryStore().allAlbums = [
       {
         name: 'Root',
         children: [],
@@ -85,7 +68,7 @@ describe('AlbumsList Coverage (Filtering)', () => {
           { path: '/long.mp4', name: 'long.mp4' },
         ],
       },
-    ];
+    ] as any;
 
     // DB should return only matching items
     const items = [{ file_path: '/long.mp4', duration: 100 }];
@@ -103,15 +86,15 @@ describe('AlbumsList Coverage (Filtering)', () => {
     // Wait for async operations
     await new Promise(process.nextTick);
 
-    expect(mockUIState.gridMediaFiles).toHaveLength(1);
-    expect(mockUIState.gridMediaFiles[0].path).toBe('/long.mp4');
+    expect(useUIStore().gridMediaFiles).toHaveLength(1);
+    expect(useUIStore().gridMediaFiles[0].path).toBe('/long.mp4');
   });
 
   it('filters by minViews', async () => {
-    mockLibraryState.smartPlaylists = [
+    useLibraryStore().smartPlaylists = [
       { id: 1, name: 'Popular', criteria: JSON.stringify({ minViews: 5 }) },
-    ];
-    mockLibraryState.allAlbums = [
+    ] as any;
+    useLibraryStore().allAlbums = [
       {
         name: 'Root',
         children: [],
@@ -120,7 +103,7 @@ describe('AlbumsList Coverage (Filtering)', () => {
           { path: '/popular.mp4', name: 'popular.mp4' },
         ],
       },
-    ];
+    ] as any;
     // DB returns only popular
     const items = [{ file_path: '/popular.mp4', view_count: 10 }];
     (api.executeSmartPlaylist as Mock).mockResolvedValue(items);
@@ -135,15 +118,15 @@ describe('AlbumsList Coverage (Filtering)', () => {
 
     await new Promise(process.nextTick);
 
-    expect(mockUIState.gridMediaFiles).toHaveLength(1);
-    expect(mockUIState.gridMediaFiles[0].path).toBe('/popular.mp4');
+    expect(useUIStore().gridMediaFiles).toHaveLength(1);
+    expect(useUIStore().gridMediaFiles[0].path).toBe('/popular.mp4');
   });
 
   it('filters by maxViews', async () => {
-    mockLibraryState.smartPlaylists = [
+    useLibraryStore().smartPlaylists = [
       { id: 1, name: 'Unseen', criteria: JSON.stringify({ maxViews: 0 }) },
-    ];
-    mockLibraryState.allAlbums = [
+    ] as any;
+    useLibraryStore().allAlbums = [
       {
         name: 'Root',
         children: [],
@@ -152,7 +135,7 @@ describe('AlbumsList Coverage (Filtering)', () => {
           { path: '/unseen.mp4', name: 'unseen.mp4' },
         ],
       },
-    ];
+    ] as any;
     // DB returns only unseen
     const items = [{ file_path: '/unseen.mp4', view_count: 0 }];
     (api.executeSmartPlaylist as Mock).mockResolvedValue(items);
@@ -167,19 +150,19 @@ describe('AlbumsList Coverage (Filtering)', () => {
 
     await new Promise(process.nextTick);
 
-    expect(mockUIState.gridMediaFiles).toHaveLength(1);
-    expect(mockUIState.gridMediaFiles[0].path).toBe('/unseen.mp4');
+    expect(useUIStore().gridMediaFiles).toHaveLength(1);
+    expect(useUIStore().gridMediaFiles[0].path).toBe('/unseen.mp4');
   });
 
   it('filters by minDaysSinceView', async () => {
-    mockLibraryState.smartPlaylists = [
+    useLibraryStore().smartPlaylists = [
       {
         id: 1,
         name: 'Forgotten',
         criteria: JSON.stringify({ minDaysSinceView: 30 }),
       },
-    ];
-    mockLibraryState.allAlbums = [
+    ] as any;
+    useLibraryStore().allAlbums = [
       {
         name: 'Root',
         children: [],
@@ -189,7 +172,7 @@ describe('AlbumsList Coverage (Filtering)', () => {
           { path: '/never.mp4', name: 'never.mp4' },
         ],
       },
-    ];
+    ] as any;
     const now = Date.now();
     const oneDay = 24 * 60 * 60 * 1000;
     // DB returns only old and never
@@ -212,16 +195,16 @@ describe('AlbumsList Coverage (Filtering)', () => {
 
     await new Promise(process.nextTick);
 
-    expect(mockUIState.gridMediaFiles.map((f: any) => f.path)).toEqual([
+    expect(useUIStore().gridMediaFiles.map((f: any) => f.path)).toEqual([
       '/old.mp4',
       '/never.mp4',
     ]);
   });
 
   it('handles error in filtering', async () => {
-    mockLibraryState.smartPlaylists = [
+    useLibraryStore().smartPlaylists = [
       { id: 1, name: 'Broken', criteria: '{}' },
-    ];
+    ] as any;
     (api.executeSmartPlaylist as Mock).mockRejectedValue(new Error('API Fail'));
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 

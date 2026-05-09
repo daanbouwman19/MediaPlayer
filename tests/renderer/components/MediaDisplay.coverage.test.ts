@@ -1,6 +1,8 @@
-import { describe, it, expect, vi, beforeEach, Mock } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
-import { ref, reactive, computed } from 'vue';
+import { ref } from 'vue';
+import { setActivePinia } from 'pinia';
+import { createTestingPinia } from '@pinia/testing';
 import MediaDisplay from '@/components/MediaDisplay.vue';
 import MediaControls from '@/components/MediaControls.vue';
 import VideoPlayer from '@/components/VideoPlayer.vue';
@@ -82,20 +84,13 @@ vi.mock('@/components/VRVideoPlayer.vue', () => ({
 }));
 
 vi.mock('@/api');
+// Keep non-Pinia composables mocked
 vi.mock('@/composables/useSlideshow');
-vi.mock('@/composables/useLibraryStore');
-vi.mock('@/composables/usePlayerStore');
-vi.mock('@/composables/useUIStore');
-vi.mock('@/composables/usePlaylistStore');
 vi.mock('@/composables/useMediaLoader');
 vi.mock('@/composables/useTranscoder');
 vi.mock('@/composables/useToast');
 
 describe('MediaDisplay Coverage Boost', () => {
-  let mockLibrary: any;
-  let mockPlayer: any;
-  let mockPlaylist: any;
-  let mockUI: any;
   let mockSlideshow: any;
   let mockMediaLoader: any;
   let mockTranscoder: any;
@@ -104,44 +99,26 @@ describe('MediaDisplay Coverage Boost', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    mockLibrary = reactive({
-      imageExtensionsSet: new Set(['.jpg', '.png']),
-      mediaDirectories: [],
-      thumbnailUrlGenerator: (path: string) => `thumb://${path}`,
-    });
-    (useLibraryStore as unknown as Mock).mockReturnValue(mockLibrary);
+    setActivePinia(createTestingPinia({ createSpy: vi.fn }));
 
-    mockPlayer = reactive({
-      pauseTimerOnPlay: false,
-      isTimerRunning: false,
-      mainVideoElement: null,
-      isSlideshowActive: false,
-      timerDuration: 5,
-    });
-    (usePlayerStore as unknown as Mock).mockReturnValue(mockPlayer);
+    // Set Pinia store state
+    useLibraryStore().imageExtensionsSet = new Set(['.jpg', '.png']) as any;
+    useLibraryStore().mediaDirectories = [];
+    useLibraryStore().thumbnailUrlGenerator = ((path: string) => `thumb://${path}`) as any;
 
-    mockPlaylist = reactive({
-      currentItem: null,
-      queue: [],
-      history: [],
-    });
-    (usePlaylistStore as unknown as Mock).mockReturnValue(
-      Object.assign(mockPlaylist, {
-        hasNext: computed(() => mockPlaylist.queue.length > 0),
-        hasPrevious: computed(() => mockPlaylist.history.length > 0),
-        playNext: vi.fn(),
-        playPrevious: vi.fn(),
-        clearPlaylist: vi.fn(),
-        setQueue: vi.fn(),
-      }),
-    );
+    usePlayerStore().pauseTimerOnPlay = false;
+    usePlayerStore().isTimerRunning = false;
+    usePlayerStore().mainVideoElement = null;
+    usePlayerStore().isSlideshowActive = false;
+    usePlayerStore().timerDuration = 5;
 
-    mockUI = reactive({
-      isControlsVisible: true,
-      isSourcesModalVisible: false,
-      isSidebarVisible: true,
-    });
-    (useUIStore as unknown as Mock).mockReturnValue(mockUI);
+    usePlaylistStore().currentItem = null;
+    usePlaylistStore().queue = [];
+    usePlaylistStore().history = [];
+
+    useUIStore().isControlsVisible = true;
+    useUIStore().isSourcesModalVisible = false;
+    useUIStore().isSidebarVisible = true;
 
     mockSlideshow = {
       navigateMedia: vi.fn(),
@@ -187,30 +164,30 @@ describe('MediaDisplay Coverage Boost', () => {
     const wrapper = mount(MediaDisplay);
     expect(wrapper.text()).toContain('Welcome to Media Player');
     await wrapper.find('button.glass-button').trigger('click');
-    expect(mockUI.isSourcesModalVisible).toBe(true);
+    expect(useUIStore().isSourcesModalVisible).toBe(true);
   });
 
   it('shows library empty screen when media directories exist but no item selected', async () => {
-    mockLibrary.mediaDirectories = ['/path'];
+    useLibraryStore().mediaDirectories = ['/path'] as any;
     const wrapper = mount(MediaDisplay);
     expect(wrapper.text()).toContain('Select an album to start playback');
 
-    mockUI.isSidebarVisible = false;
+    useUIStore().isSidebarVisible = false;
     await flushPromises();
     expect(wrapper.text()).toContain('Open Library');
     await wrapper.find('button.glass-button').trigger('click');
-    expect(mockUI.isSidebarVisible).toBe(true);
+    expect(useUIStore().isSidebarVisible).toBe(true);
   });
 
   it('shows error message', async () => {
-    mockPlaylist.currentItem = { path: 'p' };
+    usePlaylistStore().currentItem = { path: 'p' } as any;
     mockMediaLoader.error.value = 'Failed to load';
     const wrapper = mount(MediaDisplay);
     expect(wrapper.text()).toContain('Failed to load');
   });
 
   it('shows unsupported format message', async () => {
-    mockPlaylist.currentItem = { path: 'video.hevc' };
+    usePlaylistStore().currentItem = { path: 'video.hevc' } as any;
     mockMediaLoader.isVideoSupported.value = false;
     const wrapper = mount(MediaDisplay);
     expect(wrapper.text()).toContain('Video Format Not Supported');
@@ -221,7 +198,7 @@ describe('MediaDisplay Coverage Boost', () => {
   });
 
   it('handles try transcoding button', async () => {
-    mockPlaylist.currentItem = { path: 'video.hevc' };
+    usePlaylistStore().currentItem = { path: 'video.hevc' } as any;
     mockMediaLoader.isVideoSupported.value = false;
     const wrapper = mount(MediaDisplay);
 
@@ -233,7 +210,7 @@ describe('MediaDisplay Coverage Boost', () => {
   });
 
   it('handles video player events', async () => {
-    mockPlaylist.currentItem = { path: 'video.mp4' };
+    usePlaylistStore().currentItem = { path: 'video.mp4' } as any;
     mockMediaLoader.mediaUrl.value = 'video-url';
     const wrapper = mount(MediaDisplay);
     await flushPromises();
@@ -242,7 +219,7 @@ describe('MediaDisplay Coverage Boost', () => {
 
     // Play
     await videoPlayer.vm.$emit('play');
-    expect(mockPlayer.pauseTimerOnPlay).toBe(false); // Default is false
+    expect(usePlayerStore().pauseTimerOnPlay).toBe(false); // Default is false
 
     // Pause
     await videoPlayer.vm.$emit('pause');
@@ -270,15 +247,13 @@ describe('MediaDisplay Coverage Boost', () => {
   });
 
   it('handles global keyboard shortcuts', async () => {
-    mockPlaylist.currentItem = { path: 'video.mp4' };
+    usePlaylistStore().currentItem = { path: 'video.mp4' } as any;
     mockMediaLoader.mediaUrl.value = 'video-url';
     mount(MediaDisplay);
     await flushPromises();
 
     // Space to toggle play
     window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Space' }));
-    // videoPlayerRef.value.togglePlay should be called - we need to check expose
-    // But since it's a mock, we can just check if it doesn't crash
 
     // ArrowRight to seek
     window.dispatchEvent(new KeyboardEvent('keydown', { code: 'ArrowRight' }));
@@ -294,8 +269,8 @@ describe('MediaDisplay Coverage Boost', () => {
   });
 
   it('handles image slideshow', async () => {
-    mockPlaylist.currentItem = { path: 'img.jpg' };
-    mockLibrary.imageExtensionsSet = new Set(['.jpg']);
+    usePlaylistStore().currentItem = { path: 'img.jpg' } as any;
+    useLibraryStore().imageExtensionsSet = new Set(['.jpg']) as any;
     mockMediaLoader.mediaUrl.value = 'img-url';
 
     mount(MediaDisplay);
@@ -308,7 +283,7 @@ describe('MediaDisplay Coverage Boost', () => {
   });
 
   it('handles rating and mute toggles', async () => {
-    mockPlaylist.currentItem = { path: 'v.mp4', rating: 1 };
+    usePlaylistStore().currentItem = { path: 'v.mp4', rating: 1 } as any;
     mockMediaLoader.mediaUrl.value = 'url';
     const wrapper = mount(MediaDisplay);
     await flushPromises();
@@ -317,7 +292,6 @@ describe('MediaDisplay Coverage Boost', () => {
 
     // Toggle Mute
     await controls.vm.$emit('toggle-mute');
-    // We'd need to check video element but it's internal
 
     // Set Rating
     (api.setRating as Mock).mockResolvedValue({ success: true });
@@ -332,7 +306,7 @@ describe('MediaDisplay Coverage Boost', () => {
   });
 
   it('handles VR mode', async () => {
-    mockPlaylist.currentItem = { path: 'v.mp4' };
+    usePlaylistStore().currentItem = { path: 'v.mp4' } as any;
     mockMediaLoader.mediaUrl.value = 'url';
     const wrapper = mount(MediaDisplay);
     await flushPromises();
@@ -350,7 +324,7 @@ describe('MediaDisplay Coverage Boost', () => {
   });
 
   it('handles media error and auto-transcode', async () => {
-    mockPlaylist.currentItem = { path: 'broken.mp4' };
+    usePlaylistStore().currentItem = { path: 'broken.mp4' } as any;
     mockMediaLoader.mediaUrl.value = 'url';
     const wrapper = mount(MediaDisplay);
     await flushPromises();
@@ -366,7 +340,7 @@ describe('MediaDisplay Coverage Boost', () => {
   });
 
   it('handles rating error', async () => {
-    mockPlaylist.currentItem = { path: 'v.mp4', rating: 1 };
+    usePlaylistStore().currentItem = { path: 'v.mp4', rating: 1 } as any;
     const wrapper = mount(MediaDisplay);
     await flushPromises();
 
@@ -386,16 +360,10 @@ describe('MediaDisplay Coverage Boost', () => {
   });
 
   it('handles fullscreen toggle with video element', async () => {
-    mockPlaylist.currentItem = { path: 'v.mp4' };
+    usePlaylistStore().currentItem = { path: 'v.mp4' } as any;
     mockMediaLoader.mediaUrl.value = 'url';
     const wrapper = mount(MediaDisplay);
     await flushPromises();
-
-    // Mock document methods
-
-    // We need to mock it on the video element too which is harder because it's inside the component
-    // But we can just trigger it and see if it doesn't crash,
-    // or try to find it via ref if exposed.
 
     const controls = wrapper.findComponent(MediaControls);
     await controls.vm.$emit('toggle-fullscreen');
@@ -417,7 +385,7 @@ describe('MediaDisplay Coverage Boost', () => {
   });
 
   it('handles tryTranscoding error', async () => {
-    mockPlaylist.currentItem = { path: 'v.mp4' };
+    usePlaylistStore().currentItem = { path: 'v.mp4' } as any;
     const wrapper = mount(MediaDisplay);
     mockTranscoder.startTranscoding.mockRejectedValue(new Error('Fail'));
 
@@ -426,7 +394,7 @@ describe('MediaDisplay Coverage Boost', () => {
   });
 
   it('handles keyboard seek boundaries', async () => {
-    mockPlaylist.currentItem = { path: 'v.mp4' };
+    usePlaylistStore().currentItem = { path: 'v.mp4' } as any;
     mockMediaLoader.mediaUrl.value = 'url';
     mockTranscoder.isTranscodingMode.value = true;
     mockTranscoder.transcodedDuration.value = 100;
@@ -446,7 +414,7 @@ describe('MediaDisplay Coverage Boost', () => {
   });
 
   it('handles persistWatchedSegments error', async () => {
-    mockPlaylist.currentItem = { path: 'v.mp4' };
+    usePlaylistStore().currentItem = { path: 'v.mp4' } as any;
     const wrapper = mount(MediaDisplay);
     await flushPromises();
 
@@ -459,11 +427,11 @@ describe('MediaDisplay Coverage Boost', () => {
   });
 
   it('restores saved playback position on video load', async () => {
-    mockLibrary.imageExtensionsSet = new Set(['.jpg']);
+    useLibraryStore().imageExtensionsSet = new Set(['.jpg']) as any;
     (api.getMetadata as Mock).mockResolvedValue({
       'v.mp4': { playbackPosition: 42, duration: 100 },
     });
-    mockPlaylist.currentItem = { name: 'v.mp4', path: 'v.mp4' };
+    usePlaylistStore().currentItem = { name: 'v.mp4', path: 'v.mp4' } as any;
     const wrapper = mount(MediaDisplay);
     await flushPromises();
     expect(api.getMetadata).toHaveBeenCalledWith(['v.mp4']);
@@ -474,22 +442,22 @@ describe('MediaDisplay Coverage Boost', () => {
     (api.getMetadata as Mock).mockResolvedValue({
       'v.mp4': { playbackPosition: 99, duration: 100 },
     });
-    mockPlaylist.currentItem = { name: 'v.mp4', path: 'v.mp4' };
+    usePlaylistStore().currentItem = { name: 'v.mp4', path: 'v.mp4' } as any;
     const wrapper = mount(MediaDisplay);
     await flushPromises();
     expect((wrapper.vm as any).savedCurrentTime).toBe(0);
   });
 
   it('skips metadata fetch for image media items', async () => {
-    mockLibrary.imageExtensionsSet = new Set(['.jpg']);
-    mockPlaylist.currentItem = { name: 'photo.jpg', path: 'photo.jpg' };
+    useLibraryStore().imageExtensionsSet = new Set(['.jpg']) as any;
+    usePlaylistStore().currentItem = { name: 'photo.jpg', path: 'photo.jpg' } as any;
     mount(MediaDisplay);
     await flushPromises();
     expect(api.getMetadata).not.toHaveBeenCalled();
   });
 
   it('persists playback position when video is paused', async () => {
-    mockPlaylist.currentItem = { name: 'v.mp4', path: 'v.mp4' };
+    usePlaylistStore().currentItem = { name: 'v.mp4', path: 'v.mp4' } as any;
     mockMediaLoader.mediaUrl.value = 'url';
     const wrapper = mount(MediaDisplay);
     await flushPromises();
@@ -501,7 +469,7 @@ describe('MediaDisplay Coverage Boost', () => {
   });
 
   it('persistPlaybackPosition swallows errors gracefully', async () => {
-    mockPlaylist.currentItem = { name: 'v.mp4', path: 'v.mp4' };
+    usePlaylistStore().currentItem = { name: 'v.mp4', path: 'v.mp4' } as any;
     const wrapper = mount(MediaDisplay);
     await flushPromises();
 
@@ -515,7 +483,7 @@ describe('MediaDisplay Coverage Boost', () => {
   });
 
   it('persistPlaybackPosition is a no-op when no current item', async () => {
-    mockPlaylist.currentItem = null;
+    usePlaylistStore().currentItem = null;
     const wrapper = mount(MediaDisplay);
     await flushPromises();
     await (wrapper.vm as any).persistPlaybackPosition(15);
@@ -523,7 +491,7 @@ describe('MediaDisplay Coverage Boost', () => {
   });
 
   it('persistPlaybackPosition rejects non-finite values', async () => {
-    mockPlaylist.currentItem = { name: 'v.mp4', path: 'v.mp4' };
+    usePlaylistStore().currentItem = { name: 'v.mp4', path: 'v.mp4' } as any;
     const wrapper = mount(MediaDisplay);
     await flushPromises();
     (api.updatePlaybackPosition as Mock).mockClear();
@@ -533,7 +501,7 @@ describe('MediaDisplay Coverage Boost', () => {
   });
 
   it('updates video element muted state when isMuted changes', async () => {
-    mockPlaylist.currentItem = { path: 'v.mp4' };
+    usePlaylistStore().currentItem = { path: 'v.mp4' } as any;
     mockMediaLoader.mediaUrl.value = 'url';
     const wrapper = mount(MediaDisplay);
     await flushPromises();
@@ -548,7 +516,7 @@ describe('MediaDisplay Coverage Boost', () => {
   });
 
   it('handles video playing event to clear loading states', async () => {
-    mockPlaylist.currentItem = { path: 'v.mp4' };
+    usePlaylistStore().currentItem = { path: 'v.mp4' } as any;
     mockMediaLoader.mediaUrl.value = 'url';
     const wrapper = mount(MediaDisplay);
     await flushPromises();
@@ -565,8 +533,8 @@ describe('MediaDisplay Coverage Boost', () => {
   });
 
   it('handles image media error', async () => {
-    mockPlaylist.currentItem = { path: 'img.jpg' };
-    mockLibrary.imageExtensionsSet = new Set(['.jpg']);
+    usePlaylistStore().currentItem = { path: 'img.jpg' } as any;
+    useLibraryStore().imageExtensionsSet = new Set(['.jpg']) as any;
     const wrapper = mount(MediaDisplay);
     await flushPromises();
 
@@ -578,11 +546,11 @@ describe('MediaDisplay Coverage Boost', () => {
     const wrapper = mount(MediaDisplay);
     const mockEl = { id: 'test-video' } as any;
     (wrapper.vm as any).handleVideoElementUpdate(mockEl);
-    expect(mockPlayer.mainVideoElement).toStrictEqual(mockEl);
+    expect(usePlayerStore().mainVideoElement).toStrictEqual(mockEl);
   });
 
   it('handles segment merging logic', async () => {
-    mockPlaylist.currentItem = { path: 'v.mp4' };
+    usePlaylistStore().currentItem = { path: 'v.mp4' } as any;
     const wrapper = mount(MediaDisplay);
     await flushPromises();
 
@@ -608,7 +576,7 @@ describe('MediaDisplay Coverage Boost', () => {
   });
 
   it('handles video buffering event', async () => {
-    mockPlaylist.currentItem = { path: 'v.mp4' };
+    usePlaylistStore().currentItem = { path: 'v.mp4' } as any;
     mockMediaLoader.mediaUrl.value = 'url';
     const wrapper = mount(MediaDisplay);
     await flushPromises();
@@ -618,7 +586,7 @@ describe('MediaDisplay Coverage Boost', () => {
   });
 
   it('handles time update without controls ref', async () => {
-    mockPlaylist.currentItem = { path: 'v.mp4' };
+    usePlaylistStore().currentItem = { path: 'v.mp4' } as any;
     const wrapper = mount(MediaDisplay);
     (wrapper.vm as any).mediaControlsRef = null;
     await (wrapper.vm as any).handleTimeUpdate(10);
@@ -641,7 +609,7 @@ describe('MediaDisplay Coverage Boost', () => {
   it('handles video element update with null', async () => {
     const wrapper = mount(MediaDisplay);
     (wrapper.vm as any).handleVideoElementUpdate(null);
-    expect(mockPlayer.mainVideoElement).toBeNull();
+    expect(usePlayerStore().mainVideoElement).toBeNull();
   });
 
   it('handles handleNext directly', () => {
@@ -651,7 +619,7 @@ describe('MediaDisplay Coverage Boost', () => {
   });
 
   it('handles trigger-transcode event', async () => {
-    mockPlaylist.currentItem = { path: 'v.mp4' };
+    usePlaylistStore().currentItem = { path: 'v.mp4' } as any;
     mockMediaLoader.mediaUrl.value = 'url';
     const wrapper = mount(MediaDisplay);
     await flushPromises();
@@ -661,7 +629,7 @@ describe('MediaDisplay Coverage Boost', () => {
   });
 
   it('handles openInVlc error', async () => {
-    mockPlaylist.currentItem = { path: 'v.mp4' };
+    usePlaylistStore().currentItem = { path: 'v.mp4' } as any;
     mockMediaLoader.isVideoSupported.value = false;
     const wrapper = mount(MediaDisplay);
     await flushPromises();
@@ -675,7 +643,7 @@ describe('MediaDisplay Coverage Boost', () => {
   });
 
   it('handles seek when not transcoding and video exists', async () => {
-    mockPlaylist.currentItem = { path: 'v.mp4' };
+    usePlaylistStore().currentItem = { path: 'v.mp4' } as any;
     mockMediaLoader.mediaUrl.value = 'url';
     const wrapper = mount(MediaDisplay);
     await flushPromises();
@@ -688,7 +656,7 @@ describe('MediaDisplay Coverage Boost', () => {
   });
 
   it('handles openInVlc when already opening', async () => {
-    mockPlaylist.currentItem = { path: 'v.mp4' };
+    usePlaylistStore().currentItem = { path: 'v.mp4' } as any;
     mockMediaLoader.isVideoSupported.value = false;
     const wrapper = mount(MediaDisplay);
     await flushPromises();

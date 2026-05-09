@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { setActivePinia, createPinia } from 'pinia';
 import { usePlayerStore } from '@/composables/usePlayerStore';
 
 describe('usePlayerStore', () => {
@@ -6,9 +7,8 @@ describe('usePlayerStore', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    setActivePinia(createPinia());
     store = usePlayerStore();
-    store.resetPlayerState();
-    store.stopSlideshow();
   });
 
   it('should initialize with default values', () => {

@@ -1,16 +1,12 @@
-import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
-import { reactive, computed } from 'vue';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { setActivePinia } from 'pinia';
+import { createTestingPinia } from '@pinia/testing';
 import { useSlideshow } from '@/composables/useSlideshow';
 import { useLibraryStore } from '@/composables/useLibraryStore';
 import { usePlayerStore } from '@/composables/usePlayerStore';
 import { usePlaylistStore } from '@/composables/usePlaylistStore';
-import { useUIStore } from '@/composables/useUIStore';
 import { createMockElectronAPI } from '../mocks/electronAPI';
 
-vi.mock('@/composables/useLibraryStore');
-vi.mock('@/composables/usePlayerStore');
-vi.mock('@/composables/usePlaylistStore');
-vi.mock('@/composables/useUIStore');
 vi.mock('@/api', () => ({
   api: { recordMediaView: vi.fn() },
 }));
@@ -18,114 +14,36 @@ vi.mock('@/api', () => ({
 global.window.electronAPI = createMockElectronAPI();
 
 describe('useSlideshow', () => {
-  let mockLibraryState: any;
-  let mockPlayerState: any;
-  let mockPlaylistState: any;
-  let mockUIState: any;
-
   beforeEach(() => {
     vi.clearAllMocks();
-
-    mockLibraryState = reactive({
-      globalMediaPoolForSelection: [],
-      albumsSelectedForSlideshow: {},
-      allAlbums: [],
-      totalMediaInPool: 0,
-      supportedExtensions: {
-        videos: ['.mp4', '.webm'],
-        images: ['.png', '.jpg', '.jpeg'],
-      },
-    });
-
-    mockPlayerState = reactive({
-      isSlideshowActive: false,
-      slideshowTimerId: null,
-      isTimerRunning: false,
-      timerDuration: 30,
-    });
-
-    mockPlaylistState = reactive({
-      history: [],
-      queue: [],
-      currentItem: null,
-    });
-
-    mockUIState = reactive({
-      mediaFilter: 'All',
-      isHistoryMode: false,
-    });
-
-    const imageExtensionsSet = computed(
-      () => new Set(mockLibraryState.supportedExtensions.images),
-    );
-    const videoExtensionsSet = computed(
-      () => new Set(mockLibraryState.supportedExtensions.videos),
-    );
-
-    (useLibraryStore as unknown as Mock).mockReturnValue(
-      Object.assign(mockLibraryState, {
-        clearMediaPool: vi.fn(),
-        imageExtensionsSet,
-        videoExtensionsSet,
-      }),
-    );
-
-    (usePlayerStore as unknown as Mock).mockReturnValue(
-      Object.assign(mockPlayerState, { stopSlideshow: vi.fn() }),
-    );
-
-    const playNext = vi.fn((item) => {
-      if (item) {
-        if (mockPlaylistState.currentItem) {
-          mockPlaylistState.history.push(mockPlaylistState.currentItem);
-        }
-        mockPlaylistState.currentItem = item;
-      } else if (mockPlaylistState.queue.length > 0) {
-        if (mockPlaylistState.currentItem) {
-          mockPlaylistState.history.push(mockPlaylistState.currentItem);
-        }
-        mockPlaylistState.currentItem = mockPlaylistState.queue.shift();
-      }
-    });
-    const playPrevious = vi.fn();
-    const clearPlaylist = vi.fn(() => {
-      mockPlaylistState.history = [];
-      mockPlaylistState.queue = [];
-      mockPlaylistState.currentItem = null;
-    });
-    const setQueue = vi.fn();
-    const hasPrevious = computed(() => mockPlaylistState.history.length > 0);
-    const hasNext = computed(() => mockPlaylistState.queue.length > 0);
-
-    (usePlaylistStore as unknown as Mock).mockReturnValue(
-      Object.assign(mockPlaylistState, {
-        playNext,
-        playPrevious,
-        clearPlaylist,
-        setQueue,
-        hasPrevious,
-        hasNext,
-      }),
-    );
-
-    (useUIStore as unknown as Mock).mockReturnValue(mockUIState);
+    setActivePinia(createTestingPinia({ stubActions: false, createSpy: vi.fn }));
+    useLibraryStore().supportedExtensions = {
+      videos: ['.mp4', '.webm'],
+      images: ['.png', '.jpg', '.jpeg'],
+      all: [],
+    };
   });
 
   describe('startSlideshow', () => {
     it('should build a media pool from selected albums including children', async () => {
-      mockLibraryState.allAlbums = [
+      const libraryStore = useLibraryStore();
+      const playerStore = usePlayerStore();
+
+      libraryStore.allAlbums = [
         {
           id: 'albumA',
           name: 'albumA',
           textures: [{ path: 'a1.png', name: 'a1.png' }],
           children: [],
         },
-      ];
-      mockLibraryState.albumsSelectedForSlideshow = { albumA: true };
+      ] as any;
+      libraryStore.albumsSelectedForSlideshow = { albumA: true };
+
       const { startSlideshow } = useSlideshow();
       await startSlideshow();
-      expect(mockLibraryState.globalMediaPoolForSelection.length).toBe(1);
-      expect(mockPlayerState.isSlideshowActive).toBe(true);
+
+      expect(libraryStore.globalMediaPoolForSelection.length).toBe(1);
+      expect(playerStore.isSlideshowActive).toBe(true);
     });
   });
 
@@ -134,7 +52,7 @@ describe('useSlideshow', () => {
       const album = { name: 'emptyAlbum', textures: [] };
       const { startIndividualAlbumSlideshow } = useSlideshow();
       await startIndividualAlbumSlideshow(album as any);
-      expect(mockPlayerState.isSlideshowActive).toBe(false);
+      expect(usePlayerStore().isSlideshowActive).toBe(false);
     });
 
     it('should start slideshow for a single album', async () => {
@@ -144,26 +62,28 @@ describe('useSlideshow', () => {
       };
       const { startIndividualAlbumSlideshow } = useSlideshow();
       await startIndividualAlbumSlideshow(album as any);
-      expect(mockPlayerState.isSlideshowActive).toBe(true);
-      expect(mockPlaylistState.currentItem.path).toBe('a1.png');
+      expect(usePlayerStore().isSlideshowActive).toBe(true);
+      expect(usePlaylistStore().currentItem?.path).toBe('a1.png');
     });
   });
 
   describe('displayMedia', () => {
     it('should resume slideshow timer for any media when timer is running', async () => {
-      mockPlayerState.isTimerRunning = true;
-      mockPlayerState.timerDuration = 5;
+      const playerStore = usePlayerStore();
+      const libraryStore = useLibraryStore();
+      playerStore.isTimerRunning = true;
+      playerStore.timerDuration = 5;
 
       const { pickAndDisplayNextMediaItem } = useSlideshow();
 
-      mockLibraryState.globalMediaPoolForSelection = [
+      libraryStore.globalMediaPoolForSelection = [
         { path: 'a1.mp4', name: 'a1.mp4' },
-      ];
+      ] as any;
 
       await pickAndDisplayNextMediaItem();
 
-      expect(mockPlayerState.isTimerRunning).toBe(true);
-      expect(mockPlayerState.slideshowTimerId).not.toBeNull();
+      expect(playerStore.isTimerRunning).toBe(true);
+      expect(playerStore.slideshowTimerId).not.toBeNull();
     });
   });
 });

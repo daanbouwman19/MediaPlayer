@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
 import { mount } from '@vue/test-utils';
-import { reactive, computed, ref } from 'vue';
+import { ref } from 'vue';
+import { setActivePinia } from 'pinia';
+import { createTestingPinia } from '@pinia/testing';
 import { usePlaylistStore } from '@/composables/usePlaylistStore';
 import { useMediaLoader } from '@/composables/useMediaLoader';
 import MediaDisplay from '@/components/MediaDisplay.vue';
@@ -13,11 +15,7 @@ import { useUIStore } from '@/composables/useUIStore';
 import { useSlideshow } from '@/composables/useSlideshow';
 import { api } from '@/api';
 
-// Mock the composables
-vi.mock('@/composables/useLibraryStore');
-vi.mock('@/composables/usePlayerStore');
-vi.mock('@/composables/useUIStore');
-vi.mock('@/composables/usePlaylistStore');
+// Keep non-Pinia composables mocked
 vi.mock('@/composables/useSlideshow');
 vi.mock('@/composables/useMediaLoader');
 
@@ -55,11 +53,6 @@ vi.mock('@/api', () => ({
 }));
 
 describe('Palette Accessibility Improvements', () => {
-  let mockLibraryState: any;
-  let mockPlayerState: any;
-  let mockPlaylistState: any;
-  let mockUIState: any;
-
   beforeEach(() => {
     // Ensure "Desktop" mode by default
     Object.defineProperty(window, 'innerWidth', {
@@ -68,58 +61,28 @@ describe('Palette Accessibility Improvements', () => {
       value: 1024,
     });
 
-    mockLibraryState = reactive({
-      imageExtensionsSet: new Set(['.jpg', '.png']),
-      videoExtensionsSet: new Set(['.mp4', '.mkv']),
-      mediaDirectories: [],
-      thumbnailUrlGenerator: vi.fn(),
-    });
+    setActivePinia(createTestingPinia({ createSpy: vi.fn }));
 
-    mockPlaylistState = reactive({
-      currentItem: { name: 'test.mp4', path: '/test.mp4' },
-      history: [],
-      queue: [{ name: 'next.mp4', path: '/next.mp4' }],
-    });
+    // Set Pinia store state
+    useLibraryStore().imageExtensionsSet = new Set(['.jpg', '.png']) as any;
+    useLibraryStore().videoExtensionsSet = new Set(['.mp4', '.mkv']) as any;
+    useLibraryStore().mediaDirectories = [];
+    useLibraryStore().thumbnailUrlGenerator = vi.fn() as any;
 
-    mockPlayerState = reactive({
-      displayedMediaFiles: [],
-      currentMediaIndex: 0,
-      isPlaying: false,
-      isSlideshowActive: false,
-      isTimerRunning: false,
-      pauseTimerOnPlay: false,
-      mainVideoElement: null,
-      slideshowTimerId: null,
-      currentMediaItem: { name: 'test.mp4', path: '/test.mp4' },
-    });
+    usePlaylistStore().currentItem = { name: 'test.mp4', path: '/test.mp4' } as any;
+    usePlaylistStore().history = [];
+    usePlaylistStore().queue = [{ name: 'next.mp4', path: '/next.mp4' }] as any;
 
-    mockUIState = reactive({
-      isControlsVisible: true,
-      isSourcesModalVisible: false,
-      isSidebarVisible: false,
-      viewMode: 'player',
-      gridMediaFiles: [], // Add this to prevent GridView crash
-    });
+    usePlayerStore().isSlideshowActive = false;
+    usePlayerStore().isTimerRunning = false;
+    usePlayerStore().pauseTimerOnPlay = false;
+    usePlayerStore().mainVideoElement = null;
 
-    (useLibraryStore as unknown as Mock).mockReturnValue(mockLibraryState);
-
-    mockPlayerState.pauseTimerOnPlay = false;
-    (usePlayerStore as unknown as Mock).mockReturnValue(mockPlayerState);
-
-    (useUIStore as unknown as Mock).mockReturnValue(mockUIState);
-
-    (usePlaylistStore as unknown as Mock).mockReturnValue(
-      Object.assign(mockPlaylistState, {
-        hasPrevious: computed(() => mockPlaylistState.history.length > 0),
-        hasNext: computed(() => mockPlaylistState.queue.length > 0),
-        setQueue: vi.fn(),
-        playNext: vi.fn((item: any) => {
-          mockPlayerState.currentMediaItem = item;
-        }),
-        playPrevious: vi.fn(),
-        clearPlaylist: vi.fn(),
-      }),
-    );
+    useUIStore().isControlsVisible = true;
+    useUIStore().isSourcesModalVisible = false;
+    useUIStore().isSidebarVisible = false;
+    useUIStore().viewMode = 'player';
+    useUIStore().gridMediaFiles = [];
 
     (useSlideshow as Mock).mockReturnValue({
       navigateMedia: vi.fn(),
@@ -162,7 +125,7 @@ describe('Palette Accessibility Improvements', () => {
       const wrapper = mount(MediaDisplay, commonMountOptions);
 
       // Add historical item to enable "Previous"
-      mockPlaylistState.history.push({ name: 'prev.mp4', path: '/prev.mp4' });
+      usePlaylistStore().history = [{ name: 'prev.mp4', path: '/prev.mp4' }] as any;
       await wrapper.vm.$nextTick();
 
       // Trigger ResizeObserver callback manually to ensure stars & buttons are evaluated
@@ -213,14 +176,14 @@ describe('Palette Accessibility Improvements', () => {
 
   describe('SourcesModal.vue', () => {
     it('close button should have accessible label', () => {
-      mockUIState.isSourcesModalVisible = true;
+      useUIStore().isSourcesModalVisible = true;
       const wrapper = mount(SourcesModal);
       const closeButton = wrapper.find('button[aria-label="Close"]');
       expect(closeButton.exists()).toBe(true);
     });
 
     it('modal container should have accessible role and label reference', () => {
-      mockUIState.isSourcesModalVisible = true;
+      useUIStore().isSourcesModalVisible = true;
       const wrapper = mount(SourcesModal);
       const modal = wrapper.find('[role="dialog"]');
       expect(modal.exists()).toBe(true);
@@ -228,11 +191,11 @@ describe('Palette Accessibility Improvements', () => {
     });
 
     it('remove buttons should have specific accessible labels', async () => {
-      mockUIState.isSourcesModalVisible = true;
-      mockLibraryState.mediaDirectories = [
+      useUIStore().isSourcesModalVisible = true;
+      useLibraryStore().mediaDirectories = [
         { path: '/movies', active: true, name: 'Movies' },
         { path: '/tv', active: false, name: 'TV' },
-      ];
+      ] as any;
       const wrapper = mount(SourcesModal);
       const removeButtons = wrapper.findAll('.remove-button');
       expect(removeButtons.length).toBe(2);

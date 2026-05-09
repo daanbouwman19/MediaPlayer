@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { setActivePinia, createPinia } from 'pinia';
 import { useAuthStore } from '@/composables/useAuthStore';
 
 const { mockGetLockStatus, mockUnlock } = vi.hoisted(() => ({
@@ -29,11 +30,8 @@ describe('useAuthStore', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    setActivePinia(createPinia());
     store = useAuthStore();
-    // Reset state directly since it's a singleton reactive object
-    store.isEnabled = false;
-    store.isLocked = false;
-    store.isInitialized = false;
   });
 
   it('should initialize with default values', () => {

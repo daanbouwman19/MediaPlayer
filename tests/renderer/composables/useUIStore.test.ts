@@ -1,23 +1,21 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
+import { setActivePinia, createPinia } from 'pinia';
 import { useUIStore } from '@/composables/useUIStore';
 
 describe('useUIStore', () => {
-  let store: ReturnType<typeof useUIStore>;
-
   beforeEach(() => {
-    store = useUIStore();
-    // No explicit reset, but we can manually reset if needed
-    store.viewMode = 'player';
-    store.mediaFilter = 'All';
+    setActivePinia(createPinia());
   });
 
   it('should initialize with default values', () => {
+    const store = useUIStore();
     expect(store.mediaFilter).toBe('All');
     expect(store.viewMode).toBe('player');
     expect(store.isSourcesModalVisible).toBe(false);
   });
 
   it('should update state correctly', () => {
+    const store = useUIStore();
     store.viewMode = 'grid';
     expect(store.viewMode).toBe('grid');
 
@@ -26,34 +24,31 @@ describe('useUIStore', () => {
   });
 
   it('should update theme mode', () => {
+    const store = useUIStore();
     store.setThemeMode('dark');
     expect(store.themeMode).toBe('dark');
   });
 
   describe('Theme Initialization', () => {
     it('should fallback to system if localStorage contains an invalid theme', async () => {
-      // Clear localStorage
       localStorage.clear();
       localStorage.setItem('themeMode', 'invalid-theme');
 
-      // We need to re-import the module to trigger the top-level logic
-      // Note: vitest and esm might make this tricky without resetModules
-      vi.resetModules();
-      const { useUIStore: useUIStoreReloaded } =
-        await import('../../../src/renderer/composables/useUIStore');
-      const reloadedStore = useUIStoreReloaded();
-
-      expect(reloadedStore.themeMode).toBe('system');
+      // No need to resetModules anymore as logic is inside defineStore factory
+      const store = useUIStore();
+      expect(store.themeMode).toBe('system');
     });
 
     it('should use system by default if localStorage is empty', async () => {
       localStorage.clear();
-      vi.resetModules();
-      const { useUIStore: useUIStoreReloaded } =
-        await import('../../../src/renderer/composables/useUIStore');
-      const reloadedStore = useUIStoreReloaded();
+      const store = useUIStore();
+      expect(store.themeMode).toBe('system');
+    });
 
-      expect(reloadedStore.themeMode).toBe('system');
+    it('should load saved theme from localStorage', async () => {
+      localStorage.setItem('themeMode', 'dark');
+      const store = useUIStore();
+      expect(store.themeMode).toBe('dark');
     });
   });
 });

@@ -1,26 +1,21 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { setActivePinia } from 'pinia';
+import { createTestingPinia } from '@pinia/testing';
 import {
   useTheme,
   _resetThemeModule,
 } from '../../../src/renderer/composables/useTheme';
 import { useUIStore } from '../../../src/renderer/composables/useUIStore';
-import { ref, reactive, toRefs } from 'vue';
-
-vi.mock('../../../src/renderer/composables/useUIStore');
 
 describe('useTheme', () => {
   let mockMatchMedia: any;
-  let mockThemeMode: any;
   let sharedMockMQ: any;
 
   beforeEach(() => {
     vi.clearAllMocks();
+    setActivePinia(createTestingPinia({ stubActions: false, createSpy: vi.fn }));
 
-    mockThemeMode = ref('system');
-
-    (useUIStore as unknown as any).mockReturnValue({
-      ...toRefs(reactive({ themeMode: mockThemeMode })),
-    });
+    useUIStore().themeMode = 'system';
 
     sharedMockMQ = {
       matches: false,
@@ -54,32 +49,33 @@ describe('useTheme', () => {
   });
 
   it('cycles theme mode', () => {
+    const uiStore = useUIStore();
     const { cycleTheme } = useTheme();
 
     cycleTheme();
-    expect(mockThemeMode.value).toBe('light');
+    expect(uiStore.themeMode).toBe('light');
 
     cycleTheme();
-    expect(mockThemeMode.value).toBe('dark');
+    expect(uiStore.themeMode).toBe('dark');
 
     cycleTheme();
-    expect(mockThemeMode.value).toBe('pink');
+    expect(uiStore.themeMode).toBe('pink');
 
     cycleTheme();
-    expect(mockThemeMode.value).toBe('cyberpunk-light');
+    expect(uiStore.themeMode).toBe('cyberpunk-light');
 
     cycleTheme();
-    expect(mockThemeMode.value).toBe('cyberpunk-dark');
+    expect(uiStore.themeMode).toBe('cyberpunk-dark');
 
     cycleTheme();
-    expect(mockThemeMode.value).toBe('cyberpunk-auto');
+    expect(uiStore.themeMode).toBe('cyberpunk-auto');
 
     cycleTheme();
-    expect(mockThemeMode.value).toBe('system');
+    expect(uiStore.themeMode).toBe('system');
   });
 
   it('applies dark theme when mode is dark', () => {
-    mockThemeMode.value = 'dark';
+    useUIStore().themeMode = 'dark';
     const { applyTheme } = useTheme();
     applyTheme();
 
@@ -87,7 +83,7 @@ describe('useTheme', () => {
   });
 
   it('applies light theme when mode is light', () => {
-    mockThemeMode.value = 'light';
+    useUIStore().themeMode = 'light';
     const { applyTheme } = useTheme();
     applyTheme();
 
@@ -96,7 +92,7 @@ describe('useTheme', () => {
 
   it('applies dark theme based on system preference when mode is system', () => {
     sharedMockMQ.matches = true;
-    mockThemeMode.value = 'system';
+    useUIStore().themeMode = 'system';
     const { applyTheme } = useTheme();
     applyTheme();
 
@@ -104,7 +100,7 @@ describe('useTheme', () => {
   });
 
   it('applies pink theme when mode is pink', () => {
-    mockThemeMode.value = 'pink';
+    useUIStore().themeMode = 'pink';
     const { applyTheme } = useTheme();
     applyTheme();
 
@@ -121,7 +117,7 @@ describe('useTheme', () => {
   it('removes previous theme classes when applying a new one', () => {
     document.documentElement.classList.add('dark', 'theme-old');
 
-    mockThemeMode.value = 'pink';
+    useUIStore().themeMode = 'pink';
     const { applyTheme } = useTheme();
     applyTheme();
 
@@ -133,7 +129,7 @@ describe('useTheme', () => {
 
   it('syncs system theme correctly', () => {
     sharedMockMQ.matches = false; // light
-    mockThemeMode.value = 'system';
+    useUIStore().themeMode = 'system';
     const { applyTheme } = useTheme();
     applyTheme();
 
@@ -150,7 +146,7 @@ describe('useTheme', () => {
     const originalAPI = window.electronAPI;
     delete (window as any).electronAPI;
 
-    mockThemeMode.value = 'dark';
+    useUIStore().themeMode = 'dark';
     const { applyTheme } = useTheme();
 
     // Should not throw

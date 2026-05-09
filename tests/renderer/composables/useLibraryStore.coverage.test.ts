@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { setActivePinia, createPinia } from 'pinia';
 // We must mock access to localStorage via stubGlobal BEFORE importing the module if we wanted to control it specifically during module init,
 // but for runtime access (inside functions), stubbing in beforeEach is fine.
 // However, to be safe, let's define the mock structure.
@@ -39,12 +40,12 @@ describe('useLibraryStore Coverage', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    setActivePinia(createPinia());
     localStorageMock.getItem.mockReset();
     localStorageMock.setItem.mockReset();
 
-    // Reset internal state of the store (reactive state is persistent across tests properly if we reset it)
+    // Reset internal state of the store
     store = useLibraryStore();
-    store.resetLibraryState();
   });
 
   describe('setupPersistenceWatcher', () => {

@@ -1,30 +1,21 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
-import { reactive, computed } from 'vue';
+import { setActivePinia } from 'pinia';
+import { createTestingPinia } from '@pinia/testing';
 import MediaGrid from '../../../src/renderer/components/MediaGrid.vue';
 import type { MediaFile } from '../../../src/core/types';
+import { useLibraryStore } from '../../../src/renderer/composables/useLibraryStore';
+import { usePlayerStore } from '../../../src/renderer/composables/usePlayerStore';
+import { useUIStore } from '../../../src/renderer/composables/useUIStore';
+import { usePlaylistStore } from '../../../src/renderer/composables/usePlaylistStore';
 import VirtualScroller from '../../../src/renderer/components/VirtualScroller.vue';
 
-// Mock dependencies
-vi.mock('../../../src/renderer/composables/useLibraryStore');
-vi.mock('../../../src/renderer/composables/usePlayerStore');
-vi.mock('../../../src/renderer/composables/useUIStore');
-vi.mock('../../../src/renderer/composables/usePlaylistStore');
 vi.mock('../../../src/renderer/api', () => ({
   api: {
     getMediaUrlGenerator: vi.fn(),
     getThumbnailUrlGenerator: vi.fn(),
   },
 }));
-
-const { useLibraryStore } =
-  await import('../../../src/renderer/composables/useLibraryStore');
-const { usePlayerStore } =
-  await import('../../../src/renderer/composables/usePlayerStore');
-const { useUIStore } =
-  await import('../../../src/renderer/composables/useUIStore');
-const { usePlaylistStore } =
-  await import('../../../src/renderer/composables/usePlaylistStore');
 
 // Typed ResizeObserver mock
 let lastResizeCallback: ResizeObserverCallback | null = null;
@@ -58,50 +49,26 @@ const triggerResize = (width: number) => {
 };
 
 describe('MediaGrid.vue (Virtual Scrolling)', () => {
-  let mockUIState: { gridMediaFiles: MediaFile[]; viewMode: string };
-  let mockPlayerState: {
-    currentMediaItem: MediaFile | null;
-    isSlideshowActive: boolean;
-    isTimerRunning: boolean;
-  };
-
   beforeEach(() => {
     vi.clearAllMocks();
     lastResizeCallback = null;
 
-    mockPlayerState = reactive({
-      currentMediaItem: null,
-      isSlideshowActive: false,
-      isTimerRunning: false,
-    });
+    setActivePinia(createTestingPinia({ createSpy: vi.fn }));
 
-    mockUIState = reactive({
-      gridMediaFiles: [] as MediaFile[],
-      viewMode: 'grid',
-    });
+    // Set Pinia store state
+    useLibraryStore().imageExtensionsSet = new Set(['.jpg', '.png']) as any;
+    useLibraryStore().videoExtensionsSet = new Set(['.mp4']) as any;
+    useLibraryStore().mediaUrlGenerator = ((p: string) => `url://${p}`) as any;
+    useLibraryStore().thumbnailUrlGenerator = ((p: string) => `thumb://${p}`) as any;
 
-    vi.mocked(useLibraryStore).mockReturnValue({
-      imageExtensionsSet: computed(() => new Set(['.jpg', '.png'])),
-      videoExtensionsSet: computed(() => new Set(['.mp4'])),
-      mediaUrlGenerator: computed(() => (p: string) => `url://${p}`),
-      thumbnailUrlGenerator: computed(() => (p: string) => `thumb://${p}`),
-      state: {},
-    } as unknown as ReturnType<typeof useLibraryStore>);
+    usePlayerStore().isSlideshowActive = false;
+    usePlayerStore().isTimerRunning = false;
 
-    vi.mocked(usePlayerStore).mockReturnValue(
-      mockPlayerState as unknown as ReturnType<typeof usePlayerStore>,
-    );
+    useUIStore().gridMediaFiles = [] as any;
+    useUIStore().viewMode = 'grid';
 
-    vi.mocked(useUIStore).mockReturnValue(
-      mockUIState as unknown as ReturnType<typeof useUIStore>,
-    );
-
-    vi.mocked(usePlaylistStore).mockReturnValue({
-      setQueue: vi.fn(),
-      playNext: vi.fn((item: MediaFile) => {
-        mockPlayerState.currentMediaItem = item;
-      }),
-    } as unknown as ReturnType<typeof usePlaylistStore>);
+    usePlaylistStore().queue = [];
+    usePlaylistStore().currentItem = null;
   });
 
   it('renders "No media files" when list is empty', async () => {
@@ -115,7 +82,7 @@ describe('MediaGrid.vue (Virtual Scrolling)', () => {
       path: `/path/img${i}.jpg`,
       name: `img${i}.jpg`,
     }));
-    mockUIState.gridMediaFiles = items;
+    useUIStore().gridMediaFiles = items as any;
 
     const wrapper = mount(MediaGrid);
     await flushPromises();
@@ -134,7 +101,7 @@ describe('MediaGrid.vue (Virtual Scrolling)', () => {
       path: `/path/img${i}.jpg`,
       name: `img${i}.jpg`,
     }));
-    mockUIState.gridMediaFiles = items;
+    useUIStore().gridMediaFiles = items as any;
 
     const wrapper = mount(MediaGrid);
     await flushPromises();
@@ -153,7 +120,7 @@ describe('MediaGrid.vue (Virtual Scrolling)', () => {
 
   it('handles item clicks correctly', async () => {
     const item: MediaFile = { path: '/path/test.jpg', name: 'test.jpg' };
-    mockUIState.gridMediaFiles = [item];
+    useUIStore().gridMediaFiles = [item] as any;
 
     const wrapper = mount(MediaGrid);
     await flushPromises();
@@ -166,7 +133,9 @@ describe('MediaGrid.vue (Virtual Scrolling)', () => {
     expect(gridItems.length).toBeGreaterThan(0);
     await gridItems[0].trigger('click');
 
-    expect(mockPlayerState.currentMediaItem?.path).toBe(item.path);
-    expect(mockUIState.viewMode).toBe('player');
+    expect(usePlaylistStore().playNext).toHaveBeenCalledWith(
+      expect.objectContaining({ path: item.path }),
+    );
+    expect(useUIStore().viewMode).toBe('player');
   });
 });

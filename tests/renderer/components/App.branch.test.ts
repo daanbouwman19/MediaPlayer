@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { flushPromises, mount } from '@vue/test-utils';
-import { ref, reactive } from 'vue';
+import { ref } from 'vue';
+import { setActivePinia } from 'pinia';
+import { createTestingPinia } from '@pinia/testing';
 import App from '../../../src/renderer/App.vue';
 import { useSlideshow } from '../../../src/renderer/composables/useSlideshow';
 import { useLibraryStore } from '../../../src/renderer/composables/useLibraryStore';
@@ -11,10 +13,6 @@ import { useTheme } from '../../../src/renderer/composables/useTheme';
 import { api } from '../../../src/renderer/api';
 
 vi.mock('../../../src/renderer/composables/useSlideshow');
-vi.mock('../../../src/renderer/composables/useLibraryStore');
-vi.mock('../../../src/renderer/composables/usePlayerStore');
-vi.mock('../../../src/renderer/composables/useUIStore');
-vi.mock('../../../src/renderer/composables/useAuthStore');
 vi.mock('../../../src/renderer/composables/useTheme');
 vi.mock('../../../src/renderer/api');
 
@@ -44,12 +42,10 @@ vi.mock('../../../src/renderer/components/SmartPlaylistModal.vue', () => ({
 }));
 
 describe('App.vue', () => {
-  let mockLibraryState: any;
-  let mockPlayerState: any;
-  let mockUIState: any;
-
   beforeEach(() => {
     vi.clearAllMocks();
+
+    setActivePinia(createTestingPinia({ createSpy: vi.fn }));
 
     (useTheme as Mock).mockReturnValue({
       initTheme: vi.fn(),
@@ -58,62 +54,29 @@ describe('App.vue', () => {
       cleanupTheme: vi.fn(),
     });
 
-    mockLibraryState = reactive({
-      isScanning: false,
-      smartPlaylists: [],
-    });
-
-    const mockInitializeApp = vi.fn();
-    const mockLoadAlbum = vi.fn();
-
-    mockPlayerState = reactive({
-      currentMediaIndex: 0,
-      displayedMediaFiles: [{ path: '1' }, { path: '2' }],
-      isSlideshowActive: false,
-      slideshowTimerId: null,
-      toggleSlideshow: vi.fn(),
-      mainVideoElement: null,
-    });
-
-    mockUIState = reactive({
-      viewMode: 'grid',
-      isSmartPlaylistModalVisible: false,
-      playlistToEdit: null,
-      gridMediaFiles: [],
-      supportedExtensions: { images: [], videos: [] },
-      isSidebarVisible: true,
-      isControlsVisible: true,
-      themeMode: 'system',
-    });
-
-    (useLibraryStore as unknown as Mock).mockReturnValue(
-      Object.assign(mockLibraryState, {
-        loadInitialData: mockInitializeApp,
-        loadAlbum: mockLoadAlbum,
-      }),
-    );
-
-    (usePlayerStore as unknown as Mock).mockReturnValue(
-      Object.assign(mockPlayerState, {
-        stopSlideshow: vi.fn(),
-      }),
-    );
-
-    (useUIStore as unknown as Mock).mockReturnValue(
-      Object.assign(mockUIState, {}),
-    );
-
-    (useAuthStore as unknown as Mock).mockReturnValue({
-      isLocked: ref(false),
-      isInitialized: ref(true),
-      checkLockStatus: vi.fn().mockResolvedValue(undefined),
-    });
-
     vi.mocked(useSlideshow).mockReturnValue({
       navigateMedia: vi.fn(),
       toggleSlideshowTimer: vi.fn(),
       slideshowTimer: ref(null),
     } as any);
+
+    // Set initial store state
+    useLibraryStore().isScanning = false;
+    useLibraryStore().smartPlaylists = [];
+
+    usePlayerStore().isSlideshowActive = false;
+    usePlayerStore().slideshowTimerId = null;
+    usePlayerStore().mainVideoElement = null;
+
+    useUIStore().viewMode = 'grid';
+    useUIStore().isSmartPlaylistModalVisible = false;
+    useUIStore().playlistToEdit = null;
+    useUIStore().isSidebarVisible = true;
+    useUIStore().isControlsVisible = true;
+    useUIStore().themeMode = 'system';
+
+    useAuthStore().isLocked = false;
+    useAuthStore().isInitialized = true;
 
     (api as any).on = vi.fn();
     (api as any).off = vi.fn();
@@ -177,13 +140,13 @@ describe('App.vue', () => {
     const toggleBtn = wrapper.find('.icon-button');
     await toggleBtn.trigger('click');
 
-    expect(mockUIState.isSidebarVisible).toBe(false);
+    expect(useUIStore().isSidebarVisible).toBe(false);
 
     expect(toggleBtn.attributes('aria-label')).toBe('Show Albums');
     expect(wrapper.text()).not.toContain('Hide Albums');
 
     await toggleBtn.trigger('click');
-    expect(mockUIState.isSidebarVisible).toBe(true);
+    expect(useUIStore().isSidebarVisible).toBe(true);
     expect(toggleBtn.attributes('aria-label')).toBe('Hide Albums');
   });
 
@@ -192,17 +155,17 @@ describe('App.vue', () => {
     await flushPromises();
 
     // Ensure sidebar is shown
-    expect(mockUIState.isSidebarVisible).toBe(true);
+    expect(useUIStore().isSidebarVisible).toBe(true);
 
     const albumsList = wrapper.findComponent({ name: 'AlbumsList' });
     albumsList.vm.$emit('close');
     await flushPromises();
 
-    expect(mockUIState.isSidebarVisible).toBe(false);
+    expect(useUIStore().isSidebarVisible).toBe(false);
   });
 
   it('clears playlistToEdit via @close event from SmartPlaylistModal', async () => {
-    mockUIState.playlistToEdit = {
+    useUIStore().playlistToEdit = {
       id: 1,
       name: 'Test',
       criteria: '{}',
@@ -216,6 +179,6 @@ describe('App.vue', () => {
     modal.vm.$emit('close');
     await flushPromises();
 
-    expect(mockUIState.playlistToEdit).toBe(null);
+    expect(useUIStore().playlistToEdit).toBe(null);
   });
 });

@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
 import { mount } from '@vue/test-utils';
-import { reactive, nextTick, computed } from 'vue';
+import { nextTick } from 'vue';
+import { setActivePinia } from 'pinia';
+import { createTestingPinia } from '@pinia/testing';
 import App from '@/App.vue';
 import { useSlideshow } from '@/composables/useSlideshow';
 import { useLibraryStore } from '@/composables/useLibraryStore';
@@ -9,12 +11,8 @@ import { useUIStore } from '@/composables/useUIStore';
 import { useAuthStore } from '@/composables/useAuthStore';
 import { useTheme } from '@/composables/useTheme';
 
-// Mock the composables
+// Mock the non-Pinia composables
 vi.mock('@/composables/useSlideshow');
-vi.mock('@/composables/useLibraryStore');
-vi.mock('@/composables/usePlayerStore');
-vi.mock('@/composables/useUIStore');
-vi.mock('@/composables/useAuthStore');
 vi.mock('@/composables/useTheme');
 
 // Mock the child components
@@ -40,17 +38,13 @@ vi.mock('@/components/AmbientBackground.vue', () => ({
 }));
 
 describe('App.vue', () => {
-  let mockLibraryState: any;
-  let mockPlayerState: any;
-  let mockUIState: any;
-
-  let initializeApp: Mock;
   let navigateMedia: Mock;
   let toggleSlideshowTimer: Mock;
   let mockCycleTheme: Mock;
 
   beforeEach(() => {
-    initializeApp = vi.fn().mockResolvedValue(undefined);
+    setActivePinia(createTestingPinia({ createSpy: vi.fn }));
+
     navigateMedia = vi.fn();
     toggleSlideshowTimer = vi.fn();
     mockCycleTheme = vi.fn();
@@ -62,68 +56,36 @@ describe('App.vue', () => {
       cleanupTheme: vi.fn(),
     });
 
-    mockLibraryState = reactive({
-      allAlbums: [],
-      albumsSelectedForSlideshow: {},
-      isScanning: false,
-      smartPlaylists: [],
-      globalMediaPoolForSelection: [],
-      totalMediaInPool: 0,
-      mediaDirectories: [],
-      supportedExtensions: {
-        images: ['.jpg'],
-        videos: ['.mp4'],
-      },
-      initializeApp,
-    });
+    // Set initial store state
+    useLibraryStore().allAlbums = [];
+    useLibraryStore().albumsSelectedForSlideshow = {};
+    useLibraryStore().isScanning = false;
+    useLibraryStore().smartPlaylists = [];
+    useLibraryStore().globalMediaPoolForSelection = [];
+    useLibraryStore().totalMediaInPool = 0;
+    useLibraryStore().mediaDirectories = [];
+    useLibraryStore().supportedExtensions = {
+      images: ['.jpg'],
+      videos: ['.mp4'],
+      all: ['.jpg', '.mp4'],
+    };
 
-    mockPlayerState = reactive({
-      currentMediaItem: null,
-      displayedMediaFiles: [],
-      currentMediaIndex: -1,
-      isSlideshowActive: false,
-      isTimerRunning: false,
-      timerDuration: 30,
-      slideshowTimerId: null,
-      stopSlideshow: vi.fn(),
-      mainVideoElement: null,
-    });
+    usePlayerStore().isSlideshowActive = false;
+    usePlayerStore().isTimerRunning = false;
+    usePlayerStore().timerDuration = 30;
+    usePlayerStore().slideshowTimerId = null;
+    usePlayerStore().mainVideoElement = null;
 
-    mockUIState = reactive({
-      isSourcesModalVisible: false,
-      viewMode: 'player',
-      isSmartPlaylistModalVisible: false,
-      mediaFilter: 'All',
-      isControlsVisible: true,
-      isSidebarVisible: true,
-      themeMode: 'system',
-    });
+    useUIStore().isSourcesModalVisible = false;
+    useUIStore().viewMode = 'player';
+    useUIStore().isSmartPlaylistModalVisible = false;
+    useUIStore().mediaFilter = 'All';
+    useUIStore().isControlsVisible = true;
+    useUIStore().isSidebarVisible = true;
+    useUIStore().themeMode = 'system';
 
-    (useLibraryStore as unknown as Mock).mockReturnValue(
-      Object.assign(mockLibraryState, {
-        loadInitialData: initializeApp,
-      }),
-    );
-
-    (usePlayerStore as unknown as Mock).mockReturnValue(
-      Object.assign(mockPlayerState, {
-        stopSlideshow: vi.fn(),
-        pauseTimerOnPlay: { value: false },
-      }),
-    );
-
-    (useUIStore as unknown as Mock).mockReturnValue(
-      Object.assign(mockUIState, {
-        setThemeMode: vi.fn(),
-        themeMode: { value: 'system' },
-      }),
-    );
-
-    (useAuthStore as unknown as Mock).mockReturnValue({
-      isLocked: computed(() => false),
-      isInitialized: computed(() => true),
-      checkLockStatus: vi.fn().mockResolvedValue(undefined),
-    });
+    useAuthStore().isLocked = false;
+    useAuthStore().isInitialized = true;
 
     (useSlideshow as Mock).mockReturnValue({
       navigateMedia,
@@ -162,14 +124,14 @@ describe('App.vue', () => {
   });
 
   it('should render MediaDisplay component when viewMode is player', () => {
-    mockUIState.viewMode = 'player';
+    useUIStore().viewMode = 'player';
     const wrapper = mount(App);
     expect(wrapper.find('.media-display-mock').exists()).toBe(true);
     expect(wrapper.find('.media-grid-mock').exists()).toBe(false);
   });
 
   it('should render MediaGrid component when viewMode is grid', () => {
-    mockUIState.viewMode = 'grid';
+    useUIStore().viewMode = 'grid';
     const wrapper = mount(App);
     expect(wrapper.find('.media-grid-mock').exists()).toBe(true);
     expect(wrapper.find('.media-display-mock').exists()).toBe(false);
@@ -181,14 +143,14 @@ describe('App.vue', () => {
   });
 
   it('should render LoadingMask when isScanning is true', async () => {
-    mockLibraryState.isScanning = true;
+    useLibraryStore().isScanning = true;
     const wrapper = mount(App);
     await nextTick();
     expect(wrapper.find('.loading-mask-mock').exists()).toBe(true);
   });
 
   it('should NOT render LoadingMask when isScanning is false', async () => {
-    mockLibraryState.isScanning = false;
+    useLibraryStore().isScanning = false;
     const wrapper = mount(App);
     await nextTick();
     expect(wrapper.find('.loading-mask-mock').exists()).toBe(false);
@@ -197,7 +159,7 @@ describe('App.vue', () => {
   it('should call initializeApp on mount', async () => {
     mount(App);
     await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(initializeApp).toHaveBeenCalled();
+    expect(useLibraryStore().loadInitialData).toHaveBeenCalled();
   });
 
   it('should handle "z" key for previous media', async () => {
@@ -223,7 +185,7 @@ describe('App.vue', () => {
   });
 
   it('should handle space key for timer toggle', async () => {
-    mockUIState.viewMode = 'grid'; // Ensure grid mode for App global key handling
+    useUIStore().viewMode = 'grid'; // Ensure grid mode for App global key handling
     const wrapper = mount(App, { attachTo: document.body });
     await new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -273,58 +235,58 @@ describe('App.vue', () => {
   it('should auto-close sidebar when slideshow becomes active', async () => {
     mount(App);
     // Initially sidebar is open
-    expect(mockUIState.isSidebarVisible).toBe(true);
+    expect(useUIStore().isSidebarVisible).toBe(true);
 
     // Simulate slideshow starting
-    mockPlayerState.isSlideshowActive = true;
+    usePlayerStore().isSlideshowActive = true;
     await nextTick();
 
-    expect(mockUIState.isSidebarVisible).toBe(false);
+    expect(useUIStore().isSidebarVisible).toBe(false);
   });
 
   describe('Controls Visibility interactions', () => {
     it('shows controls on mousemove and hides after timeout if video playing', async () => {
       vi.useFakeTimers();
-      mockUIState.viewMode = 'player';
-      mockUIState.isControlsVisible = false;
+      useUIStore().viewMode = 'player';
+      useUIStore().isControlsVisible = false;
       // Mock video playing
-      mockPlayerState.mainVideoElement = { paused: false };
+      usePlayerStore().mainVideoElement = { paused: false } as HTMLVideoElement;
       await nextTick();
 
       const wrapper = mount(App);
       const mainDiv = wrapper.find('[data-testid="main-content-area"]');
 
       await mainDiv.trigger('mousemove');
-      expect(mockUIState.isControlsVisible).toBe(true);
+      expect(useUIStore().isControlsVisible).toBe(true);
 
       vi.advanceTimersByTime(3500);
-      expect(mockUIState.isControlsVisible).toBe(false);
+      expect(useUIStore().isControlsVisible).toBe(false);
       vi.useRealTimers();
     });
 
     it('keeps controls visible on mousemove timeout if video is PAUSED', async () => {
       vi.useFakeTimers();
-      mockUIState.viewMode = 'player';
-      mockUIState.isControlsVisible = false;
+      useUIStore().viewMode = 'player';
+      useUIStore().isControlsVisible = false;
       // Mock video paused
-      mockPlayerState.mainVideoElement = { paused: true };
+      usePlayerStore().mainVideoElement = { paused: true } as HTMLVideoElement;
 
       const wrapper = mount(App);
       const mainDiv = wrapper.find('[data-testid="main-content-area"]');
 
       await mainDiv.trigger('mousemove');
-      expect(mockUIState.isControlsVisible).toBe(true);
+      expect(useUIStore().isControlsVisible).toBe(true);
 
       vi.advanceTimersByTime(3500);
       // Should still be visible because video is paused
-      expect(mockUIState.isControlsVisible).toBe(true);
+      expect(useUIStore().isControlsVisible).toBe(true);
       vi.useRealTimers();
     });
 
     it('hides controls on mouseleave if video playing', async () => {
-      mockUIState.viewMode = 'player';
-      mockUIState.isControlsVisible = true;
-      mockPlayerState.mainVideoElement = { paused: false };
+      useUIStore().viewMode = 'player';
+      useUIStore().isControlsVisible = true;
+      usePlayerStore().mainVideoElement = { paused: false } as HTMLVideoElement;
       await nextTick();
 
       const wrapper = mount(App);
@@ -332,20 +294,20 @@ describe('App.vue', () => {
 
       expect(mainDiv.exists()).toBe(true);
       await mainDiv.trigger('mouseleave');
-      expect(mockUIState.isControlsVisible).toBe(false);
+      expect(useUIStore().isControlsVisible).toBe(false);
     });
 
     it('keeps controls visible on mouseleave if video PAUSED', async () => {
-      mockUIState.viewMode = 'player';
-      mockUIState.isControlsVisible = true;
-      mockPlayerState.mainVideoElement = { paused: true };
+      useUIStore().viewMode = 'player';
+      useUIStore().isControlsVisible = true;
+      usePlayerStore().mainVideoElement = { paused: true } as HTMLVideoElement;
       await nextTick();
 
       const wrapper = mount(App);
       const mainDiv = wrapper.find('[data-testid="main-content-area"]');
 
       await mainDiv.trigger('mouseleave');
-      expect(mockUIState.isControlsVisible).toBe(true);
+      expect(useUIStore().isControlsVisible).toBe(true);
     });
   });
 });

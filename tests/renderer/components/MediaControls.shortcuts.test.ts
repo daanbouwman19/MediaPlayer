@@ -1,6 +1,9 @@
-import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest';
 import { mount } from '@vue/test-utils';
+import { setActivePinia } from 'pinia';
+import { createTestingPinia } from '@pinia/testing';
 import MediaControls from '@/components/MediaControls.vue';
+import { useUIStore } from '@/composables/useUIStore';
 
 // Minimal Mocks needed for rendering
 vi.mock('@/api', () => ({
@@ -52,18 +55,17 @@ vi.mock('@/components/ProgressBar.vue', () => ({
   default: { template: '<div></div>', props: ['currentTime', 'duration'] },
 }));
 
-vi.mock('@/composables/useUIStore', () => ({
-  useUIStore: () => ({ isSidebarVisible: { value: false } }),
-}));
-
 describe('MediaControls.vue Shortcuts', () => {
   let originalGetBoundingClientRect: any;
 
+  beforeEach(() => {
+    setActivePinia(createTestingPinia({ createSpy: vi.fn }));
+    useUIStore().isSidebarVisible = false;
+  });
+
   beforeAll(() => {
-    // Mock ResizeObserver
     global.ResizeObserver = class ResizeObserver {
       constructor(callback: any) {
-        // Callback with large width to ensure buttons are shown
         callback([{ contentRect: { width: 1000 } }]);
       }
       observe() {}
@@ -71,7 +73,6 @@ describe('MediaControls.vue Shortcuts', () => {
       unobserve() {}
     };
 
-    // Mock getBoundingClientRect
     originalGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect;
     Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', {
       configurable: true,
@@ -94,12 +95,11 @@ describe('MediaControls.vue Shortcuts', () => {
     isPlaying: false,
     canNavigate: true,
     isControlsVisible: true,
-    isImage: false, // Must be false to show shortcuts button
+    isImage: false,
   };
 
   it('should render the help/shortcuts button', async () => {
     const wrapper = mount(MediaControls, { props: defaultProps });
-    // Ensure resize observer callback fires
     await wrapper.vm.$nextTick();
 
     const helpBtn = wrapper.find('button[aria-label="Keyboard Shortcuts"]');

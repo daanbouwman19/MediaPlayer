@@ -1,24 +1,28 @@
-import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
-import { reactive } from 'vue';
+import { setActivePinia } from 'pinia';
+import { createTestingPinia } from '@pinia/testing';
 import AlbumsList from '@/components/AlbumsList.vue';
-import { useSlideshow } from '@/composables/useSlideshow';
 import { useLibraryStore } from '@/composables/useLibraryStore';
 import { usePlayerStore } from '@/composables/usePlayerStore';
 import { useUIStore } from '@/composables/useUIStore';
 
-// Mock the composables
-vi.mock('@/composables/useSlideshow');
-vi.mock('@/composables/useLibraryStore');
-vi.mock('@/composables/usePlayerStore');
-vi.mock('@/composables/useUIStore');
+// Mock the non-Pinia composable
+vi.mock('@/composables/useSlideshow', () => ({
+  useSlideshow: () => ({
+    toggleSlideshowTimer: vi.fn(),
+    startSlideshow: vi.fn(),
+    toggleAlbumSelection: vi.fn(),
+    startIndividualAlbumSlideshow: vi.fn(),
+  }),
+}));
 
 // Mock child components
 vi.mock('@/components/AlbumTree.vue', () => ({
   default: { template: '<li>AlbumTree Item</li>' },
 }));
 
-// Mock Icons - Inline the template to avoid hoisting issues
+// Mock Icons
 vi.mock('@/components/icons/CloseIcon.vue', () => ({
   default: { template: '<svg></svg>' },
 }));
@@ -48,52 +52,31 @@ vi.mock('@/components/icons/DeleteIcon.vue', () => ({
 }));
 
 describe('AlbumsList Accessibility', () => {
-  let mockLibraryState: any;
-  let mockPlayerState: any;
-  let mockUIState: any;
-
   beforeEach(() => {
-    mockLibraryState = reactive({
-      allAlbums: [],
-      albumsSelectedForSlideshow: {},
-      smartPlaylists: [],
-      historyMedia: [],
-      mediaDirectories: [],
-    });
+    setActivePinia(createTestingPinia({ createSpy: vi.fn }));
 
-    mockPlayerState = reactive({
-      timerDuration: 5,
-      isTimerRunning: false,
-      timerProgress: 0,
-      isSlideshowActive: false,
-    });
+    useLibraryStore().allAlbums = [];
+    useLibraryStore().albumsSelectedForSlideshow = {};
+    useLibraryStore().smartPlaylists = [];
+    useLibraryStore().historyMedia = [];
+    useLibraryStore().mediaDirectories = [];
 
-    mockUIState = reactive({
-      isSourcesModalVisible: false,
-      isSmartPlaylistModalVisible: false,
-      gridMediaFiles: [],
-      viewMode: 'player',
-      playlistToEdit: null,
-    });
+    usePlayerStore().timerDuration = 5;
+    usePlayerStore().isTimerRunning = false;
+    usePlayerStore().timerProgress = 0;
+    usePlayerStore().isSlideshowActive = false;
 
-    (useLibraryStore as unknown as Mock).mockReturnValue(mockLibraryState);
-
-    (usePlayerStore as unknown as Mock).mockReturnValue(mockPlayerState);
-
-    (useUIStore as unknown as Mock).mockReturnValue(mockUIState);
-
-    (useSlideshow as Mock).mockReturnValue({
-      toggleSlideshowTimer: vi.fn(),
-      startSlideshow: vi.fn(),
-      toggleAlbumSelection: vi.fn(),
-      startIndividualAlbumSlideshow: vi.fn(),
-    });
+    useUIStore().isSourcesModalVisible = false;
+    useUIStore().isSmartPlaylistModalVisible = false;
+    useUIStore().gridMediaFiles = [];
+    useUIStore().viewMode = 'player';
+    useUIStore().playlistToEdit = null;
   });
 
   it('smart playlist items should be semantic buttons with accessible labels', async () => {
-    mockLibraryState.smartPlaylists = [
+    useLibraryStore().smartPlaylists = [
       { id: 1, name: 'My Top Rated', criteria: '{}' },
-    ];
+    ] as any;
 
     const wrapper = mount(AlbumsList);
     await wrapper.vm.$nextTick();
@@ -118,9 +101,9 @@ describe('AlbumsList Accessibility', () => {
   });
 
   it('controls should be visible on focus within', async () => {
-    mockLibraryState.smartPlaylists = [
+    useLibraryStore().smartPlaylists = [
       { id: 1, name: 'Test List', criteria: '{}' },
-    ];
+    ] as any;
 
     const wrapper = mount(AlbumsList);
     await wrapper.vm.$nextTick();

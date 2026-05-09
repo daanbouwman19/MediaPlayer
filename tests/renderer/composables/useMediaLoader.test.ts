@@ -1,19 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { setActivePinia } from 'pinia';
+import { createTestingPinia } from '@pinia/testing';
 import { useMediaLoader } from '@/composables/useMediaLoader';
 import { useLibraryStore } from '@/composables/useLibraryStore';
-import { ref } from 'vue';
-
-vi.mock('@/composables/useLibraryStore');
 
 describe('useMediaLoader', () => {
-  let mockLibraryStore: any;
-
   beforeEach(() => {
     vi.clearAllMocks();
-    mockLibraryStore = {
-      mediaUrlGenerator: ref((path: string) => `http://media/${path}`),
-    };
-    (useLibraryStore as unknown as any).mockReturnValue(mockLibraryStore);
+    setActivePinia(createTestingPinia({ createSpy: vi.fn }));
+    useLibraryStore().mediaUrlGenerator = (path: string) => `http://media/${path}`;
   });
 
   it('should load image media using generator', async () => {

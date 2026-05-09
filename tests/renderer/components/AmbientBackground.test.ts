@@ -5,49 +5,36 @@ import {
   vi,
   beforeEach,
   afterEach,
-  type Mock,
 } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
-import { reactive, toRefs, computed } from 'vue';
+import { setActivePinia } from 'pinia';
+import { createTestingPinia } from '@pinia/testing';
 import AmbientBackground from '../../../src/renderer/components/AmbientBackground.vue';
 import { usePlayerStore } from '../../../src/renderer/composables/usePlayerStore';
 import { usePlaylistStore } from '../../../src/renderer/composables/usePlaylistStore';
 import { useLibraryStore } from '../../../src/renderer/composables/useLibraryStore';
 import { api } from '../../../src/renderer/api';
 
-vi.mock('../../../src/renderer/composables/usePlayerStore');
-vi.mock('../../../src/renderer/composables/usePlaylistStore');
-vi.mock('../../../src/renderer/composables/useLibraryStore');
 vi.mock('../../../src/renderer/api');
 
 describe('AmbientBackground.vue', () => {
-  let mockPlayerState: any;
-  let mockPlaylistState: any;
-  let mockLibraryState: any;
-
   beforeEach(() => {
     vi.useFakeTimers();
     vi.clearAllMocks();
-    mockPlayerState = reactive({
-      mainVideoElement: null,
-    });
-    mockPlaylistState = reactive({
-      currentItem: null,
-      history: [],
-      queue: [],
-    });
-    mockLibraryState = reactive({
-      supportedExtensions: { images: ['.jpg', '.png'], videos: ['.mp4'] },
-    });
 
-    (usePlayerStore as unknown as Mock).mockReturnValue(mockPlayerState);
-    (usePlaylistStore as unknown as Mock).mockReturnValue({
-      state: mockPlaylistState,
-      currentItem: toRefs(mockPlaylistState).currentItem,
-      hasPrevious: computed(() => mockPlaylistState.history.length > 0),
-      hasNext: computed(() => mockPlaylistState.queue.length > 0),
-    });
-    (useLibraryStore as unknown as Mock).mockReturnValue(mockLibraryState);
+    setActivePinia(createTestingPinia({ createSpy: vi.fn }));
+
+    usePlayerStore().mainVideoElement = null;
+
+    usePlaylistStore().currentItem = null;
+    usePlaylistStore().history = [];
+    usePlaylistStore().queue = [];
+
+    useLibraryStore().supportedExtensions = {
+      images: ['.jpg', '.png'],
+      videos: ['.mp4'],
+      all: ['.jpg', '.png', '.mp4'],
+    };
 
     // Mock API
     vi.mocked(api.loadFileAsDataURL).mockResolvedValue({
@@ -77,7 +64,7 @@ describe('AmbientBackground.vue', () => {
   });
 
   it('loads media when currentMediaItem changes (Image)', async () => {
-    mockPlaylistState.currentItem = { path: '/test/image.jpg' };
+    usePlaylistStore().currentItem = { path: '/test/image.jpg' } as any;
 
     // Mock Image loading
     const originalImage = window.Image;
@@ -114,9 +101,9 @@ describe('AmbientBackground.vue', () => {
   });
 
   it('starts video loop when video', async () => {
-    mockPlaylistState.currentItem = { path: '/test/video.mp4' };
+    usePlaylistStore().currentItem = { path: '/test/video.mp4' } as any;
     const mockVideo = { paused: false, ended: false } as HTMLVideoElement;
-    mockPlayerState.mainVideoElement = mockVideo;
+    usePlayerStore().mainVideoElement = mockVideo;
 
     const wrapper = mount(AmbientBackground);
     await flushPromises();
@@ -135,7 +122,7 @@ describe('AmbientBackground.vue', () => {
     const consoleErrorSpy = vi
       .spyOn(console, 'error')
       .mockImplementation(() => {});
-    mockPlaylistState.currentItem = { path: '/test/fail.jpg' };
+    usePlaylistStore().currentItem = { path: '/test/fail.jpg' } as any;
     vi.mocked(api.loadFileAsDataURL).mockRejectedValue(new Error('Load fail'));
 
     mount(AmbientBackground);
@@ -149,7 +136,7 @@ describe('AmbientBackground.vue', () => {
   });
 
   it('handles http-url media', async () => {
-    mockPlaylistState.currentItem = { path: '/test/image.jpg' };
+    usePlaylistStore().currentItem = { path: '/test/image.jpg' } as any;
     vi.mocked(api.loadFileAsDataURL).mockResolvedValue({
       type: 'http-url',
       url: 'http://foo.com/img.jpg',
@@ -165,7 +152,7 @@ describe('AmbientBackground.vue', () => {
   });
 
   it('handles no media', async () => {
-    mockPlaylistState.currentItem = null;
+    usePlaylistStore().currentItem = null;
     await flushPromises();
     expect(api.loadFileAsDataURL).not.toHaveBeenCalled();
   });

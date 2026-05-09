@@ -1,19 +1,13 @@
 import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
-import { reactive } from 'vue';
+import { setActivePinia } from 'pinia';
+import { createTestingPinia } from '@pinia/testing';
 import SourcesModal from '@/components/SourcesModal.vue';
 
 import { useLibraryStore } from '@/composables/useLibraryStore';
 import { useUIStore } from '@/composables/useUIStore';
-import { usePlayerStore } from '@/composables/usePlayerStore';
 import { api } from '@/api';
 
-// Mock the composables
-vi.mock('@/composables/useLibraryStore');
-vi.mock('@/composables/useUIStore');
-vi.mock('@/composables/usePlayerStore');
-
-// Mock the API module
 vi.mock('@/api', () => ({
   api: {
     addMediaDirectory: vi.fn(),
@@ -33,50 +27,18 @@ vi.mock('@/api', () => ({
 }));
 
 describe('SourcesModal.vue', () => {
-  let mockLibraryState: any;
-  let mockUIState: any;
-  let mockPlayerState: any;
-
   beforeEach(() => {
-    mockLibraryState = reactive({
-      isScanning: false,
-      allAlbums: [],
-      mediaDirectories: [
-        {
-          path: '/path/to/dir1',
-          isActive: true,
-          id: '1',
-          name: 'dir1',
-          type: 'local',
-        },
-        {
-          path: '/path/to/dir2',
-          isActive: false,
-          id: '2',
-          name: 'dir2',
-          type: 'local',
-        },
-      ],
-      albumsSelectedForSlideshow: {},
-      globalMediaPoolForSelection: [],
-    });
-
-    mockUIState = reactive({
-      isSourcesModalVisible: true,
-    });
-
-    mockPlayerState = reactive({
-      isSlideshowActive: false,
-      displayedMediaFiles: [],
-      currentMediaIndex: -1,
-      currentMediaItem: null,
-    });
-
-    (useLibraryStore as unknown as Mock).mockReturnValue(mockLibraryState);
-    (useUIStore as unknown as Mock).mockReturnValue(mockUIState);
-    (usePlayerStore as unknown as Mock).mockReturnValue(mockPlayerState);
-
     vi.clearAllMocks();
+    setActivePinia(createTestingPinia({ stubActions: false, createSpy: vi.fn }));
+
+    const libraryStore = useLibraryStore();
+    libraryStore.mediaDirectories = [
+      { path: '/path/to/dir1', isActive: true, id: '1', name: 'dir1', type: 'local' },
+      { path: '/path/to/dir2', isActive: false, id: '2', name: 'dir2', type: 'local' },
+    ] as any;
+    libraryStore.albumsSelectedForSlideshow = {};
+
+    useUIStore().isSourcesModalVisible = true;
 
     (api.addMediaDirectory as Mock).mockResolvedValue('/default/path');
     (api.removeMediaDirectory as Mock).mockResolvedValue(undefined);
@@ -88,13 +50,12 @@ describe('SourcesModal.vue', () => {
 
   it('should render modal when visible', () => {
     const wrapper = mount(SourcesModal);
-    // Finds the outer fixed overlay div
     expect(wrapper.find('.fixed.inset-0').exists()).toBe(true);
     expect(wrapper.text()).toContain('Manage Media Sources');
   });
 
   it('should not render when not visible', () => {
-    mockUIState.isSourcesModalVisible = false;
+    useUIStore().isSourcesModalVisible = false;
     const wrapper = mount(SourcesModal);
     expect(wrapper.find('.fixed.inset-0').exists()).toBe(false);
   });
@@ -106,19 +67,16 @@ describe('SourcesModal.vue', () => {
   });
 
   it('should show empty message when no directories', () => {
-    mockLibraryState.mediaDirectories = [];
+    useLibraryStore().mediaDirectories = [] as any;
     const wrapper = mount(SourcesModal);
     expect(wrapper.text()).toContain('No media sources configured yet');
   });
 
   it('shows warning when Google Drive is disconnected on mount', async () => {
-    mockLibraryState.mediaDirectories.push({
-      path: 'gdrive://123',
-      isActive: true,
-      id: '3',
-      name: 'Drive',
-      type: 'google_drive',
-    });
+    useLibraryStore().mediaDirectories = [
+      ...useLibraryStore().mediaDirectories,
+      { path: 'gdrive://123', isActive: true, id: '3', name: 'Drive', type: 'google_drive' },
+    ] as any;
     (api.checkGoogleDriveAuth as Mock).mockResolvedValue(false);
 
     const wrapper = mount(SourcesModal);
@@ -127,7 +85,6 @@ describe('SourcesModal.vue', () => {
     expect(api.checkGoogleDriveAuth).toHaveBeenCalled();
     expect(wrapper.text()).toContain('Google Drive Disconnected');
 
-    // Test the re-authenticate button
     const reauthBtn = wrapper
       .findAll('button')
       .find((b) => b.text() === 'Re-authenticate Drive');
@@ -139,14 +96,13 @@ describe('SourcesModal.vue', () => {
     const wrapper = mount(SourcesModal);
     const closeButton = wrapper.find('button[aria-label="Close"]');
     await closeButton.trigger('click');
-    expect(mockUIState.isSourcesModalVisible).toBe(false);
+    expect(useUIStore().isSourcesModalVisible).toBe(false);
   });
 
   it('should close modal when clicking overlay', async () => {
     const wrapper = mount(SourcesModal);
-    // Check for the first fixed overlay (main modal)
     await wrapper.find('.fixed.inset-0').trigger('click.self');
-    expect(mockUIState.isSourcesModalVisible).toBe(false);
+    expect(useUIStore().isSourcesModalVisible).toBe(false);
   });
 
   it('should render checkboxes for directories', () => {
@@ -161,23 +117,15 @@ describe('SourcesModal.vue', () => {
     const wrapper = mount(SourcesModal);
     const checkbox = wrapper.findAll('input[type="checkbox"]')[0];
     await checkbox.setValue(false);
-    expect(api.setDirectoryActiveState).toHaveBeenCalledWith(
-      '/path/to/dir1',
-      false,
-    );
+    expect(api.setDirectoryActiveState).toHaveBeenCalledWith('/path/to/dir1', false);
   });
 
   it('should call removeMediaDirectory when confirm button clicked', async () => {
     const wrapper = mount(SourcesModal);
-    // Find the REMOVE button for the first item
-    const removeButtons = wrapper.findAll('button');
-    const removeBtn = removeButtons.find((b) => b.text().includes('REMOVE'));
+    const removeBtn = wrapper.findAll('button').find((b) => b.text().includes('REMOVE'));
     await removeBtn?.trigger('click');
 
-    // Now find CONFIRM button
-    const confirmBtn = wrapper
-      .findAll('button')
-      .find((b) => b.text().includes('CONFIRM'));
+    const confirmBtn = wrapper.findAll('button').find((b) => b.text().includes('CONFIRM'));
     expect(confirmBtn?.exists()).toBe(true);
     await confirmBtn?.trigger('click');
 
@@ -186,30 +134,20 @@ describe('SourcesModal.vue', () => {
 
   it('should not remove when cancel button clicked', async () => {
     const wrapper = mount(SourcesModal);
-    const removeBtn = wrapper
-      .findAll('button')
-      .find((b) => b.text().includes('REMOVE'));
+    const removeBtn = wrapper.findAll('button').find((b) => b.text().includes('REMOVE'));
     await removeBtn?.trigger('click');
 
-    const cancelBtn = wrapper
-      .findAll('button')
-      .find((b) => b.text().includes('CANCEL'));
+    const cancelBtn = wrapper.findAll('button').find((b) => b.text().includes('CANCEL'));
     expect(cancelBtn?.exists()).toBe(true);
     await cancelBtn?.trigger('click');
 
     expect(api.removeMediaDirectory).not.toHaveBeenCalled();
-    // Should revert to showing REMOVE button
-    expect(
-      wrapper.findAll('button').find((b) => b.text().includes('REMOVE')),
-    ).toBeTruthy();
+    expect(wrapper.findAll('button').find((b) => b.text().includes('REMOVE'))).toBeTruthy();
   });
 
   it('should open FileExplorer when add button clicked', async () => {
     const wrapper = mount(SourcesModal);
-    const buttons = wrapper.findAll('button');
-    const addButton = buttons.find((b) =>
-      b.text().includes('Add Local Folder'),
-    );
+    const addButton = wrapper.findAll('button').find((b) => b.text().includes('Add Local Folder'));
     expect(addButton?.exists()).toBe(true);
 
     await addButton?.trigger('click');
@@ -222,13 +160,7 @@ describe('SourcesModal.vue', () => {
   it('should call addMediaDirectory when FileExplorer selects a path', async () => {
     (api.addMediaDirectory as Mock).mockResolvedValue('/selected/path');
     (api.getMediaDirectories as Mock).mockResolvedValue([
-      {
-        path: '/selected/path',
-        isActive: true,
-        id: '1',
-        name: 'new',
-        type: 'local',
-      },
+      { path: '/selected/path', isActive: true, id: '1', name: 'new', type: 'local' },
     ]);
 
     const wrapper = mount(SourcesModal);
@@ -240,7 +172,7 @@ describe('SourcesModal.vue', () => {
 
     expect(api.addMediaDirectory).toHaveBeenCalledWith('/selected/path');
     expect(api.getMediaDirectories).toHaveBeenCalled();
-    expect(mockLibraryState.mediaDirectories).toContainEqual({
+    expect(useLibraryStore().mediaDirectories).toContainEqual({
       path: '/selected/path',
       isActive: true,
       id: '1',
@@ -263,17 +195,16 @@ describe('SourcesModal.vue', () => {
     (api.getMediaDirectories as Mock).mockResolvedValue([]);
 
     const wrapper = mount(SourcesModal);
-    const buttons = wrapper.findAll('button');
-    const reindexButton = buttons.find((b) =>
-      b.text().includes('APPLY CHANGES & RE-INDEX'),
-    );
+    const reindexButton = wrapper
+      .findAll('button')
+      .find((b) => b.text().includes('APPLY CHANGES & RE-INDEX'));
     expect(reindexButton?.exists()).toBe(true);
 
     await reindexButton?.trigger('click');
     await flushPromises();
 
     expect(api.reindexMediaLibrary).toHaveBeenCalled();
-    expect(mockLibraryState.albumsSelectedForSlideshow).toEqual({
+    expect(useLibraryStore().albumsSelectedForSlideshow).toEqual({
       'newAlbum1-id': true,
       'newAlbum2-id': true,
       'subAlbum-id': true,
@@ -286,21 +217,16 @@ describe('SourcesModal.vue', () => {
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     const wrapper = mount(SourcesModal);
-    const buttons = wrapper.findAll('button');
-    const reindexButton = buttons.find((b) =>
-      b.text().includes('APPLY CHANGES & RE-INDEX'),
-    );
+    const reindexButton = wrapper
+      .findAll('button')
+      .find((b) => b.text().includes('APPLY CHANGES & RE-INDEX'));
 
     await reindexButton?.trigger('click');
     await flushPromises();
 
     expect(api.reindexMediaLibrary).toHaveBeenCalled();
-    expect(consoleSpy).toHaveBeenCalledWith(
-      'Error re-indexing library:',
-      error,
-    );
-    // isScanning is set to false in finally
-    expect(mockLibraryState.isScanning).toBe(false);
+    expect(consoleSpy).toHaveBeenCalledWith('Error re-indexing library:', error);
+    expect(useLibraryStore().isScanning).toBe(false);
     consoleSpy.mockRestore();
   });
 
@@ -313,10 +239,7 @@ describe('SourcesModal.vue', () => {
     await (wrapper.vm as any).handleFileExplorerSelect('/fail/path');
     await flushPromises();
 
-    expect(consoleSpy).toHaveBeenCalledWith(
-      'Error adding media directory via explorer:',
-      error,
-    );
+    expect(consoleSpy).toHaveBeenCalledWith('Error adding media directory via explorer:', error);
     consoleSpy.mockRestore();
   });
 
@@ -331,18 +254,15 @@ describe('SourcesModal.vue', () => {
     await checkbox.setValue(false);
     await flushPromises();
 
-    expect(consoleSpy).toHaveBeenCalledWith(
-      'Error toggling directory active state:',
-      error,
-    );
+    expect(consoleSpy).toHaveBeenCalledWith('Error toggling directory active state:', error);
     consoleSpy.mockRestore();
   });
 
   it('should handle directory not found during toggle', async () => {
     const wrapper = mount(SourcesModal);
     await (wrapper.vm as any).handleToggleActive('/non-existent/path', true);
-    expect(mockLibraryState.mediaDirectories[0].isActive).toBe(true);
-    expect(mockLibraryState.mediaDirectories[1].isActive).toBe(false);
+    expect(useLibraryStore().mediaDirectories[0].isActive).toBe(true);
+    expect(useLibraryStore().mediaDirectories[1].isActive).toBe(false);
   });
 
   it('should handle error when removing directory fails', async () => {
@@ -351,14 +271,10 @@ describe('SourcesModal.vue', () => {
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     const wrapper = mount(SourcesModal);
-    const removeBtn = wrapper
-      .findAll('button')
-      .find((b) => b.text().includes('REMOVE'));
+    const removeBtn = wrapper.findAll('button').find((b) => b.text().includes('REMOVE'));
     await removeBtn?.trigger('click');
 
-    const confirmBtn = wrapper
-      .findAll('button')
-      .find((b) => b.text().includes('CONFIRM'));
+    const confirmBtn = wrapper.findAll('button').find((b) => b.text().includes('CONFIRM'));
     await confirmBtn?.trigger('click');
     await flushPromises();
 
@@ -368,9 +284,8 @@ describe('SourcesModal.vue', () => {
 
   it('should handle directory not found during remove', async () => {
     const wrapper = mount(SourcesModal);
-    // Directly calling internal method for this test case or mimicking UI
     await (wrapper.vm as any).confirmRemove('/non-existent/path');
-    expect(mockLibraryState.mediaDirectories).toHaveLength(2);
+    expect(useLibraryStore().mediaDirectories).toHaveLength(2);
   });
 
   describe('Google Drive Auth', () => {
@@ -378,20 +293,14 @@ describe('SourcesModal.vue', () => {
       (api.startGoogleDriveAuth as Mock).mockResolvedValue('http://auth-url');
       const wrapper = mount(SourcesModal);
 
-      // Find "Add Google Drive" button (it's inside the grid now)
-      const buttons = wrapper.findAll('button');
-      const addDriveBtn = buttons.find((b) =>
-        b.text().includes('Add Google Drive'),
-      );
+      const addDriveBtn = wrapper.findAll('button').find((b) => b.text().includes('Add Google Drive'));
       expect(addDriveBtn?.exists()).toBe(true);
       await addDriveBtn?.trigger('click');
       await flushPromises();
 
       expect(wrapper.text()).toContain('Add Google Drive Source');
 
-      const startAuthBtn = wrapper
-        .findAll('button')
-        .find((b) => b.text().includes('Start Authorization'));
+      const startAuthBtn = wrapper.findAll('button').find((b) => b.text().includes('Start Authorization'));
       expect(startAuthBtn?.exists()).toBe(true);
       await startAuthBtn?.trigger('click');
       await flushPromises();
@@ -409,15 +318,11 @@ describe('SourcesModal.vue', () => {
       (wrapper.vm as any).driveAuthUrl = 'http://url';
       await flushPromises();
 
-      // Find by ID directly from template
       const input = wrapper.find('#auth-code-input');
       await input.setValue('auth-code');
 
-      const submitBtn = wrapper
-        .findAll('button')
-        .find((b) => b.text() === 'Submit Code');
+      const submitBtn = wrapper.findAll('button').find((b) => b.text() === 'Submit Code');
       await submitBtn?.trigger('click');
-
       await flushPromises();
 
       expect(api.submitGoogleDriveAuthCode).toHaveBeenCalledWith('auth-code');
@@ -435,9 +340,7 @@ describe('SourcesModal.vue', () => {
       const input = wrapper.find('#auth-code-input');
       await input.setValue('bad-code');
 
-      const submitBtn = wrapper
-        .findAll('button')
-        .find((b) => b.text() === 'Submit Code');
+      const submitBtn = wrapper.findAll('button').find((b) => b.text() === 'Submit Code');
       await submitBtn?.trigger('click');
       await flushPromises();
 
@@ -453,9 +356,7 @@ describe('SourcesModal.vue', () => {
       (wrapper.vm as any).authSuccess = true;
       await flushPromises();
 
-      const addBtn = wrapper
-        .findAll('button')
-        .find((b) => b.text().includes('Add Folder'));
+      const addBtn = wrapper.findAll('button').find((b) => b.text().includes('Add Folder'));
       await addBtn?.trigger('click');
       await flushPromises();
 
@@ -472,9 +373,7 @@ describe('SourcesModal.vue', () => {
       (wrapper.vm as any).authSuccess = true;
       await flushPromises();
 
-      const addBtn = wrapper
-        .findAll('button')
-        .find((b) => b.text().includes('Add Folder'));
+      const addBtn = wrapper.findAll('button').find((b) => b.text().includes('Add Folder'));
       await addBtn?.trigger('click');
       await flushPromises();
 

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { setActivePinia, createPinia } from 'pinia';
 import { useLibraryStore } from '@/composables/useLibraryStore';
 import { api } from '@/api';
 
@@ -19,10 +20,10 @@ describe('useLibraryStore', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    setActivePinia(createPinia());
     // Clear localStorage
     localStorage.clear();
     store = useLibraryStore();
-    store.resetLibraryState();
   });
 
   it('should initialize with default values', () => {

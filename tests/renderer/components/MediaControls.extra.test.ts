@@ -1,18 +1,11 @@
-import {
-  describe,
-  it,
-  expect,
-  vi,
-  beforeEach,
-  afterEach,
-  type Mock,
-} from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mount } from '@vue/test-utils';
+import { setActivePinia } from 'pinia';
+import { createTestingPinia } from '@pinia/testing';
 import MediaControls from '@/components/MediaControls.vue';
 import { api } from '@/api';
 import { useUIStore } from '@/composables/useUIStore';
 
-// Mock API
 vi.mock('@/api', () => ({
   api: {
     getHeatmap: vi.fn(),
@@ -21,17 +14,12 @@ vi.mock('@/api', () => ({
   },
 }));
 
-vi.mock('@/composables/useUIStore', () => ({
-  useUIStore: vi.fn(),
-}));
-
 describe('MediaControls Extra Coverage', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.clearAllMocks();
-    (useUIStore as unknown as Mock).mockReturnValue({
-      isSidebarVisible: { value: true },
-    });
+    setActivePinia(createTestingPinia({ createSpy: vi.fn }));
+    useUIStore().isSidebarVisible = true;
   });
 
   afterEach(() => {

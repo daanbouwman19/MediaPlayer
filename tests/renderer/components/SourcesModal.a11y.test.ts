@@ -1,14 +1,11 @@
-import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
-import { reactive } from 'vue';
+import { setActivePinia } from 'pinia';
+import { createTestingPinia } from '@pinia/testing';
 import SourcesModal from '@/components/SourcesModal.vue';
 import { useLibraryStore } from '@/composables/useLibraryStore';
 import { usePlayerStore } from '@/composables/usePlayerStore';
 import { useUIStore } from '@/composables/useUIStore';
-
-vi.mock('@/composables/useLibraryStore');
-vi.mock('@/composables/usePlayerStore');
-vi.mock('@/composables/useUIStore');
 
 vi.mock('@/api', () => ({
   api: {
@@ -24,40 +21,23 @@ vi.mock('@/api', () => ({
 }));
 
 describe('SourcesModal A11y', () => {
-  let mockLibraryState: any;
-  let mockPlayerState: any;
-  let mockUIState: any;
-
   beforeEach(() => {
-    mockLibraryState = reactive({
-      mediaDirectories: [],
-      allAlbums: [],
-      albumsSelectedForSlideshow: {},
-      supportedExtensions: { images: [], videos: [] },
-      globalMediaPoolForSelection: [],
-      totalMediaInPool: 0,
-    });
+    setActivePinia(createTestingPinia({ createSpy: vi.fn }));
 
-    mockPlayerState = reactive({
-      currentMediaItem: null,
-      displayedMediaFiles: [],
-      currentMediaIndex: -1,
-      isSlideshowActive: false,
-      isTimerRunning: false,
-      timerDuration: 30,
-      slideshowTimerId: null,
-    });
+    useLibraryStore().mediaDirectories = [];
+    useLibraryStore().allAlbums = [];
+    useLibraryStore().albumsSelectedForSlideshow = {};
+    useLibraryStore().supportedExtensions = { images: [], videos: [], all: [] };
+    useLibraryStore().globalMediaPoolForSelection = [];
+    useLibraryStore().totalMediaInPool = 0;
 
-    mockUIState = reactive({
-      isSourcesModalVisible: true,
-      mediaFilter: 'All',
-    });
+    usePlayerStore().isSlideshowActive = false;
+    usePlayerStore().isTimerRunning = false;
+    usePlayerStore().timerDuration = 30;
+    usePlayerStore().slideshowTimerId = null;
 
-    (useLibraryStore as unknown as Mock).mockReturnValue(mockLibraryState);
-
-    (usePlayerStore as unknown as Mock).mockReturnValue(mockPlayerState);
-
-    (useUIStore as unknown as Mock).mockReturnValue(mockUIState);
+    useUIStore().isSourcesModalVisible = true;
+    useUIStore().mediaFilter = 'All';
   });
 
   it('Google Drive Auth inputs should have accessible labels', async () => {

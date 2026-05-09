@@ -1,12 +1,13 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import { setActivePinia, createPinia } from 'pinia';
 import { usePlaylistStore } from '@/composables/usePlaylistStore';
 
 describe('usePlaylistStore Coverage Boost', () => {
   let store: ReturnType<typeof usePlaylistStore>;
 
   beforeEach(() => {
+    setActivePinia(createPinia());
     store = usePlaylistStore();
-    store.clearPlaylist();
   });
 
   it('playNext with empty queue and no item sets currentItem to null', () => {

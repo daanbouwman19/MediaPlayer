@@ -1,8 +1,10 @@
-import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, vi, beforeAll, beforeEach, afterAll } from 'vitest';
 import { mount } from '@vue/test-utils';
+import { setActivePinia } from 'pinia';
+import { createTestingPinia } from '@pinia/testing';
 import MediaControls from '@/components/MediaControls.vue';
+import { useUIStore } from '@/composables/useUIStore';
 
-// Minimal mocks needed for this test
 vi.mock('@/api', () => ({
   api: {
     getHeatmapProgress: vi.fn(),
@@ -11,20 +13,12 @@ vi.mock('@/api', () => ({
   },
 }));
 
-vi.mock('@/composables/useUIStore', () => ({
-  useUIStore: () => ({
-    isSidebarVisible: { value: false },
-  }),
-}));
-
-// Mock ResizeObserver
 const disconnectMock = vi.fn();
 const observeMock = vi.fn();
 
 beforeAll(() => {
   global.ResizeObserver = class ResizeObserver {
     constructor(callback: any) {
-      // Simulate sufficient width to show time
       callback([{ contentRect: { width: 1000 } }]);
     }
     observe = observeMock;
@@ -37,7 +31,6 @@ afterAll(() => {
   delete (global as any).ResizeObserver;
 });
 
-// Mock Icons to avoid warnings
 const mockIcon = vi.hoisted(() => ({ default: { template: '<svg></svg>' } }));
 vi.mock('@/components/icons/VlcIcon.vue', () => mockIcon);
 vi.mock('@/components/icons/StarIcon.vue', () => mockIcon);
@@ -55,7 +48,11 @@ vi.mock('@/components/ProgressBar.vue', () => ({
 }));
 
 describe('MediaControls Time Display', () => {
-  // Mock getBoundingClientRect
+  beforeEach(() => {
+    setActivePinia(createTestingPinia({ createSpy: vi.fn }));
+    useUIStore().isSidebarVisible = false;
+  });
+
   beforeAll(() => {
     Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', {
       configurable: true,
@@ -70,13 +67,12 @@ describe('MediaControls Time Display', () => {
     isControlsVisible: true,
     isImage: false,
     currentTime: 10,
-    duration: 70, // 1:10
+    duration: 70,
   };
 
   it('should toggle between total and remaining time', async () => {
     const wrapper = mount(MediaControls, { props: defaultProps });
 
-    // Allow component to mount and update width
     await wrapper.vm.$nextTick();
 
     const timeDisplay = wrapper.find('[data-testid="time-display"]');
@@ -85,10 +81,9 @@ describe('MediaControls Time Display', () => {
     expect(timeDisplay.attributes('title')).toBe('Show remaining time');
 
     await timeDisplay.trigger('click');
-    expect(timeDisplay.text()).toBe('00:10 / -01:00'); // 70 - 10 = 60s = 1:00
+    expect(timeDisplay.text()).toBe('00:10 / -01:00');
     expect(timeDisplay.attributes('title')).toBe('Show total duration');
 
-    // Click again to toggle back
     await timeDisplay.trigger('click');
     expect(timeDisplay.text()).toBe('00:10 / 01:10');
   });

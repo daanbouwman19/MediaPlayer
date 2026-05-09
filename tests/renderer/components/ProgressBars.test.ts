@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { mount } from '@vue/test-utils';
-import { nextTick, reactive, computed, ref } from 'vue';
+import { nextTick, ref } from 'vue';
+import { setActivePinia } from 'pinia';
+import { createTestingPinia } from '@pinia/testing';
 import AlbumsList from '@/components/AlbumsList.vue';
 import MediaDisplay from '@/components/MediaDisplay.vue';
 import ProgressBar from '@/components/ProgressBar.vue';
@@ -13,11 +15,7 @@ import { useTranscoder } from '@/composables/useTranscoder';
 import { createMockElectronAPI } from '../mocks/electronAPI';
 import type { LoadResult } from '../../../src/preload/preload';
 
-// Mock the composables
-vi.mock('@/composables/useLibraryStore');
-vi.mock('@/composables/usePlayerStore');
-vi.mock('@/composables/usePlaylistStore');
-vi.mock('@/composables/useUIStore');
+// Keep non-Pinia composables mocked
 vi.mock('@/composables/useMediaLoader');
 vi.mock('@/composables/useTranscoder');
 
@@ -36,11 +34,6 @@ vi.mock('@/composables/useSlideshow', () => ({
 global.window.electronAPI = createMockElectronAPI();
 
 describe('Progress Bars', () => {
-  let mockLibraryState: any;
-  let mockPlayerState: any;
-  let mockPlaylistState: any;
-  let mockUIState: any;
-
   beforeEach(() => {
     // Reset any previous mock implementations from other tests
     vi.clearAllMocks();
@@ -49,63 +42,37 @@ describe('Progress Bars', () => {
       url: '',
     } as LoadResult);
 
-    mockLibraryState = reactive({
-      allAlbums: [],
-      albumsSelectedForSlideshow: {},
-      smartPlaylists: [],
-      totalMediaInPool: 0,
-      supportedExtensions: { images: ['.jpg'], videos: ['.mp4'] },
-      imageExtensionsSet: new Set(['.jpg']),
-      videoExtensionsSet: new Set(['.mp4']),
-      mediaDirectories: [],
-      mediaUrlGenerator: (p: string) => `http://localhost/media${p}`,
-    });
+    setActivePinia(createTestingPinia({ createSpy: vi.fn }));
 
-    mockPlaylistState = reactive({
-      currentItem: { path: 'video.mp4', name: 'video.mp4' },
-      history: [],
-      queue: [],
-    });
+    // Set Pinia store state
+    useLibraryStore().allAlbums = [];
+    useLibraryStore().albumsSelectedForSlideshow = {};
+    useLibraryStore().smartPlaylists = [];
+    useLibraryStore().totalMediaInPool = 0;
+    useLibraryStore().supportedExtensions = { images: ['.jpg'], videos: ['.mp4'], all: ['.jpg', '.mp4'] };
+    useLibraryStore().imageExtensionsSet = new Set(['.jpg']) as any;
+    useLibraryStore().videoExtensionsSet = new Set(['.mp4']) as any;
+    useLibraryStore().mediaDirectories = [];
+    useLibraryStore().mediaUrlGenerator = ((p: string) => `http://localhost/media${p}`) as any;
 
-    mockPlayerState = reactive({
-      timerDuration: 5,
-      isTimerRunning: false,
-      timerProgress: 50,
-      isSlideshowActive: true,
-      pauseTimerOnPlay: false,
-      mainVideoElement: null,
-    });
+    usePlaylistStore().currentItem = { path: 'video.mp4', name: 'video.mp4' } as any;
+    usePlaylistStore().history = [];
+    usePlaylistStore().queue = [];
 
-    mockUIState = reactive({
-      isSourcesModalVisible: false,
-      gridMediaFiles: [],
-      viewMode: 'player',
-      mediaFilter: 'All',
-      isControlsVisible: true,
-      isSidebarVisible: true,
-      themeMode: 'system',
-    });
+    usePlayerStore().timerDuration = 5;
+    usePlayerStore().isTimerRunning = false;
+    usePlayerStore().timerProgress = 50;
+    usePlayerStore().isSlideshowActive = true;
+    usePlayerStore().pauseTimerOnPlay = false;
+    usePlayerStore().mainVideoElement = null;
 
-    (useLibraryStore as unknown as Mock).mockReturnValue(mockLibraryState);
-
-    (usePlayerStore as unknown as Mock).mockReturnValue(
-      Object.assign(mockPlayerState, {
-        resetState: vi.fn(),
-      }),
-    );
-
-    (usePlaylistStore as unknown as Mock).mockReturnValue(
-      Object.assign(mockPlaylistState, {
-        hasPrevious: computed(() => mockPlaylistState.history.length > 0),
-        hasNext: computed(() => mockPlaylistState.queue.length > 0),
-        setQueue: vi.fn(),
-        playNext: vi.fn(),
-        playPrevious: vi.fn(),
-        clearPlaylist: vi.fn(),
-      }),
-    );
-
-    (useUIStore as unknown as Mock).mockReturnValue(mockUIState);
+    useUIStore().isSourcesModalVisible = false;
+    useUIStore().gridMediaFiles = [];
+    useUIStore().viewMode = 'player';
+    useUIStore().mediaFilter = 'All';
+    useUIStore().isControlsVisible = true;
+    useUIStore().isSidebarVisible = true;
+    useUIStore().themeMode = 'system';
 
     (useMediaLoader as Mock).mockReturnValue({
       mediaUrl: ref('http://media/video.mp4'),
@@ -125,13 +92,13 @@ describe('Progress Bars', () => {
 
   it('should display the slideshow progress bar in AlbumsList when the timer is running', async () => {
     // Arrange
-    mockPlayerState.isTimerRunning = false;
-    mockPlayerState.timerProgress = 50;
+    usePlayerStore().isTimerRunning = false;
+    usePlayerStore().timerProgress = 50;
 
     const wrapper = mount(AlbumsList);
 
     // Act
-    mockPlayerState.isTimerRunning = true;
+    usePlayerStore().isTimerRunning = true;
     await nextTick();
 
     // Assert
@@ -142,8 +109,8 @@ describe('Progress Bars', () => {
   });
 
   it('should display and update the video progress bar in MediaDisplay', async () => {
-    mockPlaylistState.currentItem = { path: 'video.mp4', name: 'video.mp4' };
-    mockPlayerState.isTimerRunning = false;
+    usePlaylistStore().currentItem = { path: 'video.mp4', name: 'video.mp4' } as any;
+    usePlayerStore().isTimerRunning = false;
 
     const wrapper = mount(MediaDisplay);
 

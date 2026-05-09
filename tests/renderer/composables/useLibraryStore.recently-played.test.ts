@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { setActivePinia, createPinia } from 'pinia';
 import { useLibraryStore } from '../../../src/renderer/composables/useLibraryStore';
 import { api } from '../../../src/renderer/api';
 import { MediaLibraryItem } from '../../../src/core/types';
@@ -24,9 +25,9 @@ describe('useLibraryStore - Recently Played', () => {
   let store: ReturnType<typeof useLibraryStore>;
 
   beforeEach(() => {
+    setActivePinia(createPinia());
     store = useLibraryStore();
     vi.clearAllMocks();
-    store.resetLibraryState();
   });
 
   it('fetchHistory should fetch and populate historyMedia', async () => {

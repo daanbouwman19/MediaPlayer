@@ -1,9 +1,11 @@
 import { mount } from '@vue/test-utils';
-import { describe, it, expect, vi } from 'vitest';
-import { reactive } from 'vue';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { setActivePinia } from 'pinia';
+import { createTestingPinia } from '@pinia/testing';
 import AlbumsList from '../../../src/renderer/components/AlbumsList.vue';
 import { useLibraryStore } from '../../../src/renderer/composables/useLibraryStore';
 import { useUIStore } from '../../../src/renderer/composables/useUIStore';
+import { usePlayerStore } from '../../../src/renderer/composables/usePlayerStore';
 
 // Mock child components
 vi.mock('../../../src/renderer/components/AlbumTree.vue', () => ({
@@ -40,22 +42,6 @@ vi.mock('../../../src/renderer/components/icons/PauseIcon.vue', () => ({
   default: { template: '<svg>PauseIcon</svg>' },
 }));
 
-// Mock composables
-vi.mock('../../../src/renderer/composables/useLibraryStore', () => ({
-  useLibraryStore: vi.fn(),
-}));
-vi.mock('../../../src/renderer/composables/usePlayerStore', () => ({
-  usePlayerStore: vi.fn(() => ({
-    timerDuration: 0,
-    isTimerRunning: false,
-    timerProgress: 0,
-    isSlideshowActive: false,
-    pauseTimerOnPlay: false,
-  })),
-}));
-vi.mock('../../../src/renderer/composables/useUIStore', () => ({
-  useUIStore: vi.fn(),
-}));
 vi.mock('../../../src/renderer/composables/useSlideshow', () => ({
   useSlideshow: vi.fn(() => ({
     toggleAlbumSelection: vi.fn(),
@@ -74,31 +60,34 @@ vi.mock('../../../src/renderer/api', () => ({
 }));
 
 describe('AlbumsList Empty State', () => {
+  beforeEach(() => {
+    setActivePinia(createTestingPinia({ createSpy: vi.fn }));
+
+    useLibraryStore().allAlbums = [];
+    useLibraryStore().albumsSelectedForSlideshow = {};
+    useLibraryStore().smartPlaylists = [];
+    useLibraryStore().historyMedia = [];
+    useLibraryStore().mediaDirectories = [];
+
+    usePlayerStore().timerDuration = 0;
+    usePlayerStore().isTimerRunning = false;
+    usePlayerStore().timerProgress = 0;
+    usePlayerStore().isSlideshowActive = false;
+    usePlayerStore().pauseTimerOnPlay = false;
+
+    useUIStore().isSourcesModalVisible = false;
+    useUIStore().isSmartPlaylistModalVisible = false;
+    useUIStore().gridMediaFiles = [];
+    useUIStore().viewMode = 'player';
+    useUIStore().playlistToEdit = null;
+    useUIStore().mediaFilter = 'All';
+    useUIStore().themeMode = 'system';
+    useUIStore().isSidebarVisible = true;
+    useUIStore().isHistoryMode = false;
+    useUIStore().isControlsVisible = true;
+  });
+
   it('renders the empty state button when no albums are present', async () => {
-    // Setup store mocks
-    (useLibraryStore as unknown as any).mockReturnValue({
-      allAlbums: [],
-      albumsSelectedForSlideshow: {},
-      smartPlaylists: [],
-      fetchHistory: vi.fn(),
-      state: { historyMedia: [], mediaDirectories: [] },
-      mediaDirectories: [],
-    });
-
-    const mockUIStore = reactive({
-      isSourcesModalVisible: false,
-      isSmartPlaylistModalVisible: false,
-      gridMediaFiles: [],
-      viewMode: 'player',
-      playlistToEdit: null,
-      mediaFilter: 'All',
-      themeMode: 'system',
-      isSidebarVisible: true,
-      isHistoryMode: false,
-      isControlsVisible: true,
-    });
-    (useUIStore as unknown as any).mockReturnValue(mockUIStore);
-
     const wrapper = mount(AlbumsList, {
       global: {
         stubs: {
@@ -119,6 +108,6 @@ describe('AlbumsList Empty State', () => {
 
     // Verify interaction
     await emptyStateButton.trigger('click');
-    expect(mockUIStore.isSourcesModalVisible).toBe(true);
+    expect(useUIStore().isSourcesModalVisible).toBe(true);
   });
 });

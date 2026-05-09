@@ -1,12 +1,13 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import { setActivePinia, createPinia } from 'pinia';
 import { usePlaylistStore } from '@/composables/usePlaylistStore';
 
 describe('usePlaylistStore', () => {
   let store: ReturnType<typeof usePlaylistStore>;
 
   beforeEach(() => {
+    setActivePinia(createPinia());
     store = usePlaylistStore();
-    store.clearPlaylist();
   });
 
   it('should initialize with empty state', () => {
