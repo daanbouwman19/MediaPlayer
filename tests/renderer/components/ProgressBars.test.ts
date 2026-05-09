@@ -49,13 +49,19 @@ describe('Progress Bars', () => {
     useLibraryStore().albumsSelectedForSlideshow = {};
     useLibraryStore().smartPlaylists = [];
     useLibraryStore().totalMediaInPool = 0;
-    useLibraryStore().supportedExtensions = { images: ['.jpg'], videos: ['.mp4'], all: ['.jpg', '.mp4'] };
-    useLibraryStore().imageExtensionsSet = new Set(['.jpg']) as any;
-    useLibraryStore().videoExtensionsSet = new Set(['.mp4']) as any;
+    useLibraryStore().supportedExtensions = {
+      images: ['.jpg'],
+      videos: ['.mp4'],
+      all: ['.jpg', '.mp4'],
+    };
     useLibraryStore().mediaDirectories = [];
-    useLibraryStore().mediaUrlGenerator = ((p: string) => `http://localhost/media${p}`) as any;
+    useLibraryStore().mediaUrlGenerator = ((p: string) =>
+      `http://localhost/media${p}`) as any;
 
-    usePlaylistStore().currentItem = { path: 'video.mp4', name: 'video.mp4' } as any;
+    usePlaylistStore().currentItem = {
+      path: 'video.mp4',
+      name: 'video.mp4',
+    } as any;
     usePlaylistStore().history = [];
     usePlaylistStore().queue = [];
 
@@ -109,7 +115,10 @@ describe('Progress Bars', () => {
   });
 
   it('should display and update the video progress bar in MediaDisplay', async () => {
-    usePlaylistStore().currentItem = { path: 'video.mp4', name: 'video.mp4' } as any;
+    usePlaylistStore().currentItem = {
+      path: 'video.mp4',
+      name: 'video.mp4',
+    } as any;
     usePlayerStore().isTimerRunning = false;
 
     const wrapper = mount(MediaDisplay);

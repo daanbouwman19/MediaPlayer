@@ -8,7 +8,8 @@ describe('useMediaLoader Coverage Boost', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     setActivePinia(createTestingPinia({ createSpy: vi.fn }));
-    useLibraryStore().mediaUrlGenerator = (path: string) => `http://media/${path}`;
+    useLibraryStore().mediaUrlGenerator = (path: string) =>
+      `http://media/${path}`;
   });
 
   it('handles null item', async () => {
@@ -49,7 +50,7 @@ describe('useMediaLoader Coverage Boost', () => {
     const { loadMedia, error, currentLoadRequestId } = useMediaLoader();
     const item = { path: 'test.mp4' } as any;
 
-    useLibraryStore().mediaUrlGenerator = async () => {
+    useLibraryStore().mediaUrlGenerator = () => {
       currentLoadRequestId.value++;
       throw new Error('Async Fail');
     };

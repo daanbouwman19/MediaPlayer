@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
 import { setActivePinia } from 'pinia';
 import { createTestingPinia } from '@pinia/testing';
@@ -32,10 +32,15 @@ describe('MediaGrid.vue (Virtualization Keys)', () => {
     setActivePinia(createTestingPinia({ createSpy: vi.fn }));
 
     // Set Pinia store state
-    useLibraryStore().imageExtensionsSet = new Set(['.jpg', '.png']) as any;
-    useLibraryStore().videoExtensionsSet = new Set(['.mp4']) as any;
-    useLibraryStore().mediaUrlGenerator = ((path: string) => `url://${path}`) as any;
-    useLibraryStore().thumbnailUrlGenerator = ((path: string) => `thumb://${path}`) as any;
+    useLibraryStore().supportedExtensions = {
+      images: ['.jpg', '.png'],
+      videos: ['.mp4'],
+      all: ['.jpg', '.png', '.mp4'],
+    };
+    useLibraryStore().mediaUrlGenerator = ((path: string) =>
+      `url://${path}`) as any;
+    useLibraryStore().thumbnailUrlGenerator = ((path: string) =>
+      `thumb://${path}`) as any;
 
     usePlayerStore().isSlideshowActive = false;
     usePlayerStore().isTimerRunning = false;

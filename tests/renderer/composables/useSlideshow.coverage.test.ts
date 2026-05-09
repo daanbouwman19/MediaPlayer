@@ -16,7 +16,9 @@ describe('useSlideshow Coverage Boost', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.useFakeTimers();
-    setActivePinia(createTestingPinia({ stubActions: false, createSpy: vi.fn }));
+    setActivePinia(
+      createTestingPinia({ stubActions: false, createSpy: vi.fn }),
+    );
     useLibraryStore().supportedExtensions = {
       videos: ['.mp4', '.webm'],
       images: ['.png', '.jpg', '.jpeg'],

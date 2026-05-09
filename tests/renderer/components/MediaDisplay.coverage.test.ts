@@ -1,4 +1,12 @@
-import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
+import {
+  describe,
+  it,
+  expect,
+  vi,
+  beforeEach,
+  afterEach,
+  type Mock,
+} from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
 import { ref } from 'vue';
 import { setActivePinia } from 'pinia';
@@ -102,9 +110,14 @@ describe('MediaDisplay Coverage Boost', () => {
     setActivePinia(createTestingPinia({ createSpy: vi.fn }));
 
     // Set Pinia store state
-    useLibraryStore().imageExtensionsSet = new Set(['.jpg', '.png']) as any;
+    useLibraryStore().supportedExtensions = {
+      images: ['.jpg', '.png'],
+      videos: ['.mp4'],
+      all: ['.jpg', '.png', '.mp4'],
+    };
     useLibraryStore().mediaDirectories = [];
-    useLibraryStore().thumbnailUrlGenerator = ((path: string) => `thumb://${path}`) as any;
+    useLibraryStore().thumbnailUrlGenerator = ((path: string) =>
+      `thumb://${path}`) as any;
 
     usePlayerStore().pauseTimerOnPlay = false;
     usePlayerStore().isTimerRunning = false;
@@ -158,6 +171,10 @@ describe('MediaDisplay Coverage Boost', () => {
       info: vi.fn(),
     };
     (useToast as Mock).mockReturnValue(mockToast);
+  });
+
+  afterEach(() => {
+    (api.getMetadata as Mock).mockClear();
   });
 
   it('shows welcome screen when no media directories', async () => {
@@ -270,7 +287,11 @@ describe('MediaDisplay Coverage Boost', () => {
 
   it('handles image slideshow', async () => {
     usePlaylistStore().currentItem = { path: 'img.jpg' } as any;
-    useLibraryStore().imageExtensionsSet = new Set(['.jpg']) as any;
+    useLibraryStore().supportedExtensions = {
+      images: ['.jpg'],
+      videos: ['.mp4'],
+      all: ['.jpg', '.mp4'],
+    };
     mockMediaLoader.mediaUrl.value = 'img-url';
 
     mount(MediaDisplay);
@@ -427,7 +448,11 @@ describe('MediaDisplay Coverage Boost', () => {
   });
 
   it('restores saved playback position on video load', async () => {
-    useLibraryStore().imageExtensionsSet = new Set(['.jpg']) as any;
+    useLibraryStore().supportedExtensions = {
+      images: ['.jpg'],
+      videos: ['.mp4'],
+      all: ['.jpg', '.mp4'],
+    };
     (api.getMetadata as Mock).mockResolvedValue({
       'v.mp4': { playbackPosition: 42, duration: 100 },
     });
@@ -449,8 +474,15 @@ describe('MediaDisplay Coverage Boost', () => {
   });
 
   it('skips metadata fetch for image media items', async () => {
-    useLibraryStore().imageExtensionsSet = new Set(['.jpg']) as any;
-    usePlaylistStore().currentItem = { name: 'photo.jpg', path: 'photo.jpg' } as any;
+    useLibraryStore().supportedExtensions = {
+      images: ['.jpg'],
+      videos: ['.mp4'],
+      all: ['.jpg', '.mp4'],
+    };
+    usePlaylistStore().currentItem = {
+      name: 'photo.jpg',
+      path: 'photo.jpg',
+    } as any;
     mount(MediaDisplay);
     await flushPromises();
     expect(api.getMetadata).not.toHaveBeenCalled();
@@ -534,7 +566,11 @@ describe('MediaDisplay Coverage Boost', () => {
 
   it('handles image media error', async () => {
     usePlaylistStore().currentItem = { path: 'img.jpg' } as any;
-    useLibraryStore().imageExtensionsSet = new Set(['.jpg']) as any;
+    useLibraryStore().supportedExtensions = {
+      images: ['.jpg'],
+      videos: ['.mp4'],
+      all: ['.jpg', '.mp4'],
+    };
     const wrapper = mount(MediaDisplay);
     await flushPromises();
 

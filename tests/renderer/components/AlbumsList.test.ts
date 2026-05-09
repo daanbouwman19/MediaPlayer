@@ -86,7 +86,9 @@ describe('AlbumsList.vue', () => {
     useLibraryStore().albumsSelectedForSlideshow = { Album1: true };
     useLibraryStore().smartPlaylists = [];
     useLibraryStore().historyMedia = [];
-    useLibraryStore().mediaDirectories = [{ path: '/test', isActive: true }] as any;
+    useLibraryStore().mediaDirectories = [
+      { path: '/test', isActive: true },
+    ] as any;
 
     usePlayerStore().timerDuration = 5;
     usePlayerStore().isTimerRunning = false;

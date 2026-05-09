@@ -14,13 +14,6 @@ vi.mock('../../../src/renderer/api', () => ({
   },
 }));
 
-// Mock localStorage
-const localStorageMock = {
-  getItem: vi.fn(),
-  setItem: vi.fn(),
-};
-global.localStorage = localStorageMock as any;
-
 describe('useLibraryStore - Recently Played', () => {
   let store: ReturnType<typeof useLibraryStore>;
 

@@ -64,12 +64,18 @@ describe('Palette Accessibility Improvements', () => {
     setActivePinia(createTestingPinia({ createSpy: vi.fn }));
 
     // Set Pinia store state
-    useLibraryStore().imageExtensionsSet = new Set(['.jpg', '.png']) as any;
-    useLibraryStore().videoExtensionsSet = new Set(['.mp4', '.mkv']) as any;
+    useLibraryStore().supportedExtensions = {
+      images: ['.jpg', '.png'],
+      videos: ['.mp4', '.mkv'],
+      all: ['.jpg', '.png', '.mp4', '.mkv'],
+    };
     useLibraryStore().mediaDirectories = [];
     useLibraryStore().thumbnailUrlGenerator = vi.fn() as any;
 
-    usePlaylistStore().currentItem = { name: 'test.mp4', path: '/test.mp4' } as any;
+    usePlaylistStore().currentItem = {
+      name: 'test.mp4',
+      path: '/test.mp4',
+    } as any;
     usePlaylistStore().history = [];
     usePlaylistStore().queue = [{ name: 'next.mp4', path: '/next.mp4' }] as any;
 
@@ -125,7 +131,9 @@ describe('Palette Accessibility Improvements', () => {
       const wrapper = mount(MediaDisplay, commonMountOptions);
 
       // Add historical item to enable "Previous"
-      usePlaylistStore().history = [{ name: 'prev.mp4', path: '/prev.mp4' }] as any;
+      usePlaylistStore().history = [
+        { name: 'prev.mp4', path: '/prev.mp4' },
+      ] as any;
       await wrapper.vm.$nextTick();
 
       // Trigger ResizeObserver callback manually to ensure stars & buttons are evaluated

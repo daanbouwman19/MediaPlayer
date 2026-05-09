@@ -71,9 +71,13 @@ describe('MediaDisplay Combined Tests', () => {
     setActivePinia(createTestingPinia({ createSpy: vi.fn }));
 
     // Set Pinia store state
-    useLibraryStore().imageExtensionsSet = new Set(['.jpg', '.png']) as any;
-    useLibraryStore().videoExtensionsSet = new Set(['.mp4']) as any;
-    useLibraryStore().mediaUrlGenerator = ((path: string) => `media://${path}`) as any;
+    useLibraryStore().supportedExtensions = {
+      images: ['.jpg', '.png'],
+      videos: ['.mp4'],
+      all: ['.jpg', '.png', '.mp4'],
+    };
+    useLibraryStore().mediaUrlGenerator = ((path: string) =>
+      `media://${path}`) as any;
     useLibraryStore().mediaDirectories = [];
 
     usePlayerStore().isSlideshowActive = false;

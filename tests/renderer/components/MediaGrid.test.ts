@@ -48,8 +48,6 @@ describe('MediaGrid.vue', () => {
     (ResizeObserverMock as any).mock.calls = [];
 
     // Set Pinia store state
-    useLibraryStore().imageExtensionsSet = new Set(['.jpg', '.png']) as any;
-    useLibraryStore().videoExtensionsSet = new Set(['.mp4', '.webm']) as any;
     useLibraryStore().supportedExtensions = {
       images: ['.jpg', '.png'],
       videos: ['.mp4', '.webm'],

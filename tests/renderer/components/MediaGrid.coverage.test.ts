@@ -48,10 +48,10 @@ describe('MediaGrid.vue Coverage', () => {
       videos: ['.mp4', '.mkv'],
       all: ['.jpg', '.png', '.mp4', '.mkv'],
     };
-    useLibraryStore().imageExtensionsSet = new Set(['.jpg', '.png']) as any;
-    useLibraryStore().videoExtensionsSet = new Set(['.mp4', '.mkv']) as any;
-    useLibraryStore().mediaUrlGenerator = ((path: string) => `url://${path}`) as any;
-    useLibraryStore().thumbnailUrlGenerator = ((path: string) => `thumb://${path}`) as any;
+    useLibraryStore().mediaUrlGenerator = ((path: string) =>
+      `url://${path}`) as any;
+    useLibraryStore().thumbnailUrlGenerator = ((path: string) =>
+      `thumb://${path}`) as any;
 
     usePlayerStore().isSlideshowActive = false;
     usePlayerStore().isTimerRunning = false;
@@ -259,7 +259,9 @@ describe('MediaGrid.vue Coverage', () => {
     // Simulate delayed generator availability in store
     useLibraryStore().mediaUrlGenerator = null as any;
 
-    useUIStore().gridMediaFiles = [{ name: 'img.jpg', path: '/img.jpg' }] as any;
+    useUIStore().gridMediaFiles = [
+      { name: 'img.jpg', path: '/img.jpg' },
+    ] as any;
     const wrapper = mountGrid();
     await flushPromises();
 
@@ -279,14 +281,17 @@ describe('MediaGrid.vue Coverage', () => {
     expect(wrapper.find('img').attributes('src')).toBe('');
 
     // Update store state
-    useLibraryStore().mediaUrlGenerator = ((path: string) => `thumb://${path}`) as any;
+    useLibraryStore().mediaUrlGenerator = ((path: string) =>
+      `thumb://${path}`) as any;
     await nextTick();
 
     expect(wrapper.find('img').attributes('src')).toBe('thumb:///img.jpg');
   });
 
   it('handleImageError fallback to full URL', async () => {
-    useUIStore().gridMediaFiles = [{ name: 'img.jpg', path: '/img.jpg' }] as any;
+    useUIStore().gridMediaFiles = [
+      { name: 'img.jpg', path: '/img.jpg' },
+    ] as any;
     const wrapper = mountGrid();
     await flushPromises();
 
