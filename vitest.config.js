@@ -2,6 +2,13 @@ import { defineConfig } from 'vitest/config';
 import { resolve } from 'path';
 import vue from '@vitejs/plugin-vue';
 
+// For Node 25+ native localStorage, we provide a unique file per worker 
+// to avoid "unable to open database file" errors in parallel CI runs.
+if (typeof process !== 'undefined') {
+  const workerId = process.env.VITEST_POOL_ID || '0';
+  process.env.NODE_OPTIONS = `${process.env.NODE_OPTIONS || ''} --localstorage-file=tests/temp/storage-${workerId}.db`.trim();
+}
+
 export default defineConfig({
   plugins: [vue()],
   test: {
