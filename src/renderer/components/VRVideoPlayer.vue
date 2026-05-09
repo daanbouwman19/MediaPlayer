@@ -11,7 +11,7 @@
     <!-- VR Controls Overlay (Moved down to avoid Header overlap) -->
     <transition name="fade">
       <div
-        v-show="isControlsVisible"
+        v-if="isControlsVisible"
         class="absolute left-4 right-4 z-20 flex justify-between items-start pointer-events-none"
         :class="[isFullscreen ? 'top-6' : 'top-24']"
         data-testid="vr-controls-container"
@@ -379,7 +379,7 @@ const handleResize = () => {
 };
 
 const animate = () => {
-  animationId = requestAnimationFrame(animate);
+  animationId = window.requestAnimationFrame(animate);
 
   if (isMotionControlActive.value && camera && deviceOrientation) {
     // Custom Device Orientation Logic (Simplified from Three.js examples)

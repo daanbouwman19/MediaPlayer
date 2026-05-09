@@ -11,47 +11,6 @@ beforeEach(() => {
   setActivePinia(createPinia());
 });
 
-// Synchronous requestAnimationFrame stub with recursion guard.
-// Executes the callback immediately so tests don't need to advance timers.
-let rafDepth = 0;
-const rafStub = (cb: FrameRequestCallback): number => {
-  if (rafDepth > 10) {
-    // Prevent infinite recursion in animation loops by deferring.
-    return setTimeout(() => {
-      try {
-        cb(Date.now());
-      } catch {
-        // Swallow errors during environment disposal.
-      }
-    }, 0) as unknown as number;
-  }
-  rafDepth++;
-  try {
-    cb(Date.now());
-  } catch (err) {
-    // Swallow disposal-related errors that occur after the test environment
-    // has been torn down (e.g. recursive RAF loops or late canvas calls).
-    if (
-      (err instanceof ReferenceError &&
-        err.message.includes('requestAnimationFrame')) ||
-      (err instanceof Error &&
-        (err.message.includes('canvas') || err.message.includes('context')))
-    ) {
-      return 1;
-    }
-    throw err;
-  } finally {
-    rafDepth--;
-  }
-  return 1;
-};
-
-const cafStub = (id: number) => {
-  if (id > 1) {
-    clearTimeout(id);
-  }
-};
-
 // happy-dom's localStorage is non-functional in this configuration
 // (node warns about --localstorage-file), so we provide a simple in-memory mock.
 const localStorageMock = (() => {
@@ -76,5 +35,17 @@ const localStorageMock = (() => {
 
 vi.stubGlobal('localStorage', localStorageMock);
 
-vi.stubGlobal('requestAnimationFrame', rafStub);
-vi.stubGlobal('cancelAnimationFrame', cafStub);
+const rafMock = (cb: FrameRequestCallback) =>
+  setTimeout(() => cb(performance.now()), 0);
+
+const cafMock = (id: NodeJS.Timeout) => clearTimeout(id);
+
+vi.stubGlobal('requestAnimationFrame', rafMock);
+vi.stubGlobal('cancelAnimationFrame', cafMock);
+
+if (typeof window !== 'undefined') {
+  window.requestAnimationFrame =
+    rafMock as unknown as typeof window.requestAnimationFrame;
+  window.cancelAnimationFrame =
+    cafMock as unknown as typeof window.cancelAnimationFrame;
+}

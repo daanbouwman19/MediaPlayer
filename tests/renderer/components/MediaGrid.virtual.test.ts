@@ -91,6 +91,10 @@ describe('MediaGrid.vue (Virtual Scrolling)', () => {
     // 1000 < 1024 → 3 cols
     triggerResize(1000);
     await wrapper.vm.$nextTick();
+    // In our tests, `requestAnimationFrame` is mocked to use `setTimeout(..., 0)`.
+    // Wait for the ResizeObserver callback's requestAnimationFrame to fire.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    await wrapper.vm.$nextTick(); // wait for computed
 
     const vm = wrapper.vm as typeof wrapper.vm & { columnCount: number };
     expect(vm.columnCount).toBe(3);
