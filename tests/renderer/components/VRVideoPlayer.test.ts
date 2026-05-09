@@ -247,24 +247,62 @@ describe('VRVideoPlayer.vue', () => {
   });
 
   it('updates video init source when src prop changes', async () => {
-    const wrapper = mount(VRVideoPlayer, { props: defaultProps });
+    const videoMock = document.createElement('video');
+    videoMock.play = vi.fn().mockRejectedValue(new Error('play failed'));
+    videoMock.pause = vi.fn();
+    videoMock.load = vi.fn();
+
+    const originalCreateElement = document.createElement.bind(document);
+    const createElementSpy = vi
+      .spyOn(document, 'createElement')
+      .mockImplementation(
+        (tagName: string, options?: ElementCreationOptions): any =>
+          tagName === 'video'
+            ? videoMock
+            : originalCreateElement(tagName, options),
+      );
+
+    const wrapper = mount(VRVideoPlayer, { props: { ...defaultProps, isPlaying: true } });
     await wrapper.vm.$nextTick();
 
     await wrapper.setProps({ src: 'http://test/video2.mp4' });
     await wrapper.vm.$nextTick();
+    await new Promise(resolve => setTimeout(resolve, 0));
 
-    // Implicitly checking that no error is thrown and logic runs.
-    // We mocked createElement so we theoretically could check if our mock's src changed
-    // if we captured it, but for coverage this branch execution is sufficient.
+    expect(videoMock.src).toMatch(/video2\.mp4$/);
+    expect(videoMock.load).toHaveBeenCalled();
+    expect(videoMock.play).toHaveBeenCalled();
+
+    // Also test changing playing prop
+    await wrapper.setProps({ isPlaying: false });
+    await wrapper.vm.$nextTick();
+    expect(videoMock.pause).toHaveBeenCalled();
+
+    await wrapper.setProps({ isPlaying: true });
+    await wrapper.vm.$nextTick();
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    createElementSpy.mockRestore();
   });
 
   it('handles window resize', async () => {
     const wrapper = mount(VRVideoPlayer, { props: defaultProps });
     await wrapper.vm.$nextTick();
+    await wrapper.vm.$nextTick(); // Wait for initThree to complete
 
     window.dispatchEvent(new Event('resize'));
     // Wait for logic
     await wrapper.vm.$nextTick();
+  });
+
+  it('handles window resize when missing refs', async () => {
+    const wrapper = mount(VRVideoPlayer, { props: defaultProps });
+    // Don't wait for initThree to complete
+
+    // Unmount to clear refs
+    wrapper.unmount();
+
+    window.dispatchEvent(new Event('resize'));
   });
 
   it('handles fullscreen error', async () => {
@@ -352,6 +390,66 @@ describe('VRVideoPlayer.vue', () => {
     expect(wrapper.emitted('timeupdate')).toBeTruthy();
   });
 
+  it('handles handleLoadedMetadata with event', async () => {
+    const wrapper = mount(VRVideoPlayer, { props: defaultProps });
+    await wrapper.vm.$nextTick();
+
+    const mockEvent = new Event('loadedmetadata');
+    wrapper.vm.handleLoadedMetadata(mockEvent);
+
+    expect(wrapper.emitted('loadedmetadata')).toBeTruthy();
+    expect(wrapper.emitted('loadedmetadata')[0]).toEqual([mockEvent]);
+  });
+
+  it('handles poster prop in initThree', async () => {
+    // We need to capture the video element created to verify poster is set
+    const videoMock = document.createElement('video');
+    const createElementSpy = vi
+      .spyOn(document, 'createElement')
+      .mockImplementation((tagName: string) => {
+        if (tagName === 'video') return videoMock;
+        return window.document.constructor.prototype.createElement.call(
+          document,
+          tagName,
+        );
+      });
+
+    const wrapper = mount(VRVideoPlayer, {
+      props: { ...defaultProps, poster: 'test-poster.jpg' },
+    });
+
+    await wrapper.vm.$nextTick();
+    await wrapper.vm.$nextTick(); // Wait for initThree
+
+    // Check if video.poster was set
+    expect(videoMock.poster).toMatch(/test-poster\.jpg$/);
+
+    createElementSpy.mockRestore();
+  });
+
+  it('handles setTimeout callback for showPermissionDenied', async () => {
+    vi.useFakeTimers();
+    const wrapper = mount(VRVideoPlayer, { props: defaultProps });
+    await wrapper.vm.$nextTick();
+
+    const requestPermission = vi.fn().mockResolvedValue('denied');
+    const originalDOE = (window as any).DeviceOrientationEvent;
+    (window as any).DeviceOrientationEvent = { requestPermission };
+
+    const recenterBtn = wrapper.find('button[title="Recenter VR View"]');
+    await recenterBtn.trigger('click');
+    await flushPromises();
+
+    expect((wrapper.vm as any).showPermissionDeniedToast).toBe(true);
+
+    vi.advanceTimersByTime(3000);
+
+    expect((wrapper.vm as any).showPermissionDeniedToast).toBe(false);
+
+    (window as any).DeviceOrientationEvent = originalDOE;
+    vi.useRealTimers();
+  });
+
   it('toggles fullscreen', async () => {
     const wrapper = mount(VRVideoPlayer, { props: defaultProps });
     // Wait for initThree (nextTick inside onMounted)
@@ -377,6 +475,12 @@ describe('VRVideoPlayer.vue', () => {
     // Enter Fullscreen - Button not visible, call method
     wrapper.vm.toggleFullscreen();
     expect(requestFullscreenMock).toHaveBeenCalled();
+
+    // Test early return when container is missing
+    const oldContainer = (wrapper.vm as any).container;
+    (wrapper.vm as any).container = null;
+    wrapper.vm.toggleFullscreen();
+    (wrapper.vm as any).container = oldContainer;
 
     // Mock fullscreen active
     Object.defineProperty(document, 'fullscreenElement', {
@@ -432,6 +536,25 @@ describe('VRVideoPlayer.vue', () => {
     Object.defineProperty(videoMock, 'paused', { value: false });
     await playPauseBtn.trigger('click');
     expect(videoMock.pause).toHaveBeenCalled();
+
+    // 3. Play again but with error
+    Object.defineProperty(videoMock, 'paused', { value: true });
+    videoMock.play = vi.fn().mockRejectedValue(new Error('play error'));
+    await playPauseBtn.trigger('click');
+    await wrapper.vm.$nextTick();
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    // Test alias
+    wrapper.vm.togglePlayback();
+    await wrapper.vm.$nextTick();
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    // Test early return
+    // Temporarily replace video element
+    const oldVideo = (wrapper.vm as any).video;
+    (wrapper.vm as any).video = null;
+    wrapper.vm.togglePlayback();
+    (wrapper.vm as any).video = oldVideo;
 
     createElementSpy.mockRestore();
   });
@@ -508,6 +631,12 @@ describe('VRVideoPlayer.vue', () => {
     // 3. Click recenter again - triggers the 'else' branch
     await recenterBtn.trigger('click');
 
+    // 4. Trigger again with missing alpha to cover the other branch
+    const eventNoAlpha = new Event('deviceorientation');
+    Object.defineProperty(eventNoAlpha, 'alpha', { value: null });
+    window.dispatchEvent(eventNoAlpha);
+    await recenterBtn.trigger('click');
+
     // Restore
     (window as any).DeviceOrientationEvent = originalDOE;
   });
@@ -525,9 +654,39 @@ describe('VRVideoPlayer.vue', () => {
     (event as any).gamma = 30;
     window.dispatchEvent(event);
 
-    // Mock animate loop effect by checking if camera updated?
-    // Since we mocked camera quaternion, we can spy on it?
-    // We can't easily spy on the camera created inside initThree unless we spy on `THREE.PerspectiveCamera` constructor return value.
-    // The existing mock for PerspectiveCamera returns an object with position.set. We can extend it.
+    // Wait a frame for requestAnimationFrame
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    // At this point, the animate loop should have processed the event.
+    // To ensure coverage of lines 386-412, we trigger another event with null properties.
+    const eventNull = new Event('deviceorientation');
+    (eventNull as any).alpha = null;
+    (eventNull as any).beta = null;
+    (eventNull as any).gamma = null;
+    window.dispatchEvent(eventNull);
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    // And test with screenOrientation change
+    const resizeEvent = new Event('orientationchange');
+    Object.defineProperty(window, 'orientation', { value: 90, writable: true, configurable: true });
+    window.dispatchEvent(resizeEvent);
+    await new Promise(resolve => setTimeout(resolve, 50));
+  });
+
+  it('updates with controls when motion is not active', async () => {
+    const wrapper = mount(VRVideoPlayer, { props: defaultProps });
+    await wrapper.vm.$nextTick();
+
+    (wrapper.vm as any).isMotionControlActive = false;
+
+    // Simulate event data
+    const event = new Event('deviceorientation');
+    (event as any).alpha = 10;
+    (event as any).beta = 20;
+    (event as any).gamma = 30;
+    window.dispatchEvent(event);
+
+    // Wait a frame for requestAnimationFrame
+    await new Promise(resolve => setTimeout(resolve, 50));
   });
 });
