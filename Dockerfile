@@ -1,5 +1,5 @@
 # Stage 1: Build assets
-FROM node:25 AS builder
+FROM node:24 AS builder
 
 WORKDIR /app
 
@@ -20,8 +20,8 @@ COPY . .
 RUN npm run build:all
 
 # Stage 2: Install production dependencies
-# We use the full node:25 image to ensure native modules like better-sqlite3 are correctly built
-FROM node:25 AS prod-deps
+# We use the full node:24 image to ensure native modules like better-sqlite3 are correctly built
+FROM node:24 AS prod-deps
 
 WORKDIR /app
 
@@ -32,7 +32,7 @@ COPY package.json package-lock.json ./
 RUN --mount=type=cache,target=/root/.npm npm pkg delete scripts.prepare && npm ci --omit=dev
 
 # Stage 3: Final Runtime
-FROM node:25-slim AS runtime
+FROM node:24-slim AS runtime
 
 # Create a non-root user and group for security
 RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 appuser
