@@ -116,9 +116,11 @@ describe('VRVideoPlayer.vue', () => {
     await wrapper.vm.$nextTick();
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    // As we can't easily assert the internal off-screen video element's poster,
-    // we simply mount it to ensure the branch `if (props.poster)` in initThree is executed.
-    expect(THREE.Scene).toHaveBeenCalled();
+    const emitted = wrapper.emitted('update:video-element');
+    expect(emitted).toBeTruthy();
+    expect(emitted![0][0]).toBeInstanceOf(HTMLVideoElement);
+    const videoElement = emitted![0][0] as HTMLVideoElement;
+    expect(videoElement.poster).toContain('test-poster.jpg');
   });
 
   it('initializes Three.js on mount', async () => {
