@@ -10,9 +10,6 @@ beforeEach(() => {
   setActivePinia(createPinia());
 });
 
-// Rely on Node 25's native localStorage with unique per-worker persistence
-// configured in vitest.config.js to avoid concurrency issues in CI.
-
 if (typeof window !== 'undefined') {
   // Minimal async rAF polyfill for components that use it (like VR)
   if (!window.requestAnimationFrame) {

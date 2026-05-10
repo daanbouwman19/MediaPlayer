@@ -50,7 +50,7 @@
   },
   "license": "MIT",
   "engines": {
-    "node": "^20.19.0 || >=22.12.0"
+    "node": ">=24.0.0"
   },
   "build": {
     "publish": {
@@ -125,7 +125,7 @@
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/lusca": "^1.7.5",
-    "@types/node": "^25.6.2",
+    "@types/node": "^24.12.3",
     "@types/range-parser": "^1.2.7",
     "@types/supertest": "^7.2.0",
     "@types/three": "^0.184.1",
