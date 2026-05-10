@@ -109,6 +109,20 @@ describe('VRVideoPlayer.vue', () => {
     // Fullscreen button is now an icon and conditional, so removing text check
   });
 
+  it('sets video poster when poster prop is provided', async () => {
+    const wrapper = mount(VRVideoPlayer, {
+      props: { ...defaultProps, poster: 'test-poster.jpg' },
+    });
+    await wrapper.vm.$nextTick();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const emitted = wrapper.emitted('update:video-element');
+    expect(emitted).toBeTruthy();
+    expect(emitted![0][0]).toBeInstanceOf(HTMLVideoElement);
+    const videoElement = emitted![0][0] as HTMLVideoElement;
+    expect(videoElement.poster).toContain('test-poster.jpg');
+  });
+
   it('initializes Three.js on mount', async () => {
     const wrapper = mount(VRVideoPlayer, { props: defaultProps });
     await wrapper.vm.$nextTick();
@@ -216,10 +230,14 @@ describe('VRVideoPlayer.vue', () => {
     Object.defineProperty(videoMock, 'videoWidth', { value: 1920 });
     Object.defineProperty(videoMock, 'videoHeight', { value: 1080 });
 
-    wrapper.vm.handleLoadedMetadata();
+    // Ensure we hit the `if (event)` branch in handleLoadedMetadata
+    const mockEvent = new Event('loadedmetadata');
+    wrapper.vm.handleLoadedMetadata(mockEvent);
     await wrapper.vm.$nextTick();
 
     expect((wrapper.vm as any).isStereo).toBe(false);
+    expect(wrapper.emitted().loadedmetadata).toBeTruthy();
+    expect(wrapper.emitted().loadedmetadata[0]).toEqual([mockEvent]);
 
     createElementSpy.mockRestore();
   });
@@ -459,6 +477,7 @@ describe('VRVideoPlayer.vue', () => {
   });
 
   it('handles recenterVR with permission denied', async () => {
+    vi.useFakeTimers();
     const wrapper = mount(VRVideoPlayer, { props: defaultProps });
 
     const requestPermission = vi.fn().mockResolvedValue('denied');
@@ -473,7 +492,12 @@ describe('VRVideoPlayer.vue', () => {
     expect((wrapper.vm as any).showPermissionDeniedToast).toBe(true);
     expect((wrapper.vm as any).isMotionControlActive).toBe(false);
 
+    // Advance timers to clear the toast
+    vi.advanceTimersByTime(3000);
+    expect((wrapper.vm as any).showPermissionDeniedToast).toBe(false);
+
     (window as any).DeviceOrientationEvent = originalDOE;
+    vi.useRealTimers();
   });
 
   it('handles recenterVR without permission requirement (non-iOS)', async () => {
@@ -515,6 +539,7 @@ describe('VRVideoPlayer.vue', () => {
   it('updates camera quaternion in animation loop when motion active', async () => {
     const wrapper = mount(VRVideoPlayer, { props: defaultProps });
     await wrapper.vm.$nextTick();
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
     (wrapper.vm as any).isMotionControlActive = true;
 
@@ -525,9 +550,17 @@ describe('VRVideoPlayer.vue', () => {
     (event as any).gamma = 30;
     window.dispatchEvent(event);
 
-    // Mock animate loop effect by checking if camera updated?
-    // Since we mocked camera quaternion, we can spy on it?
-    // We can't easily spy on the camera created inside initThree unless we spy on `THREE.PerspectiveCamera` constructor return value.
-    // The existing mock for PerspectiveCamera returns an object with position.set. We can extend it.
+    // Since we use requestAnimationFrame, we can invoke the animate function manually
+    // or advance fake timers to let it run.
+    vi.useFakeTimers();
+    vi.advanceTimersByTime(16);
+    vi.useRealTimers();
+
+    // The mock for THREE.PerspectiveCamera returns an object with `quaternion.copy` which is a vi.fn().
+    // We want to ensure it was called to update the rotation.
+    // The animate loop is internal, but because we triggered a re-render/RAF, let's verify if `THREE.Quaternion` gets called
+    // or if the camera's quaternion copy was called.
+    expect(THREE.Quaternion).toHaveBeenCalled();
+    expect(THREE.Euler).toHaveBeenCalled();
   });
 });
