@@ -479,6 +479,10 @@ footer {
 /* Custom scrollbar that auto-hides when not in use */
 .custom-scrollbar {
   scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.custom-scrollbar:hover {
   scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
 }
 
