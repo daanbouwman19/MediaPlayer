@@ -76,12 +76,12 @@
       </div>
     </div>
 
-    <!-- 2. CONTENT WRAPPER: Scrollable container -->
-    <div class="grow relative flex flex-col min-h-0">
-      <!-- SINGLE SCROLLABLE AREA -->
-      <div class="grow overflow-y-auto custom-scrollbar flex flex-col gap-4">
+    <!-- 2. CONTENT WRAPPER: Albums scrollable, controls fixed at bottom -->
+    <div class="grow relative flex flex-col min-h-0 gap-4">
+      <!-- SCROLLABLE ALBUMS AREA -->
+      <div class="grow overflow-y-auto custom-scrollbar min-h-0">
         <!-- A. ALBUMS & PLAYLISTS LIST CARD -->
-        <div class="shrink-0 px-2 py-4 glass-panel rounded-xl">
+        <div class="px-2 py-4 glass-panel rounded-xl">
           <!-- SECTION: ALBUMS -->
           <div class="mb-6">
             <h3
@@ -316,10 +316,11 @@
             </ul>
           </div>
         </div>
-        <!-- End of list content -->
+      </div>
+      <!-- End of scrollable albums area -->
 
-        <!-- B. SLIDESHOW SETTINGS CARD -->
-        <div class="shrink-0 p-3 flex flex-col gap-2 glass-panel rounded-xl">
+      <!-- B. SLIDESHOW SETTINGS CARD -->
+      <div class="shrink-0 p-3 flex flex-col gap-2 glass-panel rounded-xl">
           <!-- Media Type Filters -->
           <div class="flex justify-center bg-black/20 rounded-lg p-1 gap-1">
             <button
@@ -443,7 +444,6 @@
         </div>
       </div>
     </div>
-  </div>
 </template>
 
 <script setup lang="ts">
