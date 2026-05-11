@@ -76,12 +76,12 @@
       </div>
     </div>
 
-    <!-- 2. CONTENT WRAPPER: Scrollable container -->
-    <div class="grow relative flex flex-col min-h-0">
-      <!-- SINGLE SCROLLABLE AREA -->
-      <div class="grow overflow-y-auto custom-scrollbar flex flex-col gap-4">
+    <!-- 2. CONTENT WRAPPER: Albums scrollable, controls fixed at bottom -->
+    <div class="grow relative flex flex-col min-h-0 gap-4">
+      <!-- SCROLLABLE ALBUMS AREA -->
+      <div class="grow overflow-y-auto custom-scrollbar min-h-0">
         <!-- A. ALBUMS & PLAYLISTS LIST CARD -->
-        <div class="shrink-0 px-2 py-4 glass-panel rounded-xl">
+        <div class="px-2 py-4 glass-panel rounded-xl">
           <!-- SECTION: ALBUMS -->
           <div class="mb-6">
             <h3
@@ -316,130 +316,128 @@
             </ul>
           </div>
         </div>
-        <!-- End of list content -->
+      </div>
+      <!-- End of scrollable albums area -->
 
-        <!-- B. SLIDESHOW SETTINGS CARD -->
-        <div class="shrink-0 p-3 flex flex-col gap-2 glass-panel rounded-xl">
-          <!-- Media Type Filters -->
-          <div class="flex justify-center bg-black/20 rounded-lg p-1 gap-1">
-            <button
-              v-for="filter in MEDIA_FILTERS"
-              :key="filter"
-              class="flex-1 px-2 py-1.5 text-xs font-medium rounded-md transition-all duration-200"
-              :class="
-                mediaFilter === filter
-                  ? 'bg-accent text-button-text shadow-sm'
-                  : 'text-muted hover:text-accent hover:bg-black/5'
-              "
-              :aria-pressed="mediaFilter === filter"
-              @click="setFilter(filter)"
+      <!-- B. SLIDESHOW SETTINGS CARD -->
+      <div class="shrink-0 p-3 flex flex-col gap-2 glass-panel rounded-xl">
+        <!-- Media Type Filters -->
+        <div class="flex justify-center bg-black/20 rounded-lg p-1 gap-1">
+          <button
+            v-for="filter in MEDIA_FILTERS"
+            :key="filter"
+            class="flex-1 px-2 py-1.5 text-xs font-medium rounded-md transition-all duration-200"
+            :class="
+              mediaFilter === filter
+                ? 'bg-accent text-button-text shadow-sm'
+                : 'text-muted hover:text-accent hover:bg-black/5'
+            "
+            :aria-pressed="mediaFilter === filter"
+            @click="setFilter(filter)"
+          >
+            {{ filter }}
+          </button>
+        </div>
+
+        <!-- Toggles -->
+        <div class="flex gap-2">
+          <label class="flex-1 glass-toggle-btn cursor-pointer group">
+            <input
+              v-model="pauseTimerOnPlay"
+              type="checkbox"
+              class="peer sr-only"
+            />
+            <div
+              class="h-full px-3 py-2 rounded-md bg-black/20 border border-white/5 peer-checked:bg-accent/20 peer-checked:border-accent/50 peer-focus-visible:ring-2 peer-focus-visible:ring-accent transition-all flex items-center justify-center gap-2"
             >
-              {{ filter }}
-            </button>
-          </div>
-
-          <!-- Toggles -->
-          <div class="flex gap-2">
-            <label class="flex-1 glass-toggle-btn cursor-pointer group">
-              <input
-                v-model="pauseTimerOnPlay"
-                type="checkbox"
-                class="peer sr-only"
-              />
               <div
-                class="h-full px-3 py-2 rounded-md bg-black/20 border border-white/5 peer-checked:bg-accent/20 peer-checked:border-accent/50 peer-focus-visible:ring-2 peer-focus-visible:ring-accent transition-all flex items-center justify-center gap-2"
+                class="w-3 h-3 rounded-sm border border-muted peer-checked:bg-accent peer-checked:border-accent flex items-center justify-center"
               >
-                <div
-                  class="w-3 h-3 rounded-sm border border-muted peer-checked:bg-accent peer-checked:border-accent flex items-center justify-center"
+                <svg
+                  v-if="pauseTimerOnPlay"
+                  class="w-2.5 h-2.5 text-white"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="4"
                 >
-                  <svg
-                    v-if="pauseTimerOnPlay"
-                    class="w-2.5 h-2.5 text-white"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="4"
-                  >
-                    <polyline points="20 6 9 17 4 12"></polyline>
-                  </svg>
-                </div>
-                <span
-                  class="text-[10px] font-medium text-muted group-hover:text-color peer-checked:text-accent-secondary"
-                  >Pause Timer</span
-                >
+                  <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
               </div>
-            </label>
+              <span
+                class="text-[10px] font-medium text-muted group-hover:text-color peer-checked:text-accent-secondary"
+                >Pause Timer</span
+              >
+            </div>
+          </label>
+        </div>
+      </div>
+
+      <!-- C. TIMER PANEL CARD -->
+      <div
+        class="shrink-0 p-3 flex items-end gap-3 relative overflow-hidden glass-panel rounded-xl"
+      >
+        <div class="flex flex-col gap-1 grow">
+          <label
+            for="timer-input"
+            class="text-[10px] font-bold text-gray-500 uppercase tracking-widest"
+            >Timer Duration</label
+          >
+          <div class="relative">
+            <input
+              id="timer-input"
+              v-model.number="timerDuration"
+              type="number"
+              min="1"
+              step="1"
+              placeholder="5"
+              aria-label="Slideshow timer duration in seconds"
+              class="w-full glass-input text-sm pl-3 pr-10 py-2 rounded-lg no-spinner"
+              @blur="
+                timerDuration = Math.max(1, Math.floor(timerDuration) || 5)
+              "
+            />
+            <span
+              class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 pointer-events-none"
+              >sec</span
+            >
           </div>
         </div>
 
-        <!-- C. TIMER PANEL CARD -->
-        <div
-          class="shrink-0 p-3 flex items-end gap-3 relative overflow-hidden glass-panel rounded-xl"
+        <!-- Shuffle All Sources -->
+        <button
+          class="h-10 w-10 shrink-0 flex items-center justify-center rounded-lg text-muted hover:text-accent hover:bg-black/5 transition-colors"
+          title="Shuffle All Sources"
+          aria-label="Shuffle All Sources"
+          @click="slideshow.startSlideshow()"
         >
-          <div class="flex flex-col gap-1 grow">
-            <label
-              for="timer-input"
-              class="text-[10px] font-bold text-gray-500 uppercase tracking-widest"
-              >Timer Duration</label
-            >
-            <div class="relative">
-              <input
-                id="timer-input"
-                v-model.number="timerDuration"
-                type="number"
-                min="1"
-                step="1"
-                placeholder="5"
-                aria-label="Slideshow timer duration in seconds"
-                class="w-full glass-input text-sm pl-3 pr-10 py-2 rounded-lg no-spinner"
-                @blur="
-                  timerDuration = Math.max(1, Math.floor(timerDuration) || 5)
-                "
-              />
-              <span
-                class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 pointer-events-none"
-                >sec</span
-              >
-            </div>
-          </div>
+          <ShuffleIcon class="w-5 h-5" />
+        </button>
 
-          <!-- Shuffle All Sources -->
-          <button
-            class="h-10 w-10 shrink-0 flex items-center justify-center rounded-lg text-muted hover:text-accent hover:bg-black/5 transition-colors"
-            title="Shuffle All Sources"
-            aria-label="Shuffle All Sources"
-            @click="slideshow.startSlideshow()"
-          >
-            <ShuffleIcon class="w-5 h-5" />
-          </button>
+        <!-- Primary Play Action -->
+        <button
+          class="timer-button h-10 w-14 shrink-0 flex items-center justify-center rounded-lg glass-button-primary"
+          data-testid="timer-button"
+          :title="isTimerRunning ? 'Pause Slideshow' : 'Start/Resume Slideshow'"
+          :aria-label="
+            isTimerRunning ? 'Pause Slideshow' : 'Start/Resume Slideshow'
+          "
+          @click="handleToggleTimer"
+        >
+          <PauseIcon v-if="isTimerRunning" class="w-6 h-6 fill-current" />
+          <PlayIcon v-else class="w-6 h-6 fill-current ml-1" />
+        </button>
 
-          <!-- Primary Play Action -->
-          <button
-            class="timer-button h-10 w-14 shrink-0 flex items-center justify-center rounded-lg glass-button-primary"
-            data-testid="timer-button"
-            :title="
-              isTimerRunning ? 'Pause Slideshow' : 'Start/Resume Slideshow'
-            "
-            :aria-label="
-              isTimerRunning ? 'Pause Slideshow' : 'Start/Resume Slideshow'
-            "
-            @click="handleToggleTimer"
-          >
-            <PauseIcon v-if="isTimerRunning" class="w-6 h-6 fill-current" />
-            <PlayIcon v-else class="w-6 h-6 fill-current ml-1" />
-          </button>
-
-          <!-- Global Progress Bar (if running, inside timer pane bottom) -->
+        <!-- Global Progress Bar (if running, inside timer pane bottom) -->
+        <div
+          v-if="isTimerRunning"
+          class="absolute bottom-0 left-0 w-full h-1 bg-gray-800"
+          data-testid="slideshow-progress"
+        >
           <div
-            v-if="isTimerRunning"
-            class="absolute bottom-0 left-0 w-full h-1 bg-gray-800"
-            data-testid="slideshow-progress"
-          >
-            <div
-              class="h-full bg-accent transition-all duration-100 ease-linear"
-              :style="{ width: `${timerProgress}%` }"
-            ></div>
-          </div>
+            class="h-full bg-accent transition-all duration-100 ease-linear"
+            :style="{ width: `${timerProgress}%` }"
+          ></div>
         </div>
       </div>
     </div>

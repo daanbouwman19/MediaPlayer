@@ -47,6 +47,8 @@
   --header-font: 'Outfit', sans-serif;
   --body-font: 'Inter', sans-serif;
 
+  --scrollbar-thumb-color: rgba(0, 0, 0, 0.2);
+
   /* Glassmorphism Variables for Light Mode - Higher Quality Blur & Soft Glow */
   --glass-bg: rgba(255, 255, 255, 0.85);
   --glass-border: rgba(255, 255, 255, 0.3);
@@ -82,6 +84,8 @@
   --selection-color: #2e1065;
   /* Deep Violet */
   --button-text-color: #ffffff;
+
+  --scrollbar-thumb-color: rgba(255, 255, 255, 0.2);
 
   /* Glassmorphism Variables */
   --glass-bg: rgba(15, 15, 25, 0.7);
@@ -121,6 +125,8 @@
   /* Pink-100 */
   --button-text-color: #ffffff;
 
+  --scrollbar-thumb-color: rgba(131, 24, 67, 0.25);
+
   /* Glassmorphism Variables */
   --glass-bg: rgba(255, 255, 255, 0.8);
   --glass-border: rgba(219, 39, 119, 0.2);
@@ -151,6 +157,8 @@
   --selection-color: rgba(252, 234, 43, 0.25);
   --button-text-color: #000000;
 
+  --scrollbar-thumb-color: rgba(0, 0, 0, 0.2);
+
   --glass-bg: rgba(255, 255, 255, 0.85);
   --glass-border: rgba(252, 234, 43, 0.4);
   --glass-shadow: 0 8px 32px 0 rgba(252, 234, 43, 0.15);
@@ -178,6 +186,8 @@
   --selection-color: #422006;
   --button-text-color: #09090b;
 
+  --scrollbar-thumb-color: rgba(255, 255, 255, 0.2);
+
   --glass-bg: rgba(24, 24, 27, 0.8);
   --glass-border: rgba(254, 240, 138, 0.2);
   --glass-shadow: 0 8px 32px 0 rgba(254, 240, 138, 0.15);
@@ -190,6 +200,8 @@
 
 .theme-cyberpunk-auto {
   /* Cyberpunk Auto (System Default) */
+  --scrollbar-thumb-color: rgba(0, 0, 0, 0.2);
+
   --primary-bg: #fdfaf1;
   --secondary-bg: #ffffff;
   --tertiary-bg: #fef9c3;
@@ -214,6 +226,8 @@
 @media (prefers-color-scheme: dark) {
   .theme-cyberpunk-auto {
     /* Switch to Dark variables */
+    --scrollbar-thumb-color: rgba(255, 255, 255, 0.2);
+
     --primary-bg: #09090b;
     --secondary-bg: #18181b;
     --tertiary-bg: #27272a;
@@ -479,7 +493,11 @@ footer {
 /* Custom scrollbar that auto-hides when not in use */
 .custom-scrollbar {
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+  scrollbar-color: transparent transparent;
+}
+
+.custom-scrollbar:hover {
+  scrollbar-color: var(--scrollbar-thumb-color) transparent;
 }
 
 .custom-scrollbar::-webkit-scrollbar {
@@ -491,17 +509,16 @@ footer {
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
+  background: transparent;
   border-radius: 4px;
 }
 
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.3);
+.custom-scrollbar:hover::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb-color);
 }
 
-/* Hide scrollbar when not hovering over the container */
-.custom-scrollbar:not(:hover)::-webkit-scrollbar-thumb {
-  background: transparent;
+.custom-scrollbar:hover::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-color);
 }
 
 /* Transitions */
