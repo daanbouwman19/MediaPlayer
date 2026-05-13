@@ -32,6 +32,23 @@ export const useLibraryStore = defineStore('library', () => {
   const imageExtensionsSet = computed(
     () => new Set(supportedExtensions.value.images),
   );
+
+  const allMediaFilesMap = computed(() => {
+    const fileMap = new Map<string, MediaFile>();
+    const traverse = (albums: Album[]) => {
+      for (const album of albums) {
+        if (album.textures) {
+          for (const file of album.textures) {
+            fileMap.set(file.path, file);
+          }
+        }
+        if (album.children) traverse(album.children);
+      }
+    };
+    traverse(allAlbums.value);
+    return fileMap;
+  });
+
   const videoExtensionsSet = computed(
     () => new Set(supportedExtensions.value.videos),
   );
@@ -69,6 +86,7 @@ export const useLibraryStore = defineStore('library', () => {
       historyMedia.value = items.map((item) => {
         const name = item.file_path.split(/[\/\\]/).pop() || item.file_path;
         return {
+          allMediaFilesMap,
           name,
           path: item.file_path,
           viewCount: item.view_count || 0,
@@ -131,6 +149,7 @@ export const useLibraryStore = defineStore('library', () => {
   };
 
   return {
+    allMediaFilesMap,
     isScanning,
     allAlbums,
     mediaDirectories,
