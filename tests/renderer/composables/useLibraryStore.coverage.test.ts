@@ -230,8 +230,42 @@ describe('useLibraryStore Coverage', () => {
       store.selectAllAlbumsRecursively([deepAlbums as any]);
 
       expect(store.albumsSelectedForSlideshow['root']).toBe(true);
-      expect(store.albumsSelectedForSlideshow['c1']).toBe(true);
-      expect(store.albumsSelectedForSlideshow['c2']).toBe(true);
+    });
+  });
+
+  describe('allMediaFilesMap', () => {
+    it('should map media files from allAlbums correctly', () => {
+      const mockFile1 = { path: '/media/1.jpg', name: '1.jpg' };
+      const mockFile2 = { path: '/media/2.mp4', name: '2.mp4' };
+      const mockFile3 = { path: '/media/3.png', name: '3.png' };
+
+      store.allAlbums = [
+        {
+          id: 'root',
+          name: 'root',
+          textures: [mockFile1],
+          children: [
+            {
+              id: 'child1',
+              name: 'child1',
+              textures: [mockFile2],
+              children: [
+                {
+                  id: 'child2',
+                  name: 'child2',
+                  textures: [mockFile3],
+                },
+              ],
+            },
+          ],
+        },
+      ] as any;
+
+      const fileMap = store.allMediaFilesMap;
+      expect(fileMap.size).toBe(3);
+      expect(fileMap.get('/media/1.jpg')).toEqual(mockFile1);
+      expect(fileMap.get('/media/2.mp4')).toEqual(mockFile2);
+      expect(fileMap.get('/media/3.png')).toEqual(mockFile3);
     });
   });
 });

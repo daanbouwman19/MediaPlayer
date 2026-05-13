@@ -274,6 +274,7 @@ const handleSmartPlaylistSlideshow = async (playlist: SmartPlaylist) => {
     slideshow.startIndividualAlbumSlideshow(fakeAlbum);
   } catch (error) {
     console.error('Error starting playlist slideshow', error);
+    toast.error('Failed to start playlist slideshow.');
   } finally {
     loadingAction.value = null;
   }
@@ -290,6 +291,7 @@ const handleSmartPlaylistGrid = async (playlist: SmartPlaylist) => {
     viewMode.value = 'grid';
   } catch (error) {
     console.error('Error opening playlist grid', error);
+    toast.error('Failed to open playlist in grid.');
   } finally {
     loadingAction.value = null;
   }
