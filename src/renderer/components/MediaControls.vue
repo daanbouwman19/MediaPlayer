@@ -11,7 +11,10 @@
         :style="containerPaddingStyle"
       >
         <!-- Progress Bar -->
-        <div class="w-full mb-4 px-2 md:px-0 max-w-7xl mx-auto">
+        <div
+          v-if="!isImage && currentMediaItem"
+          class="w-full mb-4 px-2 md:px-0 max-w-7xl mx-auto"
+        >
           <ProgressBar
             :current-time="currentTime"
             :duration="duration"
