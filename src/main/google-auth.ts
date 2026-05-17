@@ -91,12 +91,17 @@ export async function loadSavedCredentialsIfExist(): Promise<boolean> {
 export async function checkGoogleDriveAuth(): Promise<boolean> {
   try {
     const auth = getOAuth2Client();
-    if (auth.credentials && auth.credentials.refresh_token) {
-      return true;
+    if (!auth.credentials?.refresh_token) {
+      const loaded = await loadSavedCredentialsIfExist();
+      if (!loaded) return false;
     }
-    return await loadSavedCredentialsIfExist();
+    // Actually probe Google to catch revoked/expired tokens
+    const { google } = await import('googleapis');
+    const drive = google.drive({ version: 'v3', auth });
+    await drive.about.get({ fields: 'user' });
+    return true;
   } catch (error) {
-    console.error('[GoogleAuth] Failed to check auth status:', error);
+    console.error('[GoogleAuth] Token validation failed:', error);
     return false;
   }
 }

@@ -75,7 +75,10 @@
               </p>
               <button
                 class="mt-3 px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-100 text-sm font-medium rounded-lg transition-colors border border-red-500/30"
-                @click="showDriveAuth = true"
+                @click="
+                  isReauthFlow = true;
+                  showDriveAuth = true;
+                "
               >
                 Re-authenticate Drive
               </button>
@@ -370,51 +373,76 @@
                 clip-rule="evenodd"
               />
             </svg>
-            Authentication successful!
+            {{
+              isReauthFlow
+                ? 'Re-authenticated successfully!'
+                : 'Authentication successful!'
+            }}
           </div>
 
-          <div>
-            <label
-              for="drive-folder-id"
-              class="block text-sm font-medium text-muted mb-1"
-            >
-              Folder ID (leave empty for 'My Drive' root)
-            </label>
-            <div class="flex gap-2">
-              <input
-                id="drive-folder-id"
-                v-model="driveFolderId"
-                type="text"
-                class="grow glass-input rounded-md px-3 py-2"
-                placeholder="e.g. 1A2B3C... or 'root'"
-              />
-              <button
-                class="px-4 bg-gray-700 hover:bg-gray-600 rounded-md text-white transition-colors"
-                @click="openDriveBrowser"
+          <!-- Re-auth flow: sources already exist, just close and re-index -->
+          <div v-if="isReauthFlow" class="space-y-4">
+            <p class="text-sm text-muted">
+              Your Google Drive connection has been restored. Click
+              <span class="text-color font-medium">Done</span> and then
+              <span class="text-color font-medium"
+                >Apply Changes &amp; Re-Index</span
               >
-                Browse
-              </button>
-            </div>
-          </div>
-
-          <p v-if="addDriveError" class="text-red-400 text-sm">
-            {{ addDriveError }}
-          </p>
-
-          <div class="flex gap-3 pt-2">
+              to reload your media.
+            </p>
             <button
-              class="flex-1 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-white transition-colors"
+              class="w-full py-2 rounded-lg bg-accent hover:bg-accent-hover text-button-text font-bold transition-colors"
               @click="cancelDriveAuth"
             >
-              Close
+              Done
             </button>
-            <button
-              class="flex-2 py-2 rounded-lg bg-accent hover:bg-accent-hover text-button-text font-bold transition-colors disabled:opacity-50"
-              :disabled="isAddingDrive"
-              @click="addDriveSource"
-            >
-              {{ isAddingDrive ? 'Adding...' : 'Add Folder' }}
-            </button>
+          </div>
+
+          <!-- Fresh auth flow: no sources yet, add a folder -->
+          <div v-else class="space-y-4">
+            <div>
+              <label
+                for="drive-folder-id"
+                class="block text-sm font-medium text-muted mb-1"
+              >
+                Folder ID (leave empty for 'My Drive' root)
+              </label>
+              <div class="flex gap-2">
+                <input
+                  id="drive-folder-id"
+                  v-model="driveFolderId"
+                  type="text"
+                  class="grow glass-input rounded-md px-3 py-2"
+                  placeholder="e.g. 1A2B3C... or 'root'"
+                />
+                <button
+                  class="px-4 bg-gray-700 hover:bg-gray-600 rounded-md text-white transition-colors"
+                  @click="openDriveBrowser"
+                >
+                  Browse
+                </button>
+              </div>
+            </div>
+
+            <p v-if="addDriveError" class="text-red-400 text-sm">
+              {{ addDriveError }}
+            </p>
+
+            <div class="flex gap-3 pt-2">
+              <button
+                class="flex-1 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-white transition-colors"
+                @click="cancelDriveAuth"
+              >
+                Close
+              </button>
+              <button
+                class="flex-2 py-2 rounded-lg bg-accent hover:bg-accent-hover text-button-text font-bold transition-colors disabled:opacity-50"
+                :disabled="isAddingDrive"
+                @click="addDriveSource"
+              >
+                {{ isAddingDrive ? 'Adding...' : 'Add Folder' }}
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -471,6 +499,7 @@ const fileExplorerMode = ref<'local' | 'google-drive'>('local');
 
 // Google Drive State
 const showDriveAuth = ref(false);
+const isReauthFlow = ref(false);
 const driveAuthUrl = ref('');
 const authCode = ref('');
 const isAuthenticating = ref(false);
@@ -504,6 +533,7 @@ const closeModal = () => {
 
 const cancelDriveAuth = () => {
   showDriveAuth.value = false;
+  isReauthFlow.value = false;
   driveAuthUrl.value = '';
   authCode.value = '';
   authSuccess.value = false;
@@ -529,6 +559,9 @@ const submitAuthCode = async () => {
     const success = await api.submitGoogleDriveAuthCode(authCode.value);
     if (success) {
       authSuccess.value = true;
+      if (isReauthFlow.value) {
+        hasDriveAuthError.value = false;
+      }
     } else {
       authError.value = 'Invalid code or authentication failed.';
     }

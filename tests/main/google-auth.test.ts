@@ -48,12 +48,19 @@ const { mockOAuth2Client, MockOAuth2, getTokensListener } = vi.hoisted(() => {
   };
 });
 
+const mockAboutGet = vi.hoisted(() =>
+  vi.fn().mockResolvedValue({ data: { user: {} } }),
+);
+
 vi.mock('googleapis', () => {
   return {
     google: {
       auth: {
         OAuth2: MockOAuth2,
       },
+      drive: vi.fn(() => ({
+        about: { get: mockAboutGet },
+      })),
     },
   };
 });
@@ -161,19 +168,21 @@ describe('Google Auth Service', () => {
   });
 
   describe('checkGoogleDriveAuth', () => {
-    it('returns true if client already has refresh_token', async () => {
+    it('returns true if client already has refresh_token and probe succeeds', async () => {
       mockOAuth2Client.credentials = { refresh_token: 'existing' };
+      mockAboutGet.mockResolvedValueOnce({ data: { user: {} } });
       const result = await googleAuth.checkGoogleDriveAuth();
       expect(result).toBe(true);
       expect(database.getSetting).not.toHaveBeenCalled();
     });
 
-    it('loads from DB if client lacks refresh_token', async () => {
+    it('loads from DB if client lacks refresh_token and probe succeeds', async () => {
       mockOAuth2Client.credentials = {} as any;
       const mockCreds = { refresh_token: 'saved-token' };
       vi.mocked(database.getSetting).mockResolvedValue(
         JSON.stringify(mockCreds),
       );
+      mockAboutGet.mockResolvedValueOnce({ data: { user: {} } });
 
       const result = await googleAuth.checkGoogleDriveAuth();
       expect(result).toBe(true);
@@ -183,6 +192,14 @@ describe('Google Auth Service', () => {
     it('returns false if DB load fails', async () => {
       mockOAuth2Client.credentials = null as any;
       vi.mocked(database.getSetting).mockResolvedValue(null);
+
+      const result = await googleAuth.checkGoogleDriveAuth();
+      expect(result).toBe(false);
+    });
+
+    it('returns false if token is revoked (probe call throws)', async () => {
+      mockOAuth2Client.credentials = { refresh_token: 'revoked-token' };
+      mockAboutGet.mockRejectedValueOnce(new Error('invalid_grant'));
 
       const result = await googleAuth.checkGoogleDriveAuth();
       expect(result).toBe(false);
