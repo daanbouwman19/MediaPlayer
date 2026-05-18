@@ -1,19 +1,12 @@
 import fs from 'fs';
 import { Response } from 'express';
+import PQueue from 'p-queue';
 import { getThumbnailCachePath, isDrivePath } from './media-utils.ts';
 import { getThumbnailArgs, runFFmpeg } from './utils/ffmpeg-utils.ts';
 import { getProvider } from './fs-provider-factory.ts';
 import { validateFileAccess, handleAccessCheck } from './access-validator.ts';
 
-let thumbnailQueue: InstanceType<typeof import('p-queue').default> | null =
-  null;
-
-async function getThumbnailQueue() {
-  if (thumbnailQueue) return thumbnailQueue;
-  const { default: PQueue } = await import('p-queue');
-  thumbnailQueue = new PQueue({ concurrency: 2 });
-  return thumbnailQueue;
-}
+const thumbnailQueue = new PQueue({ concurrency: 2 });
 
 async function runFFmpegThumbnail(
   filePath: string,
@@ -112,8 +105,7 @@ export async function generateLocalThumbnail(
   }
 
   try {
-    const queue = await getThumbnailQueue();
-    await queue.add(() =>
+    await thumbnailQueue.add(() =>
       runFFmpegThumbnail(authorizedPath, cacheFile, ffmpegPath),
     );
 
