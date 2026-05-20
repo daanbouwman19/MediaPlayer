@@ -124,63 +124,142 @@ const drawVisualizer = (
   ctx.clearRect(0, 0, width, height);
 
   const length = dataArray.length;
+  if (length === 0) return;
+
   const accent = getThemeAccentColor();
   const accentSecondary = getThemeAccentSecondary();
 
-  // Glowing Gradient
-  const gradient = ctx.createLinearGradient(0, height, width, height - 100);
-  gradient.addColorStop(0, accent);
-  gradient.addColorStop(0.5, accentSecondary);
-  gradient.addColorStop(1, accent);
+  // 1. Calculate average volume (RMS) to apply dynamic auto-gain
+  let sum = 0;
+  for (let i = 0; i < length; i++) {
+    sum += dataArray[i];
+  }
+  const avg = sum / length;
+  // Apply a dynamic multiplier so quiet audio still produces a beautiful wave
+  const boost = avg > 5 ? Math.max(1.2, Math.min(3.5, 80 / avg)) : 1.5;
 
-  ctx.shadowBlur = 15;
+  // 2. Symmetric Wave Configuration
+  // We mirror the wave from the center to make it look balanced and premium.
+  const activeBins = Math.floor(length * 0.75); // focus on low/mid frequencies
+  const points: { x: number; y: number }[] = [];
+  const centerX = width / 2;
+
+  // Generate points from center outwards
+  for (let i = 0; i < activeBins; i++) {
+    const v = (dataArray[i] / 255.0) * boost;
+    // Map frequency intensity to a height up to 45% of the screen
+    const waveHeight = Math.min(height * 0.45, (v * height) / 3.2);
+    
+    // We add a tiny base height so it ripples gracefully even during silences
+    const finalY = height - waveHeight - 30;
+    points.push({ x: i, y: finalY });
+  }
+
+  const numPoints = points.length;
+  if (numPoints < 2) return;
+
+  // Draw Primary Wave & Soft Gradient Fill
+  ctx.save();
+  
+  // Primary Stroke style
+  const gradLine = ctx.createLinearGradient(0, 0, width, 0);
+  gradLine.addColorStop(0, accent);
+  gradLine.addColorStop(0.5, accentSecondary);
+  gradLine.addColorStop(1, accent);
+
+  ctx.shadowBlur = 20;
   ctx.shadowColor = accent;
-  ctx.lineWidth = 3;
-  ctx.strokeStyle = gradient;
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = gradLine;
   ctx.beginPath();
 
-  const sliceWidth = width / length;
-  let x = 0;
+  // Begin path for the fill
+  const fillPath = new Path2D();
+  fillPath.moveTo(0, height);
 
-  for (let i = 0; i < length; i++) {
-    const v = dataArray[i] / 255.0;
-    const y = (v * height) / 4; // cap height nicely
-    const finalY = height - y - 20;
+  // Draw symmetric curve (Left half)
+  let prevX = 0;
+  let prevY = points[0].y;
+  ctx.moveTo(0, prevY);
+  fillPath.lineTo(0, prevY);
 
-    if (i === 0) {
-      ctx.moveTo(x, finalY);
-    } else {
-      const prevX = x - sliceWidth;
-      const prevY = height - ((dataArray[i - 1] / 255.0) * height) / 4 - 20;
-      ctx.quadraticCurveTo(prevX, prevY, x, finalY);
-    }
-    x += sliceWidth;
+  for (let i = 1; i < numPoints; i++) {
+    const ratio = i / (numPoints - 1);
+    const x = centerX - ratio * centerX;
+    const y = points[i].y;
+    const xc = (x + prevX) / 2;
+    const yc = (y + prevY) / 2;
+    
+    ctx.quadraticCurveTo(prevX, prevY, xc, yc);
+    fillPath.quadraticCurveTo(prevX, prevY, xc, yc);
+    
+    prevX = x;
+    prevY = y;
   }
-  ctx.lineTo(width, height);
+  ctx.lineTo(centerX, prevY);
+  fillPath.lineTo(centerX, prevY);
+
+  // Draw symmetric curve (Right half)
+  prevX = width;
+  prevY = points[0].y;
+  ctx.moveTo(width, prevY);
+  fillPath.lineTo(width, prevY);
+
+  for (let i = 1; i < numPoints; i++) {
+    const ratio = i / (numPoints - 1);
+    const x = centerX + ratio * centerX;
+    const y = points[i].y;
+    const xc = (x + prevX) / 2;
+    const yc = (y + prevY) / 2;
+    
+    ctx.quadraticCurveTo(prevX, prevY, xc, yc);
+    fillPath.quadraticCurveTo(prevX, prevY, xc, yc);
+    
+    prevX = x;
+    prevY = y;
+  }
+  ctx.lineTo(centerX, prevY);
+  fillPath.lineTo(centerX, prevY);
+
   ctx.stroke();
 
-  // Secondary wave for depth
-  ctx.shadowBlur = 8;
-  ctx.shadowColor = accentSecondary;
-  ctx.lineWidth = 1.5;
-  ctx.strokeStyle = accentSecondary;
+  // Close the fill path and draw the ambient glowing background under the wave
+  fillPath.lineTo(centerX, height);
+  fillPath.lineTo(0, height);
+  
+  const gradFill = ctx.createLinearGradient(0, height - 200, 0, height);
+  gradFill.addColorStop(0, accent + '33'); // 20% opacity at peak
+  gradFill.addColorStop(0.5, accentSecondary + '1a'); // 10% opacity mid
+  gradFill.addColorStop(1, 'transparent');
+  
+  ctx.shadowBlur = 0; // Disable shadow for fill to optimize performance
+  ctx.fillStyle = gradFill;
+  ctx.fill(fillPath);
+
+  // 3. Secondary subtle overlay wave for gorgeous depth
+  ctx.restore();
   ctx.beginPath();
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = accentSecondary + '80'; // 50% opacity line
+  
+  prevX = 0;
+  prevY = height - 40;
+  ctx.moveTo(0, prevY);
 
-  x = 0;
-  for (let i = 0; i < length; i++) {
-    const v = dataArray[length - 1 - i] / 255.0;
-    const y = (v * height) / 6;
-    const finalY = height - y - 35;
-
-    if (i === 0) {
-      ctx.moveTo(x, finalY);
-    } else {
-      const prevX = x - sliceWidth;
-      const prevY =
-        height - ((dataArray[length - i] / 255.0) * height) / 6 - 35;
-      ctx.quadraticCurveTo(prevX, prevY, x, finalY);
-    }
-    x += sliceWidth;
+  for (let i = 1; i < numPoints; i++) {
+    const ratio = i / (numPoints - 1);
+    // Offset phase for secondary wave
+    const waveIndex = Math.floor(length - 1 - i * 0.5) % length;
+    const v = (dataArray[waveIndex] / 255.0) * boost * 0.5;
+    const y = height - (v * height) / 5 - 45;
+    
+    const xLeft = centerX - ratio * centerX;
+    const xcLeft = (xLeft + prevX) / 2;
+    const ycLeft = (y + prevY) / 2;
+    
+    ctx.quadraticCurveTo(prevX, prevY, xcLeft, ycLeft);
+    prevX = xLeft;
+    prevY = y;
   }
   ctx.stroke();
 };
