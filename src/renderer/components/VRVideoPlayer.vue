@@ -95,7 +95,6 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import PlayIcon from './icons/PlayIcon.vue';
 import PauseIcon from './icons/PauseIcon.vue';
 import CloseIcon from './icons/CloseIcon.vue';
-import { audioVisualizer } from '../utils/audioVisualizer';
 
 const STEREO_ASPECT_RATIO_THRESHOLD = 1.9;
 const SPHERE_RADIUS = 500;
@@ -311,9 +310,6 @@ const initThree = () => {
   // Listen for time updates
   video.addEventListener('timeupdate', handleTimeUpdate);
   video.addEventListener('play', () => {
-    // Connect after user gesture so AudioContext is allowed to run
-    audioVisualizer.connect(video!);
-    void audioVisualizer.resumeContext();
     emit('play');
   });
   video.addEventListener('pause', () => emit('pause'));

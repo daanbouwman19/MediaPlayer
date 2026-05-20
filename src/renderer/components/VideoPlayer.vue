@@ -46,7 +46,6 @@ import { ref, watch, onUnmounted, computed, onMounted } from 'vue';
 import PlayIcon from './icons/PlayIcon.vue';
 import RefreshIcon from './icons/RefreshIcon.vue';
 import Hls from 'hls.js';
-import { audioVisualizer } from '../utils/audioVisualizer';
 
 const props = defineProps<{
   src: string | null;
@@ -244,12 +243,6 @@ const reset = () => {
 const handlePlay = () => {
   isPlaying.value = true;
   isEnded.value = false;
-  // Connect here (after user gesture) so the AudioContext is allowed to run.
-  // connect() is idempotent for the same element thanks to WeakMap caching.
-  if (videoElement.value) {
-    audioVisualizer.connect(videoElement.value);
-  }
-  void audioVisualizer.resumeContext();
   emit('play');
 };
 

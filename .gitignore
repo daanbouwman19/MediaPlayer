@@ -20,5 +20,5 @@ verification/
 *.log
 master.key
 
-.gemini/
+.antigravitycli/
 gha-creds-*.json
