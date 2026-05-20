@@ -34,8 +34,14 @@ let animationFrameId: number | null = null;
 
 /**
  * Loads the media URL for the background.
+ * Cancels any existing animation loop before starting a new one.
  */
 const loadMedia = async () => {
+  if (animationFrameId) {
+    cancelAnimationFrame(animationFrameId);
+    animationFrameId = null;
+  }
+
   if (!currentMediaItem.value) {
     mediaUrl.value = null;
     return;
@@ -85,7 +91,7 @@ const startVideoLoop = () => {
   if (animationFrameId) cancelAnimationFrame(animationFrameId);
 
   const loop = () => {
-    // Use the main video element from MediaDisplay as the source
+    // Draw video frame to blurred background canvas
     if (
       mainVideoElement.value &&
       !mainVideoElement.value.paused &&
@@ -94,7 +100,6 @@ const startVideoLoop = () => {
     ) {
       const ctx = canvas.value.getContext('2d');
       if (ctx) {
-        // Update canvas size if needed
         if (canvas.value.width !== window.innerWidth / 10) {
           canvas.value.width = window.innerWidth / 10;
           canvas.value.height = window.innerHeight / 10;
@@ -108,10 +113,11 @@ const startVideoLoop = () => {
             canvas.value.height,
           );
         } catch {
-          // Ignore errors if video is not ready
+          // Ignore cross-origin / not-ready frames
         }
       }
     }
+
     animationFrameId = requestAnimationFrame(loop);
   };
   loop();
@@ -171,6 +177,7 @@ onUnmounted(() => {
     rgba(var(--vignette-color), var(--vignette-edge)) 100%
   );
   pointer-events: none;
+  z-index: 2;
 }
 
 .noise-overlay {
@@ -179,5 +186,6 @@ onUnmounted(() => {
   opacity: 0.03;
   pointer-events: none;
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+  z-index: 3;
 }
 </style>

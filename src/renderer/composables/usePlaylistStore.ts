@@ -13,6 +13,19 @@ export const usePlaylistStore = defineStore('playlist', () => {
     currentItem.value = null;
   };
 
+  const reorderQueue = (fromIndex: number, toIndex: number) => {
+    if (
+      fromIndex < 0 ||
+      fromIndex >= queue.value.length ||
+      toIndex < 0 ||
+      toIndex >= queue.value.length
+    ) {
+      return;
+    }
+    const [movedItem] = queue.value.splice(fromIndex, 1);
+    queue.value.splice(toIndex, 0, movedItem);
+  };
+
   const clearPlaylist = () => {
     queue.value = [];
     history.value = [];
@@ -54,6 +67,7 @@ export const usePlaylistStore = defineStore('playlist', () => {
     queue,
     currentItem,
     setQueue,
+    reorderQueue,
     clearPlaylist,
     playNext,
     playPrevious,

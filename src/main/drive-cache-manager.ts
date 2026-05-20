@@ -125,6 +125,71 @@ class DriveCacheManager extends EventEmitter {
     };
   }
 
+  public async getCacheStatus(
+    fileId: string,
+  ): Promise<{ status: 'ready' | 'syncing' | 'cloud'; progress: number }> {
+    if (fileId === '') {
+      return { status: 'cloud', progress: 0 };
+    }
+    if (
+      !fileId ||
+      typeof fileId !== 'string' ||
+      fileId.includes('..') ||
+      fileId.includes('/') ||
+      fileId.includes('\\') ||
+      fileId.includes('\0')
+    ) {
+      throw new Error('Invalid fileId');
+    }
+    const filePath = path.join(this.cacheDir, fileId);
+
+    const isDownloading = this.activeDownloads.has(fileId);
+
+    let stats: fs.Stats | null = null;
+    try {
+      stats = await fsPromises.stat(filePath);
+    } catch {
+      return { status: 'cloud', progress: 0 };
+    }
+
+    let metadata = this.metadataCache.get(fileId);
+    if (!metadata) {
+      try {
+        const meta = await getDriveFileMetadata(fileId);
+        metadata = {
+          size: Number(meta.size),
+          mimeType: meta.mimeType || 'video/mp4',
+        };
+        this.metadataCache.set(fileId, metadata);
+      } catch {
+        return {
+          status: isDownloading ? 'syncing' : 'ready',
+          progress: isDownloading ? 0.5 : 1,
+        };
+      }
+    }
+
+    if (metadata.size === 0) {
+      return { status: 'ready', progress: 1 };
+    }
+
+    const progress = Math.min(1, stats.size / metadata.size);
+
+    if (isDownloading) {
+      return { status: 'syncing', progress };
+    }
+
+    if (stats.size >= metadata.size) {
+      return { status: 'ready', progress: 1 };
+    }
+
+    return { status: 'cloud', progress };
+  }
+
+  public async triggerDownload(fileId: string): Promise<void> {
+    await this.getCachedFilePath(fileId);
+  }
+
   private async startDownload(
     fileId: string,
     filePath: string,
@@ -134,6 +199,22 @@ class DriveCacheManager extends EventEmitter {
 
     const stream = await getDriveFileStream(fileId, { start: startByte });
     const fileStream = fs.createWriteStream(filePath, { flags });
+
+    let downloadedBytes = startByte;
+    const metadata = this.metadataCache.get(fileId);
+    const total = metadata ? metadata.size : 0;
+
+    stream.on('data', (chunk) => {
+      downloadedBytes += chunk.length;
+      const progress = total > 0 ? downloadedBytes / total : 0;
+      this.emit('progress', {
+        fileId,
+        downloadedBytes,
+        totalSize: total,
+        progress,
+      });
+    });
+
     stream.pipe(fileStream);
 
     return new Promise((resolve, reject) => {

@@ -9,6 +9,7 @@
       :src="effectiveSrc"
       :poster="poster"
       :autoplay="!isHls"
+      crossorigin="anonymous"
       @error="handleError"
       @ended="handleEnded"
       @play="handlePlay"

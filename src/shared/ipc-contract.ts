@@ -171,6 +171,14 @@ export interface IpcContract {
     payload: [string];
     response: string | null;
   };
+  [IPC_CHANNELS.DRIVE_CACHE_STATUS]: {
+    payload: [string];
+    response: { status: 'ready' | 'syncing' | 'cloud'; progress: number };
+  };
+  [IPC_CHANNELS.DRIVE_CACHE_TRIGGER]: {
+    payload: [string];
+    response: void;
+  };
   [IPC_CHANNELS.TRANSCODE_JOB_ADD]: {
     payload: [string[]];
     response: void;

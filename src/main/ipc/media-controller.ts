@@ -10,6 +10,7 @@ import {
   listDriveDirectory,
   getDriveParent,
 } from '../google-drive-service';
+import { getDriveCacheManager } from '../drive-cache-manager';
 import {
   recordMediaView,
   getMediaViewCounts,
@@ -213,6 +214,32 @@ export function registerMediaHandlers(mediaService: MediaService) {
       const authorized = await validatePathAccess(filePath);
       await TranscodeQueueManager.getInstance().cancel(authorized);
       await deleteTranscodeJob(authorized);
+    },
+  );
+
+  handleIpc(
+    IPC_CHANNELS.DRIVE_CACHE_STATUS,
+    async (_event: IpcMainInvokeEvent, fileId: string) => {
+      try {
+        const cacheManager = getDriveCacheManager();
+        return await cacheManager.getCacheStatus(fileId);
+      } catch (err) {
+        console.error('[MediaController] Error getting cache status:', err);
+        return { status: 'cloud', progress: 0 };
+      }
+    },
+  );
+
+  handleIpc(
+    IPC_CHANNELS.DRIVE_CACHE_TRIGGER,
+    async (_event: IpcMainInvokeEvent, fileId: string) => {
+      try {
+        const cacheManager = getDriveCacheManager();
+        await cacheManager.triggerDownload(fileId);
+      } catch (err) {
+        console.error('[MediaController] Error triggering download:', err);
+        throw err;
+      }
     },
   );
 }

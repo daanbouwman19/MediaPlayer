@@ -101,6 +101,74 @@
       {{ item.rating }}
     </div>
     <div
+      v-if="isDrive"
+      class="absolute top-2 z-30 transition-all duration-200"
+      :class="item.rating ? 'left-12' : 'left-2'"
+    >
+      <button
+        v-if="cacheStatus === 'cloud'"
+        type="button"
+        class="bg-black/60 hover:bg-accent hover:text-black text-white p-1 rounded-full flex items-center justify-center pointer-events-auto transition-all scale-100 hover:scale-110 active:scale-95"
+        title="Download to offline cache"
+        aria-label="Download to offline cache"
+        @click.stop="triggerOfflineDownload"
+      >
+        <svg
+          class="w-3.5 h-3.5"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          stroke-width="2.5"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M12 9.75v6.75m0 0l-3-3m3 3l3-3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z"
+          />
+        </svg>
+      </button>
+      <div
+        v-else-if="cacheStatus === 'syncing'"
+        class="bg-black/60 text-accent p-1 rounded-full flex items-center justify-center pointer-events-none"
+        :title="`Syncing: ${Math.round(cacheProgress * 100)}%`"
+      >
+        <svg class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+          <circle
+            class="opacity-25"
+            cx="12"
+            cy="12"
+            r="10"
+            stroke="currentColor"
+            stroke-width="3"
+          />
+          <path
+            class="opacity-75"
+            fill="currentColor"
+            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+          />
+        </svg>
+      </div>
+      <div
+        v-else-if="cacheStatus === 'ready'"
+        class="bg-green-600/90 text-white p-1 rounded-full flex items-center justify-center pointer-events-none shadow-md"
+        title="Ready Offline"
+      >
+        <svg
+          class="w-3.5 h-3.5"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          stroke-width="3"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M4.5 12.75l6 6 9-13.5"
+          />
+        </svg>
+      </div>
+    </div>
+    <div
       v-if="isWatched"
       class="absolute top-2 right-2 -translate-y-0.5 bg-green-600/90 text-white text-[10px] font-semibold px-1.5 py-0.5 rounded flex items-center gap-1 pointer-events-none"
       title="Watched"
@@ -211,7 +279,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, ref, watch, onMounted, onUnmounted } from 'vue';
 import type { MediaFile, TranscodeJob } from '../../core/types';
 import {
   getDisplayName,
@@ -370,6 +438,88 @@ const handleVideoError = () => {
 };
 
 const shouldPlayPreview = computed(() => isHovered.value && isVideo.value);
+
+// Offline Drive Caching logic
+
+const isDrive = computed(() => props.item.path.startsWith('gdrive://'));
+const cacheStatus = ref<'ready' | 'syncing' | 'cloud'>('cloud');
+const cacheProgress = ref(0);
+let unsubscribeProgress: (() => void) | null = null;
+
+const fetchCacheStatus = async () => {
+  if (!isDrive.value) return;
+  try {
+    const fileId = props.item.path.slice('gdrive://'.length);
+    const res = await window.electronAPI.getDriveCacheStatus(fileId);
+    if (res && res.success && res.data) {
+      cacheStatus.value = res.data.status;
+      cacheProgress.value = res.data.progress;
+    }
+  } catch (err) {
+    console.error('Failed to get cache status:', err);
+  }
+};
+
+const subscribeToProgress = () => {
+  if (unsubscribeProgress) {
+    unsubscribeProgress();
+    unsubscribeProgress = null;
+  }
+  if (!window.electronAPI?.onDriveCacheProgress) return;
+  unsubscribeProgress = window.electronAPI.onDriveCacheProgress(
+    (_event, data) => {
+      const fileId = props.item.path.slice('gdrive://'.length);
+      if (data.fileId === fileId) {
+        cacheStatus.value = data.progress >= 1 ? 'ready' : 'syncing';
+        cacheProgress.value = data.progress;
+      }
+    },
+  );
+};
+
+const triggerOfflineDownload = async () => {
+  if (!isDrive.value || cacheStatus.value !== 'cloud') return;
+  cacheStatus.value = 'syncing';
+  cacheProgress.value = 0;
+  try {
+    const fileId = props.item.path.slice('gdrive://'.length);
+    await window.electronAPI.triggerDriveCache(fileId);
+  } catch (err) {
+    console.error('Failed to trigger cache download:', err);
+    cacheStatus.value = 'cloud';
+  }
+};
+
+// Reset/re-fetch on path change
+watch(
+  () => props.item.path,
+  () => {
+    posterFailed.value = false;
+    videoPreviewFailed.value = false;
+    isLoading.value = true;
+    isHovered.value = false;
+    if (isDrive.value) {
+      fetchCacheStatus();
+      subscribeToProgress();
+    } else {
+      cacheStatus.value = 'cloud';
+      cacheProgress.value = 0;
+    }
+  },
+);
+
+onMounted(() => {
+  if (isDrive.value) {
+    fetchCacheStatus();
+    subscribeToProgress();
+  }
+});
+
+onUnmounted(() => {
+  if (unsubscribeProgress) {
+    unsubscribeProgress();
+  }
+});
 </script>
 
 <style scoped>

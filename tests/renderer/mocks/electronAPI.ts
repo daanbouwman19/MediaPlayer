@@ -49,6 +49,11 @@ export const createMockElectronAPI = (): ElectronAPI => ({
   addGoogleDriveSource: vi.fn(),
   listGoogleDriveDirectory: vi.fn().mockResolvedValue([]),
   getGoogleDriveParent: vi.fn().mockResolvedValue(null),
+  getDriveCacheStatus: vi
+    .fn()
+    .mockResolvedValue({ status: 'cloud', progress: 0 }),
+  triggerDriveCache: vi.fn().mockResolvedValue(undefined),
+  onDriveCacheProgress: vi.fn().mockReturnValue(() => {}),
   getHeatmap: vi.fn().mockResolvedValue({ audio: [], motion: [], points: 0 }),
   getHeatmapProgress: vi.fn().mockResolvedValue({ success: true, data: 50 }),
   getHlsStatus: vi.fn().mockResolvedValue({

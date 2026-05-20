@@ -309,7 +309,9 @@ const initThree = () => {
 
   // Listen for time updates
   video.addEventListener('timeupdate', handleTimeUpdate);
-  video.addEventListener('play', () => emit('play'));
+  video.addEventListener('play', () => {
+    emit('play');
+  });
   video.addEventListener('pause', () => emit('pause'));
 
   // Detect metadata for AR
