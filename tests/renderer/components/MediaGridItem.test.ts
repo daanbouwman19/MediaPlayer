@@ -371,4 +371,423 @@ describe('MediaGridItem.vue', () => {
     expect(emitted![0][0]).toEqual(item);
     expect(emitted![0][1]).toBeInstanceOf(MouseEvent);
   });
+
+  describe('Google Drive & Offline Cache', () => {
+    let mockDriveCacheProgressCallback: any = null;
+    const mockGetDriveCacheStatus = vi.fn();
+    const mockTriggerDriveCache = vi.fn();
+    const mockOnDriveCacheProgress = vi.fn((cb) => {
+      mockDriveCacheProgressCallback = cb;
+      return () => {
+        mockDriveCacheProgressCallback = null;
+      };
+    });
+
+    beforeEach(() => {
+      mockDriveCacheProgressCallback = null;
+      mockGetDriveCacheStatus.mockReset();
+      mockTriggerDriveCache.mockReset();
+      mockOnDriveCacheProgress.mockClear();
+
+      (global as any).window = global;
+      (global as any).window.electronAPI = {
+        getDriveCacheStatus: mockGetDriveCacheStatus,
+        triggerDriveCache: mockTriggerDriveCache,
+        onDriveCacheProgress: mockOnDriveCacheProgress,
+      };
+    });
+
+    it('handles Google Drive cloud/syncing/ready status', async () => {
+      const item = {
+        path: 'gdrive://file123',
+        name: 'Drive Video.mp4',
+        rating: 0,
+        duration: 120,
+      };
+      mockGetDriveCacheStatus.mockResolvedValue({
+        success: true,
+        data: { status: 'cloud', progress: 0 },
+      });
+
+      const wrapper = mount(MediaGridItem, {
+        props: {
+          ...defaultProps,
+          item,
+        },
+      });
+
+      // Let onMounted async call run
+      await new Promise(process.nextTick);
+      expect(mockGetDriveCacheStatus).toHaveBeenCalledWith('file123');
+      expect(mockOnDriveCacheProgress).toHaveBeenCalled();
+
+      // Click triggerOfflineDownload
+      const downloadBtn = wrapper.find(
+        'button[title="Download to offline cache"]',
+      );
+      expect(downloadBtn.exists()).toBe(true);
+      await downloadBtn.trigger('click');
+
+      expect(mockTriggerDriveCache).toHaveBeenCalledWith('file123');
+
+      // Trigger cache progress via callback
+      if (mockDriveCacheProgressCallback) {
+        mockDriveCacheProgressCallback(
+          {},
+          { fileId: 'file123', progress: 0.5 },
+        );
+      }
+      await wrapper.vm.$nextTick();
+      expect(wrapper.find('[title^="Syncing: 50%"]').exists()).toBe(true);
+
+      // Trigger progress complete
+      if (mockDriveCacheProgressCallback) {
+        mockDriveCacheProgressCallback(
+          {},
+          { fileId: 'file123', progress: 1.0 },
+        );
+      }
+      await wrapper.vm.$nextTick();
+      expect(wrapper.find('[title="Ready Offline"]').exists()).toBe(true);
+
+      // Unmount unsubscribes
+      wrapper.unmount();
+      expect(mockDriveCacheProgressCallback).toBeNull();
+    });
+
+    it('resets and updates on path change', async () => {
+      const item1 = {
+        path: 'gdrive://file123',
+        name: 'Drive Video.mp4',
+        rating: 0,
+        duration: 120,
+      };
+      mockGetDriveCacheStatus.mockResolvedValue({
+        success: true,
+        data: { status: 'ready', progress: 1.0 },
+      });
+
+      const wrapper = mount(MediaGridItem, {
+        props: {
+          ...defaultProps,
+          item: item1,
+        },
+      });
+
+      await new Promise(process.nextTick);
+      expect(mockGetDriveCacheStatus).toHaveBeenCalledTimes(1);
+
+      // Change path to non-drive item
+      const item2 = {
+        path: 'local/video.mp4',
+        name: 'Local Video.mp4',
+        rating: 0,
+        duration: 120,
+      };
+      await wrapper.setProps({ item: item2 });
+
+      expect(
+        wrapper.find('button[title="Download to offline cache"]').exists(),
+      ).toBe(false);
+    });
+  });
+
+  describe('Image and Poster Error Handling', () => {
+    it('retries image load with full url', async () => {
+      const item = {
+        path: 'image.jpg',
+        name: 'image.jpg',
+        rating: 0,
+        duration: 0,
+      };
+      const failedPaths = new Set<string>();
+      const mockGenerator = vi.fn((p) => `/full-url/${p}`);
+
+      const wrapper = mount(MediaGridItem, {
+        props: {
+          ...defaultProps,
+          item,
+          mediaUrlGenerator: mockGenerator,
+          failedImagePaths: failedPaths,
+        },
+      });
+
+      const img = wrapper.find('img');
+      const imgEl = img.element as HTMLImageElement;
+
+      // Mock the browser location URL resolution
+      Object.defineProperty(imgEl, 'src', {
+        writable: true,
+        value: 'http://localhost/other-src.jpg',
+      });
+
+      imgEl.dispatchEvent(new Event('error'));
+      await wrapper.vm.$nextTick();
+
+      expect(imgEl.src).toBe('/full-url/image.jpg');
+      expect(failedPaths.has('image.jpg')).toBe(false);
+    });
+
+    it('marks image as failed if full url retry fails', async () => {
+      const item = {
+        path: 'image.jpg',
+        name: 'image.jpg',
+        rating: 0,
+        duration: 0,
+      };
+      const failedPaths = new Set<string>();
+      const mockGenerator = vi.fn((p) => `/full-url/${p}`);
+
+      const wrapper = mount(MediaGridItem, {
+        props: {
+          ...defaultProps,
+          item,
+          mediaUrlGenerator: mockGenerator,
+          failedImagePaths: failedPaths,
+        },
+      });
+
+      const img = wrapper.find('img');
+      const imgEl = img.element as HTMLImageElement;
+
+      // Make src match full url so it represents a full failure
+      Object.defineProperty(imgEl, 'src', {
+        writable: true,
+        value: new URL('/full-url/image.jpg', window.location.href).href,
+      });
+
+      imgEl.dispatchEvent(new Event('error'));
+      await wrapper.vm.$nextTick();
+
+      expect(failedPaths.has('image.jpg')).toBe(true);
+    });
+
+    it('handles poster error to show fallback video', async () => {
+      const item = {
+        path: 'video.mp4',
+        name: 'video.mp4',
+        rating: 0,
+        duration: 120,
+      };
+      const wrapper = mount(MediaGridItem, {
+        props: {
+          ...defaultProps,
+          item,
+        },
+      });
+
+      const img = wrapper.find('img');
+      await img.trigger('error'); // Triggers handlePosterError
+
+      // Should show video now
+      expect(wrapper.find('video').exists()).toBe(true);
+    });
+  });
+
+  describe('Skeleton Loader branch coverage', () => {
+    it('shows skeleton for loading image', () => {
+      const item = {
+        path: 'image.jpg',
+        name: 'image.jpg',
+        rating: 0,
+        duration: 0,
+      };
+      const failedPaths = new Set<string>();
+      const wrapper = mount(MediaGridItem, {
+        props: {
+          ...defaultProps,
+          item,
+          failedImagePaths: failedPaths,
+        },
+      });
+
+      // By default isLoading is true
+      expect(wrapper.find('.animate-pulse').exists()).toBe(true);
+    });
+
+    it('shows skeleton for loading video with poster', () => {
+      const item = {
+        path: 'video.mp4',
+        name: 'video.mp4',
+        rating: 0,
+        duration: 120,
+      };
+      const wrapper = mount(MediaGridItem, {
+        props: {
+          ...defaultProps,
+          item,
+        },
+      });
+
+      expect(wrapper.find('.animate-pulse').exists()).toBe(true);
+    });
+  });
+
+  describe('Extra Branch Coverage for MediaGridItem', () => {
+    it('uses mediaUrlGenerator as fallback for mediaUrl when thumbnailUrlGenerator is null', () => {
+      const item = {
+        path: 'test.jpg',
+        name: 'test.jpg',
+        rating: 0,
+        duration: 0,
+      };
+      const wrapper = mount(MediaGridItem, {
+        props: {
+          ...defaultProps,
+          item,
+          thumbnailUrlGenerator: null,
+        },
+      });
+      expect((wrapper.vm as any).mediaUrl).toBe('test.jpg');
+      expect((wrapper.vm as any).posterUrl).toBe('');
+    });
+
+    it('returns false for showSkeleton if neither image nor video', () => {
+      const item = {
+        path: 'test.unknown',
+        name: 'test.unknown',
+        rating: 0,
+        duration: 0,
+      };
+      const wrapper = mount(MediaGridItem, {
+        props: {
+          ...defaultProps,
+          item,
+          imageExtensionsSet: new Set<string>(),
+          videoExtensionsSet: new Set<string>(),
+        },
+      });
+      expect((wrapper.vm as any).showSkeleton).toBe(false);
+    });
+
+    it('logs error when getDriveCacheStatus fails', async () => {
+      const item = {
+        path: 'gdrive://file123',
+        name: 'Drive Video.mp4',
+        rating: 0,
+        duration: 120,
+      };
+      const mockGetDriveCacheStatus = vi
+        .fn()
+        .mockRejectedValue(new Error('Cache API error'));
+      const consoleSpy = vi
+        .spyOn(console, 'error')
+        .mockImplementation(() => {});
+
+      (global as any).window = global;
+      (global as any).window.electronAPI = {
+        getDriveCacheStatus: mockGetDriveCacheStatus,
+        triggerDriveCache: vi.fn(),
+        onDriveCacheProgress: vi.fn(() => () => {}),
+      };
+
+      const wrapper = mount(MediaGridItem, {
+        props: {
+          ...defaultProps,
+          item,
+        },
+      });
+
+      await new Promise(process.nextTick);
+
+      expect(consoleSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Failed to get cache status'),
+        expect.any(Error),
+      );
+      consoleSpy.mockRestore();
+      wrapper.unmount();
+    });
+
+    it('handles error when triggerDriveCache fails', async () => {
+      const item = {
+        path: 'gdrive://file123',
+        name: 'Drive Video.mp4',
+        rating: 0,
+        duration: 120,
+      };
+      const mockGetDriveCacheStatus = vi.fn().mockResolvedValue({
+        success: true,
+        data: { status: 'cloud', progress: 0 },
+      });
+      const mockTriggerDriveCache = vi
+        .fn()
+        .mockRejectedValue(new Error('Trigger fail'));
+      const consoleSpy = vi
+        .spyOn(console, 'error')
+        .mockImplementation(() => {});
+
+      (global as any).window = global;
+      (global as any).window.electronAPI = {
+        getDriveCacheStatus: mockGetDriveCacheStatus,
+        triggerDriveCache: mockTriggerDriveCache,
+        onDriveCacheProgress: vi.fn(() => () => {}),
+      };
+
+      const wrapper = mount(MediaGridItem, {
+        props: {
+          ...defaultProps,
+          item,
+        },
+      });
+
+      await new Promise(process.nextTick);
+
+      const downloadBtn = wrapper.find(
+        'button[title="Download to offline cache"]',
+      );
+      await downloadBtn.trigger('click');
+
+      expect(mockTriggerDriveCache).toHaveBeenCalledWith('file123');
+      await wrapper.vm.$nextTick();
+
+      expect(consoleSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Failed to trigger cache download'),
+        expect.any(Error),
+      );
+      expect((wrapper.vm as any).cacheStatus).toBe('cloud');
+      consoleSpy.mockRestore();
+      wrapper.unmount();
+    });
+
+    it('cleans up duplicate progress subscription', async () => {
+      const item = {
+        path: 'gdrive://file123',
+        name: 'Drive Video.mp4',
+        rating: 0,
+        duration: 120,
+      };
+      const unsubscribeSpy = vi.fn();
+      const mockOnDriveCacheProgress = vi.fn(() => unsubscribeSpy);
+
+      (global as any).window = global;
+      (global as any).window.electronAPI = {
+        getDriveCacheStatus: vi
+          .fn()
+          .mockResolvedValue({ success: true, data: { status: 'cloud' } }),
+        triggerDriveCache: vi.fn(),
+        onDriveCacheProgress: mockOnDriveCacheProgress,
+      };
+
+      const wrapper = mount(MediaGridItem, {
+        props: {
+          ...defaultProps,
+          item,
+        },
+      });
+
+      await new Promise(process.nextTick);
+
+      const newItem = {
+        path: 'gdrive://file456',
+        name: 'Drive Video 2.mp4',
+        rating: 0,
+        duration: 120,
+      };
+      await wrapper.setProps({ item: newItem });
+      await new Promise(process.nextTick);
+
+      expect(unsubscribeSpy).toHaveBeenCalled();
+      wrapper.unmount();
+    });
+  });
 });

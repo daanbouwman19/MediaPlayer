@@ -12,7 +12,7 @@
  * It uses a canvas to draw the current image or video frame and applies
  * heavy blur and saturation filters to create an immersive atmosphere.
  */
-import { ref, watch, onUnmounted, computed, onMounted } from 'vue';
+import { ref, watch, onUnmounted, computed } from 'vue';
 import { storeToRefs } from 'pinia';
 import { usePlayerStore } from '../composables/usePlayerStore';
 import { usePlaylistStore } from '../composables/usePlaylistStore';
@@ -130,10 +130,6 @@ watch(
   },
   { immediate: true },
 );
-
-onMounted(() => {
-  // Empty
-});
 
 onUnmounted(() => {
   if (animationFrameId) cancelAnimationFrame(animationFrameId);

@@ -75,6 +75,15 @@ vi.mock('../../../src/main/google-drive-service', () => ({
 
 // Note: We don't need a module-level mock for MediaService anymore as we'll inject a real instance with fakes.
 
+const mockDriveCacheManager = {
+  getCacheStatus: vi.fn(),
+  triggerDownload: vi.fn(),
+};
+
+vi.mock('../../../src/main/drive-cache-manager', () => ({
+  getDriveCacheManager: vi.fn(() => mockDriveCacheManager),
+}));
+
 vi.mock('../../../src/core/hls-handler', () => ({
   generateSessionId: vi.fn(),
 }));
@@ -380,6 +389,71 @@ describe('Media Controller Combined', () => {
           '/mock/ffmpeg',
           { forceCheck: true },
         );
+      });
+    });
+
+    describe('Drive Caching IPC Handlers', () => {
+      it('DRIVE_CACHE_STATUS returns status', async () => {
+        const handler = getHandler(IPC_CHANNELS.DRIVE_CACHE_STATUS);
+        mockDriveCacheManager.getCacheStatus.mockResolvedValue({
+          status: 'ready',
+          progress: 1.0,
+        });
+
+        const res = await handler({}, 'file123');
+
+        expect(mockDriveCacheManager.getCacheStatus).toHaveBeenCalledWith(
+          'file123',
+        );
+        expect(res).toEqual({ status: 'ready', progress: 1.0 });
+      });
+
+      it('DRIVE_CACHE_STATUS handles manager errors gracefully', async () => {
+        const handler = getHandler(IPC_CHANNELS.DRIVE_CACHE_STATUS);
+        mockDriveCacheManager.getCacheStatus.mockRejectedValue(
+          new Error('Cache check failed'),
+        );
+        const consoleSpy = vi
+          .spyOn(console, 'error')
+          .mockImplementation(() => {});
+
+        const res = await handler({}, 'file123');
+
+        expect(res).toEqual({ status: 'cloud', progress: 0 });
+        expect(consoleSpy).toHaveBeenCalledWith(
+          expect.stringContaining('Error getting cache status'),
+          expect.any(Error),
+        );
+        consoleSpy.mockRestore();
+      });
+
+      it('DRIVE_CACHE_TRIGGER triggers a cache download', async () => {
+        const handler = getHandler(IPC_CHANNELS.DRIVE_CACHE_TRIGGER);
+        mockDriveCacheManager.triggerDownload.mockResolvedValue(undefined);
+
+        await handler({}, 'file123');
+
+        expect(mockDriveCacheManager.triggerDownload).toHaveBeenCalledWith(
+          'file123',
+        );
+      });
+
+      it('DRIVE_CACHE_TRIGGER handles error and throws', async () => {
+        const handler = getHandler(IPC_CHANNELS.DRIVE_CACHE_TRIGGER);
+        mockDriveCacheManager.triggerDownload.mockRejectedValue(
+          new Error('Trigger failed'),
+        );
+        const consoleSpy = vi
+          .spyOn(console, 'error')
+          .mockImplementation(() => {});
+
+        await expect(handler({}, 'file123')).rejects.toThrow('Trigger failed');
+
+        expect(consoleSpy).toHaveBeenCalledWith(
+          expect.stringContaining('Error triggering download'),
+          expect.any(Error),
+        );
+        consoleSpy.mockRestore();
       });
     });
   });

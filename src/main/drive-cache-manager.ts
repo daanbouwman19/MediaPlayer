@@ -128,8 +128,18 @@ class DriveCacheManager extends EventEmitter {
   public async getCacheStatus(
     fileId: string,
   ): Promise<{ status: 'ready' | 'syncing' | 'cloud'; progress: number }> {
-    if (!fileId) {
+    if (fileId === '') {
       return { status: 'cloud', progress: 0 };
+    }
+    if (
+      !fileId ||
+      typeof fileId !== 'string' ||
+      fileId.includes('..') ||
+      fileId.includes('/') ||
+      fileId.includes('\\') ||
+      fileId.includes('\0')
+    ) {
+      throw new Error('Invalid fileId');
     }
     const filePath = path.join(this.cacheDir, fileId);
 
@@ -189,13 +199,13 @@ class DriveCacheManager extends EventEmitter {
 
     const stream = await getDriveFileStream(fileId, { start: startByte });
     const fileStream = fs.createWriteStream(filePath, { flags });
-    stream.pipe(fileStream);
 
     let downloadedBytes = startByte;
+    const metadata = this.metadataCache.get(fileId);
+    const total = metadata ? metadata.size : 0;
+
     stream.on('data', (chunk) => {
       downloadedBytes += chunk.length;
-      const metadata = this.metadataCache.get(fileId);
-      const total = metadata ? metadata.size : 0;
       const progress = total > 0 ? downloadedBytes / total : 0;
       this.emit('progress', {
         fileId,
@@ -204,6 +214,8 @@ class DriveCacheManager extends EventEmitter {
         progress,
       });
     });
+
+    stream.pipe(fileStream);
 
     return new Promise((resolve, reject) => {
       fileStream.on('ready', () => {

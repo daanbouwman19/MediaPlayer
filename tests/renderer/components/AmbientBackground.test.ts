@@ -144,9 +144,100 @@ describe('AmbientBackground.vue', () => {
     wrapper.unmount();
   });
 
+  it('handles other result types or missing url', async () => {
+    usePlaylistStore().currentItem = { path: '/test/image.jpg' } as any;
+    vi.mocked(api.loadFileAsDataURL).mockResolvedValue({
+      type: 'unknown-type' as any,
+      url: null as any,
+    });
+
+    const wrapper = mount(AmbientBackground);
+    await flushPromises();
+
+    expect(wrapper.vm).toBeDefined();
+    wrapper.unmount();
+  });
+
+  it('handles image onload when canvas is missing on callback', async () => {
+    usePlaylistStore().currentItem = { path: '/test/image.jpg' } as any;
+
+    const originalImage = window.Image;
+    let triggerOnload: any = null;
+    window.Image = class FakeImage {
+      onload: any;
+      set src(_v: string) {
+        triggerOnload = () => {
+          if (this.onload) this.onload();
+        };
+      }
+      get src() {
+        return '';
+      }
+    } as any;
+
+    const wrapper = mount(AmbientBackground);
+    await flushPromises();
+
+    // Set canvas to null before calling onload
+    (wrapper.vm as any).canvas = null;
+
+    if (triggerOnload) triggerOnload();
+
+    expect(wrapper.vm).toBeDefined();
+    window.Image = originalImage;
+    wrapper.unmount();
+  });
+
+  it('skips video loop drawing if video is paused, ended, or missing canvas/context', async () => {
+    usePlaylistStore().currentItem = { path: '/test/video.mp4' } as any;
+
+    // Paused video
+    const mockVideo = { paused: true, ended: false } as any;
+    usePlayerStore().mainVideoElement = mockVideo;
+
+    const wrapper = mount(AmbientBackground);
+    await flushPromises();
+
+    vi.advanceTimersByTime(50);
+    const canvas = wrapper.find('canvas').element as HTMLCanvasElement;
+    const ctx = canvas.getContext('2d');
+    expect(ctx?.drawImage).not.toHaveBeenCalled();
+
+    // Draw throws an error
+    mockVideo.paused = false;
+    vi.mocked(ctx?.drawImage as any).mockImplementation(() => {
+      throw new Error('Draw error');
+    });
+    vi.advanceTimersByTime(50);
+
+    // Verify it doesn't crash on throw
+    expect(wrapper.vm).toBeDefined();
+    wrapper.unmount();
+  });
+
   it('handles no media', async () => {
     usePlaylistStore().currentItem = null;
     await flushPromises();
     expect(api.loadFileAsDataURL).not.toHaveBeenCalled();
+  });
+
+  it('cancels previous animation frame when loading new media', async () => {
+    usePlaylistStore().currentItem = { path: '/test/video1.mp4' } as any;
+    const mockVideo = { paused: false, ended: false } as HTMLVideoElement;
+    usePlayerStore().mainVideoElement = mockVideo;
+
+    const wrapper = mount(AmbientBackground);
+    await flushPromises();
+
+    vi.advanceTimersByTime(50);
+
+    const cancelSpy = vi.spyOn(window, 'cancelAnimationFrame');
+
+    usePlaylistStore().currentItem = { path: '/test/video2.mp4' } as any;
+    await flushPromises();
+
+    expect(cancelSpy).toHaveBeenCalled();
+    cancelSpy.mockRestore();
+    wrapper.unmount();
   });
 });

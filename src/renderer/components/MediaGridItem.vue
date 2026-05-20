@@ -279,7 +279,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, ref, watch, onMounted, onUnmounted } from 'vue';
 import type { MediaFile, TranscodeJob } from '../../core/types';
 import {
   getDisplayName,
@@ -440,7 +440,6 @@ const handleVideoError = () => {
 const shouldPlayPreview = computed(() => isHovered.value && isVideo.value);
 
 // Offline Drive Caching logic
-import { onMounted, onUnmounted } from 'vue';
 
 const isDrive = computed(() => props.item.path.startsWith('gdrive://'));
 const cacheStatus = ref<'ready' | 'syncing' | 'cloud'>('cloud');
