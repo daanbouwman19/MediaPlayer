@@ -5,7 +5,7 @@
  * from the main process to the renderer process. This is essential for maintaining
  * process isolation and security in the Electron application.
  */
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
 import { IPC_CHANNELS } from '../shared/ipc-channels';
 import type {
   Album,
@@ -119,6 +119,23 @@ export interface ElectronAPI {
     folderId: string,
   ) => Promise<IpcResult<FileSystemEntry[]>>;
   getGoogleDriveParent: (folderId: string) => Promise<IpcResult<string | null>>;
+  getDriveCacheStatus: (
+    fileId: string,
+  ) => Promise<
+    IpcResult<{ status: 'ready' | 'syncing' | 'cloud'; progress: number }>
+  >;
+  triggerDriveCache: (fileId: string) => Promise<IpcResult<void>>;
+  onDriveCacheProgress: (
+    callback: (
+      event: IpcRendererEvent,
+      data: {
+        fileId: string;
+        progress: number;
+        downloadedBytes: number;
+        totalSize: number;
+      },
+    ) => void,
+  ) => () => void;
 
   // Theme
   setTheme: (theme: string) => void;
@@ -255,6 +272,25 @@ const api: ElectronAPI = {
 
   getGoogleDriveParent: (folderId: string) =>
     ipcRenderer.invoke(IPC_CHANNELS.DRIVE_GET_PARENT, folderId),
+  getDriveCacheStatus: (fileId: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.DRIVE_CACHE_STATUS, fileId),
+  triggerDriveCache: (fileId: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.DRIVE_CACHE_TRIGGER, fileId),
+  onDriveCacheProgress: (callback) => {
+    const listener = (
+      event: IpcRendererEvent,
+      data: {
+        fileId: string;
+        progress: number;
+        downloadedBytes: number;
+        totalSize: number;
+      },
+    ) => callback(event, data);
+    ipcRenderer.on(IPC_CHANNELS.DRIVE_CACHE_PROGRESS, listener);
+    return () => {
+      ipcRenderer.removeListener(IPC_CHANNELS.DRIVE_CACHE_PROGRESS, listener);
+    };
+  },
 
   setTheme: (theme: string) =>
     ipcRenderer.send(IPC_CHANNELS.THEME_CHANGED, theme),

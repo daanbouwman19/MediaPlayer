@@ -14,6 +14,9 @@
 
           <!-- SECTION: SMART PLAYLISTS -->
           <PlaylistsSection />
+
+          <!-- SECTION: PLAYBACK QUEUE -->
+          <QueueSection class="mt-4" />
         </div>
       </div>
       <!-- End of scrollable albums area -->
@@ -37,6 +40,7 @@
 import AlbumsListHeader from './AlbumsList/AlbumsListHeader.vue';
 import AlbumsSection from './AlbumsList/AlbumsSection.vue';
 import PlaylistsSection from './AlbumsList/PlaylistsSection.vue';
+import QueueSection from './AlbumsList/QueueSection.vue';
 import SlideshowSettings from './AlbumsList/SlideshowSettings.vue';
 import TimerPanel from './AlbumsList/TimerPanel.vue';
 

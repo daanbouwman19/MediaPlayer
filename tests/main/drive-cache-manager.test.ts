@@ -591,6 +591,62 @@ describe('DriveCacheManager', () => {
     consoleSpy.mockRestore();
   });
 
+  it('getCacheStatus returns cloud for non-existent file', async () => {
+    statMock().mockRejectedValue(
+      Object.assign(new Error('Not Found'), { code: 'ENOENT' }),
+    );
+    const status = await driveCacheManager.getCacheStatus('non-existent');
+    expect(status.status).toBe('cloud');
+    expect(status.progress).toBe(0);
+  });
+
+  it('getCacheStatus returns ready for fully cached file', async () => {
+    const fileId = 'fully-cached-file';
+    const driveService = await import('../../src/main/google-drive-service');
+    vi.mocked(driveService.getDriveFileMetadata).mockResolvedValue({
+      size: '1000',
+      mimeType: 'video/mp4',
+    } as any);
+
+    statMock().mockResolvedValue({ size: 1000 } as any);
+
+    const status = await driveCacheManager.getCacheStatus(fileId);
+    expect(status.status).toBe('ready');
+    expect(status.progress).toBe(1);
+  });
+
+  it('getCacheStatus returns syncing when file is actively downloading', async () => {
+    const fileId = 'actively-syncing-file';
+    const driveService = await import('../../src/main/google-drive-service');
+    vi.mocked(driveService.getDriveFileMetadata).mockResolvedValue({
+      size: '1000',
+      mimeType: 'video/mp4',
+    } as any);
+
+    statMock().mockRejectedValue(
+      Object.assign(new Error('Not Found'), { code: 'ENOENT' }),
+    );
+
+    const mockStream = new EventEmitter();
+    (mockStream as any).pipe = vi.fn();
+    vi.mocked(driveService.getDriveFileStream).mockResolvedValue(
+      mockStream as any,
+    );
+
+    const writeStream = new EventEmitter();
+    setupMockWriteStream(writeStream);
+
+    // Start download
+    await driveCacheManager.getCachedFilePath(fileId);
+
+    // Mock stat for getCacheStatus to simulate partial download size (e.g. 400 bytes)
+    statMock().mockResolvedValue({ size: 400 } as any);
+
+    const status = await driveCacheManager.getCacheStatus(fileId);
+    expect(status.status).toBe('syncing');
+    expect(status.progress).toBe(0.4);
+  });
+
   it('throws when getting manager before initialization', () => {
     cleanupDriveCacheManager();
     expect(() => getDriveCacheManager()).toThrow(

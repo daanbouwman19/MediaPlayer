@@ -111,7 +111,12 @@ app.on('ready', () => {
   }
 
   const driveCacheDir = path.join(app.getPath('userData'), 'drive-cache');
-  initializeDriveCacheManager(driveCacheDir);
+  const driveCacheManager = initializeDriveCacheManager(driveCacheDir);
+  driveCacheManager.on('progress', (data) => {
+    for (const win of BrowserWindow.getAllWindows()) {
+      win.webContents.send('drive:cache-progress', data);
+    }
+  });
 
   const securityConfigPath = path.join(
     app.getPath('userData'),

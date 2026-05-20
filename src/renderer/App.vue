@@ -76,15 +76,19 @@
         </div>
 
         <!-- Media Display -->
-        <MediaGrid
-          v-if="viewMode === 'grid'"
-          class="grow glass-panel md:rounded-xl overflow-hidden"
-        />
-        <MediaDisplay
-          v-else
-          class="grow md:rounded-xl overflow-hidden"
-          @open-shortcuts="isShortcutsModalOpen = true"
-        />
+        <transition name="view-fade" mode="out-in">
+          <MediaGrid
+            v-if="viewMode === 'grid'"
+            key="grid"
+            class="grow glass-panel md:rounded-xl overflow-hidden"
+          />
+          <MediaDisplay
+            v-else
+            key="player"
+            class="grow md:rounded-xl overflow-hidden"
+            @open-shortcuts="isShortcutsModalOpen = true"
+          />
+        </transition>
       </div>
     </main>
 
