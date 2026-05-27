@@ -1,15 +1,15 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import Database from 'better-sqlite3';
+import { DatabaseSync } from 'node:sqlite';
 import {
   initializeSchema,
   migrateMediaMetadata,
 } from '../../src/core/database-schema';
 
 describe('Database Schema vs Application Types', () => {
-  let db: Database.Database;
+  let db: DatabaseSync;
 
   beforeAll(() => {
-    db = new Database(':memory:');
+    db = new DatabaseSync(':memory:');
     initializeSchema(db);
     migrateMediaMetadata(db);
   });

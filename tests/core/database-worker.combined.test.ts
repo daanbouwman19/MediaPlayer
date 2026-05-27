@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import path from 'path';
 import fs from 'fs';
 import { parentPort } from 'worker_threads';
-import Database from 'better-sqlite3';
+import { DatabaseSync } from 'node:sqlite';
 
 // Use __mocks__/worker_threads.js
 vi.mock('worker_threads');
@@ -157,12 +157,10 @@ describe('Database Worker Combined Tests', () => {
           tempDir,
           'migration_old_schema.sqlite',
         );
-        const tempDb = new Database(migrationDbPath);
-        tempDb
-          .prepare(
-            `CREATE TABLE media_directories (path TEXT UNIQUE, is_active INTEGER DEFAULT 1)`,
-          )
-          .run();
+        const tempDb = new DatabaseSync(migrationDbPath);
+        tempDb.exec(
+          `CREATE TABLE media_directories (path TEXT UNIQUE, is_active INTEGER DEFAULT 1)`,
+        );
         tempDb
           .prepare(
             'INSERT INTO media_directories (path, is_active) VALUES (?, ?)',

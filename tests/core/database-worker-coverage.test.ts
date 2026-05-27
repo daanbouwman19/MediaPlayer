@@ -16,9 +16,8 @@ const {
   };
 
   const instance = {
-    pragma: vi.fn(),
+    exec: vi.fn(),
     prepare: vi.fn().mockReturnValue(stmt),
-    transaction: vi.fn((fn) => fn),
     close: vi.fn(),
   };
 
@@ -54,9 +53,9 @@ vi.mock('worker_threads', async (importOriginal) => {
   };
 });
 
-vi.mock('better-sqlite3', () => {
+vi.mock('node:sqlite', () => {
   return {
-    default: vi.fn(function () {
+    DatabaseSync: vi.fn(function () {
       return mockDbInstance;
     }),
   };
@@ -101,7 +100,7 @@ vi.mock('fs/promises', async () => {
 });
 
 import * as worker from '../../src/core/database-worker';
-import Database from 'better-sqlite3';
+import { DatabaseSync } from 'node:sqlite';
 
 describe('Database Worker Coverage', () => {
   let mockGetFileIdsStmt: any;
@@ -116,9 +115,6 @@ describe('Database Worker Coverage', () => {
     mockStatement.all.mockReset();
     mockStatement.get.mockReset();
     mockStatement.all.mockReturnValue([]);
-
-    // Reset transaction mock
-    mockDbInstance.transaction.mockImplementation((fn: any) => fn);
 
     // Initialize specific mocks
     mockGetFileIdsStmt = { all: vi.fn().mockReturnValue([]) };
@@ -157,7 +153,7 @@ describe('Database Worker Coverage', () => {
 
   it('initDatabase - handles initialization failure', () => {
     // Force constructor to throw
-    (Database as any).mockImplementationOnce(function () {
+    (DatabaseSync as any).mockImplementationOnce(function () {
       throw new Error('Init failed');
     });
     const result = worker.initDatabase(':memory:');
@@ -254,10 +250,8 @@ describe('Database Worker Coverage', () => {
   });
 
   it('recordMediaView - handles transaction error', async () => {
-    mockDbInstance.transaction.mockImplementationOnce(() => {
-      return () => {
-        throw new Error('Transaction failed');
-      };
+    mockDbInstance.exec.mockImplementationOnce(() => {
+      throw new Error('Transaction failed');
     });
 
     const result = await worker.recordMediaView('/test.mp4');
@@ -328,10 +322,8 @@ describe('Database Worker Coverage', () => {
   });
 
   it('bulkUpsertMetadata - handles error', async () => {
-    mockDbInstance.transaction.mockImplementationOnce(() => {
-      return () => {
-        throw new Error('Bulk failed');
-      };
+    mockDbInstance.exec.mockImplementationOnce(() => {
+      throw new Error('Bulk failed');
     });
 
     const result = await worker.bulkUpsertMetadata([{ filePath: '/test.mp4' }]);
@@ -413,11 +405,6 @@ describe('Database Worker Coverage', () => {
   });
 
   it('bulkUpsertMetadata - handles undefined fields in batch', async () => {
-    // Setup transaction mock to execute the iterator
-    mockDbInstance.transaction.mockImplementationOnce((fn: any) => {
-      return (items: any[]) => fn(items);
-    });
-
     const result = await worker.bulkUpsertMetadata([{ filePath: '/test.mp4' }]);
     expect(result.success).toBe(true);
 

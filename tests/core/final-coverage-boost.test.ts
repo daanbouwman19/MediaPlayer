@@ -21,9 +21,8 @@ const {
   };
 
   const mockDbInstance = {
-    pragma: vi.fn(),
+    exec: vi.fn(),
     prepare: vi.fn(() => mockStatement),
-    transaction: vi.fn((fn: any) => fn),
     close: vi.fn(),
   };
 
@@ -82,9 +81,9 @@ const {
 });
 
 // 1. Mock Database
-vi.mock('better-sqlite3', () => {
+vi.mock('node:sqlite', () => {
   return {
-    default: mockDatabaseConstructor,
+    DatabaseSync: mockDatabaseConstructor,
   };
 });
 
@@ -266,6 +265,25 @@ describe('Final Coverage Boost', () => {
           const e: any = new Error('Constraint');
           e.code = 'SQLITE_CONSTRAINT_UNIQUE';
           throw e;
+        })
+        .mockImplementationOnce(() => {});
+
+      await dbWorker.recordMediaView('/test/view.mp4');
+
+      expect(mockStatement.run).toHaveBeenCalledTimes(3);
+    });
+
+    it('recordMediaView: handles unique constraint error message string violation by falling back', async () => {
+      const initRes = dbWorker.initDatabase(':memory:');
+      if (!initRes.success) throw new Error(`Init failed: ${initRes.error}`);
+
+      mockStatement.run.mockClear();
+
+      // sequence: insert -> updatePath -> updateFallback
+      mockStatement.run
+        .mockImplementationOnce(() => {})
+        .mockImplementationOnce(() => {
+          throw new Error('UNIQUE constraint failed: media_views.file_path');
         })
         .mockImplementationOnce(() => {});
 

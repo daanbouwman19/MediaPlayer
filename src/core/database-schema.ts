@@ -2,7 +2,7 @@
  * @file Database schema definitions and migration logic.
  */
 
-import Database from 'better-sqlite3';
+import { DatabaseSync } from 'node:sqlite';
 import crypto from 'crypto';
 import path from 'path';
 
@@ -73,7 +73,7 @@ export const DB_INDEXES = {
 /**
  * Initializes the database schema.
  */
-export function initializeSchema(db: Database.Database): void {
+export function initializeSchema(db: DatabaseSync): void {
   for (const schema of Object.values(DB_SCHEMA)) {
     db.prepare(schema).run();
   }
@@ -83,7 +83,7 @@ export function initializeSchema(db: Database.Database): void {
  * Creates database indexes.
  * Should be called after schema initialization and migrations.
  */
-export function createIndexes(db: Database.Database): void {
+export function createIndexes(db: DatabaseSync): void {
   for (const index of Object.values(DB_INDEXES)) {
     try {
       db.prepare(index).run();
@@ -96,7 +96,7 @@ export function createIndexes(db: Database.Database): void {
 /**
  * Migrates media_directories table if needed.
  */
-export function migrateMediaDirectories(db: Database.Database): void {
+export function migrateMediaDirectories(db: DatabaseSync): void {
   const dirTableInfo = db
     .prepare('PRAGMA table_info(media_directories)')
     .all() as { name: string }[];
@@ -108,7 +108,12 @@ export function migrateMediaDirectories(db: Database.Database): void {
   if (tableExists && !hasId) {
     console.log('[worker] Migrating media_directories table...');
 
-    const migrate = db.transaction(() => {
+    // In node:sqlite, db.transaction can be constructed manually, or since DatabaseSync transactions aren't built-in helper functions returning a transaction runner, let's look at DatabaseSync.
+    // DatabaseSync transactions: there is no `db.transaction()` wrapper in node:sqlite!
+    // Transactions are executed using standard SQL: db.exec('BEGIN'), db.exec('COMMIT'), db.exec('ROLLBACK').
+    // Let's implement transaction manually with try-catch-rollback!
+    db.exec('BEGIN');
+    try {
       // 1. Rename old table
       db.prepare(
         'ALTER TABLE media_directories RENAME TO media_directories_old',
@@ -133,9 +138,16 @@ export function migrateMediaDirectories(db: Database.Database): void {
 
       // 4. Drop old table
       db.prepare('DROP TABLE media_directories_old').run();
-    });
+      db.exec('COMMIT');
+    } catch (e) {
+      try {
+        db.exec('ROLLBACK');
+      } catch (rollbackErr) {
+        console.error('[worker] Failed to rollback transaction:', rollbackErr);
+      }
+      throw e;
+    }
 
-    migrate();
     console.log('[worker] Migration complete.');
   }
 }
@@ -143,7 +155,7 @@ export function migrateMediaDirectories(db: Database.Database): void {
 /**
  * Migrates media_metadata table if needed.
  */
-export function migrateMediaMetadata(db: Database.Database): void {
+export function migrateMediaMetadata(db: DatabaseSync): void {
   try {
     const tableInfo = db.prepare('PRAGMA table_info(media_metadata)').all() as {
       name: string;

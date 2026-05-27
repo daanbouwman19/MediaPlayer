@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import Database from 'better-sqlite3';
+import { DatabaseSync } from 'node:sqlite';
 import path from 'path';
 import fs from 'fs';
 import {
@@ -10,7 +10,7 @@ import {
 } from '../../src/core/database-schema';
 
 describe('Database Schema', () => {
-  let db: Database.Database;
+  let db: DatabaseSync;
   let tempDir: string;
   let dbPath: string;
 
@@ -19,7 +19,7 @@ describe('Database Schema', () => {
       path.join(process.cwd(), 'tests', 'temp', 'schema-'),
     );
     dbPath = path.join(tempDir, 'test.db');
-    db = new Database(dbPath);
+    db = new DatabaseSync(dbPath);
   });
 
   afterEach(() => {
@@ -81,9 +81,9 @@ describe('Database Schema', () => {
     describe('media_directories', () => {
       it('migrates from old schema (no id) to new schema', () => {
         // Create old schema
-        db.prepare(
+        db.exec(
           'CREATE TABLE media_directories (path TEXT UNIQUE, is_active INTEGER DEFAULT 1)',
-        ).run();
+        );
         db.prepare(
           'INSERT INTO media_directories (path, is_active) VALUES (?, ?)',
         ).run('/old/path', 1);
@@ -133,9 +133,9 @@ describe('Database Schema', () => {
     describe('media_metadata', () => {
       it('adds missing columns', () => {
         // Create table with missing columns
-        db.prepare(
+        db.exec(
           'CREATE TABLE media_metadata (file_path_hash TEXT PRIMARY KEY)',
-        ).run();
+        );
 
         migrateMediaMetadata(db);
 

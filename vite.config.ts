@@ -1,4 +1,5 @@
 import { defineConfig } from 'vite';
+import type { UserConfig } from 'vite';
 import vue from '@vitejs/plugin-vue';
 import tailwindcss from '@tailwindcss/vite';
 import { visualizer } from 'rollup-plugin-visualizer';
@@ -29,7 +30,7 @@ export default defineConfig(({ mode }) => {
         rollupOptions: {
           external: [
             /^electron(\/.*)?$/,
-            'better-sqlite3',
+            'node:sqlite',
             'ffmpeg-static',
             /^node:/,
             'express',
@@ -45,7 +46,7 @@ export default defineConfig(({ mode }) => {
       ssr: {
         noExternal: ['execa', 'p-queue', 'range-parser'],
       },
-    };
+    } as UserConfig;
   }
 
   if (target === 'preload') {
@@ -69,7 +70,7 @@ export default defineConfig(({ mode }) => {
           },
         },
       },
-    };
+    } as UserConfig;
   }
 
   if (target === 'renderer') {
@@ -108,7 +109,7 @@ export default defineConfig(({ mode }) => {
           '@': resolve(__dirname, 'src/renderer'),
         },
       },
-    };
+    } as UserConfig;
   }
 
   if (target === 'server') {
@@ -130,7 +131,7 @@ export default defineConfig(({ mode }) => {
           },
           external: [
             /^node:/,
-            'better-sqlite3',
+            'node:sqlite',
             'express',
             'cors',
             'ffmpeg-static',
@@ -140,7 +141,7 @@ export default defineConfig(({ mode }) => {
         minify: 'esbuild',
         sourcemap: 'hidden',
       },
-    };
+    } as UserConfig;
   }
 
   if (target === 'client') {
@@ -202,8 +203,8 @@ export default defineConfig(({ mode }) => {
           },
         },
       },
-    };
+    } as UserConfig;
   }
 
-  return {};
+  return {} as UserConfig;
 });

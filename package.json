@@ -14,30 +14,22 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
-    "preverify": "npm run rebuild:node",
     "verify": "npm run format && npm run lint && npm run typecheck && npm run test:coverage",
-    "rebuild:electron": "rimraf node_modules/better-sqlite3/build && npx electron-builder install-app-deps",
-    "rebuild:node": "npm rebuild better-sqlite3",
     "_dev:main": "cross-env VITE_TARGET=main vite build --watch",
     "_dev:preload": "cross-env VITE_TARGET=preload vite build --watch",
     "_dev:renderer": "cross-env VITE_TARGET=renderer vite dev",
-    "preelectron:dev": "npm run rebuild:electron",
     "electron:dev": "concurrently -k --success first \"npm run _dev:main\" \"npm run _dev:preload\" \"npm run _dev:renderer\" \"rimraf out && wait-on file:out/main/index.js file:out/preload/preload.cjs tcp:5173 && electron .\"",
     "_build:main": "cross-env VITE_TARGET=main vite build",
     "_build:preload": "cross-env VITE_TARGET=preload vite build",
     "_build:renderer": "cross-env VITE_TARGET=renderer vite build",
-    "preelectron:build": "npm run rebuild:electron",
     "electron:build": "npm run _build:main && npm run _build:preload && npm run _build:renderer",
     "electron:preview": "npm run electron:build && electron .",
     "electron:package": "npm run electron:build && electron-builder",
     "electron:package:win": "npm run electron:build && electron-builder --win",
     "electron:package:mac": "npm run electron:build && electron-builder --mac",
     "electron:package:linux": "npm run electron:build && electron-builder --linux",
-    "preweb:dev": "npm run rebuild:node",
     "web:dev": "concurrently \"tsx --watch src/server/main.ts\" \"wait-on tcp:3000 && cross-env VITE_TARGET=client vite dev\"",
-    "preweb:build": "npm run rebuild:node",
     "web:build": "concurrently \"vue-tsc -b --noEmit && cross-env VITE_TARGET=client vite build\" \"cross-env VITE_TARGET=server vite build\"",
-    "preweb:start": "npm run rebuild:node",
     "web:start": "cross-env NODE_ENV=production node dist/server/index.js"
   },
   "repository": {
@@ -94,12 +86,10 @@
       ]
     },
     "asarUnpack": [
-      "node_modules/better-sqlite3/**/*",
       "node_modules/ffmpeg-static/**/*"
     ]
   },
   "dependencies": {
-    "better-sqlite3": "^12.9.0",
     "cookie-session": "^2.1.1",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
@@ -120,7 +110,6 @@
     "@pinia/testing": "^1.0.3",
     "@playwright/test": "^1.59.1",
     "@tailwindcss/vite": "^4.3.0",
-    "@types/better-sqlite3": "^7.6.13",
     "@types/cookie-session": "^2.0.49",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
