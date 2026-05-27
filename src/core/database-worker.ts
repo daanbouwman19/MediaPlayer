@@ -6,7 +6,7 @@
  */
 
 import { parentPort } from 'worker_threads';
-import Database from 'better-sqlite3';
+import { DatabaseSync } from 'node:sqlite';
 import crypto from 'crypto';
 import fs from 'fs/promises';
 import path from 'path';
@@ -19,16 +19,19 @@ import {
   createIndexes,
 } from './database-schema.ts';
 
+// Extract the Statement type from return value of DatabaseSync.prepare or mock it
+type StatementSync = ReturnType<DatabaseSync['prepare']>;
+
 /**
  * The database instance for this worker thread.
  */
-let db: Database.Database | null = null;
+let db: DatabaseSync | null = null;
 
 /**
  * Cache for prepared statements to improve performance of repeated queries.
  * Keys are the statement names (e.g., 'insertMediaView'), and values are the prepared SQLite statements.
  */
-const statements: { [key: string]: Database.Statement } = {};
+const statements: { [key: string]: StatementSync } = {};
 
 /**
  * Default batch size for SQL operations.
@@ -236,10 +239,11 @@ export function initDatabase(dbPath: string): WorkerResult {
       console.log('[worker] Closed existing DB connection before re-init.');
     }
 
-    db = new Database(dbPath);
+    db = new DatabaseSync(dbPath);
     // Enable WAL mode for better concurrency
-    // Bolt Optimization: WAL mode reduces write transaction time by ~88% and allows concurrent reads/writes
-    db.pragma('journal_mode = WAL');
+    // In node:sqlite, db.exec can run multiple sql statements, including PRAGMAs.
+    // db.pragma does not exist in node:sqlite! Use db.exec instead.
+    db.exec('PRAGMA journal_mode = WAL');
 
     initializeSchema(db);
     migrateMediaDirectories(db);
@@ -593,8 +597,9 @@ export async function bulkUpsertMetadata(
       return { ...p, fileId };
     });
 
-    const transaction = db.transaction((items: typeof itemsWithIds) => {
-      for (const item of items) {
+    db.exec('BEGIN');
+    try {
+      for (const item of itemsWithIds) {
         statements.upsertMetadata.run(
           item.fileId,
           item.filePath,
@@ -607,9 +612,11 @@ export async function bulkUpsertMetadata(
           item.playbackPosition === undefined ? null : item.playbackPosition,
         );
       }
-    });
-
-    transaction(itemsWithIds);
+      db.exec('COMMIT');
+    } catch (e) {
+      db.exec('ROLLBACK');
+      throw e;
+    }
     return { success: true };
   } catch (error: unknown) {
     return { success: false, error: (error as Error).message };
@@ -954,7 +961,8 @@ export async function recordMediaView(filePath: string): Promise<WorkerResult> {
 
     const now = new Date().toISOString();
 
-    const transaction = db.transaction(() => {
+    db.exec('BEGIN');
+    try {
       statements.insertMediaView.run(fileId, filePath, now);
       // Attempt to update path (handles renames/moves), but fallback if unique constraint violated
       try {
@@ -968,9 +976,11 @@ export async function recordMediaView(filePath: string): Promise<WorkerResult> {
           throw err;
         }
       }
-    });
-
-    transaction();
+      db.exec('COMMIT');
+    } catch (e) {
+      db.exec('ROLLBACK');
+      throw e;
+    }
     return { success: true };
   } catch (error: unknown) {
     console.error(`[worker] Error recording view for ${filePath}:`, error);

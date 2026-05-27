@@ -21,9 +21,8 @@ const {
   };
 
   const mockDbInstance = {
-    pragma: vi.fn(),
+    exec: vi.fn(),
     prepare: vi.fn(() => mockStatement),
-    transaction: vi.fn((fn: any) => fn),
     close: vi.fn(),
   };
 
@@ -82,9 +81,9 @@ const {
 });
 
 // 1. Mock Database
-vi.mock('better-sqlite3', () => {
+vi.mock('node:sqlite', () => {
   return {
-    default: mockDatabaseConstructor,
+    DatabaseSync: mockDatabaseConstructor,
   };
 });
 
