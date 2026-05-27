@@ -47,14 +47,14 @@ async function getAllowedFsRoots(): Promise<string[]> {
 }
 
 function isPathWithinRoot(candidatePath: string, rootPath: string): boolean {
+  const normalizedCandidate = path.resolve(candidatePath);
   const normalizedRoot = path.resolve(rootPath);
-  const relative = path.relative(normalizedRoot, candidatePath);
+  const rootWithSep = normalizedRoot.endsWith(path.sep)
+    ? normalizedRoot
+    : normalizedRoot + path.sep;
   return (
-    relative === '' ||
-    (!path.isAbsolute(relative) &&
-      !relative.startsWith('..' + path.sep) &&
-      !relative.startsWith('../') &&
-      relative !== '..')
+    normalizedCandidate === normalizedRoot ||
+    normalizedCandidate.startsWith(rootWithSep)
   );
 }
 
@@ -64,9 +64,15 @@ async function resolveAndValidateDirectoryPath(
 ): Promise<string> {
   const requestedPath = path.resolve(directoryPath);
   const canonicalRequestedPath = await getCanonicalPath(requestedPath);
-  const allowedRoots = await Promise.all(
-    allowedRootsList.map((root) => getCanonicalPath(root)),
-  );
+  const allowedRoots = (
+    await Promise.all(allowedRootsList.map((root) => getCanonicalPath(root)))
+  )
+    .map((root) => path.resolve(root))
+    .filter((root) => path.isAbsolute(root));
+
+  if (allowedRoots.length === 0) {
+    throw new Error('Access denied: no valid allowed roots configured');
+  }
 
   // Validate canonicalized requested path is within at least one canonical allowed root.
   const isRequestedPathAllowed = allowedRoots.some((root) =>
