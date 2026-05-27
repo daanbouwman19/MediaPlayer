@@ -94,7 +94,10 @@ async function resolveAndValidateDirectoryPath(
   const preRealpathPrefix = matchingRoot.endsWith(path.sep)
     ? matchingRoot
     : matchingRoot + path.sep;
-  if (requestedPath !== matchingRoot && !requestedPath.startsWith(preRealpathPrefix)) {
+  if (
+    requestedPath !== matchingRoot &&
+    !requestedPath.startsWith(preRealpathPrefix)
+  ) {
     throw new Error('Access denied: path is outside allowed roots');
   }
   let canonicalPath: string;
