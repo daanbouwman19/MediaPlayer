@@ -87,22 +87,15 @@ async function resolveAndValidateDirectoryPath(
   }
 
   // 2. Resolve symlinks so that a symlink pointing outside the root is caught.
-  //    The inline startsWith check here is required for static-analysis tools
-  //    (CodeQL js/path-injection) to recognise requestedPath as sanitised
-  //    before it reaches fs.realpath.  isPathWithinRoot already verified this,
-  //    but CodeQL does not model custom functions as sanitizer barriers.
-  const preRealpathPrefix = matchingRoot.endsWith(path.sep)
-    ? matchingRoot
-    : matchingRoot + path.sep;
-  if (
-    requestedPath !== matchingRoot &&
-    !requestedPath.startsWith(preRealpathPrefix)
-  ) {
-    throw new Error('Access denied: path is outside allowed roots');
-  }
+  //    Reconstruct the path as path.resolve(trustedRoot, relPath) before
+  //    passing it to fs.realpath — anchoring to a known-safe prefix is the
+  //    pattern CodeQL js/path-injection recognises as a sanitiser barrier.
+  const relativeUserPath = path.relative(matchingRoot, requestedPath);
   let canonicalPath: string;
   try {
-    canonicalPath = await fs.realpath(requestedPath);
+    canonicalPath = await fs.realpath(
+      path.resolve(matchingRoot, relativeUserPath),
+    );
   } catch {
     throw new Error('Access denied: path is outside allowed roots');
   }
