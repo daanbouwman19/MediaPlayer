@@ -58,6 +58,35 @@ function isPathWithinRoot(candidatePath: string, rootPath: string): boolean {
   );
 }
 
+async function resolveAndValidateDirectoryPath(
+  directoryPath: string,
+  allowedRootsList: string[],
+): Promise<string> {
+  const requestedPath = path.resolve(directoryPath);
+  const allowedRoots = await Promise.all(
+    allowedRootsList.map((root) => getCanonicalPath(root)),
+  );
+
+  // 1. Unresolved path check to prevent uncontrolled path I/O (CodeQL alert no. 114)
+  const isRequestedPathAllowed = allowedRoots.some((root) =>
+    isPathWithinRoot(requestedPath, root),
+  );
+  if (!isRequestedPathAllowed) {
+    throw new Error('Access denied: path is outside allowed roots');
+  }
+
+  // 2. Canonical path check to prevent symlink-based traversal bypasses
+  const resolvedPath = await fs.realpath(requestedPath);
+  const isResolvedPathAllowed = allowedRoots.some((root) =>
+    isPathWithinRoot(resolvedPath, root),
+  );
+  if (!isResolvedPathAllowed) {
+    throw new Error('Access denied: path is outside allowed roots');
+  }
+
+  return resolvedPath;
+}
+
 export async function listDirectory(
   directoryPath: string,
 ): Promise<FileSystemEntry[]> {
@@ -70,28 +99,11 @@ export async function listDirectory(
   }
 
   try {
-    const requestedPath = path.resolve(directoryPath);
     const allowedRootsList = await getAllowedFsRoots();
-    const allowedRoots = await Promise.all(
-      allowedRootsList.map((root) => getCanonicalPath(root)),
+    const resolvedPath = await resolveAndValidateDirectoryPath(
+      directoryPath,
+      allowedRootsList,
     );
-
-    // 1. Unresolved path check to prevent uncontrolled path I/O (CodeQL alert no. 114)
-    const isRequestedPathAllowed = allowedRoots.some((root) =>
-      isPathWithinRoot(requestedPath, root),
-    );
-    if (!isRequestedPathAllowed) {
-      throw new Error('Access denied: path is outside allowed roots');
-    }
-
-    // 2. Canonical path check to prevent symlink-based traversal bypasses
-    const resolvedPath = await fs.realpath(requestedPath);
-    const isResolvedPathAllowed = allowedRoots.some((root) =>
-      isPathWithinRoot(resolvedPath, root),
-    );
-    if (!isResolvedPathAllowed) {
-      throw new Error('Access denied: path is outside allowed roots');
-    }
 
     const items = await fs.readdir(resolvedPath, { withFileTypes: true });
 
