@@ -614,7 +614,11 @@ export async function bulkUpsertMetadata(
       }
       db.exec('COMMIT');
     } catch (e) {
-      db.exec('ROLLBACK');
+      try {
+        db.exec('ROLLBACK');
+      } catch (rollbackErr) {
+        console.error('[worker] Failed to rollback transaction:', rollbackErr);
+      }
       throw e;
     }
     return { success: true };
@@ -970,7 +974,11 @@ export async function recordMediaView(filePath: string): Promise<WorkerResult> {
       } catch (err: unknown) {
         // If unique constraint failed (path already exists on another ID),
         // fallback to legacy update (update count only, keep old path)
-        if ((err as { code?: string }).code === 'SQLITE_CONSTRAINT_UNIQUE') {
+        if (
+          (err as { code?: string }).code === 'SQLITE_CONSTRAINT_UNIQUE' ||
+          (err instanceof Error &&
+            err.message.includes('UNIQUE constraint failed'))
+        ) {
           statements.updateMediaView.run(now, fileId);
         } else {
           throw err;
@@ -978,7 +986,11 @@ export async function recordMediaView(filePath: string): Promise<WorkerResult> {
       }
       db.exec('COMMIT');
     } catch (e) {
-      db.exec('ROLLBACK');
+      try {
+        db.exec('ROLLBACK');
+      } catch (rollbackErr) {
+        console.error('[worker] Failed to rollback transaction:', rollbackErr);
+      }
       throw e;
     }
     return { success: true };

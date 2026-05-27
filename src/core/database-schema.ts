@@ -140,7 +140,11 @@ export function migrateMediaDirectories(db: DatabaseSync): void {
       db.prepare('DROP TABLE media_directories_old').run();
       db.exec('COMMIT');
     } catch (e) {
-      db.exec('ROLLBACK');
+      try {
+        db.exec('ROLLBACK');
+      } catch (rollbackErr) {
+        console.error('[worker] Failed to rollback transaction:', rollbackErr);
+      }
       throw e;
     }
 

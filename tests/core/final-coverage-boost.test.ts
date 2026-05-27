@@ -273,6 +273,25 @@ describe('Final Coverage Boost', () => {
       expect(mockStatement.run).toHaveBeenCalledTimes(3);
     });
 
+    it('recordMediaView: handles unique constraint error message string violation by falling back', async () => {
+      const initRes = dbWorker.initDatabase(':memory:');
+      if (!initRes.success) throw new Error(`Init failed: ${initRes.error}`);
+
+      mockStatement.run.mockClear();
+
+      // sequence: insert -> updatePath -> updateFallback
+      mockStatement.run
+        .mockImplementationOnce(() => {})
+        .mockImplementationOnce(() => {
+          throw new Error('UNIQUE constraint failed: media_views.file_path');
+        })
+        .mockImplementationOnce(() => {});
+
+      await dbWorker.recordMediaView('/test/view.mp4');
+
+      expect(mockStatement.run).toHaveBeenCalledTimes(3);
+    });
+
     it('recordMediaView: throws on non-constraint error', async () => {
       const initRes = dbWorker.initDatabase(':memory:');
       if (!initRes.success) throw new Error(`Init failed: ${initRes.error}`);
