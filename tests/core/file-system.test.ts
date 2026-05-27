@@ -3,6 +3,7 @@ import {
   listDirectory,
   isValidDirectory,
   listDrives,
+  clearDrivesCache,
 } from '../../src/core/file-system';
 import fs from 'fs/promises';
 import path from 'path';
@@ -28,6 +29,7 @@ vi.mock('execa', () => {
 describe('file-system', () => {
   afterEach(() => {
     vi.restoreAllMocks();
+    clearDrivesCache();
   });
 
   describe('listDirectory', () => {
@@ -181,6 +183,20 @@ describe('file-system', () => {
       } finally {
         process.env.ALLOWED_FS_ROOTS = originalEnv;
       }
+    });
+
+    it('allows directories starting with double dots but not traversing (e.g. ..foo)', async () => {
+      const mockDirents = [{ name: 'file.txt', isDirectory: () => false }];
+      vi.mocked(fs.readdir).mockResolvedValue(mockDirents as any);
+      const result = await listDirectory('/test/..foo');
+      expect(result).toHaveLength(1);
+      expect(result[0].name).toBe('file.txt');
+    });
+
+    it('blocks directories that attempt parent traversal', async () => {
+      await expect(listDirectory('/test/../outside')).rejects.toThrow(
+        'Access denied: path is outside allowed roots',
+      );
     });
   });
 

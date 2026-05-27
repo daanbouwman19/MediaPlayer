@@ -306,7 +306,10 @@ export async function validatePathAgainstDir(
     const relative = path.relative(allowedRootReal, candidateRealPath);
     const isWithin =
       relative === '' ||
-      (!relative.startsWith('..') && !path.isAbsolute(relative));
+      (relative !== '..' &&
+        !relative.startsWith('..' + path.sep) &&
+        !relative.startsWith('../') &&
+        !path.isAbsolute(relative));
 
     if (isWithin) {
       if (hasSensitiveSegments(relative)) {
