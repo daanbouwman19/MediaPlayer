@@ -63,9 +63,17 @@ async function resolveAndValidateDirectoryPath(
   allowedRootsList: string[],
 ): Promise<string> {
   const requestedPath = path.resolve(directoryPath);
-  const canonicalRequestedPath = await getCanonicalPath(requestedPath);
   const allowedRoots = (
-    await Promise.all(allowedRootsList.map((root) => getCanonicalPath(root)))
+    await Promise.all(
+      allowedRootsList.map(async (root) => {
+        const resolvedRoot = path.resolve(root);
+        try {
+          return await getCanonicalPath(resolvedRoot);
+        } catch {
+          return resolvedRoot;
+        }
+      }),
+    )
   )
     .map((root) => path.resolve(root))
     .filter((root) => path.isAbsolute(root));
@@ -74,11 +82,17 @@ async function resolveAndValidateDirectoryPath(
     throw new Error('Access denied: no valid allowed roots configured');
   }
 
-  // Validate canonicalized requested path is within at least one canonical allowed root.
-  const isRequestedPathAllowed = allowedRoots.some((root) =>
-    isPathWithinRoot(canonicalRequestedPath, root),
+  // 1. Unresolved path check first to prevent uncontrolled path I/O
+  const matchingRoot = allowedRoots.find((root) =>
+    isPathWithinRoot(requestedPath, root),
   );
-  if (!isRequestedPathAllowed) {
+  if (!matchingRoot) {
+    throw new Error('Access denied: path is outside allowed roots');
+  }
+
+  // 2. Canonical path check using realpath to prevent symbolic link traversal
+  const canonicalRequestedPath = await getCanonicalPath(requestedPath);
+  if (!isPathWithinRoot(canonicalRequestedPath, matchingRoot)) {
     throw new Error('Access denied: path is outside allowed roots');
   }
 

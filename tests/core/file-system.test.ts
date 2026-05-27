@@ -148,7 +148,13 @@ describe('file-system', () => {
     it('blocks access if unresolved path is allowed but resolved path is outside allowed roots', async () => {
       const originalEnv = process.env.ALLOWED_FS_ROOTS;
       process.env.ALLOWED_FS_ROOTS = '/allowed';
-      vi.mocked(fs.realpath).mockResolvedValue('/outside/path');
+      vi.mocked(fs.realpath).mockImplementation((p) => {
+        const resolved = path.resolve(p.toString());
+        if (resolved.includes('dir')) {
+          return Promise.resolve('/outside/path');
+        }
+        return Promise.resolve(resolved);
+      });
       try {
         await expect(listDirectory('/allowed/dir')).rejects.toThrow(
           'Access denied: path is outside allowed roots',
