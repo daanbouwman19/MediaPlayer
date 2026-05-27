@@ -17,6 +17,22 @@ export interface FileSystemEntry {
  * @param directoryPath - The absolute path of the directory to list.
  * @returns A promise that resolves to an array of file system entries.
  */
+function getAllowedFsRoots(): string[] {
+  if (process.platform === 'win32') {
+    return ['C:\\'];
+  }
+  return ['/'];
+}
+
+function isPathWithinRoot(candidatePath: string, rootPath: string): boolean {
+  const normalizedRoot = path.resolve(rootPath);
+  const relative = path.relative(normalizedRoot, candidatePath);
+  return (
+    relative === '' ||
+    (!relative.startsWith('..') && !path.isAbsolute(relative))
+  );
+}
+
 export async function listDirectory(
   directoryPath: string,
 ): Promise<FileSystemEntry[]> {
@@ -29,7 +45,17 @@ export async function listDirectory(
   }
 
   try {
-    const items = await fs.readdir(directoryPath, { withFileTypes: true });
+    const requestedPath = path.resolve(directoryPath);
+    const resolvedPath = await fs.realpath(requestedPath);
+    const allowedRoots = getAllowedFsRoots().map((root) => path.resolve(root));
+    const isAllowed = allowedRoots.some((root) =>
+      isPathWithinRoot(resolvedPath, root),
+    );
+    if (!isAllowed) {
+      throw new Error('Access denied: path is outside allowed roots');
+    }
+
+    const items = await fs.readdir(resolvedPath, { withFileTypes: true });
 
     // Bolt Optimization: Replace .filter().map() with a for...of loop to avoid
     // creating intermediate arrays and reduce GC pressure for large directories.
@@ -39,7 +65,7 @@ export async function listDirectory(
       if (!item.name.startsWith('.') && !isSensitiveFilename(item.name)) {
         entries.push({
           name: item.name,
-          path: path.join(directoryPath, item.name),
+          path: path.join(resolvedPath, item.name),
           isDirectory: item.isDirectory(),
         });
       }
