@@ -34,7 +34,13 @@
             :class="{
               'opacity-50 border-dashed border-accent': draggedIndex === index,
               'border-t-2 border-t-accent bg-accent/10':
-                dragOverIndex === index && draggedIndex !== index,
+                dragOverIndex === index &&
+                draggedIndex !== null &&
+                draggedIndex > index,
+              'border-b-2 border-b-accent bg-accent/10':
+                dragOverIndex === index &&
+                draggedIndex !== null &&
+                draggedIndex < index,
             }"
             draggable="true"
             @dragstart="handleDragStart($event, index)"
@@ -197,7 +203,7 @@ const resetDragState = () => {
   transition:
     max-height 0.3s ease,
     opacity 0.2s ease;
-  max-height: 500px;
+  max-height: 3000px;
   overflow: hidden;
 }
 

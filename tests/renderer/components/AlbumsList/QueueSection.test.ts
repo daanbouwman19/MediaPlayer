@@ -240,6 +240,34 @@ describe('QueueSection.vue', () => {
 
       expect((wrapper.vm as any).dragOverIndex).toBe(1); // remains 1
     });
+
+    it('applies border-t-2 when dragging upwards and border-b-2 when dragging downwards', async () => {
+      const store = usePlaylistStore();
+      store.queue = [
+        { name: 'Track 1', path: '/track1.mp3' },
+        { name: 'Track 2', path: '/track2.mp3' },
+        { name: 'Track 3', path: '/track3.mp3' },
+      ] as any;
+
+      const wrapper = mount(QueueSection);
+      const listItems = wrapper.findAll('li');
+
+      // Drag Track 3 (index 2) over Track 2 (index 1) - dragging upwards
+      await listItems[2].trigger('dragstart', {
+        dataTransfer: { setData: vi.fn(), effectAllowed: '' },
+      } as any);
+      await listItems[1].trigger('dragenter');
+      expect(listItems[1].classes()).toContain('border-t-2');
+      expect(listItems[1].classes()).not.toContain('border-b-2');
+
+      // Drag Track 1 (index 0) over Track 2 (index 1) - dragging downwards
+      await listItems[0].trigger('dragstart', {
+        dataTransfer: { setData: vi.fn(), effectAllowed: '' },
+      } as any);
+      await listItems[1].trigger('dragenter');
+      expect(listItems[1].classes()).toContain('border-b-2');
+      expect(listItems[1].classes()).not.toContain('border-t-2');
+    });
   });
 
   describe('Performance display limit', () => {
