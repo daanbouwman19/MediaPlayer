@@ -3,6 +3,8 @@
  */
 import fs from 'fs/promises';
 import path from 'path';
+import os from 'os';
+import { execa } from 'execa';
 import { isSensitiveFilename } from './security.ts';
 import { safeError } from './utils/logger.ts';
 
@@ -17,6 +19,86 @@ export interface FileSystemEntry {
  * @param directoryPath - The absolute path of the directory to list.
  * @returns A promise that resolves to an array of file system entries.
  */
+async function getCanonicalPath(inputPath: string): Promise<string> {
+  const resolved = path.resolve(inputPath);
+  try {
+    return await fs.realpath(resolved);
+  } catch {
+    return resolved;
+  }
+}
+
+async function getAllowedFsRoots(): Promise<string[]> {
+  const configuredRoots = process.env.ALLOWED_FS_ROOTS?.split(',')
+    .map((root) => root.trim())
+    .filter(Boolean);
+  if (configuredRoots && configuredRoots.length > 0) {
+    return configuredRoots;
+  }
+  if (process.platform === 'win32') {
+    const drives = await listDrives();
+    const drivePaths: string[] = [];
+    for (const d of drives) {
+      drivePaths.push(d.path);
+    }
+    return drivePaths;
+  }
+  return ['/'];
+}
+
+function isPathWithinRoot(candidatePath: string, rootPath: string): boolean {
+  const normalizedCandidate = path.resolve(candidatePath);
+  const normalizedRoot = path.resolve(rootPath);
+  const rootWithSep = normalizedRoot.endsWith(path.sep)
+    ? normalizedRoot
+    : normalizedRoot + path.sep;
+  return (
+    normalizedCandidate === normalizedRoot ||
+    normalizedCandidate.startsWith(rootWithSep)
+  );
+}
+
+async function resolveAndValidateDirectoryPath(
+  directoryPath: string,
+  allowedRootsList: string[],
+): Promise<string> {
+  const requestedPath = path.resolve(directoryPath);
+  const allowedRoots = (
+    await Promise.all(
+      allowedRootsList.map(async (root) => {
+        const resolvedRoot = path.resolve(root);
+        try {
+          return await getCanonicalPath(resolvedRoot);
+        } catch {
+          return resolvedRoot;
+        }
+      }),
+    )
+  )
+    .map((root) => path.resolve(root))
+    .filter((root) => path.isAbsolute(root));
+
+  if (allowedRoots.length === 0) {
+    throw new Error('Access denied: no valid allowed roots configured');
+  }
+
+  // 1. Unresolved path check first to prevent uncontrolled path I/O
+  const matchingRoot = allowedRoots.find((root) =>
+    isPathWithinRoot(requestedPath, root),
+  );
+  if (!matchingRoot) {
+    throw new Error('Access denied: path is outside allowed roots');
+  }
+
+  // 2. Canonical path check using realpath to prevent symbolic link traversal
+  const canonicalRequestedPath = await getCanonicalPath(requestedPath);
+  if (!isPathWithinRoot(canonicalRequestedPath, matchingRoot)) {
+    throw new Error('Access denied: path is outside allowed roots');
+  }
+
+  return canonicalRequestedPath;
+}
+
 export async function listDirectory(
   directoryPath: string,
 ): Promise<FileSystemEntry[]> {
@@ -29,7 +111,13 @@ export async function listDirectory(
   }
 
   try {
-    const items = await fs.readdir(directoryPath, { withFileTypes: true });
+    const allowedRootsList = await getAllowedFsRoots();
+    const resolvedPath = await resolveAndValidateDirectoryPath(
+      directoryPath,
+      allowedRootsList,
+    );
+
+    const items = await fs.readdir(resolvedPath, { withFileTypes: true });
 
     // Bolt Optimization: Replace .filter().map() with a for...of loop to avoid
     // creating intermediate arrays and reduce GC pressure for large directories.
@@ -39,7 +127,7 @@ export async function listDirectory(
       if (!item.name.startsWith('.') && !isSensitiveFilename(item.name)) {
         entries.push({
           name: item.name,
-          path: path.join(directoryPath, item.name),
+          path: path.join(resolvedPath, item.name),
           isDirectory: item.isDirectory(),
         });
       }
@@ -63,9 +151,6 @@ export async function listDirectory(
     throw error;
   }
 }
-
-import os from 'os';
-import { execa } from 'execa';
 
 /**
  * Lists the available drives on Windows.

@@ -223,14 +223,16 @@ export function createSystemRoutes(limiters: RateLimiters) {
         throw new AppError(400, inputResult.message || 'Invalid path');
       }
 
-      if (isRestrictedPath(dirPath)) {
+      const normalizedDirPath = path.resolve(dirPath);
+
+      if (isRestrictedPath(normalizedDirPath)) {
         console.warn(
-          `[Security] Blocked attempt to list restricted directory: ${dirPath}`,
+          `[Security] Blocked attempt to list restricted directory: ${normalizedDirPath}`,
         );
         throw new AppError(403, 'Access denied');
       }
 
-      const contents = await listDirectory(dirPath);
+      const contents = await listDirectory(normalizedDirPath);
       res.json(contents);
     }),
   );

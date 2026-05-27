@@ -1,10 +1,11 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import {
   listDirectory,
   isValidDirectory,
   listDrives,
 } from '../../src/core/file-system';
 import fs from 'fs/promises';
+import path from 'path';
 import { execa } from 'execa';
 import os from 'os';
 
@@ -13,6 +14,7 @@ vi.mock('fs/promises', () => {
     default: {
       readdir: vi.fn(),
       stat: vi.fn(),
+      realpath: vi.fn().mockImplementation((p) => Promise.resolve(p)),
     },
   };
 });
@@ -29,6 +31,17 @@ describe('file-system', () => {
   });
 
   describe('listDirectory', () => {
+    let originalAllowedRoots: string | undefined;
+
+    beforeEach(() => {
+      originalAllowedRoots = process.env.ALLOWED_FS_ROOTS;
+      process.env.ALLOWED_FS_ROOTS = '/test';
+    });
+
+    afterEach(() => {
+      process.env.ALLOWED_FS_ROOTS = originalAllowedRoots;
+    });
+
     it('lists and sorts directories and files', async () => {
       const mockDirents = [
         { name: 'file2.txt', isDirectory: () => false },
@@ -88,6 +101,86 @@ describe('file-system', () => {
       vi.spyOn(os, 'platform').mockReturnValue('linux');
       const result = await listDirectory('ROOT');
       expect(result[0].path).toBe('/');
+    });
+
+    it('blocks access to directories outside configured roots', async () => {
+      const originalEnv = process.env.ALLOWED_FS_ROOTS;
+      process.env.ALLOWED_FS_ROOTS = '/allowed';
+      try {
+        await expect(listDirectory('/outside/path')).rejects.toThrow(
+          'Access denied: path is outside allowed roots',
+        );
+      } finally {
+        process.env.ALLOWED_FS_ROOTS = originalEnv;
+      }
+    });
+
+    it('allows access to directories inside configured roots', async () => {
+      const originalEnv = process.env.ALLOWED_FS_ROOTS;
+      process.env.ALLOWED_FS_ROOTS = '/allowed';
+      const mockDirents = [{ name: 'file.txt', isDirectory: () => false }];
+      vi.mocked(fs.readdir).mockResolvedValue(mockDirents as any);
+      try {
+        const result = await listDirectory('/allowed/dir');
+        expect(result).toHaveLength(1);
+        expect(result[0].name).toBe('file.txt');
+      } finally {
+        process.env.ALLOWED_FS_ROOTS = originalEnv;
+      }
+    });
+
+    it('blocks access and does not call fs.realpath on candidate path if unresolved path is outside allowed roots', async () => {
+      const originalEnv = process.env.ALLOWED_FS_ROOTS;
+      process.env.ALLOWED_FS_ROOTS = '/allowed';
+      vi.mocked(fs.realpath).mockClear();
+      try {
+        await expect(listDirectory('/outside/path')).rejects.toThrow(
+          'Access denied: path is outside allowed roots',
+        );
+        expect(fs.realpath).not.toHaveBeenCalledWith(
+          path.resolve('/outside/path'),
+        );
+      } finally {
+        process.env.ALLOWED_FS_ROOTS = originalEnv;
+      }
+    });
+
+    it('blocks access if unresolved path is allowed but resolved path is outside allowed roots', async () => {
+      const originalEnv = process.env.ALLOWED_FS_ROOTS;
+      process.env.ALLOWED_FS_ROOTS = '/allowed';
+      vi.mocked(fs.realpath).mockImplementation((p) => {
+        const resolved = path.resolve(p.toString());
+        if (resolved.includes('dir')) {
+          return Promise.resolve('/outside/path');
+        }
+        return Promise.resolve(resolved);
+      });
+      try {
+        await expect(listDirectory('/allowed/dir')).rejects.toThrow(
+          'Access denied: path is outside allowed roots',
+        );
+      } finally {
+        process.env.ALLOWED_FS_ROOTS = originalEnv;
+        vi.mocked(fs.realpath).mockImplementation((p) =>
+          Promise.resolve(p as any),
+        );
+      }
+    });
+
+    it('anchors realpath resolution inside the allowed root', async () => {
+      const originalEnv = process.env.ALLOWED_FS_ROOTS;
+      process.env.ALLOWED_FS_ROOTS = '/allowed';
+      vi.mocked(fs.realpath).mockClear();
+      const mockDirents = [{ name: 'file.txt', isDirectory: () => false }];
+      vi.mocked(fs.readdir).mockResolvedValue(mockDirents as any);
+      try {
+        await listDirectory('/allowed/dir');
+        expect(fs.realpath).toHaveBeenCalledWith(
+          path.resolve('/allowed', 'dir'),
+        );
+      } finally {
+        process.env.ALLOWED_FS_ROOTS = originalEnv;
+      }
     });
   });
 
