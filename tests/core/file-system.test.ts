@@ -185,7 +185,10 @@ describe('file-system', () => {
       }
     });
 
-    it('allows directories starting with double dots but not traversing (e.g. ..foo)', async () => {
+    it('allows directories whose names start with dots but are not traversal (e.g. ..foo)', async () => {
+      // `..foo` resolves to `/test/..foo` which starts with `/test/` — allowed.
+      // This covers the `startsWith`-with-separator correctness: `/test/..foo`
+      // begins with `/test/` so it is correctly identified as a descendant.
       const mockDirents = [{ name: 'file.txt', isDirectory: () => false }];
       vi.mocked(fs.readdir).mockResolvedValue(mockDirents as any);
       const result = await listDirectory('/test/..foo');
@@ -197,6 +200,20 @@ describe('file-system', () => {
       await expect(listDirectory('/test/../outside')).rejects.toThrow(
         'Access denied: path is outside allowed roots',
       );
+    });
+
+    it('blocks a path that shares a root prefix but is not a child (e.g. /test2 when root is /test)', async () => {
+      // Without the separator, `/test`.startsWith(`/test`) would be true for
+      // `/test2`, creating a false-positive.  Appending `path.sep` prevents this.
+      const originalEnv = process.env.ALLOWED_FS_ROOTS;
+      process.env.ALLOWED_FS_ROOTS = '/test';
+      try {
+        await expect(listDirectory('/test2')).rejects.toThrow(
+          'Access denied: path is outside allowed roots',
+        );
+      } finally {
+        process.env.ALLOWED_FS_ROOTS = originalEnv;
+      }
     });
   });
 

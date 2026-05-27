@@ -303,26 +303,33 @@ export async function validatePathAgainstDir(
     const candidateResolved = path.resolve(allowedRootReal, safePath);
     const candidateRealPath = await fs.realpath(candidateResolved);
 
-    const relative = path.relative(allowedRootReal, candidateRealPath);
-    const isWithin =
-      relative === '' ||
-      (relative !== '..' &&
-        !relative.startsWith('..' + path.sep) &&
-        !relative.startsWith('../') &&
-        !path.isAbsolute(relative));
-
-    if (isWithin) {
-      if (hasSensitiveSegments(relative)) {
-        console.warn(
-          `[Security] Access denied to sensitive file: ${candidateRealPath}`,
-        );
-        return {
-          isAllowed: false,
-          message: 'Access to sensitive file denied',
-        };
-      }
-      return { isAllowed: true, realPath: candidateRealPath };
+    // [SECURITY] Containment check using startsWith — this is the pattern
+    // recognised by static-analysis tools (e.g. CodeQL js/path-injection) as
+    // a sanitizer barrier.  All uses of `candidateRealPath` below this guard
+    // are provably within `allowedRootReal`.
+    const rootPrefix = allowedRootReal.endsWith(path.sep)
+      ? allowedRootReal
+      : allowedRootReal + path.sep;
+    if (
+      candidateRealPath !== allowedRootReal &&
+      !candidateRealPath.startsWith(rootPrefix)
+    ) {
+      return null;
     }
+
+    // candidateRealPath is within allowedRootReal — compute the relative
+    // segment for the sensitive-filename sub-check only.
+    const relative = path.relative(allowedRootReal, candidateRealPath);
+    if (hasSensitiveSegments(relative)) {
+      console.warn(
+        `[Security] Access denied to sensitive file: ${candidateRealPath}`,
+      );
+      return {
+        isAllowed: false,
+        message: 'Access to sensitive file denied',
+      };
+    }
+    return { isAllowed: true, realPath: candidateRealPath };
   } catch (error) {
     if (!isErrnoException(error) || error.code !== 'ENOENT') {
       console.warn(
