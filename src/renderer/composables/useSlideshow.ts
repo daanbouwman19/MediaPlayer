@@ -152,7 +152,8 @@ export function useSlideshow() {
     playerStore.isTimerRunning = true;
     playerStore.timerProgress = 100;
 
-    const duration = playerStore.timerDuration * 1000;
+    const duration =
+      Math.max(1, Math.floor(playerStore.timerDuration) || 5) * 1000;
     const now = Date.now();
     playerStore.timerStartTime = now;
     playerStore.timerEndTime = now + duration;

@@ -89,7 +89,11 @@ const displayProgress = ref(100);
 let animationFrameId: number | null = null;
 
 const updateProgress = () => {
-  if (!isTimerRunning.value || !timerStartTime.value || !timerEndTime.value) {
+  if (
+    !isTimerRunning.value ||
+    timerStartTime.value === null ||
+    timerEndTime.value === null
+  ) {
     animationFrameId = null;
     return;
   }
@@ -99,7 +103,10 @@ const updateProgress = () => {
   const elapsed = now - timerStartTime.value;
 
   if (total > 0 && elapsed < total) {
-    displayProgress.value = Math.max(0, 100 - (elapsed / total) * 100);
+    displayProgress.value = Math.min(
+      100,
+      Math.max(0, 100 - (elapsed / total) * 100),
+    );
     animationFrameId = requestAnimationFrame(updateProgress);
   } else {
     displayProgress.value = 0;
@@ -113,9 +120,11 @@ watch([isTimerRunning, timerStartTime], ([isRunning, startTime]) => {
     animationFrameId = null;
   }
 
-  if (isRunning && startTime) {
-    displayProgress.value = 100; // Reset visual progress when new timer starts
-    animationFrameId = requestAnimationFrame(updateProgress);
+  if (isRunning) {
+    displayProgress.value = 100; // Reset visual progress when new timer starts or during loading phase
+    if (startTime !== null) {
+      animationFrameId = requestAnimationFrame(updateProgress);
+    }
   }
 });
 
