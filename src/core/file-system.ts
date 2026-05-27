@@ -71,15 +71,25 @@ export async function listDirectory(
 
   try {
     const requestedPath = path.resolve(directoryPath);
-    const resolvedPath = await fs.realpath(requestedPath);
     const allowedRootsList = await getAllowedFsRoots();
     const allowedRoots = await Promise.all(
       allowedRootsList.map((root) => getCanonicalPath(root)),
     );
-    const isAllowed = allowedRoots.some((root) =>
+
+    // 1. Unresolved path check to prevent uncontrolled path I/O (CodeQL alert no. 114)
+    const isRequestedPathAllowed = allowedRoots.some((root) =>
+      isPathWithinRoot(requestedPath, root),
+    );
+    if (!isRequestedPathAllowed) {
+      throw new Error('Access denied: path is outside allowed roots');
+    }
+
+    // 2. Canonical path check to prevent symlink-based traversal bypasses
+    const resolvedPath = await fs.realpath(requestedPath);
+    const isResolvedPathAllowed = allowedRoots.some((root) =>
       isPathWithinRoot(resolvedPath, root),
     );
-    if (!isAllowed) {
+    if (!isResolvedPathAllowed) {
       throw new Error('Access denied: path is outside allowed roots');
     }
 
