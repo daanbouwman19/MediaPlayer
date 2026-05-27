@@ -3,6 +3,8 @@
  */
 import fs from 'fs/promises';
 import path from 'path';
+import os from 'os';
+import { execa } from 'execa';
 import { isSensitiveFilename } from './security.ts';
 import { safeError } from './utils/logger.ts';
 
@@ -17,9 +19,29 @@ export interface FileSystemEntry {
  * @param directoryPath - The absolute path of the directory to list.
  * @returns A promise that resolves to an array of file system entries.
  */
-function getAllowedFsRoots(): string[] {
+async function getCanonicalPath(inputPath: string): Promise<string> {
+  const resolved = path.resolve(inputPath);
+  try {
+    return await fs.realpath(resolved);
+  } catch {
+    return resolved;
+  }
+}
+
+async function getAllowedFsRoots(): Promise<string[]> {
+  const configuredRoots = process.env.ALLOWED_FS_ROOTS?.split(',')
+    .map((root) => root.trim())
+    .filter(Boolean);
+  if (configuredRoots && configuredRoots.length > 0) {
+    return configuredRoots;
+  }
   if (process.platform === 'win32') {
-    return ['C:\\'];
+    const drives = await listDrives();
+    const drivePaths: string[] = [];
+    for (const d of drives) {
+      drivePaths.push(d.path);
+    }
+    return drivePaths;
   }
   return ['/'];
 }
@@ -29,7 +51,10 @@ function isPathWithinRoot(candidatePath: string, rootPath: string): boolean {
   const relative = path.relative(normalizedRoot, candidatePath);
   return (
     relative === '' ||
-    (!relative.startsWith('..') && !path.isAbsolute(relative))
+    (!path.isAbsolute(relative) &&
+      !relative.startsWith('..' + path.sep) &&
+      !relative.startsWith('../') &&
+      relative !== '..')
   );
 }
 
@@ -47,7 +72,10 @@ export async function listDirectory(
   try {
     const requestedPath = path.resolve(directoryPath);
     const resolvedPath = await fs.realpath(requestedPath);
-    const allowedRoots = getAllowedFsRoots().map((root) => path.resolve(root));
+    const allowedRootsList = await getAllowedFsRoots();
+    const allowedRoots = await Promise.all(
+      allowedRootsList.map((root) => getCanonicalPath(root)),
+    );
     const isAllowed = allowedRoots.some((root) =>
       isPathWithinRoot(resolvedPath, root),
     );
@@ -89,9 +117,6 @@ export async function listDirectory(
     throw error;
   }
 }
-
-import os from 'os';
-import { execa } from 'execa';
 
 /**
  * Lists the available drives on Windows.

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import {
   listDirectory,
   isValidDirectory,
@@ -13,6 +13,7 @@ vi.mock('fs/promises', () => {
     default: {
       readdir: vi.fn(),
       stat: vi.fn(),
+      realpath: vi.fn().mockImplementation((p) => Promise.resolve(p)),
     },
   };
 });
@@ -29,6 +30,17 @@ describe('file-system', () => {
   });
 
   describe('listDirectory', () => {
+    let originalAllowedRoots: string | undefined;
+
+    beforeEach(() => {
+      originalAllowedRoots = process.env.ALLOWED_FS_ROOTS;
+      process.env.ALLOWED_FS_ROOTS = '/test';
+    });
+
+    afterEach(() => {
+      process.env.ALLOWED_FS_ROOTS = originalAllowedRoots;
+    });
+
     it('lists and sorts directories and files', async () => {
       const mockDirents = [
         { name: 'file2.txt', isDirectory: () => false },
@@ -88,6 +100,32 @@ describe('file-system', () => {
       vi.spyOn(os, 'platform').mockReturnValue('linux');
       const result = await listDirectory('ROOT');
       expect(result[0].path).toBe('/');
+    });
+
+    it('blocks access to directories outside configured roots', async () => {
+      const originalEnv = process.env.ALLOWED_FS_ROOTS;
+      process.env.ALLOWED_FS_ROOTS = '/allowed';
+      try {
+        await expect(listDirectory('/outside/path')).rejects.toThrow(
+          'Access denied: path is outside allowed roots',
+        );
+      } finally {
+        process.env.ALLOWED_FS_ROOTS = originalEnv;
+      }
+    });
+
+    it('allows access to directories inside configured roots', async () => {
+      const originalEnv = process.env.ALLOWED_FS_ROOTS;
+      process.env.ALLOWED_FS_ROOTS = '/allowed';
+      const mockDirents = [{ name: 'file.txt', isDirectory: () => false }];
+      vi.mocked(fs.readdir).mockResolvedValue(mockDirents as any);
+      try {
+        const result = await listDirectory('/allowed/dir');
+        expect(result).toHaveLength(1);
+        expect(result[0].name).toBe('file.txt');
+      } finally {
+        process.env.ALLOWED_FS_ROOTS = originalEnv;
+      }
     });
   });
 
