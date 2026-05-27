@@ -14,20 +14,6 @@ export interface FileSystemEntry {
   isDirectory: boolean;
 }
 
-/**
- * Lists the contents of a directory.
- * @param directoryPath - The absolute path of the directory to list.
- * @returns A promise that resolves to an array of file system entries.
- */
-async function getCanonicalPath(inputPath: string): Promise<string> {
-  const resolved = path.resolve(inputPath);
-  try {
-    return await fs.realpath(resolved);
-  } catch {
-    return resolved;
-  }
-}
-
 async function getAllowedFsRoots(): Promise<string[]> {
   const configuredRoots = process.env.ALLOWED_FS_ROOTS?.split(',')
     .map((root) => root.trim())
@@ -46,58 +32,76 @@ async function getAllowedFsRoots(): Promise<string[]> {
   return ['/'];
 }
 
-function isPathWithinRoot(candidatePath: string, rootPath: string): boolean {
-  const normalizedCandidate = path.resolve(candidatePath);
-  const normalizedRoot = path.resolve(rootPath);
-  const relative = path.relative(normalizedRoot, normalizedCandidate);
-  return (
-    relative === '' ||
-    (relative !== '..' &&
-      !relative.startsWith('..' + path.sep) &&
-      !relative.startsWith('../') &&
-      !path.isAbsolute(relative))
-  );
-}
-
 async function resolveAndValidateDirectoryPath(
   directoryPath: string,
   allowedRootsList: string[],
 ): Promise<string> {
   const requestedPath = path.resolve(directoryPath);
+
+  // Canonicalise each allowed root (trusted data: env var / drive list, not
+  // user input).  Calling fs.realpath here is safe because the values come
+  // from configuration, not from the HTTP request.
   const allowedRoots = (
     await Promise.all(
       allowedRootsList.map(async (root) => {
-        const resolvedRoot = path.resolve(root);
+        const r = path.resolve(root);
         try {
-          return await getCanonicalPath(resolvedRoot);
+          return await fs.realpath(r);
         } catch {
-          return resolvedRoot;
+          return r;
         }
       }),
     )
-  )
-    .map((root) => path.resolve(root))
-    .filter((root) => path.isAbsolute(root));
+  ).filter((root) => path.isAbsolute(root));
 
   if (allowedRoots.length === 0) {
     throw new Error('Access denied: no valid allowed roots configured');
   }
 
-  // 1. Unresolved path check first to prevent uncontrolled path I/O
-  const matchingRoot = allowedRoots.find((root) =>
-    isPathWithinRoot(requestedPath, root),
-  );
+  // 1. Pre-symlink check: inline startsWith so CodeQL js/path-injection
+  //    sees the guard directly on requestedPath (a custom helper function
+  //    is not modelled as a sanitiser barrier by static-analysis tools).
+  let matchingRoot: string | undefined;
+  for (const root of allowedRoots) {
+    const prefix = root.endsWith(path.sep) ? root : root + path.sep;
+    if (requestedPath === root || requestedPath.startsWith(prefix)) {
+      matchingRoot = root;
+      break;
+    }
+  }
   if (!matchingRoot) {
     throw new Error('Access denied: path is outside allowed roots');
   }
 
-  // 2. Canonical path check using realpath to prevent symbolic link traversal
-  const canonicalRequestedPath = await getCanonicalPath(requestedPath);
-  if (!isPathWithinRoot(canonicalRequestedPath, matchingRoot)) {
+  // 2. Resolve symlinks so that a symlink pointing outside the root is caught.
+  //    Compute the relative segment and guard it against traversal before
+  //    anchoring to the trusted root — path.resolve(trustedRoot, relPath) is
+  //    the pattern CodeQL js/path-injection recognises as a sanitiser barrier.
+  const relPath = path.relative(matchingRoot, requestedPath);
+  if (
+    relPath === '..' ||
+    relPath.startsWith('..' + path.sep) ||
+    path.isAbsolute(relPath)
+  ) {
+    throw new Error('Access denied: path is outside allowed roots');
+  }
+  let canonicalPath: string;
+  try {
+    canonicalPath = await fs.realpath(path.resolve(matchingRoot, relPath));
+  } catch {
     throw new Error('Access denied: path is outside allowed roots');
   }
 
-  return canonicalRequestedPath;
+  // 3. Post-symlink containment check using startsWith — catches symlinks
+  //    that point outside the allowed root.
+  const rootPrefix = matchingRoot.endsWith(path.sep)
+    ? matchingRoot
+    : matchingRoot + path.sep;
+  if (canonicalPath !== matchingRoot && !canonicalPath.startsWith(rootPrefix)) {
+    throw new Error('Access denied: path is outside allowed roots');
+  }
+
+  return canonicalPath;
 }
 
 export async function listDirectory(
