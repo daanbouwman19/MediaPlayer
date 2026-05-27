@@ -240,5 +240,98 @@ describe('QueueSection.vue', () => {
 
       expect((wrapper.vm as any).dragOverIndex).toBe(1); // remains 1
     });
+
+    it('applies border-t-2 when dragging upwards and border-b-2 when dragging downwards', async () => {
+      const store = usePlaylistStore();
+      store.queue = [
+        { name: 'Track 1', path: '/track1.mp3' },
+        { name: 'Track 2', path: '/track2.mp3' },
+        { name: 'Track 3', path: '/track3.mp3' },
+      ] as any;
+
+      const wrapper = mount(QueueSection);
+      const listItems = wrapper.findAll('li');
+
+      // Drag Track 3 (index 2) over Track 2 (index 1) - dragging upwards
+      await listItems[2].trigger('dragstart', {
+        dataTransfer: { setData: vi.fn(), effectAllowed: '' },
+      } as any);
+      await listItems[1].trigger('dragenter');
+      expect(listItems[1].classes()).toContain('border-t-2');
+      expect(listItems[1].classes()).not.toContain('border-b-2');
+
+      // Drag Track 1 (index 0) over Track 2 (index 1) - dragging downwards
+      await listItems[0].trigger('dragstart', {
+        dataTransfer: { setData: vi.fn(), effectAllowed: '' },
+      } as any);
+      await listItems[1].trigger('dragenter');
+      expect(listItems[1].classes()).toContain('border-b-2');
+      expect(listItems[1].classes()).not.toContain('border-t-2');
+    });
+  });
+
+  describe('Performance display limit', () => {
+    it('limits the rendered track items to displayLimit (50)', async () => {
+      const store = usePlaylistStore();
+      const largeQueue = [];
+      for (let i = 1; i <= 60; i++) {
+        largeQueue.push({ name: `Track ${i}`, path: `/track${i}.mp3` });
+      }
+      store.queue = largeQueue as any;
+
+      const wrapper = mount(QueueSection);
+      expect(wrapper.text()).toContain('Playback Queue (60)');
+
+      // Should show the first 50 tracks
+      expect(wrapper.text()).toContain('Track 1');
+      expect(wrapper.text()).toContain('Track 50');
+      // Should NOT show Track 51
+      expect(wrapper.text()).not.toContain('Track 51');
+
+      // Should show the "... and 10 more tracks" message
+      expect(wrapper.text()).toContain('... and 10 more tracks');
+    });
+
+    it('increases displayLimit when clicking Show 100 more', async () => {
+      const store = usePlaylistStore();
+      const largeQueue = [];
+      for (let i = 1; i <= 60; i++) {
+        largeQueue.push({ name: `Track ${i}`, path: `/track${i}.mp3` });
+      }
+      store.queue = largeQueue as any;
+
+      const wrapper = mount(QueueSection);
+      const buttons = wrapper.findAll('button');
+      const showMoreBtnReal = buttons.find((btn) =>
+        btn.text().includes('Show 100 more'),
+      );
+      expect(showMoreBtnReal).toBeDefined();
+
+      await showMoreBtnReal!.trigger('click');
+
+      // Now Track 51 should be rendered
+      expect(wrapper.text()).toContain('Track 51');
+      expect(wrapper.text()).toContain('Track 60');
+      expect(wrapper.text()).not.toContain('more tracks');
+    });
+
+    it('increases displayLimit to show all when clicking Show all', async () => {
+      const store = usePlaylistStore();
+      const largeQueue = [];
+      for (let i = 1; i <= 60; i++) {
+        largeQueue.push({ name: `Track ${i}`, path: `/track${i}.mp3` });
+      }
+      store.queue = largeQueue as any;
+
+      const wrapper = mount(QueueSection);
+      const buttons = wrapper.findAll('button');
+      const showAllBtn = buttons.find((btn) => btn.text().includes('Show all'));
+      expect(showAllBtn).toBeDefined();
+
+      await showAllBtn!.trigger('click');
+
+      expect(wrapper.text()).toContain('Track 60');
+      expect(wrapper.text()).not.toContain('more tracks');
+    });
   });
 });
