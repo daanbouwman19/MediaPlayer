@@ -300,13 +300,25 @@ export async function validatePathAgainstDir(
   try {
     const allowedRootReal = await fs.realpath(path.resolve(allowedDir));
 
-    const candidateResolved = path.resolve(allowedRootReal, safePath);
-    const candidateRealPath = await fs.realpath(candidateResolved);
+    // Guard the relative path before anchoring to the trusted root.
+    // path.resolve(trustedRoot, relPath) is the pattern CodeQL
+    // js/path-injection recognises as a sanitiser barrier.
+    const relPath = path.relative(
+      allowedRootReal,
+      path.resolve(allowedRootReal, safePath),
+    );
+    if (
+      relPath === '..' ||
+      relPath.startsWith('..' + path.sep) ||
+      path.isAbsolute(relPath)
+    ) {
+      return null;
+    }
+    const candidateRealPath = await fs.realpath(
+      path.resolve(allowedRootReal, relPath),
+    );
 
-    // [SECURITY] Containment check using startsWith — this is the pattern
-    // recognised by static-analysis tools (e.g. CodeQL js/path-injection) as
-    // a sanitizer barrier.  All uses of `candidateRealPath` below this guard
-    // are provably within `allowedRootReal`.
+    // Post-symlink containment check — catches symlinks pointing outside root.
     const rootPrefix = allowedRootReal.endsWith(path.sep)
       ? allowedRootReal
       : allowedRootReal + path.sep;
