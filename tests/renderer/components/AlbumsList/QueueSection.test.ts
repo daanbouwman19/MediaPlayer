@@ -241,4 +241,69 @@ describe('QueueSection.vue', () => {
       expect((wrapper.vm as any).dragOverIndex).toBe(1); // remains 1
     });
   });
+
+  describe('Performance display limit', () => {
+    it('limits the rendered track items to displayLimit (50)', async () => {
+      const store = usePlaylistStore();
+      const largeQueue = [];
+      for (let i = 1; i <= 60; i++) {
+        largeQueue.push({ name: `Track ${i}`, path: `/track${i}.mp3` });
+      }
+      store.queue = largeQueue as any;
+
+      const wrapper = mount(QueueSection);
+      expect(wrapper.text()).toContain('Playback Queue (60)');
+
+      // Should show the first 50 tracks
+      expect(wrapper.text()).toContain('Track 1');
+      expect(wrapper.text()).toContain('Track 50');
+      // Should NOT show Track 51
+      expect(wrapper.text()).not.toContain('Track 51');
+
+      // Should show the "... and 10 more tracks" message
+      expect(wrapper.text()).toContain('... and 10 more tracks');
+    });
+
+    it('increases displayLimit when clicking Show 100 more', async () => {
+      const store = usePlaylistStore();
+      const largeQueue = [];
+      for (let i = 1; i <= 60; i++) {
+        largeQueue.push({ name: `Track ${i}`, path: `/track${i}.mp3` });
+      }
+      store.queue = largeQueue as any;
+
+      const wrapper = mount(QueueSection);
+      const buttons = wrapper.findAll('button');
+      const showMoreBtnReal = buttons.find((btn) =>
+        btn.text().includes('Show 100 more'),
+      );
+      expect(showMoreBtnReal).toBeDefined();
+
+      await showMoreBtnReal!.trigger('click');
+
+      // Now Track 51 should be rendered
+      expect(wrapper.text()).toContain('Track 51');
+      expect(wrapper.text()).toContain('Track 60');
+      expect(wrapper.text()).not.toContain('more tracks');
+    });
+
+    it('increases displayLimit to show all when clicking Show all', async () => {
+      const store = usePlaylistStore();
+      const largeQueue = [];
+      for (let i = 1; i <= 60; i++) {
+        largeQueue.push({ name: `Track ${i}`, path: `/track${i}.mp3` });
+      }
+      store.queue = largeQueue as any;
+
+      const wrapper = mount(QueueSection);
+      const buttons = wrapper.findAll('button');
+      const showAllBtn = buttons.find((btn) => btn.text().includes('Show all'));
+      expect(showAllBtn).toBeDefined();
+
+      await showAllBtn!.trigger('click');
+
+      expect(wrapper.text()).toContain('Track 60');
+      expect(wrapper.text()).not.toContain('more tracks');
+    });
+  });
 });
