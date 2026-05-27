@@ -58,14 +58,15 @@
       data-testid="slideshow-progress"
     >
       <div
-        class="h-full bg-accent transition-all duration-100 ease-linear"
-        :style="{ width: `${timerProgress}%` }"
+        class="h-full bg-accent"
+        :style="{ width: `${displayProgress}%` }"
       ></div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { ref, watch, onUnmounted } from 'vue';
 import { storeToRefs } from 'pinia';
 import { usePlayerStore } from '../../composables/usePlayerStore';
 import { useSlideshow } from '../../composables/useSlideshow';
@@ -76,8 +77,53 @@ import PlayIcon from '../icons/PlayIcon.vue';
 const playerStore = usePlayerStore();
 const slideshow = useSlideshow();
 
-const { timerDuration, isTimerRunning, timerProgress, isSlideshowActive } =
-  storeToRefs(playerStore);
+const {
+  timerDuration,
+  isTimerRunning,
+  isSlideshowActive,
+  timerStartTime,
+  timerEndTime,
+} = storeToRefs(playerStore);
+
+const displayProgress = ref(100);
+let animationFrameId: number | null = null;
+
+const updateProgress = () => {
+  if (!isTimerRunning.value || !timerStartTime.value || !timerEndTime.value) {
+    animationFrameId = null;
+    return;
+  }
+
+  const now = Date.now();
+  const total = timerEndTime.value - timerStartTime.value;
+  const elapsed = now - timerStartTime.value;
+
+  if (total > 0 && elapsed < total) {
+    displayProgress.value = Math.max(0, 100 - (elapsed / total) * 100);
+    animationFrameId = requestAnimationFrame(updateProgress);
+  } else {
+    displayProgress.value = 0;
+    animationFrameId = null;
+  }
+};
+
+watch([isTimerRunning, timerStartTime], ([isRunning, startTime]) => {
+  if (animationFrameId !== null) {
+    cancelAnimationFrame(animationFrameId);
+    animationFrameId = null;
+  }
+
+  if (isRunning && startTime) {
+    displayProgress.value = 100; // Reset visual progress when new timer starts
+    animationFrameId = requestAnimationFrame(updateProgress);
+  }
+});
+
+onUnmounted(() => {
+  if (animationFrameId !== null) {
+    cancelAnimationFrame(animationFrameId);
+  }
+});
 
 const handleToggleTimer = () => {
   if (!isSlideshowActive.value) {

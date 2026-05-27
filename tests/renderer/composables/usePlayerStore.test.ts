@@ -23,15 +23,15 @@ describe('usePlayerStore', () => {
 
   it('should stop slideshow and clear timer', () => {
     vi.useFakeTimers();
-    const clearIntervalSpy = vi.spyOn(global, 'clearInterval');
+    const clearTimeoutSpy = vi.spyOn(global, 'clearTimeout');
 
     // Simulate active timer
-    store.slideshowTimerId = setInterval(() => {}, 1000) as any;
+    store.slideshowTimerId = setTimeout(() => {}, 1000) as any;
     store.isTimerRunning = true;
 
     store.stopSlideshow();
 
-    expect(clearIntervalSpy).toHaveBeenCalled();
+    expect(clearTimeoutSpy).toHaveBeenCalled();
     expect(store.slideshowTimerId).toBe(null);
     expect(store.isTimerRunning).toBe(false);
 
