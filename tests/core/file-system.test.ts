@@ -160,6 +160,22 @@ describe('file-system', () => {
         );
       }
     });
+
+    it('anchors realpath resolution inside the allowed root', async () => {
+      const originalEnv = process.env.ALLOWED_FS_ROOTS;
+      process.env.ALLOWED_FS_ROOTS = '/allowed';
+      vi.mocked(fs.realpath).mockClear();
+      const mockDirents = [{ name: 'file.txt', isDirectory: () => false }];
+      vi.mocked(fs.readdir).mockResolvedValue(mockDirents as any);
+      try {
+        await listDirectory('/allowed/dir');
+        expect(fs.realpath).toHaveBeenCalledWith(
+          path.resolve('/allowed', 'dir'),
+        );
+      } finally {
+        process.env.ALLOWED_FS_ROOTS = originalEnv;
+      }
+    });
   });
 
   describe('listDrives', () => {

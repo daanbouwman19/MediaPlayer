@@ -75,16 +75,20 @@ async function resolveAndValidateDirectoryPath(
     throw new Error('Access denied: path is outside allowed roots');
   }
 
-  // 2. Canonical path check to prevent symlink-based traversal bypasses
-  const resolvedPath = await fs.realpath(requestedPath);
-  const isResolvedPathAllowed = allowedRoots.some((root) =>
-    isPathWithinRoot(resolvedPath, root),
-  );
-  if (!isResolvedPathAllowed) {
-    throw new Error('Access denied: path is outside allowed roots');
+  // 2. Canonical path check using root-anchored candidates to avoid taint (CodeQL alert no. 119)
+  for (const root of allowedRoots) {
+    if (!isPathWithinRoot(requestedPath, root)) {
+      continue;
+    }
+    const resolvedPath = await fs.realpath(
+      path.resolve(root, path.relative(root, requestedPath)),
+    );
+    if (isPathWithinRoot(resolvedPath, root)) {
+      return resolvedPath;
+    }
   }
 
-  return resolvedPath;
+  throw new Error('Access denied: path is outside allowed roots');
 }
 
 export async function listDirectory(
