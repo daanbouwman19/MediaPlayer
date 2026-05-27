@@ -303,15 +303,15 @@ export async function validatePathAgainstDir(
     const candidateResolved = path.resolve(allowedRootReal, safePath);
     const candidateRealPath = await fs.realpath(candidateResolved);
 
-    const normalizedRoot = allowedRootReal.endsWith(path.sep)
-      ? allowedRootReal
-      : allowedRootReal + path.sep;
+    const relative = path.relative(allowedRootReal, candidateRealPath);
+    const isWithin =
+      relative === '' ||
+      (relative !== '..' &&
+        !relative.startsWith('..' + path.sep) &&
+        !relative.startsWith('../') &&
+        !path.isAbsolute(relative));
 
-    if (
-      candidateRealPath === allowedRootReal ||
-      candidateRealPath.startsWith(normalizedRoot)
-    ) {
-      const relative = path.relative(allowedRootReal, candidateRealPath);
+    if (isWithin) {
       if (hasSensitiveSegments(relative)) {
         console.warn(
           `[Security] Access denied to sensitive file: ${candidateRealPath}`,

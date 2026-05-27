@@ -49,12 +49,13 @@ async function getAllowedFsRoots(): Promise<string[]> {
 function isPathWithinRoot(candidatePath: string, rootPath: string): boolean {
   const normalizedCandidate = path.resolve(candidatePath);
   const normalizedRoot = path.resolve(rootPath);
-  const rootWithSep = normalizedRoot.endsWith(path.sep)
-    ? normalizedRoot
-    : normalizedRoot + path.sep;
+  const relative = path.relative(normalizedRoot, normalizedCandidate);
   return (
-    normalizedCandidate === normalizedRoot ||
-    normalizedCandidate.startsWith(rootWithSep)
+    relative === '' ||
+    (relative !== '..' &&
+      !relative.startsWith('..' + path.sep) &&
+      !relative.startsWith('../') &&
+      !path.isAbsolute(relative))
   );
 }
 
@@ -156,6 +157,12 @@ export async function listDirectory(
  * Lists the available drives on Windows.
  * On other platforms, returns the root directory.
  */
+let cachedDrives: FileSystemEntry[] | null = null;
+
+export function clearDrivesCache(): void {
+  cachedDrives = null;
+}
+
 export async function listDrives(): Promise<FileSystemEntry[]> {
   if (os.platform() !== 'win32') {
     // For non-Windows, simply return root
@@ -166,6 +173,10 @@ export async function listDrives(): Promise<FileSystemEntry[]> {
         isDirectory: true,
       },
     ];
+  }
+
+  if (cachedDrives) {
+    return cachedDrives;
   }
 
   try {
@@ -189,17 +200,20 @@ export async function listDrives(): Promise<FileSystemEntry[]> {
       }
     }
 
+    cachedDrives = mappedDrives;
     return mappedDrives;
   } catch (error) {
     console.error('Failed to list drives:', error);
     // Fallback to C:\ if fsutil fails
-    return [
+    const fallback = [
       {
         name: 'C:',
         path: 'C:\\',
         isDirectory: true,
       },
     ];
+    cachedDrives = fallback;
+    return fallback;
   }
 }
 
@@ -211,8 +225,16 @@ export async function listDrives(): Promise<FileSystemEntry[]> {
 export async function isValidDirectory(
   directoryPath: string,
 ): Promise<boolean> {
+  if (typeof directoryPath !== 'string' || directoryPath.includes('\0')) {
+    return false;
+  }
   try {
-    const stats = await fs.stat(directoryPath);
+    const allowedRootsList = await getAllowedFsRoots();
+    const resolvedPath = await resolveAndValidateDirectoryPath(
+      directoryPath,
+      allowedRootsList,
+    );
+    const stats = await fs.stat(resolvedPath);
     return stats.isDirectory();
   } catch {
     return false;
