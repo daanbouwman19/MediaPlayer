@@ -32,25 +32,6 @@ async function getAllowedFsRoots(): Promise<string[]> {
   return ['/'];
 }
 
-/**
- * Returns true when `candidatePath` is the same as, or a descendant of,
- * `rootPath`.  Appending `path.sep` to the root prevents the
- * `/allowed` vs `/allowed2` false-positive while still allowing any
- * directory name that starts with `..` (e.g. `..foo`) because those
- * resolve to a child path that begins with `<root>/`.
- */
-function isPathWithinRoot(candidatePath: string, rootPath: string): boolean {
-  const normalizedRoot = path.resolve(rootPath);
-  const rootPrefix = normalizedRoot.endsWith(path.sep)
-    ? normalizedRoot
-    : normalizedRoot + path.sep;
-  const normalizedCandidate = path.resolve(candidatePath);
-  return (
-    normalizedCandidate === normalizedRoot ||
-    normalizedCandidate.startsWith(rootPrefix)
-  );
-}
-
 async function resolveAndValidateDirectoryPath(
   directoryPath: string,
   allowedRootsList: string[],
@@ -77,34 +58,42 @@ async function resolveAndValidateDirectoryPath(
     throw new Error('Access denied: no valid allowed roots configured');
   }
 
-  // 1. Pre-symlink check: reject obviously out-of-bounds paths without
-  //    touching the file system for the user-provided value.
-  const matchingRoot = allowedRoots.find((root) =>
-    isPathWithinRoot(requestedPath, root),
-  );
+  // 1. Pre-symlink check: inline startsWith so CodeQL js/path-injection
+  //    sees the guard directly on requestedPath (a custom helper function
+  //    is not modelled as a sanitiser barrier by static-analysis tools).
+  let matchingRoot: string | undefined;
+  for (const root of allowedRoots) {
+    const prefix = root.endsWith(path.sep) ? root : root + path.sep;
+    if (requestedPath === root || requestedPath.startsWith(prefix)) {
+      matchingRoot = root;
+      break;
+    }
+  }
   if (!matchingRoot) {
     throw new Error('Access denied: path is outside allowed roots');
   }
 
   // 2. Resolve symlinks so that a symlink pointing outside the root is caught.
-  //    Reconstruct the path as path.resolve(trustedRoot, relPath) before
-  //    passing it to fs.realpath — anchoring to a known-safe prefix is the
-  //    pattern CodeQL js/path-injection recognises as a sanitiser barrier.
-  const relativeUserPath = path.relative(matchingRoot, requestedPath);
+  //    Compute the relative segment and guard it against traversal before
+  //    anchoring to the trusted root — path.resolve(trustedRoot, relPath) is
+  //    the pattern CodeQL js/path-injection recognises as a sanitiser barrier.
+  const relPath = path.relative(matchingRoot, requestedPath);
+  if (
+    relPath === '..' ||
+    relPath.startsWith('..' + path.sep) ||
+    path.isAbsolute(relPath)
+  ) {
+    throw new Error('Access denied: path is outside allowed roots');
+  }
   let canonicalPath: string;
   try {
-    canonicalPath = await fs.realpath(
-      path.resolve(matchingRoot, relativeUserPath),
-    );
+    canonicalPath = await fs.realpath(path.resolve(matchingRoot, relPath));
   } catch {
     throw new Error('Access denied: path is outside allowed roots');
   }
 
-  // 3. Post-symlink containment check using startsWith – this is the pattern
-  //    recognised by static-analysis tools (e.g. CodeQL js/path-injection) as
-  //    a sanitizer barrier.  Code that uses `canonicalPath` after this point
-  //    is considered safe because it can only be reached when the resolved
-  //    path is provably within `matchingRoot`.
+  // 3. Post-symlink containment check using startsWith — catches symlinks
+  //    that point outside the allowed root.
   const rootPrefix = matchingRoot.endsWith(path.sep)
     ? matchingRoot
     : matchingRoot + path.sep;
