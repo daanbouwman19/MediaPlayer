@@ -63,32 +63,20 @@ async function resolveAndValidateDirectoryPath(
   allowedRootsList: string[],
 ): Promise<string> {
   const requestedPath = path.resolve(directoryPath);
+  const canonicalRequestedPath = await getCanonicalPath(requestedPath);
   const allowedRoots = await Promise.all(
     allowedRootsList.map((root) => getCanonicalPath(root)),
   );
 
-  // 1. Unresolved path check to prevent uncontrolled path I/O (CodeQL alert no. 114)
+  // Validate canonicalized requested path is within at least one canonical allowed root.
   const isRequestedPathAllowed = allowedRoots.some((root) =>
-    isPathWithinRoot(requestedPath, root),
+    isPathWithinRoot(canonicalRequestedPath, root),
   );
   if (!isRequestedPathAllowed) {
     throw new Error('Access denied: path is outside allowed roots');
   }
 
-  // 2. Canonical path check using root-anchored candidates to avoid taint (CodeQL alert no. 119)
-  for (const root of allowedRoots) {
-    if (!isPathWithinRoot(requestedPath, root)) {
-      continue;
-    }
-    const resolvedPath = await fs.realpath(
-      path.resolve(root, path.relative(root, requestedPath)),
-    );
-    if (isPathWithinRoot(resolvedPath, root)) {
-      return resolvedPath;
-    }
-  }
-
-  throw new Error('Access denied: path is outside allowed roots');
+  return canonicalRequestedPath;
 }
 
 export async function listDirectory(
