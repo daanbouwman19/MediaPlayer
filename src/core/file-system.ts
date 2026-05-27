@@ -49,12 +49,10 @@ async function getAllowedFsRoots(): Promise<string[]> {
 function isPathWithinRoot(candidatePath: string, rootPath: string): boolean {
   const normalizedCandidate = path.resolve(candidatePath);
   const normalizedRoot = path.resolve(rootPath);
-  const rootWithSep = normalizedRoot.endsWith(path.sep)
-    ? normalizedRoot
-    : normalizedRoot + path.sep;
+  const relative = path.relative(normalizedRoot, normalizedCandidate);
   return (
-    normalizedCandidate === normalizedRoot ||
-    normalizedCandidate.startsWith(rootWithSep)
+    relative === '' ||
+    (!relative.startsWith('..') && !path.isAbsolute(relative))
   );
 }
 
@@ -211,8 +209,16 @@ export async function listDrives(): Promise<FileSystemEntry[]> {
 export async function isValidDirectory(
   directoryPath: string,
 ): Promise<boolean> {
+  if (typeof directoryPath !== 'string' || directoryPath.includes('\0')) {
+    return false;
+  }
   try {
-    const stats = await fs.stat(directoryPath);
+    const allowedRootsList = await getAllowedFsRoots();
+    const resolvedPath = await resolveAndValidateDirectoryPath(
+      directoryPath,
+      allowedRootsList,
+    );
+    const stats = await fs.stat(resolvedPath);
     return stats.isDirectory();
   } catch {
     return false;

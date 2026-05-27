@@ -229,6 +229,17 @@ describe('file-system', () => {
   });
 
   describe('isValidDirectory', () => {
+    let originalAllowedRoots: string | undefined;
+
+    beforeEach(() => {
+      originalAllowedRoots = process.env.ALLOWED_FS_ROOTS;
+      process.env.ALLOWED_FS_ROOTS = '/';
+    });
+
+    afterEach(() => {
+      process.env.ALLOWED_FS_ROOTS = originalAllowedRoots;
+    });
+
     it('returns true for valid directory', async () => {
       vi.mocked(fs.stat).mockResolvedValue({ isDirectory: () => true } as any);
       expect(await isValidDirectory('/valid')).toBe(true);
