@@ -26,9 +26,11 @@ export function useSlideshow() {
 
   const clearSlideshowTimer = () => {
     if (playerStore.slideshowTimerId) {
-      clearInterval(playerStore.slideshowTimerId);
+      clearTimeout(playerStore.slideshowTimerId);
       playerStore.slideshowTimerId = null;
     }
+    playerStore.timerStartTime = null;
+    playerStore.timerEndTime = null;
   };
 
   const filterMedia = (mediaFiles: MediaFile[]): MediaFile[] => {
@@ -150,20 +152,16 @@ export function useSlideshow() {
     playerStore.isTimerRunning = true;
     playerStore.timerProgress = 100;
 
-    const duration = playerStore.timerDuration * 1000;
-    const interval = 200;
-    let elapsed = 0;
+    const duration =
+      Math.max(1, Math.floor(playerStore.timerDuration) || 5) * 1000;
+    const now = Date.now();
+    playerStore.timerStartTime = now;
+    playerStore.timerEndTime = now + duration;
 
-    playerStore.slideshowTimerId = setInterval(() => {
-      elapsed += interval;
-      const progress = Math.max(0, 100 - (elapsed / duration) * 100);
-      playerStore.timerProgress = progress;
-
-      if (progress <= 0) {
-        clearSlideshowTimer();
-        navigateMedia(1);
-      }
-    }, interval);
+    playerStore.slideshowTimerId = setTimeout(() => {
+      clearSlideshowTimer();
+      navigateMedia(1);
+    }, duration);
   };
 
   const pauseSlideshowTimer = () => {

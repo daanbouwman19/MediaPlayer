@@ -144,11 +144,11 @@ describe('useSlideshow Coverage Boost', () => {
       expect(playerStore.isTimerRunning).toBe(true);
       expect(playerStore.timerProgress).toBe(100);
 
-      vi.advanceTimersByTime(500);
-      expect(playerStore.timerProgress).toBe(60);
-
-      vi.advanceTimersByTime(501);
-      expect(playerStore.timerProgress).toBe(0);
+      // We removed the interval in favor of a smooth animation timer with setTimeout.
+      // So timerProgress is no longer actively updated during the interval by the store.
+      // We just need to check the exact end when it triggers navigateMedia.
+      vi.advanceTimersByTime(1000);
+      expect(playerStore.slideshowTimerId).toBeNull(); // It should clear itself at the end
 
       pauseSlideshowTimer();
       expect(playerStore.isTimerRunning).toBe(false);
