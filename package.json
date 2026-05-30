@@ -99,7 +99,7 @@
     "express-rate-limit": "^8.5.1",
     "ffmpeg-static": "^5.3.0",
     "google-auth-library": "^10.5.0",
-    "googleapis": "^172.0.0",
+    "googleapis": "^173.0.0",
     "helmet": "^8.1.0",
     "lusca": "^1.7.0",
     "p-queue": "^9.2.0",
@@ -121,7 +121,7 @@
     "@vitejs/plugin-vue": "^6.0.6",
     "@vitest/coverage-v8": "^4.1.5",
     "@vue/test-utils": "^2.4.10",
-    "concurrently": "^9.2.1",
+    "concurrently": "^10.0.0",
     "cross-env": "^10.1.0",
     "electron": "^42.3.0",
     "electron-builder": "^26.8.1",
@@ -143,7 +143,7 @@
     "vite": "^8.0.11",
     "vitest": "^4.1.0",
     "vue": "^3.5.35",
-    "vue-tsc": "^3.3.2",
+    "vue-tsc": "^3.3.3",
     "wait-on": "^9.0.5"
   }
 }
