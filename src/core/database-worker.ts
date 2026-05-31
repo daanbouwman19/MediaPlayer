@@ -8,10 +8,9 @@
 import { parentPort } from 'worker_threads';
 import { DatabaseSync } from 'node:sqlite';
 import crypto from 'crypto';
-import fs from 'fs/promises';
 import path from 'path';
 import type { Album } from './types.ts';
-import { isDrivePath, getDriveId } from './media-utils.ts';
+import { generateFileId } from './utils/file-id.ts';
 import {
   initializeSchema,
   migrateMediaDirectories,
@@ -40,34 +39,6 @@ const statements: { [key: string]: StatementSync } = {};
 const SQL_BATCH_SIZE = 900;
 
 // Helper Functions
-
-/**
- * Generates a stable, unique identifier for a file.
- * @param filePath - The path to the file.
- * @returns A unique MD5 hash for the file.
- */
-async function generateFileId(filePath: string): Promise<string> {
-  try {
-    if (!filePath) {
-      throw new Error('File path cannot be null or empty');
-    }
-    if (isDrivePath(filePath)) {
-      return getDriveId(filePath);
-    }
-    const stats = await fs.stat(filePath);
-    const uniqueString = `${stats.size}-${stats.mtime.getTime()}`;
-    return crypto.createHash('md5').update(uniqueString).digest('hex');
-  } catch (error: unknown) {
-    // If we can't stat the file (e.g. invalid path), fallback to hashing the path string
-    if ((error as { code?: string }).code !== 'ENOENT') {
-      console.error(
-        `[worker] Error generating file ID for ${filePath}:`,
-        error,
-      );
-    }
-    return crypto.createHash('md5').update(filePath).digest('hex');
-  }
-}
 
 /**
  * Helper to generate file IDs in batches to avoid EMFILE errors.
@@ -467,7 +438,7 @@ export async function upsertMetadata(
 ): Promise<WorkerResult> {
   if (!db) return { success: false, error: 'Database not initialized' };
   try {
-    const fileId = await generateFileId(payload.filePath);
+    const fileId = await getExistingIdOrGenerate(payload.filePath);
     statements.upsertMetadata.run(
       fileId,
       payload.filePath,
@@ -554,10 +525,18 @@ export async function bulkUpsertMetadata(
     const updatePayloads: MetadataPayload[] = [];
 
     for (const p of payloads) {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { filePath, ...metadata } = p;
-      // Check if any property in metadata is defined
-      const hasData = Object.values(metadata).some((v) => v !== undefined);
+      // Check if any property in metadata is defined without rest destructuring or Object.values
+      let hasData = false;
+      for (const key in p) {
+        if (
+          Object.hasOwn(p, key) &&
+          key !== 'filePath' &&
+          (p as unknown as Record<string, unknown>)[key] !== undefined
+        ) {
+          hasData = true;
+          break;
+        }
+      }
 
       if (hasData) {
         updatePayloads.push(p);
@@ -566,7 +545,7 @@ export async function bulkUpsertMetadata(
       }
     }
 
-    const payloadsToProcess = [...updatePayloads];
+    const payloadsToProcess = updatePayloads.slice();
 
     if (pathOnlyPayloads.length > 0) {
       const paths = pathOnlyPayloads.map((p) => p.filePath);
@@ -594,7 +573,7 @@ export async function bulkUpsertMetadata(
       if (!fileId) {
         throw new Error(`Failed to generate ID for path: ${p.filePath}`);
       }
-      return { ...p, fileId };
+      return Object.assign({ fileId }, p);
     });
 
     db.exec('BEGIN');

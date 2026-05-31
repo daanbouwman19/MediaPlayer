@@ -202,7 +202,7 @@ async function performFullMediaScan(
       // Bolt Optimization: Replace recursive reduce with an iterative stack
       // to prevent stack overflows on deeply nested directories and reduce GC pressure.
       let count = 0;
-      const stack: Album[] = [...albums];
+      const stack: Album[] = albums.slice();
       while (stack.length > 0) {
         const album = stack.pop()!;
         count += album.textures.length;

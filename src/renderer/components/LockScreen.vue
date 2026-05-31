@@ -3,6 +3,7 @@
     class="fixed inset-0 bg-black/90 flex items-center justify-center z-3000 backdrop-blur-xl"
     role="dialog"
     aria-modal="true"
+    aria-labelledby="lock-screen-title"
   >
     <div
       class="max-w-md w-full p-8 text-center bg-white/10 rounded-2xl border border-white/20 shadow-2xl mx-4"
@@ -13,7 +14,9 @@
         >
           <LockIcon class="w-10 h-10 text-button-text" />
         </div>
-        <h2 class="text-3xl font-bold text-white mb-2">Media Locked</h2>
+        <h2 id="lock-screen-title" class="text-3xl font-bold text-white mb-2">
+          Media Locked
+        </h2>
         <p class="text-white/60">Enter the password to access your library</p>
       </div>
 
@@ -24,6 +27,7 @@
             id="lock-screen-password"
             v-model="password"
             type="password"
+            autocomplete="current-password"
             placeholder="Password"
             class="w-full bg-white/5 border border-white/10 rounded-xl px-5 py-4 text-white focus:outline-none focus:ring-2 focus:ring-accent focus:bg-white/10 transition-all text-lg placeholder:text-white/20"
             :disabled="isUnlocking"
