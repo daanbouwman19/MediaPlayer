@@ -529,6 +529,7 @@ export async function bulkUpsertMetadata(
       let hasData = false;
       for (const key in p) {
         if (
+          Object.hasOwn(p, key) &&
           key !== 'filePath' &&
           (p as unknown as Record<string, unknown>)[key] !== undefined
         ) {

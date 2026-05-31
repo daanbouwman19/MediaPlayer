@@ -8,10 +8,10 @@ import { isDrivePath, getDriveId } from '../media-utils.ts';
  * @returns A unique MD5 hash for the file.
  */
 export async function generateFileId(filePath: string): Promise<string> {
+  if (!filePath) {
+    throw new Error('File path cannot be null or empty');
+  }
   try {
-    if (!filePath) {
-      throw new Error('File path cannot be null or empty');
-    }
     if (isDrivePath(filePath)) {
       return getDriveId(filePath);
     }
