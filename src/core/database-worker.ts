@@ -8,10 +8,9 @@
 import { parentPort } from 'worker_threads';
 import { DatabaseSync } from 'node:sqlite';
 import crypto from 'crypto';
-import fs from 'fs/promises';
 import path from 'path';
 import type { Album } from './types.ts';
-import { isDrivePath, getDriveId } from './media-utils.ts';
+import { generateFileId } from './utils/file-id.ts';
 import {
   initializeSchema,
   migrateMediaDirectories,
@@ -40,34 +39,6 @@ const statements: { [key: string]: StatementSync } = {};
 const SQL_BATCH_SIZE = 900;
 
 // Helper Functions
-
-/**
- * Generates a stable, unique identifier for a file.
- * @param filePath - The path to the file.
- * @returns A unique MD5 hash for the file.
- */
-async function generateFileId(filePath: string): Promise<string> {
-  try {
-    if (!filePath) {
-      throw new Error('File path cannot be null or empty');
-    }
-    if (isDrivePath(filePath)) {
-      return getDriveId(filePath);
-    }
-    const stats = await fs.stat(filePath);
-    const uniqueString = `${stats.size}-${stats.mtime.getTime()}`;
-    return crypto.createHash('md5').update(uniqueString).digest('hex');
-  } catch (error: unknown) {
-    // If we can't stat the file (e.g. invalid path), fallback to hashing the path string
-    if ((error as { code?: string }).code !== 'ENOENT') {
-      console.error(
-        `[worker] Error generating file ID for ${filePath}:`,
-        error,
-      );
-    }
-    return crypto.createHash('md5').update(filePath).digest('hex');
-  }
-}
 
 /**
  * Helper to generate file IDs in batches to avoid EMFILE errors.
@@ -556,16 +527,14 @@ export async function bulkUpsertMetadata(
     for (const p of payloads) {
       // Check if any property in metadata is defined without rest destructuring or Object.values
       let hasData = false;
-      if (
-        p.duration !== undefined ||
-        p.size !== undefined ||
-        p.createdAt !== undefined ||
-        p.rating !== undefined ||
-        p.status !== undefined ||
-        p.watchedSegments !== undefined ||
-        p.playbackPosition !== undefined
-      ) {
-        hasData = true;
+      for (const key in p) {
+        if (
+          key !== 'filePath' &&
+          (p as unknown as Record<string, unknown>)[key] !== undefined
+        ) {
+          hasData = true;
+          break;
+        }
       }
 
       if (hasData) {
@@ -603,17 +572,7 @@ export async function bulkUpsertMetadata(
       if (!fileId) {
         throw new Error(`Failed to generate ID for path: ${p.filePath}`);
       }
-      return {
-        filePath: p.filePath,
-        duration: p.duration,
-        size: p.size,
-        createdAt: p.createdAt,
-        rating: p.rating,
-        status: p.status,
-        watchedSegments: p.watchedSegments,
-        playbackPosition: p.playbackPosition,
-        fileId,
-      };
+      return Object.assign({ fileId }, p);
     });
 
     db.exec('BEGIN');
