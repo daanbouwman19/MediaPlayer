@@ -54,6 +54,29 @@ async function generateFileId(filePath: string): Promise<string> {
     if (isDrivePath(filePath)) {
       return getDriveId(filePath);
     }
+
+    // Optimization: query database first to avoid expensive fs.stat if known
+    if (db) {
+      const statementsToTry = [
+        statements.getFileIdFromMetadata,
+        statements.getFileIdByPath,
+      ];
+      for (const stmt of statementsToTry) {
+        if (stmt) {
+          try {
+            const row = stmt.get(filePath) as
+              | { file_path_hash: string }
+              | undefined;
+            if (row && row.file_path_hash) {
+              return row.file_path_hash;
+            }
+          } catch {
+            // ignore and fallback
+          }
+        }
+      }
+    }
+
     const stats = await fs.stat(filePath);
     const uniqueString = `${stats.size}-${stats.mtime.getTime()}`;
     return crypto.createHash('md5').update(uniqueString).digest('hex');
@@ -554,10 +577,19 @@ export async function bulkUpsertMetadata(
     const updatePayloads: MetadataPayload[] = [];
 
     for (const p of payloads) {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { filePath, ...metadata } = p;
-      // Check if any property in metadata is defined
-      const hasData = Object.values(metadata).some((v) => v !== undefined);
+      // Check if any property in metadata is defined without rest destructuring or Object.values
+      let hasData = false;
+      if (
+        p.duration !== undefined ||
+        p.size !== undefined ||
+        p.createdAt !== undefined ||
+        p.rating !== undefined ||
+        p.status !== undefined ||
+        p.watchedSegments !== undefined ||
+        p.playbackPosition !== undefined
+      ) {
+        hasData = true;
+      }
 
       if (hasData) {
         updatePayloads.push(p);
@@ -566,7 +598,7 @@ export async function bulkUpsertMetadata(
       }
     }
 
-    const payloadsToProcess = [...updatePayloads];
+    const payloadsToProcess = updatePayloads.slice();
 
     if (pathOnlyPayloads.length > 0) {
       const paths = pathOnlyPayloads.map((p) => p.filePath);
@@ -594,7 +626,17 @@ export async function bulkUpsertMetadata(
       if (!fileId) {
         throw new Error(`Failed to generate ID for path: ${p.filePath}`);
       }
-      return { ...p, fileId };
+      return {
+        filePath: p.filePath,
+        duration: p.duration,
+        size: p.size,
+        createdAt: p.createdAt,
+        rating: p.rating,
+        status: p.status,
+        watchedSegments: p.watchedSegments,
+        playbackPosition: p.playbackPosition,
+        fileId,
+      };
     });
 
     db.exec('BEGIN');

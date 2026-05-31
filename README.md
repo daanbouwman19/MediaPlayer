@@ -33,7 +33,7 @@ A versatile media application that runs as both a **Desktop Application** (Elect
 - **Desktop Framework**: [Electron](https://www.electronjs.org/)
 - **Web Framework**: [Vue 3](https://vuejs.org/)
 - **Build Tool**: [Vite](https://vitejs.dev/)
-- **Database**: [sqlite3](https://github.com/TryGhost/node-sqlite3)
+- **Database**: Built-in [node:sqlite](https://nodejs.org/docs/latest/api/sqlite.html) (running in WAL mode)
 - **Media Processing**: [FFmpeg](https://ffmpeg.org/)
 - **Styling**: [Tailwind CSS](https://tailwindcss.com/)
 - **Testing**: [Vitest](https://vitest.dev/)
@@ -76,7 +76,7 @@ The application uses SQLite to store metadata and cache.
 ### Prerequisites
 
 - [Node.js](https://nodejs.org/) (Version 25)
-- C++/Python build tools for native modules (`sqlite3`).
+- No native module compilation tools are required, as database functionality uses Node's built-in `node:sqlite` module.
 
 ### Setup
 

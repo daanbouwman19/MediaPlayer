@@ -483,6 +483,7 @@ describe('MediaDisplay Coverage Boost', () => {
       name: 'photo.jpg',
       path: 'photo.jpg',
     } as any;
+    (api.getMetadata as Mock).mockClear();
     mount(MediaDisplay);
     await flushPromises();
     expect(api.getMetadata).not.toHaveBeenCalled();

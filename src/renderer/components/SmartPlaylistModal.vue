@@ -16,6 +16,7 @@
         class="relative w-full max-w-lg overflow-hidden rounded-2xl glass-panel shadow-2xl transform transition-all"
         role="dialog"
         aria-modal="true"
+        aria-labelledby="smart-playlist-title"
       >
         <!-- Decorative top gradient (Indigo/Violet) -->
         <div
@@ -26,7 +27,10 @@
           <!-- Header -->
           <div class="flex justify-between items-start mb-8">
             <div>
-              <h2 class="text-2xl font-bold text-color">
+              <h2
+                id="smart-playlist-title"
+                class="text-2xl font-bold text-color"
+              >
                 {{ isEditing ? 'Edit' : 'Create' }} Smart Playlist
               </h2>
               <p class="text-sm text-muted mt-1">

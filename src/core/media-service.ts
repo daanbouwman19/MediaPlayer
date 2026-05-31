@@ -27,7 +27,7 @@ import { decrypt } from './utils/encryption.ts';
  */
 function collectAllFilePaths(albums: Album[]): string[] {
   const accumulator: string[] = [];
-  const stack: Album[] = [...albums];
+  const stack: Album[] = albums.slice();
 
   while (stack.length > 0) {
     const album = stack.pop();
@@ -57,7 +57,7 @@ function enrichAlbumsWithStats(
   albums: Album[],
   statsMap: Map<string, MediaLibraryItem>,
 ): Album[] {
-  const stack: Album[] = [...albums];
+  const stack: Album[] = albums.slice();
 
   while (stack.length > 0) {
     const album = stack.pop();

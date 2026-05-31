@@ -15,7 +15,7 @@ npm run web:dev         # Express server + Vue dev server
 npm test                # Vitest unit/integration tests
 npm run test:watch      # Vitest watch mode
 npm run test:e2e        # Playwright end-to-end tests (starts web:dev as server)
-npm run rebuild:electron # Rebuild native modules (better-sqlite3) for Electron
+npm run rebuild:electron # Rebuild native modules (e.g. ffmpeg-static) for Electron (not needed for node:sqlite)
 npm run rebuild:node    # Rebuild native modules for Node/server mode
 ```
 
@@ -48,11 +48,11 @@ src/
 
 - `media-service.ts` / `media-handler.ts` — orchestrate scanning, streaming, and transcoding
 - `hls-handler.ts` / `hls-manager.ts` — FFmpeg-based HLS transcoding and session management
-- `database.ts` + `database-worker.ts` — SQLite (better-sqlite3) with WAL mode; queries centralized in `repositories/media-repository.ts`
+- `database.ts` + `database-worker.ts` — Built-in SQLite (`node:sqlite`) with WAL mode; queries centralized in `repositories/media-repository.ts`
 - `fs-provider.ts` / `fs-provider-factory.ts` — filesystem abstraction over local FS and Google Drive
 - `access-validator.ts` — authorization layer; hot path uses LRU cache
 
-**Vue state** lives in composables under `src/renderer/composables/` (no Pinia/Vuex). Key stores: `useLibraryStore`, `usePlayerStore`, `useSlideshow`, `usePlaylistStore`.
+**Vue state** lives in Pinia stores under `src/renderer/composables/`. Key stores: `useLibraryStore`, `usePlayerStore`, `useSlideshow`, `usePlaylistStore`.
 
 ### Test layout
 
@@ -60,4 +60,4 @@ Tests mirror the source tree under `tests/`. Vitest uses `happy-dom` for rendere
 
 ### Native dependencies
 
-`better-sqlite3` and `ffmpeg-static` are native modules. After changing Node/Electron versions, run the appropriate `rebuild:*` command.
+This project utilizes Node's built-in `node:sqlite` module, which does not require native rebuilding, ensuring high compatibility between Electron and Node environments. `ffmpeg-static` is used for media transcoding.
