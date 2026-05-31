@@ -22,6 +22,7 @@ export class WorkerScannerService implements IWorkerService {
         isElectron,
         currentDirname: WORKER_DIRNAME,
         currentUrl: import.meta.url,
+        workerDir: path.join(WORKER_DIRNAME, '..'),
       });
 
     const client = new WorkerClient(workerPath, {
