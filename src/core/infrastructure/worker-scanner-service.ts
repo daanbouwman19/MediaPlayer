@@ -17,12 +17,19 @@ export class WorkerScannerService implements IWorkerService {
   }): Promise<Album[]> {
     const isElectron = !!process.versions['electron'];
 
+    const isProd = process.env.NODE_ENV === 'production';
+    const currentDirname = isProd
+      ? WORKER_DIRNAME
+      : path.join(WORKER_DIRNAME, '..');
+    const currentUrl = isProd
+      ? import.meta.url
+      : new URL('../', import.meta.url).href;
+
     const { path: workerPath, options: workerOptions } =
       await WorkerFactory.getWorkerPath('scan-worker', {
         isElectron,
-        currentDirname: WORKER_DIRNAME,
-        currentUrl: import.meta.url,
-        workerDir: path.join(WORKER_DIRNAME, '..'),
+        currentDirname,
+        currentUrl,
       });
 
     const client = new WorkerClient(workerPath, {

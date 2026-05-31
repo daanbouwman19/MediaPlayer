@@ -79,4 +79,21 @@ describe('WorkerScannerService', () => {
       configurable: true,
     });
   });
+
+  it('handles production environment', async () => {
+    const originalEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+
+    await service.runScan({ directories: [], tokens: null, previousPaths: [] });
+
+    expect(WorkerFactory.getWorkerPath).toHaveBeenCalledWith(
+      'scan-worker',
+      expect.objectContaining({
+        currentDirname: expect.stringContaining('src/core/infrastructure'),
+        currentUrl: expect.stringContaining('worker-scanner-service.ts'),
+      }),
+    );
+
+    process.env.NODE_ENV = originalEnv;
+  });
 });
