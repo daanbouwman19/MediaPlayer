@@ -54,29 +54,6 @@ async function generateFileId(filePath: string): Promise<string> {
     if (isDrivePath(filePath)) {
       return getDriveId(filePath);
     }
-
-    // Optimization: query database first to avoid expensive fs.stat if known
-    if (db) {
-      const statementsToTry = [
-        statements.getFileIdFromMetadata,
-        statements.getFileIdByPath,
-      ];
-      for (const stmt of statementsToTry) {
-        if (stmt) {
-          try {
-            const row = stmt.get(filePath) as
-              | { file_path_hash: string }
-              | undefined;
-            if (row && row.file_path_hash) {
-              return row.file_path_hash;
-            }
-          } catch {
-            // ignore and fallback
-          }
-        }
-      }
-    }
-
     const stats = await fs.stat(filePath);
     const uniqueString = `${stats.size}-${stats.mtime.getTime()}`;
     return crypto.createHash('md5').update(uniqueString).digest('hex');
@@ -490,7 +467,7 @@ export async function upsertMetadata(
 ): Promise<WorkerResult> {
   if (!db) return { success: false, error: 'Database not initialized' };
   try {
-    const fileId = await generateFileId(payload.filePath);
+    const fileId = await getExistingIdOrGenerate(payload.filePath);
     statements.upsertMetadata.run(
       fileId,
       payload.filePath,

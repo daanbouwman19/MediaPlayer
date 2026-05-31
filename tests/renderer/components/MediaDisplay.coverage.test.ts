@@ -7,8 +7,15 @@ import {
   afterEach,
   type Mock,
 } from 'vitest';
-import { mount, flushPromises } from '@vue/test-utils';
+import { mount as rawMount, flushPromises } from '@vue/test-utils';
 import { ref } from 'vue';
+
+let activeWrappers: any[] = [];
+function mount(comp: any, options?: any) {
+  const w = rawMount(comp, options);
+  activeWrappers.push(w);
+  return w;
+}
 import { setActivePinia } from 'pinia';
 import { createTestingPinia } from '@pinia/testing';
 import MediaDisplay from '@/components/MediaDisplay.vue';
@@ -174,6 +181,12 @@ describe('MediaDisplay Coverage Boost', () => {
   });
 
   afterEach(() => {
+    for (const w of activeWrappers) {
+      try {
+        w.unmount();
+      } catch {}
+    }
+    activeWrappers = [];
     (api.getMetadata as Mock).mockClear();
   });
 
