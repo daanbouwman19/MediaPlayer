@@ -550,7 +550,12 @@ describe('VRVideoPlayer.vue', () => {
 
     expect(animateCallback).toBeTruthy();
 
-    (wrapper.vm as any).isMotionControlActive = true;
+    // Activate motion control naturally via the UI instead of mutating unexposed state
+    const originalDOE = (window as any).DeviceOrientationEvent;
+    (window as any).DeviceOrientationEvent = {};
+    const recenterBtn = wrapper.find('button[title="Recenter VR View"]');
+    await recenterBtn.trigger('click');
+    (window as any).DeviceOrientationEvent = originalDOE;
 
     // Simulate event data
     const event = new Event('deviceorientation');
