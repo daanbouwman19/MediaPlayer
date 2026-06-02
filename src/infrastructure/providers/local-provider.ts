@@ -17,11 +17,16 @@ export class LocalFileSystemProvider implements FileSystemProvider {
   }
 
   async getMetadata(filePath: string): Promise<FileMetadata> {
-    if (typeof filePath !== 'string' || filePath.includes('\0')) {
+    if (
+      typeof filePath !== 'string' ||
+      filePath.includes('\0') ||
+      filePath.includes('..')
+    ) {
       throw new Error('Invalid file path');
     }
-    const stats = await fsPromises.stat(filePath);
-    const mimeType = getMimeType(filePath);
+    const absolutePath = path.resolve(filePath);
+    const stats = await fsPromises.stat(absolutePath);
+    const mimeType = getMimeType(absolutePath);
     return {
       size: stats.size,
       mimeType,
@@ -33,10 +38,15 @@ export class LocalFileSystemProvider implements FileSystemProvider {
     filePath: string,
     options?: { start?: number; end?: number },
   ): Promise<{ stream: Readable; length?: number }> {
-    if (typeof filePath !== 'string' || filePath.includes('\0')) {
+    if (
+      typeof filePath !== 'string' ||
+      filePath.includes('\0') ||
+      filePath.includes('..')
+    ) {
       throw new Error('Invalid file path');
     }
-    return { stream: fs.createReadStream(filePath, options) };
+    const absolutePath = path.resolve(filePath);
+    return { stream: fs.createReadStream(absolutePath, options) };
   }
 
   async getParent(filePath: string): Promise<string | null> {
