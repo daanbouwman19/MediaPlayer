@@ -16,7 +16,7 @@ import {
   updatePlaybackPosition,
   executeSmartPlaylist,
   getAllMetadataAndStats,
-} from '../../core/database';
+} from '../../core/database/database';
 import { handleIpc } from '../utils/ipc-helper';
 
 export function registerDatabaseHandlers() {

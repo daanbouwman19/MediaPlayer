@@ -5,7 +5,7 @@ import {
   createDrivePath,
   getThumbnailCachePath,
   normalizeFilePath,
-} from '../../src/core/media-utils';
+} from '../../src/core/media/media-utils';
 import path from 'path';
 
 describe('media-utils unit tests', () => {

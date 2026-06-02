@@ -11,20 +11,20 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs/promises';
 import crypto from 'crypto';
-import { getFFmpegStaticPath } from '../core/utils/ffmpeg-static-path';
-import { MediaService } from '../core/media-service.ts';
-import { initDatabase } from '../core/database.ts';
+import { getFFmpegStaticPath } from '../infrastructure/ffmpeg-static-path';
+import { MediaService } from '../core/media/media-service.ts';
+import { initDatabase } from '../core/database/database.ts';
 import {
   HLS_CACHE_DIR_NAME,
   HEATMAP_CACHE_DIR_NAME,
-} from '../core/constants.ts';
-import { registerSensitiveFile } from '../core/security.ts';
+} from '../core/media/constants.ts';
+import { registerSensitiveFile } from '../core/auth/security.ts';
 import { initializeDriveCacheManager } from '../main/drive-cache-manager.ts';
-import { HlsManager } from '../core/hls-manager.ts';
-import { TranscodeQueueManager } from '../core/transcode-queue-manager.ts';
-import { MediaAnalyzer } from '../core/analysis/media-analyzer.ts';
-import { MediaHandler } from '../core/media-handler.ts';
-import { WorkerFactory } from '../core/worker-factory.ts';
+import { HlsManager } from '../core/media/hls-manager.ts';
+import { TranscodeQueueManager } from '../core/media/transcode-queue-manager.ts';
+import { MediaAnalyzer } from '../core/media/analysis/media-analyzer.ts';
+import { MediaHandler } from '../core/media/media-handler.ts';
+import { WorkerFactory } from '../core/database/worker-factory.ts';
 import { createRateLimiters } from './middleware/rate-limiters.ts';
 import { basicAuthMiddleware } from './middleware/basic-auth.ts';
 import { globalPasswordMiddleware } from './middleware/global-password.ts';
@@ -158,7 +158,7 @@ export async function createApp(mediaService: MediaService) {
         currentDirname: __dirname,
         currentUrl: import.meta.url,
         isElectron,
-        workerDir: path.join(__dirname, '../core'),
+        workerDir: path.join(__dirname, '../core/database'),
         serverWorkerAlias: 'worker',
       });
 

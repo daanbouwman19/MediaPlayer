@@ -8,7 +8,7 @@ import { DatabaseSync } from 'node:sqlite';
 vi.mock('worker_threads');
 
 // Import worker code - this will register the 'message' listener on the mocked parentPort
-import '../../src/core/database-worker';
+import '../../src/core/database/database-worker';
 import {
   initDatabase,
   closeDatabase,
@@ -16,7 +16,7 @@ import {
   getMetadata,
   getAllMetadata,
   bulkUpsertMetadata,
-} from '../../src/core/database-worker';
+} from '../../src/core/database/database-worker';
 
 // --- Constants & Types ---
 interface WorkerMessage {

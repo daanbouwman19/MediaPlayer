@@ -134,7 +134,7 @@ import { useUIStore } from './composables/useUIStore';
 import { useAuthStore } from './composables/useAuthStore';
 import { useSlideshow } from './composables/useSlideshow';
 import { useTheme } from './composables/useTheme';
-import { CONTROLS_HIDE_TIMEOUT_MS } from '../core/constants';
+import { CONTROLS_HIDE_TIMEOUT_MS } from '../core/media/constants';
 
 const libraryStore = useLibraryStore();
 const uiStore = useUIStore();

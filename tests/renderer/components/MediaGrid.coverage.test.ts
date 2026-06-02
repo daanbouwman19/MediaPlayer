@@ -4,7 +4,7 @@ import { ref, nextTick } from 'vue';
 import { setActivePinia } from 'pinia';
 import { createTestingPinia } from '@pinia/testing';
 import MediaGrid from '../../../src/renderer/components/MediaGrid.vue';
-import { api } from '../../../src/renderer/api';
+import { api } from '../../../src/renderer/api/index';
 import { useLibraryStore } from '../../../src/renderer/composables/useLibraryStore';
 import { usePlayerStore } from '../../../src/renderer/composables/usePlayerStore';
 import { useUIStore } from '../../../src/renderer/composables/useUIStore';
@@ -14,7 +14,7 @@ import VirtualScroller from '../../../src/renderer/components/VirtualScroller.vu
 
 // Keep non-Pinia composables mocked
 vi.mock('../../../src/renderer/composables/useTranscodeQueue');
-vi.mock('../../../src/renderer/api');
+vi.mock('../../../src/renderer/api/index');
 
 // Mock ResizeObserver
 class ResizeObserverMock {

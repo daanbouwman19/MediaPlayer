@@ -17,7 +17,7 @@ import {
   updateWatchedSegments,
   updatePlaybackPosition,
   getAllMetadataAndStats,
-} from '../../../src/core/database';
+} from '../../../src/core/database/database';
 
 vi.mock('../../../src/main/utils/ipc-helper', () => ({
   handleIpc: vi.fn(),
@@ -28,7 +28,7 @@ vi.mock('../../../src/main/utils/security-utils', () => ({
   filterAuthorizedPaths: vi.fn(),
 }));
 
-vi.mock('../../../src/core/database', () => ({
+vi.mock('../../../src/core/database/database', () => ({
   isFileInLibrary: vi.fn(),
   upsertMetadata: vi.fn(),
   getMetadata: vi.fn(),

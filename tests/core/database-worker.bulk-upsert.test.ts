@@ -4,7 +4,7 @@ import {
   closeDatabase,
   bulkUpsertMetadata,
   upsertMetadata,
-} from '../../src/core/database-worker';
+} from '../../src/core/database/database-worker';
 import fs from 'fs/promises';
 
 // Mock worker_threads since we are importing the worker file which has side effects (parentPort usage)

@@ -3,9 +3,9 @@ import {
   isDrivePath,
   getDriveId,
   createDrivePath,
-} from '../../src/core/media-utils';
-import { getMimeType } from '../../src/core/utils/mime-types';
-import { GDRIVE_PROTOCOL } from '../../src/core/constants';
+} from '../../src/core/media/media-utils';
+import { getMimeType } from '../../src/core/media/utils/mime-types';
+import { GDRIVE_PROTOCOL } from '../../src/core/media/constants';
 
 describe('media-utils MIME and Drive Path tests', () => {
   describe('Google Drive Path Utilities', () => {

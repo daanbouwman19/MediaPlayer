@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { getCachedAlbums, recordMediaView } from '../../src/core/database';
+import {
+  getCachedAlbums,
+  recordMediaView,
+} from '../../src/core/database/database';
 
 describe('Database Environment Specific Logging', () => {
   const originalEnv = process.env.NODE_ENV;

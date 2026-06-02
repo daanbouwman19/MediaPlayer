@@ -1,9 +1,9 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
-import type { SmartPlaylist, MediaFile } from '../../core/types';
-import type { MediaFilter } from '../../core/constants';
-import type { ThemeId } from '../../core/themes';
-import { AVAILABLE_THEMES } from '../../core/themes';
+import type { SmartPlaylist, MediaFile } from '../../core/media/types';
+import type { MediaFilter } from '../../core/media/constants';
+import type { ThemeId } from '../../core/media/themes';
+import { AVAILABLE_THEMES } from '../../core/media/themes';
 
 export const useUIStore = defineStore('ui', () => {
   const savedTheme = (localStorage.getItem('themeMode') as ThemeId) || 'system';

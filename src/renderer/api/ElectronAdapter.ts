@@ -8,8 +8,8 @@ import type {
   IpcResult,
   HeatmapData,
   TranscodeJob,
-} from '../../core/types';
-import type { FileSystemEntry } from '../../core/file-system';
+} from '../../core/media/types';
+import type { FileSystemEntry } from '../../core/media/file-system';
 
 export class ElectronAdapter implements IMediaBackend {
   constructor(private bridge = window.electronAPI) {}

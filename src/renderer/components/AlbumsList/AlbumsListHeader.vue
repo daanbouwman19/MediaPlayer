@@ -78,7 +78,7 @@
 import { ref, onMounted, onBeforeUnmount } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useUIStore } from '../../composables/useUIStore';
-import { AVAILABLE_THEMES, type ThemeId } from '../../../core/themes';
+import { AVAILABLE_THEMES, type ThemeId } from '../../../core/media/themes';
 import CloseIcon from '../icons/CloseIcon.vue';
 import SettingsIcon from '../icons/SettingsIcon.vue';
 import PlaylistAddIcon from '../icons/PlaylistAddIcon.vue';

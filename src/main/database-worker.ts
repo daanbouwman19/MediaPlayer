@@ -1,1 +1,1 @@
-import '../core/database-worker';
+import '../core/database/database-worker';

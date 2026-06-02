@@ -1,4 +1,4 @@
-import { IMediaHandler } from '../../src/core/interfaces/media-handler.interface';
+import { IMediaHandler } from '../../src/core/media/interfaces/media-handler.interface';
 
 export class FakeMediaDurationHandler implements IMediaHandler {
   private durations = new Map<string, number>();

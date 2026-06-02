@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { MediaAnalyzer } from '../../../src/core/analysis/media-analyzer';
+import { MediaAnalyzer } from '../../../src/core/media/analysis/media-analyzer';
 import fs from 'fs/promises';
 import { EventEmitter } from 'events';
 import { spawn } from 'child_process';
@@ -48,24 +48,24 @@ vi.mock('crypto', () => ({
 
 // Mock using the exact same strings as the source imports
 // PLUS the strings as the test imports
-vi.mock('../../../src/core/utils/ffmpeg-utils', () => ({
+vi.mock('../../../src/infrastructure/ffmpeg-utils', () => ({
   getFFmpegStreams: vi.fn(),
   runFFmpeg: vi.fn(),
 }));
-vi.mock('../../../src/core/utils/ffmpeg-utils.ts', () => ({
+vi.mock('../../../src/infrastructure/ffmpeg-utils.ts', () => ({
   getFFmpegStreams: vi.fn(),
   runFFmpeg: vi.fn(),
 }));
 
-vi.mock('../../../src/core/media-source', () => ({
+vi.mock('../../../src/core/media/media-source', () => ({
   createMediaSource: vi.fn(),
 }));
-vi.mock('../../../src/core/media-source.ts', () => ({
+vi.mock('../../../src/core/media/media-source.ts', () => ({
   createMediaSource: vi.fn(),
 }));
 
-import { getFFmpegStreams } from '../../../src/core/utils/ffmpeg-utils';
-import { createMediaSource } from '../../../src/core/media-source';
+import { getFFmpegStreams } from '../../../src/infrastructure/ffmpeg-utils';
+import { createMediaSource } from '../../../src/core/media/media-source';
 
 describe('MediaAnalyzer Robustness', () => {
   let analyzer: MediaAnalyzer;

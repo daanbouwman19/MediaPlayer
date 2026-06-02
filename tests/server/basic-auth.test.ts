@@ -4,7 +4,7 @@ import { createApp } from '../../src/server/app';
 import { createTestMediaService } from '../utils/test-factory';
 
 // Mock dependencies
-vi.mock('../../src/core/database', () => ({
+vi.mock('../../src/core/database/database', () => ({
   initDatabase: vi.fn(),
   getMediaViewCounts: vi.fn(),
   getMetadata: vi.fn(),
@@ -12,20 +12,20 @@ vi.mock('../../src/core/database', () => ({
   getAllMetadataAndStats: vi.fn(),
 }));
 
-vi.mock('../../src/core/transcode-queue-manager', () => ({
+vi.mock('../../src/core/media/transcode-queue-manager', () => ({
   TranscodeQueueManager: {
     getInstance: vi.fn(() => ({ start: vi.fn(), enqueue: vi.fn() })),
     resetInstance: vi.fn(),
   },
 }));
 
-vi.mock('../../src/core/worker-factory', () => ({
+vi.mock('../../src/core/database/worker-factory', () => ({
   WorkerFactory: {
     getWorkerPath: vi.fn().mockResolvedValue({ path: '', options: {} }),
   },
 }));
 
-vi.mock('../../src/core/hls-manager', () => ({
+vi.mock('../../src/core/media/hls-manager', () => ({
   HlsManager: {
     getInstance: vi.fn().mockReturnValue({
       setCacheDir: vi.fn(),
@@ -33,7 +33,7 @@ vi.mock('../../src/core/hls-manager', () => ({
   },
 }));
 
-vi.mock('../../src/core/analysis/media-analyzer', () => ({
+vi.mock('../../src/core/media/analysis/media-analyzer', () => ({
   MediaAnalyzer: {
     getInstance: vi.fn().mockReturnValue({
       setCacheDir: vi.fn(),

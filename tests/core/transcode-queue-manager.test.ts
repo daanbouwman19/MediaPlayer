@@ -21,13 +21,13 @@ const {
   mockGenerateSessionId: vi.fn().mockResolvedValue('sess-abc'),
 }));
 
-vi.mock('../../src/core/database.ts', () => ({
+vi.mock('../../src/core/database/database.ts', () => ({
   addTranscodeJob: mockAddTranscodeJob,
   updateTranscodeJobStatus: mockUpdateTranscodeJobStatus,
   getPendingTranscodeJobs: mockGetPendingTranscodeJobs,
 }));
 
-vi.mock('../../src/core/hls-manager.ts', () => ({
+vi.mock('../../src/core/media/hls-manager.ts', () => ({
   HlsSessionStatus: {
     STARTING: 'starting',
     ACTIVE: 'active',
@@ -45,11 +45,11 @@ vi.mock('../../src/core/hls-manager.ts', () => ({
   },
 }));
 
-vi.mock('../../src/core/hls-handler.ts', () => ({
+vi.mock('../../src/core/media/hls-handler.ts', () => ({
   generateSessionId: mockGenerateSessionId,
 }));
 
-import { TranscodeQueueManager } from '../../src/core/transcode-queue-manager.ts';
+import { TranscodeQueueManager } from '../../src/core/media/transcode-queue-manager.ts';
 
 describe('TranscodeQueueManager', () => {
   beforeEach(() => {

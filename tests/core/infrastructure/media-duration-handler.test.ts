@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
-import { MediaDurationHandler } from '../../../src/core/infrastructure/media-duration-handler';
-import * as mediaHandler from '../../../src/core/media-handler';
+import { MediaDurationHandler } from '../../../src/infrastructure/media-duration-handler';
+import * as mediaHandler from '../../../src/core/media/media-handler';
 
-vi.mock('../../../src/core/media-handler', () => ({
+vi.mock('../../../src/core/media/media-handler', () => ({
   getVideoDuration: vi.fn(),
 }));
 

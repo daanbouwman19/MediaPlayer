@@ -10,7 +10,7 @@ import { useUIStore } from '../../../../src/renderer/composables/useUIStore';
 import { useTheme } from '../../../../src/renderer/composables/useTheme';
 
 // --- New Mocking Strategy ---
-import { api } from '../../../../src/renderer/api';
+import { api } from '../../../../src/renderer/api/index';
 
 const mocks = vi.hoisted(() => ({
   mockToggleAlbumSelection: vi.fn(),
@@ -33,7 +33,7 @@ vi.mock('../../../../src/renderer/composables/useSlideshow', () => ({
   }),
 }));
 
-vi.mock('../../../../src/renderer/api', () => ({
+vi.mock('../../../../src/renderer/api/index', () => ({
   api: {
     getAllMetadataAndStats: vi.fn(),
     executeSmartPlaylist: vi.fn(),

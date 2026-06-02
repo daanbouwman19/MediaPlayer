@@ -8,7 +8,7 @@ import {
   getThumbnailArgs,
   parseFFmpegDuration,
   getHlsTranscodeArgs,
-} from '../../../src/core/utils/ffmpeg-utils';
+} from '../../../src/infrastructure/ffmpeg-utils';
 import EventEmitter from 'events';
 
 // Mock spawn

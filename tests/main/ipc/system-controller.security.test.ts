@@ -2,19 +2,19 @@ import { describe, it, expect, vi, beforeEach, Mock } from 'vitest';
 import { registerSystemHandlers } from '../../../src/main/ipc/system-controller';
 import { IPC_CHANNELS } from '../../../src/shared/ipc-channels';
 import { handleIpc } from '../../../src/main/utils/ipc-helper';
-import { addMediaDirectory } from '../../../src/core/database';
-import { listDirectory } from '../../../src/core/file-system';
+import { addMediaDirectory } from '../../../src/core/database/database';
+import { listDirectory } from '../../../src/core/media/file-system';
 import fs from 'fs/promises';
 import {
   isSensitiveDirectory,
   isRestrictedPath,
-} from '../../../src/core/security';
+} from '../../../src/core/auth/security';
 
 vi.mock('../../../src/main/utils/ipc-helper', () => ({
   handleIpc: vi.fn(),
 }));
 
-vi.mock('../../../src/core/database', () => ({
+vi.mock('../../../src/core/database/database', () => ({
   isFileInLibrary: vi.fn(),
   addMediaDirectory: vi.fn(),
   removeMediaDirectory: vi.fn(),
@@ -22,11 +22,11 @@ vi.mock('../../../src/core/database', () => ({
   getMediaDirectories: vi.fn(),
 }));
 
-vi.mock('../../../src/core/media-handler', () => ({
+vi.mock('../../../src/core/media/media-handler', () => ({
   openMediaInVlc: vi.fn(),
 }));
 
-vi.mock('../../../src/core/file-system', () => ({
+vi.mock('../../../src/core/media/file-system', () => ({
   listDirectory: vi.fn(),
 }));
 
@@ -49,7 +49,7 @@ vi.mock('fs/promises', () => ({
 }));
 
 // Mock security module
-vi.mock('../../../src/core/security', () => ({
+vi.mock('../../../src/core/auth/security', () => ({
   isSensitiveDirectory: vi.fn(),
   isRestrictedPath: vi.fn(),
 }));

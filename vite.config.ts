@@ -23,7 +23,7 @@ export default defineConfig(({ mode }) => {
               __dirname,
               'src/main/database-worker.ts',
             ),
-            'scan-worker': resolve(__dirname, 'src/core/scan-worker.ts'),
+            'scan-worker': resolve(__dirname, 'src/core/media/scan-worker.ts'),
           },
           formats: ['es'],
         },
@@ -120,8 +120,8 @@ export default defineConfig(({ mode }) => {
         lib: {
           entry: {
             index: resolve(__dirname, 'src/server/main.ts'),
-            worker: resolve(__dirname, 'src/core/database-worker.ts'),
-            'scan-worker': resolve(__dirname, 'src/core/scan-worker.ts'),
+            worker: resolve(__dirname, 'src/core/database/database-worker.ts'),
+            'scan-worker': resolve(__dirname, 'src/core/media/scan-worker.ts'),
           },
           formats: ['es'],
         },

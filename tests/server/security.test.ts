@@ -31,7 +31,7 @@ vi.mock('selfsigned', () => ({
   },
 }));
 
-vi.mock('../../src/core/database', () => ({
+vi.mock('../../src/core/database/database', () => ({
   initDatabase: vi.fn(),
   getMediaDirectories: vi.fn().mockResolvedValue([]),
   getAlbumsWithViewCounts: vi.fn().mockResolvedValue([]),
@@ -40,7 +40,7 @@ vi.mock('../../src/core/database', () => ({
   getAllMetadataAndStats: vi.fn().mockResolvedValue([]),
 }));
 
-vi.mock('../../src/core/transcode-queue-manager', () => ({
+vi.mock('../../src/core/media/transcode-queue-manager', () => ({
   TranscodeQueueManager: {
     getInstance: vi.fn(() => ({ start: vi.fn(), enqueue: vi.fn() })),
     resetInstance: vi.fn(),
@@ -64,7 +64,7 @@ describe('Server Security Enhancements', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
-    const { MediaService } = await import('../../src/core/media-service');
+    const { MediaService } = await import('../../src/core/media/media-service');
     const service = new MediaService(
       {} as any,
       {} as any,

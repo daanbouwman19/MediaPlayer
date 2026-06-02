@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { WorkerScannerService } from '../../../src/core/infrastructure/worker-scanner-service';
-import { WorkerClient } from '../../../src/core/worker-client';
-import { WorkerFactory } from '../../../src/core/worker-factory';
+import { WorkerScannerService } from '../../../src/infrastructure/worker-scanner-service';
+import { WorkerClient } from '../../../src/core/database/worker-client';
+import { WorkerFactory } from '../../../src/core/database/worker-factory';
 
-vi.mock('../../../src/core/worker-client');
-vi.mock('../../../src/core/worker-factory');
+vi.mock('../../../src/core/database/worker-client');
+vi.mock('../../../src/core/database/worker-factory');
 
 describe('WorkerScannerService', () => {
   let service: WorkerScannerService;
@@ -89,7 +89,7 @@ describe('WorkerScannerService', () => {
     expect(WorkerFactory.getWorkerPath).toHaveBeenCalledWith(
       'scan-worker',
       expect.objectContaining({
-        currentDirname: expect.stringContaining('src/core/infrastructure'),
+        currentDirname: expect.stringContaining('src/infrastructure'),
         currentUrl: expect.stringContaining('worker-scanner-service.ts'),
       }),
     );

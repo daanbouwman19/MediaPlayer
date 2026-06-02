@@ -1,12 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import request from 'supertest';
 import { createTestMediaService } from '../utils/test-factory';
-import { MediaRoutes } from '../../src/core/routes';
+import { MediaRoutes } from '../../src/core/media/routes';
 import {
   createMediaApp,
   serveHeatmapProgress,
   serveStaticFile,
-} from '../../src/core/media-handler';
+} from '../../src/core/media/media-handler';
 import { PassThrough } from 'stream';
 
 // Dynamic mocks using vi.hoisted
@@ -22,14 +22,14 @@ const {
   mockGetProgress: vi.fn(),
 }));
 
-vi.mock('../../src/core/access-validator', () => ({
+vi.mock('../../src/core/auth/access-validator', () => ({
   validateFileAccess: (path: string) => mockValidateFileAccess(path),
   handleAccessCheck: vi.fn().mockReturnValue(false),
 }));
 
-vi.mock('../../src/core/media-utils', async (importOriginal) => {
+vi.mock('../../src/core/media/media-utils', async (importOriginal) => {
   const actual =
-    await importOriginal<typeof import('../../src/core/media-utils')>();
+    await importOriginal<typeof import('../../src/core/media/media-utils')>();
   return {
     ...actual,
     isDrivePath: (p: string) => mockIsDrivePath(p),
@@ -37,7 +37,7 @@ vi.mock('../../src/core/media-utils', async (importOriginal) => {
   };
 });
 
-vi.mock('../../src/core/media-source', () => ({
+vi.mock('../../src/core/media/media-source', () => ({
   createMediaSource: vi.fn().mockReturnValue({
     getSize: vi.fn().mockResolvedValue(100),
     getMimeType: vi.fn().mockResolvedValue('video/mp4'),
@@ -46,7 +46,7 @@ vi.mock('../../src/core/media-source', () => ({
   }),
 }));
 
-vi.mock('../../src/core/analysis/media-analyzer', () => ({
+vi.mock('../../src/core/media/analysis/media-analyzer', () => ({
   MediaAnalyzer: {
     getInstance: vi.fn().mockReturnValue({
       setCacheDir: vi.fn(),
@@ -56,13 +56,13 @@ vi.mock('../../src/core/analysis/media-analyzer', () => ({
   },
 }));
 
-vi.mock('../../src/core/rate-limiter', () => ({
+vi.mock('../../src/core/network/rate-limiter', () => ({
   createRateLimiter: () => (_req: any, _res: any, next: any) => next(),
 }));
 
-vi.mock('../../src/core/security', async (importOriginal) => {
+vi.mock('../../src/core/auth/security', async (importOriginal) => {
   const actual =
-    await importOriginal<typeof import('../../src/core/security')>();
+    await importOriginal<typeof import('../../src/core/auth/security')>();
   return {
     ...actual,
     authorizeFilePath: vi

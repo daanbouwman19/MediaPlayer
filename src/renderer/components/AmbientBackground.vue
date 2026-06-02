@@ -17,7 +17,7 @@ import { storeToRefs } from 'pinia';
 import { usePlayerStore } from '../composables/usePlayerStore';
 import { usePlaylistStore } from '../composables/usePlaylistStore';
 import { useLibraryStore } from '../composables/useLibraryStore';
-import { api } from '../api';
+import { api } from '../api/index';
 
 const playerStore = usePlayerStore();
 const playlistStore = usePlaylistStore();

@@ -34,14 +34,14 @@ describe('getFFmpegStaticPath', () => {
   it('returns null if ffmpeg-static is null', async () => {
     mockState.value = null;
     const { getFFmpegStaticPath } =
-      await import('../../../src/core/utils/ffmpeg-static-path');
+      await import('../../../src/infrastructure/ffmpeg-static-path');
     expect(getFFmpegStaticPath()).toBeNull();
   });
 
   it('returns unchanged path if not in asar', async () => {
     mockState.value = '/home/user/ffmpeg';
     const { getFFmpegStaticPath } =
-      await import('../../../src/core/utils/ffmpeg-static-path');
+      await import('../../../src/infrastructure/ffmpeg-static-path');
     expect(getFFmpegStaticPath()).toBe('/home/user/ffmpeg');
   });
 
@@ -54,7 +54,7 @@ describe('getFFmpegStaticPath', () => {
 
     mockState.value = '/tmp/app.asar/node_modules/ffmpeg-static/ffmpeg';
     const { getFFmpegStaticPath } =
-      await import('../../../src/core/utils/ffmpeg-static-path');
+      await import('../../../src/infrastructure/ffmpeg-static-path');
     expect(getFFmpegStaticPath()).toBe(
       '/tmp/app.asar.unpacked/node_modules/ffmpeg-static/ffmpeg',
     );
@@ -69,7 +69,7 @@ describe('getFFmpegStaticPath', () => {
     mockState.value =
       '/tmp/app.asar.unpacked/node_modules/ffmpeg-static/ffmpeg';
     const { getFFmpegStaticPath } =
-      await import('../../../src/core/utils/ffmpeg-static-path');
+      await import('../../../src/infrastructure/ffmpeg-static-path');
     expect(getFFmpegStaticPath()).toBe(
       '/tmp/app.asar.unpacked/node_modules/ffmpeg-static/ffmpeg',
     );
@@ -83,7 +83,7 @@ describe('getFFmpegStaticPath', () => {
 
     mockState.value = '/tmp/app.asar/node_modules/ffmpeg-static/ffmpeg';
     const { getFFmpegStaticPath } =
-      await import('../../../src/core/utils/ffmpeg-static-path');
+      await import('../../../src/infrastructure/ffmpeg-static-path');
     expect(getFFmpegStaticPath()).toBe(
       '/tmp/app.asar/node_modules/ffmpeg-static/ffmpeg',
     );

@@ -10,11 +10,11 @@ import { usePlayerStore } from '../../../src/renderer/composables/usePlayerStore
 import { useUIStore } from '../../../src/renderer/composables/useUIStore';
 import { useAuthStore } from '../../../src/renderer/composables/useAuthStore';
 import { useTheme } from '../../../src/renderer/composables/useTheme';
-import { api } from '../../../src/renderer/api';
+import { api } from '../../../src/renderer/api/index';
 
 vi.mock('../../../src/renderer/composables/useSlideshow');
 vi.mock('../../../src/renderer/composables/useTheme');
-vi.mock('../../../src/renderer/api');
+vi.mock('../../../src/renderer/api/index');
 
 vi.mock('../../../src/renderer/components/MediaGrid.vue', () => ({
   default: { template: '<div>Grid</div>' },

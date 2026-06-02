@@ -204,7 +204,7 @@ import { storeToRefs } from 'pinia';
 import { useUIStore } from '../composables/useUIStore';
 import { useLibraryStore } from '../composables/useLibraryStore';
 import { useToast } from '../composables/useToast';
-import { api } from '../api';
+import { api } from '../api/index';
 import CloseIcon from './icons/CloseIcon.vue';
 import { useEscapeKey } from '../composables/useEscapeKey';
 

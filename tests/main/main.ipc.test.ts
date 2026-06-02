@@ -26,7 +26,7 @@ vi.mock('../../src/main/local-server', () => ({
 }));
 
 // Also mock core/database because src/core/security.ts imports directly from it
-vi.mock('../../src/core/database', () => ({
+vi.mock('../../src/core/database/database', () => ({
   isFileInLibrary: vi.fn(),
   getMediaDirectories: vi.fn(),
   recordMediaView: vi.fn(),
@@ -48,7 +48,7 @@ describe('Media Controller IPC Handlers', () => {
     vi.clearAllMocks();
     handlers.clear();
 
-    const dbCore = await import('../../src/core/database');
+    const dbCore = await import('../../src/core/database/database');
 
     const mockDirectories = [{ path: '/path/to', isActive: true }];
     (dbCore.getMediaDirectories as unknown as Mock).mockResolvedValue(

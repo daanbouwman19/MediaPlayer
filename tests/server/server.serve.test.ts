@@ -1,15 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import request from 'supertest';
 import { createApp } from '../../src/server/server';
-import { serveRawStream } from '../../src/core/media-handler';
-import { createMediaSource } from '../../src/core/media-source';
+import { serveRawStream } from '../../src/core/media/media-handler';
+import { createMediaSource } from '../../src/core/media/media-source';
 
 const { mockValidateFileAccess } = vi.hoisted(() => ({
   mockValidateFileAccess: vi.fn(),
 }));
 
 // Mock dependencies
-vi.mock('../../src/core/database', () => ({
+vi.mock('../../src/core/database/database', () => ({
   initDatabase: vi.fn(),
   getMediaDirectories: vi.fn().mockResolvedValue([]),
   getAlbumsWithViewCounts: vi.fn(),
@@ -22,14 +22,14 @@ vi.mock('../../src/core/database', () => ({
   setDirectoryActiveState: vi.fn(),
 }));
 
-vi.mock('../../src/core/transcode-queue-manager', () => ({
+vi.mock('../../src/core/media/transcode-queue-manager', () => ({
   TranscodeQueueManager: {
     getInstance: vi.fn(() => ({ start: vi.fn(), enqueue: vi.fn() })),
     resetInstance: vi.fn(),
   },
 }));
 
-vi.mock('../../src/core/analysis/media-analyzer', () => ({
+vi.mock('../../src/core/media/analysis/media-analyzer', () => ({
   MediaAnalyzer: {
     getInstance: vi.fn().mockReturnValue({
       generateHeatmap: vi.fn().mockResolvedValue({ points: 100 }),
@@ -38,18 +38,18 @@ vi.mock('../../src/core/analysis/media-analyzer', () => ({
   },
 }));
 
-vi.mock('../../src/core/media-handler', async (importOriginal) => {
+vi.mock('../../src/core/media/media-handler', async (importOriginal) => {
   const actual =
-    await importOriginal<typeof import('../../src/core/media-handler')>();
+    await importOriginal<typeof import('../../src/core/media/media-handler')>();
   return {
     ...actual,
     serveRawStream: vi.fn((_req, res) => res.end()), // Fix: Ensure response is ended
     // serveHeatmap: Use actual implementation to test its validation logic
   };
 });
-vi.mock('../../src/core/media-source', async (importOriginal) => {
+vi.mock('../../src/core/media/media-source', async (importOriginal) => {
   const actual =
-    await importOriginal<typeof import('../../src/core/media-source')>();
+    await importOriginal<typeof import('../../src/core/media/media-source')>();
   return {
     ...actual,
     createMediaSource: vi.fn(),
@@ -79,7 +79,7 @@ vi.mock('../../src/main/google-drive-service', () => ({
   getDriveParent: vi.fn(),
 }));
 
-vi.mock('../../src/core/access-validator', () => ({
+vi.mock('../../src/core/auth/access-validator', () => ({
   validateFileAccess: mockValidateFileAccess,
   handleAccessCheck: vi.fn((res, access) => {
     if (!access.success) {
@@ -156,7 +156,7 @@ describe('Server Endpoint Security', () => {
       // Since we mock validateFileAccess directly, and MediaHandler uses handleAccessCheck,
       // we need to ensure handleAccessCheck behaves correctly given the mockValidateFileAccess return.
       // However, handleAccessCheck is implemented in the real code, not mocked here unless we mock access-validator entirely.
-      // In this test file we did: vi.mock('../../src/core/access-validator', ...
+      // In this test file we did: vi.mock('../../src/core/auth/access-validator', ...
       // Let's check the mock implementation at the top of the file.
 
       const response = await request(app)

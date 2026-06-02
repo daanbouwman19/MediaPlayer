@@ -164,8 +164,8 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
-import { api } from '../api';
-import type { FileSystemEntry } from '../../core/file-system';
+import { api } from '../api/index';
+import type { FileSystemEntry } from '../../core/media/file-system';
 import ArrowUpIcon from './icons/ArrowUpIcon.vue';
 import GridIcon from './icons/GridIcon.vue';
 import ListIcon from './icons/ListIcon.vue';

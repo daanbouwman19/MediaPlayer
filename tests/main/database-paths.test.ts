@@ -14,7 +14,7 @@ vi.mock('electron', () => ({
 }));
 
 // Mock core database to intercept calls and avoid side effects
-vi.mock('../../src/core/database', () => ({
+vi.mock('../../src/core/database/database', () => ({
   isFileInLibrary: vi.fn(),
   initDatabase: vi.fn(),
   // We don't need to re-export others for this test
@@ -40,7 +40,8 @@ describe('Main Process Database Initialization Paths', () => {
 
     // Import module under test
     const { initDatabase } = await import('../../src/main/database');
-    const { initDatabase: initCore } = await import('../../src/core/database');
+    const { initDatabase: initCore } =
+      await import('../../src/core/database/database');
 
     await initDatabase();
 
@@ -61,7 +62,8 @@ describe('Main Process Database Initialization Paths', () => {
 
     // Import module under test
     const { initDatabase } = await import('../../src/main/database');
-    const { initDatabase: initCore } = await import('../../src/core/database');
+    const { initDatabase: initCore } =
+      await import('../../src/core/database/database');
 
     await initDatabase();
 
@@ -82,7 +84,8 @@ describe('Main Process Database Initialization Paths', () => {
 
     // Import module under test
     const { initDatabase } = await import('../../src/main/database');
-    const { initDatabase: initCore } = await import('../../src/core/database');
+    const { initDatabase: initCore } =
+      await import('../../src/core/database/database');
 
     await initDatabase();
 

@@ -9,17 +9,17 @@ import {
   getServerPort,
   getMimeType,
 } from '../../src/main/local-server';
-import { clearAuthCache } from '../../src/core/security';
+import { clearAuthCache } from '../../src/core/auth/security';
 import { createTestMediaService } from '../utils/test-factory';
 
 // Mock the database module
-vi.mock('../../src/core/database', () => ({
+vi.mock('../../src/core/database/database', () => ({
   isFileInLibrary: vi.fn(),
   getMediaDirectories: vi.fn(),
   getPendingTranscodeJobs: vi.fn().mockResolvedValue([]),
 }));
 
-import { getMediaDirectories } from '../../src/core/database';
+import { getMediaDirectories } from '../../src/core/database/database';
 
 // Helper to promisify callback-based functions
 const startServer = () => {

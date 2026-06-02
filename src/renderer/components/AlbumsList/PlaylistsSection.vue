@@ -192,9 +192,13 @@ import { useLibraryStore } from '../../composables/useLibraryStore';
 import { useUIStore } from '../../composables/useUIStore';
 import { useSlideshow } from '../../composables/useSlideshow';
 import { useToast } from '../../composables/useToast';
-import { api } from '../../api';
-import type { Album, SmartPlaylist, MediaFile } from '../../../core/types';
-import { RECENTLY_PLAYED_FETCH_LIMIT } from '../../../core/constants';
+import { api } from '../../api/index';
+import type {
+  Album,
+  SmartPlaylist,
+  MediaFile,
+} from '../../../core/media/types';
+import { RECENTLY_PLAYED_FETCH_LIMIT } from '../../../core/media/constants';
 import HistoryIcon from '../icons/HistoryIcon.vue';
 import GridIcon from '../icons/GridIcon.vue';
 import PlaylistIcon from '../icons/PlaylistIcon.vue';

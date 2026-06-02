@@ -3,25 +3,25 @@ import request from 'supertest';
 import express from 'express';
 import bodyParser from 'body-parser';
 import * as mediaRoutes from '../../../src/server/routes/media.routes';
-import * as security from '../../../src/core/security';
-import * as mediaHandler from '../../../src/core/media-handler';
-import { MAX_API_BATCH_SIZE } from '../../../src/core/constants';
+import * as security from '../../../src/core/auth/security';
+import * as mediaHandler from '../../../src/core/media/media-handler';
+import { MAX_API_BATCH_SIZE } from '../../../src/core/media/constants';
 
 // Mocks
-vi.mock('../../../src/core/database');
-vi.mock('../../../src/core/security');
+vi.mock('../../../src/core/database/database');
+vi.mock('../../../src/core/auth/security');
 
 const mockQueueManager = vi.hoisted(() => ({
   enqueue: vi.fn().mockResolvedValue(undefined),
   cancel: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock('../../../src/core/transcode-queue-manager', () => ({
+vi.mock('../../../src/core/media/transcode-queue-manager', () => ({
   TranscodeQueueManager: {
     getInstance: vi.fn(() => mockQueueManager),
   },
 }));
-vi.mock('../../../src/core/media-handler', () => ({
+vi.mock('../../../src/core/media/media-handler', () => ({
   MediaHandler: vi.fn(),
   serveRawStream: vi.fn(),
   serveTranscodedStream: vi.fn((_req, res) => {
@@ -30,7 +30,7 @@ vi.mock('../../../src/core/media-handler', () => ({
   }),
   validateFileAccess: vi.fn(),
 }));
-vi.mock('../../../src/core/media-source');
+vi.mock('../../../src/core/media/media-source');
 
 // Mock Limiters
 const mockLimiters = {
@@ -155,7 +155,7 @@ describe('Media Routes Coverage', () => {
     });
 
     it('POST /api/media/playback-position succeeds with valid input', async () => {
-      const db = await import('../../../src/core/database');
+      const db = await import('../../../src/core/database/database');
       vi.mocked(db.updatePlaybackPosition).mockResolvedValue(undefined);
       const res = await request(app)
         .post('/api/media/playback-position')
@@ -165,7 +165,7 @@ describe('Media Routes Coverage', () => {
     });
 
     it('POST /api/media/playback-position clamps negative positions to 0', async () => {
-      const db = await import('../../../src/core/database');
+      const db = await import('../../../src/core/database/database');
       vi.mocked(db.updatePlaybackPosition).mockResolvedValue(undefined);
       const res = await request(app)
         .post('/api/media/playback-position')
@@ -298,7 +298,8 @@ describe('Media Routes Coverage', () => {
     });
 
     it('GET /api/transcode/jobs returns job list', async () => {
-      const { listTranscodeJobs } = await import('../../../src/core/database');
+      const { listTranscodeJobs } =
+        await import('../../../src/core/database/database');
       vi.mocked(listTranscodeJobs).mockResolvedValue([
         { file_path: '/a.mp4', status: 'pending' } as any,
       ]);
@@ -311,7 +312,8 @@ describe('Media Routes Coverage', () => {
       vi.mocked(security.authorizeFilePath).mockResolvedValue({
         isAllowed: true,
       } as any);
-      const { deleteTranscodeJob } = await import('../../../src/core/database');
+      const { deleteTranscodeJob } =
+        await import('../../../src/core/database/database');
       const res = await request(app)
         .delete('/api/transcode/jobs')
         .send({ path: '/a.mp4' });

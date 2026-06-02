@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   createSmartPlaylist,
   updateSmartPlaylist,
-} from '../../src/core/database';
+} from '../../src/core/database/database';
 
 describe('Smart Playlist Validation', () => {
   it('should reject empty name', async () => {

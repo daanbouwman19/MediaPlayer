@@ -17,8 +17,7 @@ describe('Encryption Utils Coverage', () => {
     const mockKey = crypto.randomBytes(32).toString('hex');
     vi.stubEnv('MASTER_KEY', mockKey);
 
-    const { encrypt, decrypt } =
-      await import('../../src/core/utils/encryption');
+    const { encrypt, decrypt } = await import('../../src/core/auth/encryption');
     const text = 'test-env-key';
     const encrypted = encrypt(text);
     expect(decrypt(encrypted)).toBe(text);
@@ -26,7 +25,7 @@ describe('Encryption Utils Coverage', () => {
 
   it('should throw if MASTER_KEY is invalid length', async () => {
     vi.stubEnv('MASTER_KEY', 'short-key');
-    const { encrypt } = await import('../../src/core/utils/encryption');
+    const { encrypt } = await import('../../src/core/auth/encryption');
     expect(() => encrypt('test')).toThrow(/Invalid MASTER_KEY length/);
   });
 
@@ -40,7 +39,7 @@ describe('Encryption Utils Coverage', () => {
     vi.spyOn(fs, 'existsSync').mockReturnValue(true);
     vi.spyOn(fs, 'readFileSync').mockReturnValue('short-hex');
 
-    const { encrypt } = await import('../../src/core/utils/encryption');
+    const { encrypt } = await import('../../src/core/auth/encryption');
     encrypt('test');
 
     expect(consoleWarnSpy).toHaveBeenCalledWith(
@@ -63,7 +62,7 @@ describe('Encryption Utils Coverage', () => {
       throw new Error('Read permission denied');
     });
 
-    const { encrypt } = await import('../../src/core/utils/encryption');
+    const { encrypt } = await import('../../src/core/auth/encryption');
     encrypt('test');
 
     expect(consoleWarnSpy).toHaveBeenCalledWith(
@@ -84,7 +83,7 @@ describe('Encryption Utils Coverage', () => {
       throw new Error('Write permission denied');
     });
 
-    const { encrypt } = await import('../../src/core/utils/encryption');
+    const { encrypt } = await import('../../src/core/auth/encryption');
     // Should throw to prevent data loss on restart
     expect(() => encrypt('test')).toThrow(/Failed to persist encryption key/);
     expect(consoleErrorSpy).toHaveBeenCalledWith(
@@ -100,8 +99,7 @@ describe('Encryption Utils Coverage', () => {
     const consoleWarnSpy = vi
       .spyOn(console, 'warn')
       .mockImplementation(() => {});
-    const { encrypt, decrypt } =
-      await import('../../src/core/utils/encryption');
+    const { encrypt, decrypt } = await import('../../src/core/auth/encryption');
 
     const plain = 'secret';
     const encrypted = encrypt(plain);
@@ -133,7 +131,7 @@ describe('Encryption Utils Coverage', () => {
       '50c7a5ac267dc92161817ab092dcfc9dcd64ea5824d9b40b021c0f5e3f514563',
     );
 
-    const { encrypt } = await import('../../src/core/utils/encryption');
+    const { encrypt } = await import('../../src/core/auth/encryption');
     encrypt('test');
 
     expect(consoleWarnSpy).toHaveBeenCalledWith(

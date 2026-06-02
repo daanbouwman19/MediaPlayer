@@ -47,7 +47,7 @@ import {
   getAlbumAndChildrenIds,
   collectTexturesRecursive,
 } from '../../utils/albumUtils';
-import type { Album } from '../../../core/types';
+import type { Album } from '../../../core/media/types';
 import AlbumTree from '../AlbumTree.vue';
 import PlaylistAddIcon from '../icons/PlaylistAddIcon.vue';
 

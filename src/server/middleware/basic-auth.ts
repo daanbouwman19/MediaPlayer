@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import crypto from 'crypto';
-import { MAX_PASSWORD_LENGTH } from '../../core/constants.ts';
+import { MAX_PASSWORD_LENGTH } from '../../core/media/constants.ts';
 
 // Generate a unique salt for this process lifetime.
 const AUTH_SALT = crypto.randomBytes(16);

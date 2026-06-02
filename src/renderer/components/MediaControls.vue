@@ -273,12 +273,12 @@ import ExpandIcon from './icons/ExpandIcon.vue';
 import StarIcon from './icons/StarIcon.vue';
 import HelpIcon from './icons/HelpIcon.vue';
 import ProgressBar from './ProgressBar.vue';
-import type { MediaFile, HeatmapData } from '../../core/types';
+import type { MediaFile, HeatmapData } from '../../core/media/types';
 import { useUIStore } from '../composables/useUIStore';
 import { computed, ref, onMounted, onUnmounted, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { formatTime } from '../utils/timeUtils';
-import { api } from '../api';
+import { api } from '../api/index';
 
 defineOptions({
   inheritAttrs: false,

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import * as mediaScanner from '../../src/core/media-scanner';
+import * as mediaScanner from '../../src/core/media/media-scanner';
 
 import path from 'path';
 

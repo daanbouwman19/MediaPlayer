@@ -7,7 +7,7 @@ import {
   collectSelectedTextures,
   traverseAlbumTree,
 } from '../../../src/renderer/utils/albumUtils';
-import type { Album, MediaFile } from '../../../src/core/types';
+import type { Album, MediaFile } from '../../../src/core/media/types';
 
 /**
  * Helper to create a fully compliant MediaFile mock.

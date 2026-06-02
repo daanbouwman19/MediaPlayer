@@ -1,5 +1,5 @@
 import { ref, onBeforeUnmount } from 'vue';
-import { api } from '../api';
+import { api } from '../api/index';
 
 export function useTranscoder() {
   const isTranscodingMode = ref(false);

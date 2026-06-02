@@ -1,6 +1,6 @@
 import { ref } from 'vue';
-import type { TranscodeJob } from '../../core/types';
-import { api } from '../api';
+import type { TranscodeJob } from '../../core/media/types';
+import { api } from '../api/index';
 
 export function useTranscodeQueue() {
   const jobStatusMap = ref<Map<string, TranscodeJob['status']>>(new Map());

@@ -4,12 +4,12 @@
 import { Router } from 'express';
 import path from 'path';
 import fs from 'fs/promises';
-import { AppError } from '../../core/errors.ts';
+import { AppError } from '../../core/media/errors.ts';
 import {
   ALL_SUPPORTED_EXTENSIONS,
   SUPPORTED_IMAGE_EXTENSIONS,
   SUPPORTED_VIDEO_EXTENSIONS,
-} from '../../core/constants.ts';
+} from '../../core/media/constants.ts';
 import {
   addMediaDirectory,
   createSmartPlaylist,
@@ -19,14 +19,14 @@ import {
   removeMediaDirectory,
   setDirectoryActiveState,
   updateSmartPlaylist,
-} from '../../core/database.ts';
-import { listDirectory } from '../../core/file-system.ts';
+} from '../../core/database/database.ts';
+import { listDirectory } from '../../core/media/file-system.ts';
 import {
   isRestrictedPath,
   isSensitiveDirectory,
   validateInput,
-} from '../../core/security.ts';
-import { getQueryParam } from '../../core/utils/http-utils.ts';
+} from '../../core/auth/security.ts';
+import { getQueryParam } from '../../core/network/http-utils.ts';
 import {
   getDriveClient,
   getDriveParent,
@@ -34,11 +34,11 @@ import {
 } from '../../main/google-drive-service.ts';
 import type { RateLimiters } from '../middleware/rate-limiters.ts';
 import { asyncHandler } from '../middleware/async-handler.ts';
-import { createRateLimiter } from '../../core/rate-limiter.ts';
+import { createRateLimiter } from '../../core/network/rate-limiter.ts';
 import {
   RATE_LIMIT_FS_READ_WINDOW_MS,
   RATE_LIMIT_FS_READ_MAX_REQUESTS,
-} from '../../core/constants.ts';
+} from '../../core/media/constants.ts';
 
 function validateMediaDirectoryPath(dirPath: string): void {
   if (!path.isAbsolute(dirPath)) {

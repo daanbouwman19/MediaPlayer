@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { HlsManager } from '../../src/core/hls-manager.ts';
-import { MAX_CONCURRENT_TRANSCODES } from '../../src/core/constants.ts';
+import { HlsManager } from '../../src/core/media/hls-manager.ts';
+import { MAX_CONCURRENT_TRANSCODES } from '../../src/core/media/constants.ts';
 import EventEmitter from 'events';
 
 const { mockSpawn, mockFsMkdir, mockFsRm, mockFsStat } = vi.hoisted(() => ({
@@ -32,13 +32,13 @@ vi.mock('ffmpeg-static', () => ({
   default: '/usr/bin/ffmpeg',
 }));
 
-vi.mock('../../src/core/media-source.ts', () => ({
+vi.mock('../../src/core/media/media-source.ts', () => ({
   createMediaSource: vi.fn(),
 }));
 
-import { createMediaSource } from '../../src/core/media-source.ts';
+import { createMediaSource } from '../../src/core/media/media-source.ts';
 
-vi.mock('../../src/core/utils/ffmpeg-utils.ts', () => ({
+vi.mock('../../src/infrastructure/ffmpeg-utils.ts', () => ({
   getHlsTranscodeArgs: vi.fn().mockReturnValue(['-f', 'hls', 'playlist.m3u8']),
   detectFFmpegCapabilities: vi.fn().mockResolvedValue({
     nvenc: false,

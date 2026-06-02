@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, Mock } from 'vitest';
-import { GoogleDriveProvider } from '../../../src/core/providers/drive-provider';
-import { getDriveStreamWithCache } from '../../../src/core/drive-stream';
+import { GoogleDriveProvider } from '../../../src/infrastructure/providers/drive-provider';
+import { getDriveStreamWithCache } from '../../../src/core/media/drive-stream';
 import {
   listDriveDirectory,
   getDriveFileMetadata,
@@ -8,7 +8,7 @@ import {
   getDriveFileThumbnail,
 } from '../../../src/main/google-drive-service';
 
-vi.mock('../../../src/core/drive-stream', () => ({
+vi.mock('../../../src/core/media/drive-stream', () => ({
   getDriveStreamWithCache: vi.fn(),
 }));
 

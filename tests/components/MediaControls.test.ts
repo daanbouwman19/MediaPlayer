@@ -6,7 +6,7 @@ import MediaControls from '../../src/renderer/components/MediaControls.vue';
 import { useUIStore } from '../../src/renderer/composables/useUIStore';
 
 // Mock API
-vi.mock('../../src/renderer/api', () => ({
+vi.mock('../../src/renderer/api/index', () => ({
   api: {
     getHeatmapProgress: vi.fn(),
     getHeatmap: vi.fn(),

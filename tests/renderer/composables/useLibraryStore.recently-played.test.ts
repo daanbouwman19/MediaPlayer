@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { setActivePinia, createPinia } from 'pinia';
 import { useLibraryStore } from '../../../src/renderer/composables/useLibraryStore';
-import { api } from '../../../src/renderer/api';
-import { MediaLibraryItem } from '../../../src/core/types';
+import { api } from '../../../src/renderer/api/index';
+import { MediaLibraryItem } from '../../../src/core/media/types';
 
-vi.mock('../../../src/renderer/api', () => ({
+vi.mock('../../../src/renderer/api/index', () => ({
   api: {
     getAlbumsWithViewCounts: vi.fn(),
     getMediaDirectories: vi.fn(),

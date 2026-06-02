@@ -2,7 +2,7 @@
  * @file Provides utility functions for selecting media items from a list.
  * Includes algorithms for weighted random selection and array shuffling.
  */
-import type { MediaFile } from '../../core/types';
+import type { MediaFile } from '../../core/media/types';
 
 /**
  * Shuffles an array in place using the Fisher-Yates shuffle algorithm.

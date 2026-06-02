@@ -280,7 +280,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch, onMounted, onUnmounted } from 'vue';
-import type { MediaFile, TranscodeJob } from '../../core/types';
+import type { MediaFile, TranscodeJob } from '../../core/media/types';
 import {
   getDisplayName,
   isMediaFileImage,

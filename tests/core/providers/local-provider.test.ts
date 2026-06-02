@@ -1,22 +1,22 @@
 import { describe, it, expect, vi, beforeEach, afterEach, Mock } from 'vitest';
-import { LocalFileSystemProvider } from '../../../src/core/providers/local-provider';
-import { listDirectory } from '../../../src/core/file-system';
-import { isDrivePath } from '../../../src/core/media-utils';
-import { getMimeType } from '../../../src/core/utils/mime-types';
+import { LocalFileSystemProvider } from '../../../src/infrastructure/providers/local-provider';
+import { listDirectory } from '../../../src/core/media/file-system';
+import { isDrivePath } from '../../../src/core/media/media-utils';
+import { getMimeType } from '../../../src/core/media/utils/mime-types';
 import fs from 'fs';
 import fsPromises from 'fs/promises';
 import path from 'path';
 
 // Mock internal dependencies safe to mock
-vi.mock('../../../src/core/file-system', () => ({
+vi.mock('../../../src/core/media/file-system', () => ({
   listDirectory: vi.fn(),
 }));
 
-vi.mock('../../../src/core/media-utils', () => ({
+vi.mock('../../../src/core/media/media-utils', () => ({
   isDrivePath: vi.fn(),
 }));
 
-vi.mock('../../../src/core/utils/mime-types', () => ({
+vi.mock('../../../src/core/media/utils/mime-types', () => ({
   getMimeType: vi.fn(),
 }));
 

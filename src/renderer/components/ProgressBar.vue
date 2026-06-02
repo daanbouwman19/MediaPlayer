@@ -44,7 +44,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue';
-import type { HeatmapData } from '../../core/types';
+import type { HeatmapData } from '../../core/media/types';
 import { useUIStore } from '../composables/useUIStore';
 
 const props = defineProps<{

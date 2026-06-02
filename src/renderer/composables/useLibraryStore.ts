@@ -5,8 +5,8 @@ import type {
   MediaDirectory,
   SmartPlaylist,
   MediaFile,
-} from '../../core/types';
-import { api } from '../api';
+} from '../../core/media/types';
+import { api } from '../api/index';
 
 export const useLibraryStore = defineStore('library', () => {
   const isScanning = ref(false);

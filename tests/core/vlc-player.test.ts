@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { EventEmitter } from 'events';
-import { openMediaInVlc } from '../../src/core/vlc-player';
+import { openMediaInVlc } from '../../src/infrastructure/vlc-player';
 
 const { mockSpawn, mockAuthorizeFilePath, mockFsAccess } = vi.hoisted(() => ({
   mockSpawn: vi.fn(),
@@ -25,11 +25,11 @@ vi.mock('fs/promises', async (importOriginal) => {
   };
 });
 
-vi.mock('../../src/core/security', () => ({
+vi.mock('../../src/core/auth/security', () => ({
   authorizeFilePath: mockAuthorizeFilePath,
 }));
 
-vi.mock('../../src/core/utils/vlc-paths', () => ({
+vi.mock('../../src/infrastructure/vlc-paths', () => ({
   getVlcPath: vi.fn().mockResolvedValue('/usr/bin/vlc'),
 }));
 

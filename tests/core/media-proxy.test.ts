@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { InternalMediaProxy } from '../../src/core/media-proxy';
+import { InternalMediaProxy } from '../../src/core/media/media-proxy';
 
 // Hoist mocks
 const {
@@ -49,11 +49,11 @@ vi.mock('../../src/main/google-drive-service', () => ({
   getDriveFileMetadata: mockGetDriveFileMetadata,
 }));
 
-vi.mock('../../src/core/drive-stream', () => ({
+vi.mock('../../src/core/media/drive-stream', () => ({
   getDriveStreamWithCache: mockGetDriveStreamWithCache,
 }));
 
-vi.mock('../../src/core/database', () => ({
+vi.mock('../../src/core/database/database', () => ({
   isFileInLibrary: mockIsFileInLibrary,
 }));
 

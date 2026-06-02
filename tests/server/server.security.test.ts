@@ -1,23 +1,23 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import request from 'supertest';
 import { createApp } from '../../src/server/server';
-import * as database from '../../src/core/database';
+import * as database from '../../src/core/database/database';
 import fs from 'fs/promises';
 
 // Mock dependencies
-vi.mock('../../src/core/database');
-vi.mock('../../src/core/media-service');
-vi.mock('../../src/core/file-system', async (importOriginal) => {
+vi.mock('../../src/core/database/database');
+vi.mock('../../src/core/media/media-service');
+vi.mock('../../src/core/media/file-system', async (importOriginal) => {
   const actual =
-    await importOriginal<typeof import('../../src/core/file-system')>();
+    await importOriginal<typeof import('../../src/core/media/file-system')>();
   return {
     ...actual,
     listDirectory: vi.fn(),
   };
 });
-vi.mock('../../src/core/security', async (importOriginal) => {
+vi.mock('../../src/core/auth/security', async (importOriginal) => {
   const actual =
-    await importOriginal<typeof import('../../src/core/security')>();
+    await importOriginal<typeof import('../../src/core/auth/security')>();
   return {
     ...actual,
     authorizeFilePath: vi.fn(),
@@ -47,7 +47,7 @@ const { MockMediaHandler } = vi.hoisted(() => {
   return { MockMediaHandler };
 });
 
-vi.mock('../../src/core/media-handler', () => ({
+vi.mock('../../src/core/media/media-handler', () => ({
   MediaHandler: MockMediaHandler,
   serveMetadata: vi.fn(),
   serveTranscodedStream: vi.fn(),

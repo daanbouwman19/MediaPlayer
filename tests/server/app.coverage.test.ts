@@ -3,7 +3,7 @@ import { Router } from 'express';
 import request from 'supertest';
 import fs from 'fs/promises';
 import path from 'path';
-import * as database from '../../src/core/database';
+import * as database from '../../src/core/database/database';
 
 let capturedMediaOptions: any;
 
@@ -26,7 +26,7 @@ vi.mock('../../src/server/routes/system.routes.ts', () => ({
   createSystemRoutes: vi.fn(() => Router()),
 }));
 
-vi.mock('../../src/core/database', () => ({
+vi.mock('../../src/core/database/database', () => ({
   initDatabase: vi.fn(),
 }));
 
@@ -34,7 +34,7 @@ vi.mock('../../src/main/drive-cache-manager.ts', () => ({
   initializeDriveCacheManager: vi.fn(),
 }));
 
-vi.mock('../../src/core/hls-manager.ts', () => ({
+vi.mock('../../src/core/media/hls-manager.ts', () => ({
   HlsManager: {
     getInstance: vi.fn(() => ({
       setCacheDir: vi.fn(),
@@ -42,14 +42,14 @@ vi.mock('../../src/core/hls-manager.ts', () => ({
   },
 }));
 
-vi.mock('../../src/core/transcode-queue-manager', () => ({
+vi.mock('../../src/core/media/transcode-queue-manager', () => ({
   TranscodeQueueManager: {
     getInstance: vi.fn(() => ({ start: vi.fn(), enqueue: vi.fn() })),
     resetInstance: vi.fn(),
   },
 }));
 
-vi.mock('../../src/core/analysis/media-analyzer.ts', () => ({
+vi.mock('../../src/core/media/analysis/media-analyzer.ts', () => ({
   MediaAnalyzer: {
     getInstance: vi.fn(() => ({
       setCacheDir: vi.fn(),
@@ -72,7 +72,7 @@ const { MockMediaHandler } = vi.hoisted(() => {
   return { MockMediaHandler };
 });
 
-vi.mock('../../src/core/media-handler', () => ({
+vi.mock('../../src/core/media/media-handler', () => ({
   MediaHandler: MockMediaHandler,
 }));
 

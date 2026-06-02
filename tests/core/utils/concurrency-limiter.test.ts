@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ConcurrencyLimiter } from '../../../src/core/utils/concurrency-limiter';
+import { ConcurrencyLimiter } from '../../../src/core/media/utils/concurrency-limiter';
 
 // Helper to create a controlled promise
 function createDeferred() {

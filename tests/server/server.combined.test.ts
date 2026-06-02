@@ -1,13 +1,16 @@
 import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
 import request from 'supertest';
 import { createApp } from '../../src/server/server';
-import * as database from '../../src/core/database';
-import * as mediaHandler from '../../src/core/media-handler';
-import * as fileSystem from '../../src/core/file-system'; // Added import
-import * as security from '../../src/core/security';
-import * as mediaUtils from '../../src/core/media-utils';
-import * as mimeTypes from '../../src/core/utils/mime-types';
-import { MAX_API_BATCH_SIZE, MAX_PATH_LENGTH } from '../../src/core/constants';
+import * as database from '../../src/core/database/database';
+import * as mediaHandler from '../../src/core/media/media-handler';
+import * as fileSystem from '../../src/core/media/file-system'; // Added import
+import * as security from '../../src/core/auth/security';
+import * as mediaUtils from '../../src/core/media/media-utils';
+import * as mimeTypes from '../../src/core/media/utils/mime-types';
+import {
+  MAX_API_BATCH_SIZE,
+  MAX_PATH_LENGTH,
+} from '../../src/core/media/constants';
 import fs from 'fs/promises';
 import {
   getDriveClient,
@@ -93,15 +96,15 @@ vi.mock('fs', () => {
 });
 
 // Mock core modules
-vi.mock('../../src/core/database');
-vi.mock('../../src/core/file-system');
+vi.mock('../../src/core/database/database');
+vi.mock('../../src/core/media/file-system');
 vi.mock('../../src/main/drive-cache-manager');
-vi.mock('../../src/core/utils/mime-types');
+vi.mock('../../src/core/media/utils/mime-types');
 
 // Mock security
-vi.mock('../../src/core/security', async (importOriginal) => {
+vi.mock('../../src/core/auth/security', async (importOriginal) => {
   const actual =
-    await importOriginal<typeof import('../../src/core/security')>();
+    await importOriginal<typeof import('../../src/core/auth/security')>();
   return {
     ...actual,
     authorizeFilePath: vi.fn(),
@@ -112,12 +115,12 @@ vi.mock('../../src/core/security', async (importOriginal) => {
 });
 
 // Mock rate-limiter (pass-through by default)
-vi.mock('../../src/core/rate-limiter', () => ({
+vi.mock('../../src/core/network/rate-limiter', () => ({
   createRateLimiter: vi.fn(() => (_req: any, _res: any, next: any) => next()),
 }));
 
 // Mock media-utils
-vi.mock('../../src/core/media-utils', () => ({
+vi.mock('../../src/core/media/media-utils', () => ({
   getThumbnailCachePath: vi.fn(),
   isDrivePath: vi.fn().mockReturnValue(false),
   normalizeFilePath: vi.fn((p) => p),
@@ -147,7 +150,7 @@ const { MockMediaHandler, getLastMediaHandler } = vi.hoisted(() => {
   return { MockMediaHandler, getLastMediaHandler };
 });
 
-vi.mock('../../src/core/media-handler', () => ({
+vi.mock('../../src/core/media/media-handler', () => ({
   MediaHandler: MockMediaHandler,
   serveMetadata: vi.fn((_req, res) => res.end()),
   serveTranscodedStream: vi.fn((_req, res) => res.end()),
@@ -177,7 +180,7 @@ vi.mock('../../src/main/google-drive-service', () => ({
 }));
 
 // Mock media-source (for Transcode Concurrency test mainly)
-vi.mock('../../src/core/media-source', async () => {
+vi.mock('../../src/core/media/media-source', async () => {
   const { EventEmitter } = await import('events');
   return {
     createMediaSource: vi.fn().mockReturnValue({

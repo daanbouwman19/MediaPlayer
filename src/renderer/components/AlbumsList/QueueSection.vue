@@ -130,7 +130,7 @@ import { usePlaylistStore } from '../../composables/usePlaylistStore';
 import ArrowUpIcon from '../icons/ArrowUpIcon.vue';
 import ListIcon from '../icons/ListIcon.vue';
 import DeleteIcon from '../icons/DeleteIcon.vue';
-import type { MediaFile } from '../../../core/types';
+import type { MediaFile } from '../../../core/media/types';
 
 const playlistStore = usePlaylistStore();
 const { queue } = storeToRefs(playlistStore);

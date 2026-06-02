@@ -5,9 +5,9 @@ import { createTestingPinia } from '@pinia/testing';
 import PlaylistsSection from '../../../../src/renderer/components/AlbumsList/PlaylistsSection.vue';
 import { useLibraryStore } from '../../../../src/renderer/composables/useLibraryStore';
 import { useUIStore } from '../../../../src/renderer/composables/useUIStore';
-import { api } from '../../../../src/renderer/api';
+import { api } from '../../../../src/renderer/api/index';
 
-vi.mock('../../../../src/renderer/api', () => ({
+vi.mock('../../../../src/renderer/api/index', () => ({
   api: {
     executeSmartPlaylist: vi.fn(),
     deleteSmartPlaylist: vi.fn(),

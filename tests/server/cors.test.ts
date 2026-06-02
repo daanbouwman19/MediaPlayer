@@ -1,14 +1,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import request from 'supertest';
-import * as security from '../../src/core/security';
+import * as security from '../../src/core/auth/security';
 import { createApp } from '../../src/server/server';
 import { createTestMediaService } from '../utils/test-factory';
 
 // Mock dependencies
-vi.mock('../../src/core/database');
-vi.mock('../../src/core/media-service');
-vi.mock('../../src/core/file-system');
-vi.mock('../../src/core/security');
+vi.mock('../../src/core/database/database');
+vi.mock('../../src/core/media/media-service');
+vi.mock('../../src/core/media/file-system');
+vi.mock('../../src/core/auth/security');
 
 // Mock Google Drive Service to prevent importing googleapis
 vi.mock('../../src/main/google-drive-service', () => ({
@@ -17,7 +17,7 @@ vi.mock('../../src/main/google-drive-service', () => ({
 }));
 
 // Mock WorkerFactory to avoid electron import check
-vi.mock('../../src/core/worker-factory', () => ({
+vi.mock('../../src/core/database/worker-factory', () => ({
   WorkerFactory: {
     getWorkerPath: vi
       .fn()
@@ -56,7 +56,7 @@ const { MockMediaHandler } = vi.hoisted(() => {
   return { MockMediaHandler };
 });
 
-vi.mock('../../src/core/media-handler', () => ({
+vi.mock('../../src/core/media/media-handler', () => ({
   MediaHandler: MockMediaHandler,
   serveMetadata: vi.fn((_req, res) => res.end()),
   serveTranscodedStream: vi.fn((_req, res) => res.end()),

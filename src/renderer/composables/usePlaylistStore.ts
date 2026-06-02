@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-import type { MediaFile } from '../../core/types';
+import type { MediaFile } from '../../core/media/types';
 
 export const usePlaylistStore = defineStore('playlist', () => {
   const history = ref<MediaFile[]>([]);

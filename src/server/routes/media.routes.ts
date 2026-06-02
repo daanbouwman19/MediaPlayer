@@ -2,7 +2,7 @@
  * @file Media routes.
  */
 import { Router } from 'express';
-import { AppError } from '../../core/errors.ts';
+import { AppError } from '../../core/media/errors.ts';
 import {
   getAllMetadataAndStats,
   getMediaViewCounts,
@@ -14,24 +14,24 @@ import {
   upsertMetadata,
   listTranscodeJobs,
   deleteTranscodeJob,
-} from '../../core/database.ts';
-import { TranscodeQueueManager } from '../../core/transcode-queue-manager.ts';
+} from '../../core/database/database.ts';
+import { TranscodeQueueManager } from '../../core/media/transcode-queue-manager.ts';
 import {
   authorizeFilePath,
   filterAuthorizedPaths,
-} from '../../core/security.ts';
-import { getQueryParam } from '../../core/utils/http-utils.ts';
+} from '../../core/auth/security.ts';
+import { getQueryParam } from '../../core/network/http-utils.ts';
 import {
   MAX_API_BATCH_SIZE,
   MAX_CONCURRENT_TRANSCODES,
-} from '../../core/constants.ts';
+} from '../../core/media/constants.ts';
 import {
   MediaHandler,
   serveRawStream,
   serveTranscodedStream,
   validateFileAccess,
-} from '../../core/media-handler.ts';
-import { createMediaSource } from '../../core/media-source.ts';
+} from '../../core/media/media-handler.ts';
+import { createMediaSource } from '../../core/media/media-source.ts';
 import type { RateLimiters } from '../middleware/rate-limiters.ts';
 import { asyncHandler } from '../middleware/async-handler.ts';
 

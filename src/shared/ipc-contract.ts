@@ -7,8 +7,8 @@ import type {
   SmartPlaylist,
   HeatmapData,
   TranscodeJob,
-} from '../core/types';
-import type { FileSystemEntry } from '../core/file-system';
+} from '../core/media/types';
+import type { FileSystemEntry } from '../core/media/file-system';
 
 export interface IpcContract {
   [IPC_CHANNELS.LOAD_FILE_AS_DATA_URL]: {

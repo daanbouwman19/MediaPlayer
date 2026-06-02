@@ -7,7 +7,7 @@ import {
 } from '../google-auth';
 import { startAuthServer } from '../auth-server';
 import { getDriveClient } from '../google-drive-service';
-import { addMediaDirectory } from '../../core/database';
+import { addMediaDirectory } from '../../core/database/database';
 import { handleIpc } from '../utils/ipc-helper';
 
 export function registerAuthHandlers() {

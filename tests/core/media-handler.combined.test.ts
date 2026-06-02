@@ -1,13 +1,13 @@
 // @vitest-environment node
 import { describe, it, expect, vi, beforeEach, Mock, afterEach } from 'vitest';
-import { IMediaSource } from '../../src/core/media-source-types';
+import { IMediaSource } from '../../src/core/media/media-source-types';
 import { PassThrough, EventEmitter } from 'stream';
 import path from 'path';
 import request from 'supertest';
-import { createMediaSource } from '../../src/core/media-source';
+import { createMediaSource } from '../../src/core/media/media-source';
 import fs from 'fs';
 import { createTestMediaService } from '../utils/test-factory';
-import { MediaService } from '../../src/core/media-service';
+import { MediaService } from '../../src/core/media/media-service';
 
 // --- Mocks ---
 
@@ -51,7 +51,7 @@ import {
   generateFileUrl,
   createMediaApp,
   MediaHandler,
-} from '../../src/core/media-handler';
+} from '../../src/core/media/media-handler';
 
 vi.mock('../../src/main/google-drive-service', () => ({
   getDriveFileMetadata: mockGetDriveFileMetadata,
@@ -59,22 +59,24 @@ vi.mock('../../src/main/google-drive-service', () => ({
   getDriveFileStream: vi.fn(),
 }));
 
-vi.mock('../../src/core/drive-stream', () => ({
+vi.mock('../../src/core/media/drive-stream', () => ({
   getDriveStreamWithCache: mockGetDriveStreamWithCache,
 }));
 
-vi.mock('../../src/core/security', async (importOriginal) => {
+vi.mock('../../src/core/auth/security', async (importOriginal) => {
   const actual =
-    await importOriginal<typeof import('../../src/core/security')>();
+    await importOriginal<typeof import('../../src/core/auth/security')>();
   return {
     ...actual,
     authorizeFilePath: mockAuthorizeFilePath,
   };
 });
 
-vi.mock('../../src/core/access-validator', async (importOriginal) => {
+vi.mock('../../src/core/auth/access-validator', async (importOriginal) => {
   const actual =
-    await importOriginal<typeof import('../../src/core/access-validator')>();
+    await importOriginal<
+      typeof import('../../src/core/auth/access-validator')
+    >();
   return {
     ...actual,
     validateFileAccess: mockValidateFileAccess,
@@ -88,20 +90,20 @@ vi.mock('../../src/core/access-validator', async (importOriginal) => {
   };
 });
 
-vi.mock('../../src/core/access-utils', () => ({
+vi.mock('../../src/core/auth/access-utils', () => ({
   getAuthorizedPath: async (res: any, filePath: string) => {
     // Import from the module we already mocked
     const { validateFileAccess, handleAccessCheck } =
-      await import('../../src/core/access-validator');
+      await import('../../src/core/auth/access-validator');
     const access = await validateFileAccess(filePath);
     if (handleAccessCheck(res, access)) return null;
     return access.success ? access.path : null;
   },
 }));
 
-vi.mock('../../src/core/media-utils', async (importOriginal) => {
+vi.mock('../../src/core/media/media-utils', async (importOriginal) => {
   const actual =
-    await importOriginal<typeof import('../../src/core/media-utils')>();
+    await importOriginal<typeof import('../../src/core/media/media-utils')>();
   return {
     ...actual,
     getThumbnailCachePath: mockGetThumbnailCachePath,
@@ -109,27 +111,34 @@ vi.mock('../../src/core/media-utils', async (importOriginal) => {
   };
 });
 
-vi.mock('../../src/core/utils/ffmpeg-utils', async (importOriginal) => {
+vi.mock('../../src/infrastructure/ffmpeg-utils', async (importOriginal) => {
   const actual =
-    await importOriginal<typeof import('../../src/core/utils/ffmpeg-utils')>();
+    await importOriginal<
+      typeof import('../../src/infrastructure/ffmpeg-utils')
+    >();
   return {
     ...actual,
     getFFmpegDuration: mockGetFFmpegDuration,
   };
 });
 
-vi.mock('../../src/core/media-source', () => ({
+vi.mock('../../src/core/media/media-source', () => ({
   createMediaSource: vi.fn(),
 }));
 
-vi.mock('../../src/core/fs-provider-factory', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('../../src/core/fs-provider-factory')>();
-  return {
-    ...actual,
-    getProvider: mockGetProvider,
-  };
-});
+vi.mock(
+  '../../src/infrastructure/fs-provider-factory',
+  async (importOriginal) => {
+    const actual =
+      await importOriginal<
+        typeof import('../../src/infrastructure/fs-provider-factory')
+      >();
+    return {
+      ...actual,
+      getProvider: mockGetProvider,
+    };
+  },
+);
 
 const mockHlsManagerInstance = {
   ensureSession: vi.fn(),
@@ -140,13 +149,13 @@ const mockHlsManagerInstance = {
   pinSession: vi.fn(),
 };
 
-vi.mock('../../src/core/hls-manager', () => ({
+vi.mock('../../src/core/media/hls-manager', () => ({
   HlsManager: {
     getInstance: vi.fn(() => mockHlsManagerInstance),
   },
 }));
 
-vi.mock('../../src/core/transcode-queue-manager', () => ({
+vi.mock('../../src/core/media/transcode-queue-manager', () => ({
   TranscodeQueueManager: {
     getInstance: vi.fn(() => ({ start: vi.fn(), enqueue: vi.fn() })),
   },
@@ -158,14 +167,14 @@ const mockAnalyzerInstance = {
   setCacheDir: vi.fn(),
 };
 
-vi.mock('../../src/core/analysis/media-analyzer', () => ({
+vi.mock('../../src/core/media/analysis/media-analyzer', () => ({
   MediaAnalyzer: {
     getInstance: vi.fn(() => mockAnalyzerInstance),
   },
 }));
 
 // UPDATED: Mock thumbnail handler to simulate security check failure
-vi.mock('../../src/core/thumbnail-handler', () => ({
+vi.mock('../../src/core/media/thumbnail-handler', () => ({
   serveThumbnail: vi.fn((_req, res, filePath) => {
     if (filePath && filePath.includes('forbidden')) {
       return res.status(403).send('Access denied.');
@@ -284,7 +293,7 @@ describe('MediaHandler Combined Tests', () => {
 
     // Restore default getProvider behavior
     const { getProvider: actualGetProvider } = (await vi.importActual(
-      '../../src/core/fs-provider-factory',
+      '../../src/infrastructure/fs-provider-factory',
     )) as any;
     mockGetProvider.mockImplementation(actualGetProvider);
 
@@ -1262,7 +1271,7 @@ describe('MediaHandler Combined Tests', () => {
       // Need to mock serveThumbnail import or it will call real one (which is mocked in this file).
 
       const { serveThumbnail: mockServeThumbnail } =
-        await import('../../src/core/thumbnail-handler');
+        await import('../../src/core/media/thumbnail-handler');
 
       await handler.serveThumbnail(req, res, '/file.mp4');
       expect(mockServeThumbnail).toHaveBeenCalled();
@@ -1394,8 +1403,8 @@ describe('MediaHandler Combined Tests', () => {
 
     it('prevents file enumeration in serveThumbnail', async () => {
       const actual = await vi.importActual<
-        typeof import('../../src/core/media-handler')
-      >('../../src/core/media-handler');
+        typeof import('../../src/core/media/media-handler')
+      >('../../src/core/media/media-handler');
 
       await actual.serveThumbnail(
         req,

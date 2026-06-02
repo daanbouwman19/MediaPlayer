@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { callWithRetry } from '../../../src/core/utils/async-utils';
+import { callWithRetry } from '../../../src/core/media/utils/async-utils';
 
 describe('async-utils', () => {
   describe('callWithRetry', () => {

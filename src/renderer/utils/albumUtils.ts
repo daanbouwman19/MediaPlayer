@@ -1,7 +1,7 @@
 /**
  * @file Provides utility functions for working with album data structures.
  */
-import type { Album, MediaFile } from '../../core/types';
+import type { Album, MediaFile } from '../../core/media/types';
 
 /**
  * Iterates over an album or list of albums and their children using a stack-based traversal.

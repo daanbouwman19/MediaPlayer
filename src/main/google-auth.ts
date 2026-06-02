@@ -6,10 +6,13 @@ import {
   getGoogleClientSecret,
   getGoogleRedirectUri,
 } from './google-secrets.ts';
-import { getSetting, saveSetting } from '../core/database.ts';
-import { GOOGLE_DRIVE_SCOPES, GOOGLE_TOKENS_KEY } from '../core/constants.ts';
-import { encrypt, decrypt } from '../core/utils/encryption.ts';
-import { callWithRetry } from '../core/utils/async-utils.ts';
+import { getSetting, saveSetting } from '../core/database/database.ts';
+import {
+  GOOGLE_DRIVE_SCOPES,
+  GOOGLE_TOKENS_KEY,
+} from '../core/media/constants.ts';
+import { encrypt, decrypt } from '../core/auth/encryption.ts';
+import { callWithRetry } from '../core/media/utils/async-utils.ts';
 
 let oauth2Client: OAuth2Client | null = null;
 // Store the pending code verifier for PKCE flow.

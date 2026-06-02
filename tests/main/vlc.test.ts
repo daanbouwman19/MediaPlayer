@@ -148,7 +148,7 @@ vi.mock('../../src/main/local-server.js', () => ({
   stopLocalServer: vi.fn(),
 }));
 
-vi.mock('../../src/core/database', () => ({
+vi.mock('../../src/core/database/database', () => ({
   isFileInLibrary: vi.fn(),
   closeDatabase: vi.fn(),
   getMediaDirectories: mocks.mockGetMediaDirectories,

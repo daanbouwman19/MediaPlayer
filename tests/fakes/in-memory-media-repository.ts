@@ -1,10 +1,10 @@
-import { IMediaRepository } from '../../src/core/repositories/media-repository.interface.ts';
+import { IMediaRepository } from '../../src/core/database/repositories/media-repository.interface.ts';
 import type {
   Album,
   MediaMetadata,
   MediaLibraryItem,
   MediaDirectory,
-} from '../../src/core/types.ts';
+} from '../../src/core/media/types.ts';
 
 export class InMemoryMediaRepository implements IMediaRepository {
   private albums: Album[] | null = null;

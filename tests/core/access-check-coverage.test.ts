@@ -3,14 +3,14 @@ import {
   serveHlsMaster,
   serveHlsPlaylist,
   serveHlsSegment,
-} from '../../src/core/hls-handler';
+} from '../../src/core/media/hls-handler';
 import {
   serveMetadata,
   serveHeatmap,
   serveHeatmapProgress,
   serveStaticFile,
   handleStreamRequest,
-} from '../../src/core/media-handler';
+} from '../../src/core/media/media-handler';
 
 // Mock dependencies
 const { mockValidateFileAccess, mockHandleAccessCheck } = vi.hoisted(() => ({
@@ -18,12 +18,12 @@ const { mockValidateFileAccess, mockHandleAccessCheck } = vi.hoisted(() => ({
   mockHandleAccessCheck: vi.fn(),
 }));
 
-vi.mock('../../src/core/access-validator', () => ({
+vi.mock('../../src/core/auth/access-validator', () => ({
   validateFileAccess: mockValidateFileAccess,
   handleAccessCheck: mockHandleAccessCheck,
 }));
 
-vi.mock('../../src/core/hls-manager', () => ({
+vi.mock('../../src/core/media/hls-manager', () => ({
   HlsManager: {
     getInstance: () => ({
       ensureSession: vi.fn(),
@@ -33,7 +33,7 @@ vi.mock('../../src/core/hls-manager', () => ({
   },
 }));
 
-vi.mock('../../src/core/analysis/media-analyzer', () => ({
+vi.mock('../../src/core/media/analysis/media-analyzer', () => ({
   MediaAnalyzer: {
     getInstance: () => ({
       generateHeatmap: vi.fn(),
@@ -43,7 +43,7 @@ vi.mock('../../src/core/analysis/media-analyzer', () => ({
   },
 }));
 
-vi.mock('../../src/core/media-utils', () => ({
+vi.mock('../../src/core/media/media-utils', () => ({
   isDrivePath: vi.fn().mockReturnValue(false),
   normalizeFilePath: vi.fn((p) => p),
   getThumbnailCachePath: vi.fn(),
@@ -51,12 +51,12 @@ vi.mock('../../src/core/media-utils', () => ({
   getDriveId: vi.fn(),
 }));
 
-vi.mock('../../src/core/utils/ffmpeg-utils', () => ({
+vi.mock('../../src/infrastructure/ffmpeg-utils', () => ({
   getFFmpegDuration: vi.fn(),
   getTranscodeArgs: vi.fn(),
 }));
 
-vi.mock('../../src/core/media-source', () => ({
+vi.mock('../../src/core/media/media-source', () => ({
   createMediaSource: vi.fn(() => ({
     getSize: vi.fn().mockResolvedValue(100),
     getMimeType: vi.fn().mockResolvedValue('video/mp4'),
@@ -65,7 +65,7 @@ vi.mock('../../src/core/media-source', () => ({
   })),
 }));
 
-vi.mock('../../src/core/thumbnail-handler', () => ({
+vi.mock('../../src/core/media/thumbnail-handler', () => ({
   serveThumbnail: vi.fn(),
 }));
 

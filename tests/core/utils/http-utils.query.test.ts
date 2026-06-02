@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getQueryParam } from '../../../src/core/utils/http-utils';
+import { getQueryParam } from '../../../src/core/network/http-utils';
 
 describe('getQueryParam', () => {
   type TestCase = {

@@ -1,7 +1,7 @@
 import { watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useUIStore } from './useUIStore';
-import { AVAILABLE_THEMES } from '../../core/themes';
+import { AVAILABLE_THEMES } from '../../core/media/themes';
 
 let mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
 

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
-import { getVlcPath } from '../../../src/core/utils/vlc-paths';
+import { getVlcPath } from '../../../src/infrastructure/vlc-paths';
 import fs from 'fs';
 
 type Platform = NodeJS.Platform;
