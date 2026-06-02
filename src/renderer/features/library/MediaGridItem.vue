@@ -280,17 +280,17 @@
 
 <script setup lang="ts">
 import { computed, ref, watch, onMounted, onUnmounted } from 'vue';
-import type { MediaFile, TranscodeJob } from '../../core/media/types';
+import type { MediaFile, TranscodeJob } from '../../../core/media/types';
 import {
   getDisplayName,
   isMediaFileImage,
   isMediaFileVideo,
-} from '../utils/mediaUtils';
-import { formatTime, formatDurationForA11y } from '../utils/timeUtils';
-import { isWatched as isWatchedThreshold } from '../utils/playbackUtils';
-import ImageIcon from './icons/ImageIcon.vue';
-import PlayIcon from './icons/PlayIcon.vue';
-import StarIcon from './icons/StarIcon.vue';
+} from '@/utils/mediaUtils';
+import { formatTime, formatDurationForA11y } from '@/utils/timeUtils';
+import { isWatched as isWatchedThreshold } from '@/utils/playbackUtils';
+import ImageIcon from '@/components/atoms/icons/ImageIcon.vue';
+import PlayIcon from '@/components/atoms/icons/PlayIcon.vue';
+import StarIcon from '@/components/atoms/icons/StarIcon.vue';
 
 const props = defineProps<{
   item: MediaFile;

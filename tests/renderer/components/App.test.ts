@@ -16,22 +16,22 @@ vi.mock('@/composables/useSlideshow');
 vi.mock('@/composables/useTheme');
 
 // Mock the child components
-vi.mock('@/components/AlbumsList.vue', () => ({
+vi.mock('@/features/library/AlbumsList.vue', () => ({
   default: { template: '<div class="albums-list-mock">AlbumsList</div>' },
 }));
-vi.mock('@/components/MediaDisplay.vue', () => ({
+vi.mock('@/features/player/MediaDisplay.vue', () => ({
   default: { template: '<div class="media-display-mock">MediaDisplay</div>' },
 }));
-vi.mock('@/components/MediaGrid.vue', () => ({
+vi.mock('@/features/library/MediaGrid.vue', () => ({
   default: { template: '<div class="media-grid-mock">MediaGrid</div>' },
 }));
-vi.mock('@/components/SourcesModal.vue', () => ({
+vi.mock('@/features/library/SourcesModal.vue', () => ({
   default: { template: '<div class="sources-modal-mock">SourcesModal</div>' },
 }));
-vi.mock('@/components/LoadingMask.vue', () => ({
+vi.mock('@/components/atoms/LoadingMask.vue', () => ({
   default: { template: '<div class="loading-mask-mock">LoadingMask</div>' },
 }));
-vi.mock('@/components/AmbientBackground.vue', () => ({
+vi.mock('@/features/player/AmbientBackground.vue', () => ({
   default: {
     template: '<div class="ambient-background-mock">AmbientBackground</div>',
   },

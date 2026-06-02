@@ -260,25 +260,25 @@
 </template>
 
 <script setup lang="ts">
-import VlcIcon from './icons/VlcIcon.vue';
-import SpinnerIcon from './icons/SpinnerIcon.vue';
-import VRIcon from './icons/VRIcon.vue';
-import ChevronLeftIcon from './icons/ChevronLeftIcon.vue';
-import ChevronRightIcon from './icons/ChevronRightIcon.vue';
-import PlayIcon from './icons/PlayIcon.vue';
-import PauseIcon from './icons/PauseIcon.vue';
-import VolumeUpIcon from './icons/VolumeUpIcon.vue';
-import VolumeOffIcon from './icons/VolumeOffIcon.vue';
-import ExpandIcon from './icons/ExpandIcon.vue';
-import StarIcon from './icons/StarIcon.vue';
-import HelpIcon from './icons/HelpIcon.vue';
-import ProgressBar from './ProgressBar.vue';
-import type { MediaFile, HeatmapData } from '../../core/media/types';
-import { useUIStore } from '../composables/useUIStore';
+import VlcIcon from '@/components/atoms/icons/VlcIcon.vue';
+import SpinnerIcon from '@/components/atoms/icons/SpinnerIcon.vue';
+import VRIcon from '@/components/atoms/icons/VRIcon.vue';
+import ChevronLeftIcon from '@/components/atoms/icons/ChevronLeftIcon.vue';
+import ChevronRightIcon from '@/components/atoms/icons/ChevronRightIcon.vue';
+import PlayIcon from '@/components/atoms/icons/PlayIcon.vue';
+import PauseIcon from '@/components/atoms/icons/PauseIcon.vue';
+import VolumeUpIcon from '@/components/atoms/icons/VolumeUpIcon.vue';
+import VolumeOffIcon from '@/components/atoms/icons/VolumeOffIcon.vue';
+import ExpandIcon from '@/components/atoms/icons/ExpandIcon.vue';
+import StarIcon from '@/components/atoms/icons/StarIcon.vue';
+import HelpIcon from '@/components/atoms/icons/HelpIcon.vue';
+import ProgressBar from '@/components/atoms/ProgressBar.vue';
+import type { MediaFile, HeatmapData } from '../../../core/media/types';
+import { useUIStore } from '@/composables/useUIStore';
 import { computed, ref, onMounted, onUnmounted, watch } from 'vue';
 import { storeToRefs } from 'pinia';
-import { formatTime } from '../utils/timeUtils';
-import { api } from '../api/index';
+import { formatTime } from '@/utils/timeUtils';
+import { api } from '@/api/index';
 
 defineOptions({
   inheritAttrs: false,

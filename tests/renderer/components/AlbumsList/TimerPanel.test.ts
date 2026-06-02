@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mount } from '@vue/test-utils';
 import { setActivePinia } from 'pinia';
 import { createTestingPinia } from '@pinia/testing';
-import TimerPanel from '../../../../src/renderer/components/AlbumsList/TimerPanel.vue';
+import TimerPanel from '@/features/library/AlbumsList/TimerPanel.vue';
 import { usePlayerStore } from '../../../../src/renderer/composables/usePlayerStore';
 
 const mockToggleSlideshowTimer = vi.fn();

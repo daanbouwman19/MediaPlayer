@@ -14,10 +14,10 @@
  */
 import { ref, watch, onUnmounted, computed } from 'vue';
 import { storeToRefs } from 'pinia';
-import { usePlayerStore } from '../composables/usePlayerStore';
-import { usePlaylistStore } from '../composables/usePlaylistStore';
-import { useLibraryStore } from '../composables/useLibraryStore';
-import { api } from '../api/index';
+import { usePlayerStore } from '@/composables/usePlayerStore';
+import { usePlaylistStore } from '@/composables/usePlaylistStore';
+import { useLibraryStore } from '@/composables/useLibraryStore';
+import { api } from '@/api/index';
 
 const playerStore = usePlayerStore();
 const playlistStore = usePlaylistStore();

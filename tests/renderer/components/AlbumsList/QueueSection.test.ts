@@ -2,7 +2,7 @@ import { mount } from '@vue/test-utils';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { setActivePinia } from 'pinia';
 import { createTestingPinia } from '@pinia/testing';
-import QueueSection from '../../../../src/renderer/components/AlbumsList/QueueSection.vue';
+import QueueSection from '@/features/library/AlbumsList/QueueSection.vue';
 import { usePlaylistStore } from '../../../../src/renderer/composables/usePlaylistStore';
 
 describe('QueueSection.vue', () => {

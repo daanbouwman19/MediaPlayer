@@ -77,12 +77,12 @@
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount } from 'vue';
 import { storeToRefs } from 'pinia';
-import { useUIStore } from '../../composables/useUIStore';
-import { AVAILABLE_THEMES, type ThemeId } from '../../../core/media/themes';
-import CloseIcon from '../icons/CloseIcon.vue';
-import SettingsIcon from '../icons/SettingsIcon.vue';
-import PlaylistAddIcon from '../icons/PlaylistAddIcon.vue';
-import ThemeIcon from '../icons/ThemeIcon.vue';
+import { useUIStore } from '@/composables/useUIStore';
+import { AVAILABLE_THEMES, type ThemeId } from '../../../../core/media/themes';
+import CloseIcon from '@/components/atoms/icons/CloseIcon.vue';
+import SettingsIcon from '@/components/atoms/icons/SettingsIcon.vue';
+import PlaylistAddIcon from '@/components/atoms/icons/PlaylistAddIcon.vue';
+import ThemeIcon from '@/components/atoms/icons/ThemeIcon.vue';
 
 defineEmits(['close']);
 

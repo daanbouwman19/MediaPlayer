@@ -135,7 +135,7 @@
 </template>
 
 <script setup lang="ts">
-import CloseIcon from './icons/CloseIcon.vue';
+import CloseIcon from '@/components/atoms/icons/CloseIcon.vue';
 import { onMounted, onUnmounted } from 'vue';
 
 const props = defineProps<{

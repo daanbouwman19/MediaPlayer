@@ -126,11 +126,11 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import { storeToRefs } from 'pinia';
-import { usePlaylistStore } from '../../composables/usePlaylistStore';
-import ArrowUpIcon from '../icons/ArrowUpIcon.vue';
-import ListIcon from '../icons/ListIcon.vue';
-import DeleteIcon from '../icons/DeleteIcon.vue';
-import type { MediaFile } from '../../../core/media/types';
+import { usePlaylistStore } from '@/composables/usePlaylistStore';
+import ArrowUpIcon from '@/components/atoms/icons/ArrowUpIcon.vue';
+import ListIcon from '@/components/atoms/icons/ListIcon.vue';
+import DeleteIcon from '@/components/atoms/icons/DeleteIcon.vue';
+import type { MediaFile } from '../../../../core/media/types';
 
 const playlistStore = usePlaylistStore();
 const { queue } = storeToRefs(playlistStore);

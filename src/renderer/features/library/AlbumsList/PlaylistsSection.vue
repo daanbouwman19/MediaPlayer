@@ -188,22 +188,22 @@
 <script setup lang="ts">
 import { ref, nextTick } from 'vue';
 import { storeToRefs } from 'pinia';
-import { useLibraryStore } from '../../composables/useLibraryStore';
-import { useUIStore } from '../../composables/useUIStore';
-import { useSlideshow } from '../../composables/useSlideshow';
-import { useToast } from '../../composables/useToast';
-import { api } from '../../api/index';
+import { useLibraryStore } from '@/composables/useLibraryStore';
+import { useUIStore } from '@/composables/useUIStore';
+import { useSlideshow } from '@/composables/useSlideshow';
+import { useToast } from '@/composables/useToast';
+import { api } from '@/api/index';
 import type {
   Album,
   SmartPlaylist,
   MediaFile,
-} from '../../../core/media/types';
-import { RECENTLY_PLAYED_FETCH_LIMIT } from '../../../core/media/constants';
-import HistoryIcon from '../icons/HistoryIcon.vue';
-import GridIcon from '../icons/GridIcon.vue';
-import PlaylistIcon from '../icons/PlaylistIcon.vue';
-import EditIcon from '../icons/EditIcon.vue';
-import DeleteIcon from '../icons/DeleteIcon.vue';
+} from '../../../../core/media/types';
+import { RECENTLY_PLAYED_FETCH_LIMIT } from '../../../../core/media/constants';
+import HistoryIcon from '@/components/atoms/icons/HistoryIcon.vue';
+import GridIcon from '@/components/atoms/icons/GridIcon.vue';
+import PlaylistIcon from '@/components/atoms/icons/PlaylistIcon.vue';
+import EditIcon from '@/components/atoms/icons/EditIcon.vue';
+import DeleteIcon from '@/components/atoms/icons/DeleteIcon.vue';
 
 const libraryStore = useLibraryStore();
 const uiStore = useUIStore();

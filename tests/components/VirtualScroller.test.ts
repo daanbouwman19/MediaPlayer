@@ -1,6 +1,6 @@
 import { mount } from '@vue/test-utils';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import VirtualScroller from '../../src/renderer/components/VirtualScroller.vue';
+import VirtualScroller from '../../src/renderer/components/atoms/VirtualScroller.vue';
 
 // Mock ResizeObserver
 let resizeCallback: (entries: any[]) => void;

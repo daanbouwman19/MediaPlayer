@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
 import { setActivePinia } from 'pinia';
 import { createTestingPinia } from '@pinia/testing';
-import AlbumsList from '@/components/AlbumsList.vue';
+import AlbumsList from '@/features/library/AlbumsList.vue';
 import { useLibraryStore } from '@/composables/useLibraryStore';
 import { usePlayerStore } from '@/composables/usePlayerStore';
 import { useUIStore } from '@/composables/useUIStore';
@@ -18,36 +18,36 @@ vi.mock('@/composables/useSlideshow', () => ({
 }));
 
 // Mock child components
-vi.mock('@/components/AlbumTree.vue', () => ({
+vi.mock('@/features/library/AlbumTree.vue', () => ({
   default: { template: '<li>AlbumTree Item</li>' },
 }));
 
 // Mock Icons
-vi.mock('@/components/icons/CloseIcon.vue', () => ({
+vi.mock('@/components/atoms/icons/CloseIcon.vue', () => ({
   default: { template: '<svg></svg>' },
 }));
-vi.mock('@/components/icons/PlayIcon.vue', () => ({
+vi.mock('@/components/atoms/icons/PlayIcon.vue', () => ({
   default: { template: '<svg></svg>' },
 }));
-vi.mock('@/components/icons/PauseIcon.vue', () => ({
+vi.mock('@/components/atoms/icons/PauseIcon.vue', () => ({
   default: { template: '<svg></svg>' },
 }));
-vi.mock('@/components/icons/SettingsIcon.vue', () => ({
+vi.mock('@/components/atoms/icons/SettingsIcon.vue', () => ({
   default: { template: '<svg></svg>' },
 }));
-vi.mock('@/components/icons/PlaylistAddIcon.vue', () => ({
+vi.mock('@/components/atoms/icons/PlaylistAddIcon.vue', () => ({
   default: { template: '<svg></svg>' },
 }));
-vi.mock('@/components/icons/PlaylistIcon.vue', () => ({
+vi.mock('@/components/atoms/icons/PlaylistIcon.vue', () => ({
   default: { template: '<svg></svg>' },
 }));
-vi.mock('@/components/icons/GridIcon.vue', () => ({
+vi.mock('@/components/atoms/icons/GridIcon.vue', () => ({
   default: { template: '<svg></svg>' },
 }));
-vi.mock('@/components/icons/EditIcon.vue', () => ({
+vi.mock('@/components/atoms/icons/EditIcon.vue', () => ({
   default: { template: '<svg></svg>' },
 }));
-vi.mock('@/components/icons/DeleteIcon.vue', () => ({
+vi.mock('@/components/atoms/icons/DeleteIcon.vue', () => ({
   default: { template: '<svg></svg>' },
 }));
 

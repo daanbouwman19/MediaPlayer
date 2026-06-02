@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
 import { setActivePinia } from 'pinia';
 import { createTestingPinia } from '@pinia/testing';
-import SourcesModal from '@/components/SourcesModal.vue';
+import SourcesModal from '@/features/library/SourcesModal.vue';
 
 import { useLibraryStore } from '@/composables/useLibraryStore';
 import { useUIStore } from '@/composables/useUIStore';

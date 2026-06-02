@@ -1,6 +1,6 @@
 import { mount } from '@vue/test-utils';
 import { describe, it, expect } from 'vitest';
-import ProgressBar from '../../src/renderer/components/ProgressBar.vue';
+import ProgressBar from '../../src/renderer/components/atoms/ProgressBar.vue';
 
 describe('ProgressBar', () => {
   it('seeks when ArrowRight is pressed', async () => {

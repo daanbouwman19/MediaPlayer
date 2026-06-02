@@ -5,10 +5,10 @@ import { setActivePinia } from 'pinia';
 import { createTestingPinia } from '@pinia/testing';
 import { usePlaylistStore } from '@/composables/usePlaylistStore';
 import { useMediaLoader } from '@/composables/useMediaLoader';
-import MediaDisplay from '@/components/MediaDisplay.vue';
+import MediaDisplay from '@/features/player/MediaDisplay.vue';
 
-import SourcesModal from '@/components/SourcesModal.vue';
-import AlbumTree from '@/components/AlbumTree.vue';
+import SourcesModal from '@/features/library/SourcesModal.vue';
+import AlbumTree from '@/features/library/AlbumTree.vue';
 import { useLibraryStore } from '@/composables/useLibraryStore';
 import { usePlayerStore } from '@/composables/usePlayerStore';
 import { useUIStore } from '@/composables/useUIStore';
@@ -32,7 +32,7 @@ class ResizeObserverMock {
 global.ResizeObserver = ResizeObserverMock as any;
 
 // Mock VlcIcon
-vi.mock('@/components/icons/VlcIcon.vue', () => ({
+vi.mock('@/components/atoms/icons/VlcIcon.vue', () => ({
   default: { template: '<svg class="vlc-icon-mock"></svg>' },
 }));
 

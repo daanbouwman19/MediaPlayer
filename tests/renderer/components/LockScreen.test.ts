@@ -2,7 +2,7 @@ import { mount, flushPromises } from '@vue/test-utils';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { setActivePinia } from 'pinia';
 import { createTestingPinia } from '@pinia/testing';
-import LockScreen from '@/components/LockScreen.vue';
+import LockScreen from '@/features/auth/LockScreen.vue';
 import { useAuthStore } from '@/composables/useAuthStore';
 import { useLibraryStore } from '@/composables/useLibraryStore';
 

@@ -43,8 +43,8 @@
 
 <script setup lang="ts">
 import { ref, watch, onUnmounted, computed, onMounted } from 'vue';
-import PlayIcon from './icons/PlayIcon.vue';
-import RefreshIcon from './icons/RefreshIcon.vue';
+import PlayIcon from '@/components/atoms/icons/PlayIcon.vue';
+import RefreshIcon from '@/components/atoms/icons/RefreshIcon.vue';
 import Hls from 'hls.js';
 
 const props = defineProps<{

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
 import { setActivePinia } from 'pinia';
 import { createTestingPinia } from '@pinia/testing';
-import AmbientBackground from '../../../src/renderer/components/AmbientBackground.vue';
+import AmbientBackground from '@/features/player/AmbientBackground.vue';
 import { usePlayerStore } from '../../../src/renderer/composables/usePlayerStore';
 import { usePlaylistStore } from '../../../src/renderer/composables/usePlaylistStore';
 import { useLibraryStore } from '../../../src/renderer/composables/useLibraryStore';

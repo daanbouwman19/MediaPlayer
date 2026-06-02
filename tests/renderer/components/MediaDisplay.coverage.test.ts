@@ -18,10 +18,10 @@ function mount(comp: any, options?: any) {
 }
 import { setActivePinia } from 'pinia';
 import { createTestingPinia } from '@pinia/testing';
-import MediaDisplay from '@/components/MediaDisplay.vue';
-import MediaControls from '@/components/MediaControls.vue';
-import VideoPlayer from '@/components/VideoPlayer.vue';
-import VRVideoPlayer from '@/components/VRVideoPlayer.vue';
+import MediaDisplay from '@/features/player/MediaDisplay.vue';
+import MediaControls from '@/features/player/MediaControls.vue';
+import VideoPlayer from '@/features/player/VideoPlayer.vue';
+import VRVideoPlayer from '@/features/player/VRVideoPlayer.vue';
 import { useSlideshow } from '@/composables/useSlideshow';
 import { useLibraryStore } from '@/composables/useLibraryStore';
 import { usePlayerStore } from '@/composables/usePlayerStore';
@@ -32,7 +32,7 @@ import { useUIStore } from '@/composables/useUIStore';
 import { useToast } from '@/composables/useToast';
 import { api } from '@/api';
 
-vi.mock('@/components/VideoPlayer.vue', () => ({
+vi.mock('@/features/player/VideoPlayer.vue', () => ({
   default: {
     name: 'VideoPlayer',
     template: '<div class="video-player-mock"></div>',
@@ -81,7 +81,7 @@ vi.mock('@/components/VideoPlayer.vue', () => ({
 // and then probes the returned module for `__esModule`, `__isTeleport`,
 // `__asyncLoader`, etc. Vitest's strict mock mode throws on access to undefined
 // exports, so we declare those flags explicitly alongside the stub.
-vi.mock('@/components/VRVideoPlayer.vue', () => ({
+vi.mock('@/features/player/VRVideoPlayer.vue', () => ({
   __esModule: true,
   __isTeleport: false,
   __isKeepAlive: false,

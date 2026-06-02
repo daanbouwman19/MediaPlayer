@@ -10,7 +10,7 @@ import {
 import { mount } from '@vue/test-utils';
 import { setActivePinia } from 'pinia';
 import { createTestingPinia } from '@pinia/testing';
-import MediaControls from '@/components/MediaControls.vue';
+import MediaControls from '@/features/player/MediaControls.vue';
 import { useUIStore } from '@/composables/useUIStore';
 
 vi.mock('@/api', () => ({
@@ -40,18 +40,18 @@ afterAll(() => {
 });
 
 const mockIcon = vi.hoisted(() => ({ default: { template: '<svg></svg>' } }));
-vi.mock('@/components/icons/VlcIcon.vue', () => mockIcon);
-vi.mock('@/components/icons/StarIcon.vue', () => mockIcon);
-vi.mock('@/components/icons/ChevronLeftIcon.vue', () => mockIcon);
-vi.mock('@/components/icons/ChevronRightIcon.vue', () => mockIcon);
-vi.mock('@/components/icons/VRIcon.vue', () => mockIcon);
-vi.mock('@/components/icons/PlayIcon.vue', () => mockIcon);
-vi.mock('@/components/icons/PauseIcon.vue', () => mockIcon);
-vi.mock('@/components/icons/ExpandIcon.vue', () => mockIcon);
-vi.mock('@/components/icons/VolumeUpIcon.vue', () => mockIcon);
-vi.mock('@/components/icons/VolumeOffIcon.vue', () => mockIcon);
-vi.mock('@/components/icons/SpinnerIcon.vue', () => mockIcon);
-vi.mock('@/components/ProgressBar.vue', () => ({
+vi.mock('@/components/atoms/icons/VlcIcon.vue', () => mockIcon);
+vi.mock('@/components/atoms/icons/StarIcon.vue', () => mockIcon);
+vi.mock('@/components/atoms/icons/ChevronLeftIcon.vue', () => mockIcon);
+vi.mock('@/components/atoms/icons/ChevronRightIcon.vue', () => mockIcon);
+vi.mock('@/components/atoms/icons/VRIcon.vue', () => mockIcon);
+vi.mock('@/components/atoms/icons/PlayIcon.vue', () => mockIcon);
+vi.mock('@/components/atoms/icons/PauseIcon.vue', () => mockIcon);
+vi.mock('@/components/atoms/icons/ExpandIcon.vue', () => mockIcon);
+vi.mock('@/components/atoms/icons/VolumeUpIcon.vue', () => mockIcon);
+vi.mock('@/components/atoms/icons/VolumeOffIcon.vue', () => mockIcon);
+vi.mock('@/components/atoms/icons/SpinnerIcon.vue', () => mockIcon);
+vi.mock('@/components/atoms/ProgressBar.vue', () => ({
   default: { template: '<div></div>' },
 }));
 

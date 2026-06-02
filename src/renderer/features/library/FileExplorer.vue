@@ -164,12 +164,12 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
-import { api } from '../api/index';
-import type { FileSystemEntry } from '../../core/media/file-system';
-import ArrowUpIcon from './icons/ArrowUpIcon.vue';
-import GridIcon from './icons/GridIcon.vue';
-import ListIcon from './icons/ListIcon.vue';
-import RefreshIcon from './icons/RefreshIcon.vue';
+import { api } from '@/api/index';
+import type { FileSystemEntry } from '../../../core/media/file-system';
+import ArrowUpIcon from '@/components/atoms/icons/ArrowUpIcon.vue';
+import GridIcon from '@/components/atoms/icons/GridIcon.vue';
+import ListIcon from '@/components/atoms/icons/ListIcon.vue';
+import RefreshIcon from '@/components/atoms/icons/RefreshIcon.vue';
 
 const props = withDefaults(
   defineProps<{

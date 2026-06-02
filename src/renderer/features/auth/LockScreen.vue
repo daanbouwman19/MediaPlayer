@@ -54,9 +54,9 @@
 
 <script setup lang="ts">
 import { ref } from 'vue';
-import LockIcon from './icons/LockIcon.vue';
-import { useAuthStore } from '../composables/useAuthStore';
-import { useLibraryStore } from '../composables/useLibraryStore';
+import LockIcon from '@/components/atoms/icons/LockIcon.vue';
+import { useAuthStore } from '@/composables/useAuthStore';
+import { useLibraryStore } from '@/composables/useLibraryStore';
 
 const authStore = useAuthStore();
 const libraryStore = useLibraryStore();

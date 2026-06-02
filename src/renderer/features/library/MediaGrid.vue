@@ -129,20 +129,20 @@ import {
   reactive,
   toRaw,
 } from 'vue';
-import { useLibraryStore } from '../composables/useLibraryStore';
-import { usePlayerStore } from '../composables/usePlayerStore';
-import { usePlaylistStore } from '../composables/usePlaylistStore';
-import { useUIStore } from '../composables/useUIStore';
-import { useTranscodeQueue } from '../composables/useTranscodeQueue';
-import type { MediaFile } from '../../core/media/types';
+import { useLibraryStore } from '@/composables/useLibraryStore';
+import { usePlayerStore } from '@/composables/usePlayerStore';
+import { usePlaylistStore } from '@/composables/usePlaylistStore';
+import { useUIStore } from '@/composables/useUIStore';
+import { useTranscodeQueue } from '@/composables/useTranscodeQueue';
+import type { MediaFile } from '../../../core/media/types';
 import MediaGridItem from './MediaGridItem.vue';
-import VirtualScroller from './VirtualScroller.vue';
-import PlaylistIcon from './icons/PlaylistIcon.vue';
+import VirtualScroller from '@/components/atoms/VirtualScroller.vue';
+import PlaylistIcon from '@/components/atoms/icons/PlaylistIcon.vue';
 import {
   GRID_BREAKPOINT_SM,
   GRID_BREAKPOINT_LG,
   GRID_BREAKPOINT_XL,
-} from '../../core/media/constants';
+} from '../../../core/media/constants';
 
 const libraryStore = useLibraryStore();
 const playerStore = usePlayerStore();

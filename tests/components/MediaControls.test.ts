@@ -2,7 +2,7 @@ import { mount } from '@vue/test-utils';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { setActivePinia } from 'pinia';
 import { createTestingPinia } from '@pinia/testing';
-import MediaControls from '../../src/renderer/components/MediaControls.vue';
+import MediaControls from '../../src/renderer/features/player/MediaControls.vue';
 import { useUIStore } from '../../src/renderer/composables/useUIStore';
 
 // Mock API

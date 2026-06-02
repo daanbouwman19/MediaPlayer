@@ -92,9 +92,9 @@
 import { ref, onMounted, onBeforeUnmount, watch, nextTick } from 'vue';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import PlayIcon from './icons/PlayIcon.vue';
-import PauseIcon from './icons/PauseIcon.vue';
-import CloseIcon from './icons/CloseIcon.vue';
+import PlayIcon from '@/components/atoms/icons/PlayIcon.vue';
+import PauseIcon from '@/components/atoms/icons/PauseIcon.vue';
+import CloseIcon from '@/components/atoms/icons/CloseIcon.vue';
 
 const STEREO_ASPECT_RATIO_THRESHOLD = 1.9;
 const SPHERE_RADIUS = 500;

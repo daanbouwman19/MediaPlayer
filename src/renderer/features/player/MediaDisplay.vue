@@ -227,19 +227,19 @@ import {
   onBeforeUnmount,
   defineAsyncComponent,
 } from 'vue';
-import { useLibraryStore } from '../composables/useLibraryStore';
-import { usePlayerStore } from '../composables/usePlayerStore';
-import { usePlaylistStore } from '../composables/usePlaylistStore';
-import { useTranscoder } from '../composables/useTranscoder';
-import { useMediaLoader } from '../composables/useMediaLoader';
-import { useSlideshow } from '../composables/useSlideshow';
-import { useUIStore } from '../composables/useUIStore';
-import { useToast } from '../composables/useToast';
-import { api } from '../api/index';
-import MenuIcon from './icons/MenuIcon.vue';
-import PlaylistIcon from './icons/PlaylistIcon.vue';
-import SpinnerIcon from './icons/SpinnerIcon.vue';
-import VlcIcon from './icons/VlcIcon.vue';
+import { useLibraryStore } from '@/composables/useLibraryStore';
+import { usePlayerStore } from '@/composables/usePlayerStore';
+import { usePlaylistStore } from '@/composables/usePlaylistStore';
+import { useTranscoder } from '@/composables/useTranscoder';
+import { useMediaLoader } from '@/composables/useMediaLoader';
+import { useSlideshow } from '@/composables/useSlideshow';
+import { useUIStore } from '@/composables/useUIStore';
+import { useToast } from '@/composables/useToast';
+import { api } from '@/api/index';
+import MenuIcon from '@/components/atoms/icons/MenuIcon.vue';
+import PlaylistIcon from '@/components/atoms/icons/PlaylistIcon.vue';
+import SpinnerIcon from '@/components/atoms/icons/SpinnerIcon.vue';
+import VlcIcon from '@/components/atoms/icons/VlcIcon.vue';
 import MediaControls from './MediaControls.vue';
 import TranscodingStatus from './TranscodingStatus.vue';
 import VideoPlayer from './VideoPlayer.vue';
@@ -247,8 +247,8 @@ import VideoPlayer from './VideoPlayer.vue';
 // the user opens VR mode. Importing the type statically is free at runtime.
 import type VRVideoPlayerType from './VRVideoPlayer.vue';
 const VRVideoPlayer = defineAsyncComponent(() => import('./VRVideoPlayer.vue'));
-import { isMediaFileImage } from '../utils/mediaUtils';
-import { WATCHED_THRESHOLD } from '../utils/playbackUtils';
+import { isMediaFileImage } from '@/utils/mediaUtils';
+import { WATCHED_THRESHOLD } from '@/utils/playbackUtils';
 
 defineEmits(['open-shortcuts']);
 const libraryStore = useLibraryStore();
