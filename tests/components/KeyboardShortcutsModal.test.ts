@@ -1,6 +1,6 @@
 import { mount } from '@vue/test-utils';
 import { describe, it, expect } from 'vitest';
-import KeyboardShortcutsModal from '../../src/renderer/components/KeyboardShortcutsModal.vue';
+import KeyboardShortcutsModal from '../../src/renderer/components/organisms/KeyboardShortcutsModal.vue';
 
 describe('KeyboardShortcutsModal', () => {
   it('does not render when isOpen is false', () => {

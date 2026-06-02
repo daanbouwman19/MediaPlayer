@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mount } from '@vue/test-utils';
-import MediaGridItem from '../../../src/renderer/components/MediaGridItem.vue';
+import MediaGridItem from '@/features/library/MediaGridItem.vue';
 
 // Mock formatDurationForA11y to return predictable strings
 vi.mock('../../../src/renderer/utils/timeUtils', async () => {

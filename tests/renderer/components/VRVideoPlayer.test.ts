@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
-import VRVideoPlayer from '@/components/VRVideoPlayer.vue';
+import VRVideoPlayer from '@/features/player/VRVideoPlayer.vue';
 import * as THREE from 'three';
 
 // Mock Three.js
@@ -537,9 +537,18 @@ describe('VRVideoPlayer.vue', () => {
   });
 
   it('updates camera quaternion in animation loop when motion active', async () => {
+    let animateCallback: FrameRequestCallback | null = null;
+    const originalRAF = window.requestAnimationFrame;
+    window.requestAnimationFrame = vi.fn((cb: FrameRequestCallback) => {
+      animateCallback = cb;
+      return 1;
+    }) as any;
+
     const wrapper = mount(VRVideoPlayer, { props: defaultProps });
     await wrapper.vm.$nextTick();
     await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(animateCallback).toBeTruthy();
 
     (wrapper.vm as any).isMotionControlActive = true;
 
@@ -550,16 +559,14 @@ describe('VRVideoPlayer.vue', () => {
     (event as any).gamma = 30;
     window.dispatchEvent(event);
 
-    // Since we use requestAnimationFrame, we can invoke the animate function manually
-    // or advance fake timers to let it run.
-    vi.useFakeTimers();
-    vi.advanceTimersByTime(16);
-    vi.useRealTimers();
+    // Manually invoke the animate callback
+    if (animateCallback) {
+      (animateCallback as FrameRequestCallback)(0);
+    }
 
-    // The mock for THREE.PerspectiveCamera returns an object with `quaternion.copy` which is a vi.fn().
-    // We want to ensure it was called to update the rotation.
-    // The animate loop is internal, but because we triggered a re-render/RAF, let's verify if `THREE.Quaternion` gets called
-    // or if the camera's quaternion copy was called.
+    // Restore requestAnimationFrame
+    window.requestAnimationFrame = originalRAF;
+
     expect(THREE.Quaternion).toHaveBeenCalled();
     expect(THREE.Euler).toHaveBeenCalled();
   });

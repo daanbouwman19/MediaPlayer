@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
-import AlbumTree from '../../../src/renderer/components/AlbumTree.vue';
+import AlbumTree from '@/features/library/AlbumTree.vue';
 
 // Mock useSlideshow
 const mockOpenAlbumInGrid = vi.fn();

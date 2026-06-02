@@ -16,25 +16,25 @@ vi.mock('../../../src/renderer/composables/useSlideshow');
 vi.mock('../../../src/renderer/composables/useTheme');
 vi.mock('../../../src/renderer/api/index');
 
-vi.mock('../../../src/renderer/components/MediaGrid.vue', () => ({
+vi.mock('@/features/library/MediaGrid.vue', () => ({
   default: { template: '<div>Grid</div>' },
 }));
-vi.mock('../../../src/renderer/components/MediaDisplay.vue', () => ({
+vi.mock('@/features/player/MediaDisplay.vue', () => ({
   default: { template: '<div>Display</div>' },
 }));
-vi.mock('../../../src/renderer/components/AlbumsList.vue', () => ({
+vi.mock('@/features/library/AlbumsList.vue', () => ({
   default: { name: 'AlbumsList', template: '<div>Albums</div>' },
 }));
-vi.mock('../../../src/renderer/components/LoadingMask.vue', () => ({
+vi.mock('@/components/atoms/LoadingMask.vue', () => ({
   default: { template: '<div>Loading</div>' },
 }));
-vi.mock('../../../src/renderer/components/AmbientBackground.vue', () => ({
+vi.mock('@/features/player/AmbientBackground.vue', () => ({
   default: { template: '<div>BG</div>' },
 }));
-vi.mock('../../../src/renderer/components/SourcesModal.vue', () => ({
+vi.mock('@/features/library/SourcesModal.vue', () => ({
   default: { template: '<div>Sources</div>' },
 }));
-vi.mock('../../../src/renderer/components/SmartPlaylistModal.vue', () => ({
+vi.mock('@/features/library/SmartPlaylistModal.vue', () => ({
   default: {
     name: 'SmartPlaylistModal',
     template: '<div>SmartPlaylistModal</div>',

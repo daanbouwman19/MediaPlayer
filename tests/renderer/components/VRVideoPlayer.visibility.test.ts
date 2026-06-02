@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
-import VRVideoPlayer from '@/components/VRVideoPlayer.vue';
+import VRVideoPlayer from '@/features/player/VRVideoPlayer.vue';
 
 // Mock Three.js dependencies
 vi.mock('three', () => {

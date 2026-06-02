@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { mount } from '@vue/test-utils';
-import TranscodingStatus from '../../../src/renderer/components/TranscodingStatus.vue';
+import TranscodingStatus from '@/features/player/TranscodingStatus.vue';
 
 describe('TranscodingStatus.vue', () => {
   it('renders nothing when not loading, transcoding or buffering', () => {

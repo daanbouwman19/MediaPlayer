@@ -68,11 +68,11 @@
 <script setup lang="ts">
 import { ref, watch, onUnmounted } from 'vue';
 import { storeToRefs } from 'pinia';
-import { usePlayerStore } from '../../composables/usePlayerStore';
-import { useSlideshow } from '../../composables/useSlideshow';
-import ShuffleIcon from '../icons/ShuffleIcon.vue';
-import PauseIcon from '../icons/PauseIcon.vue';
-import PlayIcon from '../icons/PlayIcon.vue';
+import { usePlayerStore } from '@/composables/usePlayerStore';
+import { useSlideshow } from '@/composables/useSlideshow';
+import ShuffleIcon from '@/components/atoms/icons/ShuffleIcon.vue';
+import PauseIcon from '@/components/atoms/icons/PauseIcon.vue';
+import PlayIcon from '@/components/atoms/icons/PlayIcon.vue';
 
 const playerStore = usePlayerStore();
 const slideshow = useSlideshow();

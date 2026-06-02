@@ -1,13 +1,13 @@
 import { describe, it, expect, vi, Mock, beforeEach } from 'vitest';
 import { mount } from '@vue/test-utils';
 import { nextTick } from 'vue';
-import VideoPlayer from '@/components/VideoPlayer.vue';
+import VideoPlayer from '@/features/player/VideoPlayer.vue';
 
 // Mock icons
-vi.mock('@/components/icons/PlayIcon.vue', () => ({
+vi.mock('@/components/atoms/icons/PlayIcon.vue', () => ({
   default: { template: '<span>Play</span>' },
 }));
-vi.mock('@/components/icons/PauseIcon.vue', () => ({
+vi.mock('@/components/atoms/icons/PauseIcon.vue', () => ({
   default: { template: '<span>Pause</span>' },
 }));
 

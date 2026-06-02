@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
 import { setActivePinia } from 'pinia';
 import { createTestingPinia } from '@pinia/testing';
-import SmartPlaylistModal from '@/components/SmartPlaylistModal.vue';
+import SmartPlaylistModal from '@/features/library/SmartPlaylistModal.vue';
 import { useLibraryStore } from '@/composables/useLibraryStore';
 import { useUIStore } from '@/composables/useUIStore';
 import { api } from '@/api';

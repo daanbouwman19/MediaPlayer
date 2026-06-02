@@ -1,11 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { mount } from '@vue/test-utils';
-import VlcIcon from '@/components/atoms/icons/VlcIcon.vue';
+import SlideshowIcon from '@/components/atoms/icons/SlideshowIcon.vue';
 
-describe('VlcIcon.vue', () => {
+describe('SlideshowIcon.vue', () => {
   it('should render the SVG icon', () => {
-    const wrapper = mount(VlcIcon);
+    const wrapper = mount(SlideshowIcon);
     expect(wrapper.find('svg').exists()).toBe(true);
-    expect(wrapper.classes()).toContain('feather-cone');
   });
 });

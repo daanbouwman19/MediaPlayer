@@ -3,8 +3,8 @@ import { mount, flushPromises } from '@vue/test-utils';
 import { ref } from 'vue';
 import { setActivePinia } from 'pinia';
 import { createTestingPinia } from '@pinia/testing';
-import MediaDisplay from '@/components/MediaDisplay.vue';
-import MediaControls from '@/components/MediaControls.vue';
+import MediaDisplay from '@/features/player/MediaDisplay.vue';
+import MediaControls from '@/features/player/MediaControls.vue';
 import { useSlideshow } from '@/composables/useSlideshow';
 import { useLibraryStore } from '@/composables/useLibraryStore';
 import { usePlayerStore } from '@/composables/usePlayerStore';
@@ -14,7 +14,7 @@ import { useTranscoder } from '@/composables/useTranscoder';
 import { useUIStore } from '@/composables/useUIStore';
 import { api } from '@/api';
 
-vi.mock('@/components/VideoPlayer.vue', () => ({
+vi.mock('@/features/player/VideoPlayer.vue', () => ({
   default: {
     name: 'VideoPlayer',
     template: '<div class="video-player-mock"></div>',

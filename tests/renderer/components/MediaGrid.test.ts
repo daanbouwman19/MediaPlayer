@@ -11,7 +11,7 @@ import { mount, flushPromises } from '@vue/test-utils';
 import { setActivePinia } from 'pinia';
 import { createTestingPinia } from '@pinia/testing';
 
-import MediaGrid from '@/components/MediaGrid.vue';
+import MediaGrid from '@/features/library/MediaGrid.vue';
 import { useLibraryStore } from '@/composables/useLibraryStore';
 import { usePlayerStore } from '@/composables/usePlayerStore';
 import { usePlaylistStore } from '@/composables/usePlaylistStore';

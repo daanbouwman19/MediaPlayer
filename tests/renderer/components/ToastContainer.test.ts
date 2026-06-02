@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mount } from '@vue/test-utils';
 import { useToast } from '../../../src/renderer/composables/useToast';
-import ToastContainer from '../../../src/renderer/components/ToastContainer.vue';
+import ToastContainer from '@/components/organisms/ToastContainer.vue';
 
 // Mock `useToast` to isolate component logic
 vi.mock('../../../src/renderer/composables/useToast', async () => {

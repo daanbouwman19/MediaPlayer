@@ -55,10 +55,13 @@
 
 <script setup lang="ts">
 import { storeToRefs } from 'pinia';
-import { useUIStore } from '../../composables/useUIStore';
-import { usePlayerStore } from '../../composables/usePlayerStore';
-import { useSlideshow } from '../../composables/useSlideshow';
-import { MEDIA_FILTERS, type MediaFilter } from '../../../core/media/constants';
+import { useUIStore } from '@/composables/useUIStore';
+import { usePlayerStore } from '@/composables/usePlayerStore';
+import { useSlideshow } from '@/composables/useSlideshow';
+import {
+  MEDIA_FILTERS,
+  type MediaFilter,
+} from '../../../../core/media/constants';
 
 const uiStore = useUIStore();
 const playerStore = usePlayerStore();

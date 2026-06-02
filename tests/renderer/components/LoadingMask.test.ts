@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { mount } from '@vue/test-utils';
-import LoadingMask from '../../../src/renderer/components/LoadingMask.vue';
+import LoadingMask from '@/components/atoms/LoadingMask.vue';
 
 describe('LoadingMask.vue', () => {
   it('renders the loading mask with default text', () => {

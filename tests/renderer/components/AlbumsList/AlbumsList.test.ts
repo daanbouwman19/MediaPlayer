@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
 import { setActivePinia } from 'pinia';
 import { createTestingPinia } from '@pinia/testing';
-import AlbumsList from '../../../../src/renderer/components/AlbumsList.vue';
+import AlbumsList from '@/features/library/AlbumsList.vue';
 import { collectTexturesRecursive } from '../../../../src/renderer/utils/albumUtils';
 import { useLibraryStore } from '../../../../src/renderer/composables/useLibraryStore';
 import { usePlayerStore } from '../../../../src/renderer/composables/usePlayerStore';

@@ -139,12 +139,12 @@
  * Refactored to use Tailwind CSS and icon-based navigation.
  */
 import { ref, computed } from 'vue';
-import { countTextures, getAlbumAndChildrenIds } from '../utils/albumUtils';
-import { useSlideshow } from '../composables/useSlideshow';
-import PlayIcon from './icons/PlayIcon.vue';
-import GridIcon from './icons/GridIcon.vue';
-import ChevronRightIcon from './icons/ChevronRightIcon.vue';
-import type { Album } from '../../core/media/types';
+import { countTextures, getAlbumAndChildrenIds } from '@/utils/albumUtils';
+import { useSlideshow } from '@/composables/useSlideshow';
+import PlayIcon from '@/components/atoms/icons/PlayIcon.vue';
+import GridIcon from '@/components/atoms/icons/GridIcon.vue';
+import ChevronRightIcon from '@/components/atoms/icons/ChevronRightIcon.vue';
+import type { Album } from '../../../core/media/types';
 
 const props = withDefaults(
   defineProps<{

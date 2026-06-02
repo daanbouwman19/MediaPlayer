@@ -477,17 +477,17 @@
  * Users can add, remove, and toggle the active state of directories.
  * Changes that affect the media library (add, remove, re-index) will reset the current slideshow.
  */
-import { useLibraryStore } from '../composables/useLibraryStore';
-import { useUIStore } from '../composables/useUIStore';
-import { usePlayerStore } from '../composables/usePlayerStore'; // For resetting slideshow state
-import { usePlaylistStore } from '../composables/usePlaylistStore';
-import { selectAllAlbums } from '../utils/albumUtils';
-import { api } from '../api/index';
+import { useLibraryStore } from '@/composables/useLibraryStore';
+import { useUIStore } from '@/composables/useUIStore';
+import { usePlayerStore } from '@/composables/usePlayerStore'; // For resetting slideshow state
+import { usePlaylistStore } from '@/composables/usePlaylistStore';
+import { selectAllAlbums } from '@/utils/albumUtils';
+import { api } from '@/api/index';
 import { ref, onMounted } from 'vue';
 import { storeToRefs } from 'pinia';
 import FileExplorer from './FileExplorer.vue';
-import CloseIcon from './icons/CloseIcon.vue';
-import { useEscapeKey } from '../composables/useEscapeKey';
+import CloseIcon from '@/components/atoms/icons/CloseIcon.vue';
+import { useEscapeKey } from '@/composables/useEscapeKey';
 
 const libraryStore = useLibraryStore();
 const uiStore = useUIStore();

@@ -10,31 +10,31 @@ import {
 import { mount } from '@vue/test-utils';
 import { setActivePinia } from 'pinia';
 import { createTestingPinia } from '@pinia/testing';
-import MediaControls from '@/components/MediaControls.vue';
+import MediaControls from '@/features/player/MediaControls.vue';
 import { useUIStore } from '@/composables/useUIStore';
 
-vi.mock('@/components/icons/VlcIcon.vue', () => ({
+vi.mock('@/components/atoms/icons/VlcIcon.vue', () => ({
   default: { template: '<svg></svg>' },
 }));
-vi.mock('@/components/icons/StarIcon.vue', () => ({
+vi.mock('@/components/atoms/icons/StarIcon.vue', () => ({
   default: { template: '<svg></svg>' },
 }));
-vi.mock('@/components/icons/ChevronLeftIcon.vue', () => ({
+vi.mock('@/components/atoms/icons/ChevronLeftIcon.vue', () => ({
   default: { template: '<svg></svg>' },
 }));
-vi.mock('@/components/icons/ChevronRightIcon.vue', () => ({
+vi.mock('@/components/atoms/icons/ChevronRightIcon.vue', () => ({
   default: { template: '<svg></svg>' },
 }));
-vi.mock('@/components/icons/PlayIcon.vue', () => ({
+vi.mock('@/components/atoms/icons/PlayIcon.vue', () => ({
   default: { template: '<svg></svg>' },
 }));
-vi.mock('@/components/icons/PauseIcon.vue', () => ({
+vi.mock('@/components/atoms/icons/PauseIcon.vue', () => ({
   default: { template: '<svg></svg>' },
 }));
-vi.mock('@/components/icons/ExpandIcon.vue', () => ({
+vi.mock('@/components/atoms/icons/ExpandIcon.vue', () => ({
   default: { template: '<svg></svg>' },
 }));
-vi.mock('@/components/icons/VRIcon.vue', () => ({
+vi.mock('@/components/atoms/icons/VRIcon.vue', () => ({
   default: { template: '<svg></svg>' },
 }));
 

@@ -2,20 +2,17 @@ import { mount } from '@vue/test-utils';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { setActivePinia } from 'pinia';
 import { createTestingPinia } from '@pinia/testing';
-import AlbumsSection from '../../../../src/renderer/components/AlbumsList/AlbumsSection.vue';
+import AlbumsSection from '@/features/library/AlbumsList/AlbumsSection.vue';
 import { useLibraryStore } from '../../../../src/renderer/composables/useLibraryStore';
 import { useUIStore } from '../../../../src/renderer/composables/useUIStore';
 
 // Mock child components
-vi.mock('../../../../src/renderer/components/AlbumTree.vue', () => ({
+vi.mock('@/features/library/AlbumTree.vue', () => ({
   default: { template: '<li>AlbumTree</li>' },
 }));
-vi.mock(
-  '../../../../src/renderer/components/icons/PlaylistAddIcon.vue',
-  () => ({
-    default: { template: '<svg>PlaylistAddIcon</svg>' },
-  }),
-);
+vi.mock('@/components/atoms/icons/PlaylistAddIcon.vue', () => ({
+  default: { template: '<svg>PlaylistAddIcon</svg>' },
+}));
 
 vi.mock('../../../../src/renderer/composables/useSlideshow', () => ({
   useSlideshow: vi.fn(() => ({

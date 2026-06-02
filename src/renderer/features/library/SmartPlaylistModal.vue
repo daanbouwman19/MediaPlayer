@@ -201,12 +201,12 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue';
 import { storeToRefs } from 'pinia';
-import { useUIStore } from '../composables/useUIStore';
-import { useLibraryStore } from '../composables/useLibraryStore';
-import { useToast } from '../composables/useToast';
-import { api } from '../api/index';
-import CloseIcon from './icons/CloseIcon.vue';
-import { useEscapeKey } from '../composables/useEscapeKey';
+import { useUIStore } from '@/composables/useUIStore';
+import { useLibraryStore } from '@/composables/useLibraryStore';
+import { useToast } from '@/composables/useToast';
+import { api } from '@/api/index';
+import CloseIcon from '@/components/atoms/icons/CloseIcon.vue';
+import { useEscapeKey } from '@/composables/useEscapeKey';
 
 const props = defineProps<{
   playlistToEdit?: {

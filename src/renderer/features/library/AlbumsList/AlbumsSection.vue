@@ -40,16 +40,16 @@
 
 <script setup lang="ts">
 import { storeToRefs } from 'pinia';
-import { useLibraryStore } from '../../composables/useLibraryStore';
-import { useUIStore } from '../../composables/useUIStore';
-import { useSlideshow } from '../../composables/useSlideshow';
+import { useLibraryStore } from '@/composables/useLibraryStore';
+import { useUIStore } from '@/composables/useUIStore';
+import { useSlideshow } from '@/composables/useSlideshow';
 import {
   getAlbumAndChildrenIds,
   collectTexturesRecursive,
-} from '../../utils/albumUtils';
-import type { Album } from '../../../core/media/types';
+} from '@/utils/albumUtils';
+import type { Album } from '../../../../core/media/types';
 import AlbumTree from '../AlbumTree.vue';
-import PlaylistAddIcon from '../icons/PlaylistAddIcon.vue';
+import PlaylistAddIcon from '@/components/atoms/icons/PlaylistAddIcon.vue';
 
 const libraryStore = useLibraryStore();
 const uiStore = useUIStore();

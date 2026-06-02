@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
-import VirtualScroller from '../../../src/renderer/components/VirtualScroller.vue';
+import VirtualScroller from '@/components/atoms/VirtualScroller.vue';
 
 // Mock ResizeObserver
 class ResizeObserverMock {
