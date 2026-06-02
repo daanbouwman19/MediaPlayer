@@ -85,8 +85,8 @@ describe('LocalFileSystemProvider', () => {
 
       const meta = await provider.getMetadata('/file.txt');
 
-      expect(fsPromises.stat).toHaveBeenCalledWith('/file.txt');
-      expect(getMimeType).toHaveBeenCalledWith('/file.txt');
+      expect(fsPromises.stat).toHaveBeenCalledWith(path.resolve('/file.txt'));
+      expect(getMimeType).toHaveBeenCalledWith(path.resolve('/file.txt'));
       expect(meta).toEqual({
         size: 100,
         mimeType: 'text/plain',
@@ -105,10 +105,13 @@ describe('LocalFileSystemProvider', () => {
         end: 10,
       });
 
-      expect(fs.createReadStream).toHaveBeenCalledWith('/file.txt', {
-        start: 0,
-        end: 10,
-      });
+      expect(fs.createReadStream).toHaveBeenCalledWith(
+        path.resolve('/file.txt'),
+        {
+          start: 0,
+          end: 10,
+        },
+      );
       expect(result.stream).toBe(mockStream);
     });
   });
