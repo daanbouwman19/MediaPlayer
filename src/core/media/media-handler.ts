@@ -119,9 +119,11 @@ function tryServeDirectFile(res: Response, filePath: string): boolean {
   if (isDrivePath(filePath)) return false;
 
   try {
-    const rootDir = path.dirname(filePath);
-    const fileName = path.basename(filePath);
-    res.sendFile(fileName, { root: rootDir });
+    // CodeQL Path Traversal Sanitizer: The path was already validated by getAuthorizedPath,
+    // but we add this explicit check and resolve it to satisfy static analysis.
+    if (filePath.includes('..')) return false;
+    const absolutePath = path.resolve(filePath);
+    res.sendFile(absolutePath);
     return true;
   } catch (e) {
     console.error('[Handler] SendFile check failed:', e);

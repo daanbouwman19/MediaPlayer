@@ -803,9 +803,7 @@ describe('MediaHandler Combined Tests', () => {
       });
 
       await handleStreamRequest(req, res, 'ffmpeg');
-      expect(res.sendFile).toHaveBeenCalledWith(path.basename(testFile), {
-        root: path.dirname(testFile),
-      });
+      expect(res.sendFile).toHaveBeenCalledWith(path.resolve(testFile));
     });
 
     it('handles local file access denied', async () => {

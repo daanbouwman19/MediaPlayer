@@ -48,13 +48,17 @@ describe('access-validator unit tests', () => {
     expect(mockAuthorizeFilePath).toHaveBeenCalledWith('/local/file');
   });
 
-  it('falls back to filePath if realPath is undefined', async () => {
+  it('fails and returns 403 if realPath is undefined to prevent path injection', async () => {
     mockAuthorizeFilePath.mockResolvedValue({
       isAllowed: true,
       realPath: undefined,
     });
     const result = await validateFileAccess('/local/file');
-    expect(result).toEqual({ success: true, path: '/local/file' });
+    expect(result).toEqual({
+      success: false,
+      error: 'Access denied.',
+      statusCode: 403,
+    });
   });
 
   it('denies unauthorized local paths', async () => {
