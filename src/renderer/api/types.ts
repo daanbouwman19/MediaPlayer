@@ -6,8 +6,8 @@ import type {
   MediaLibraryItem,
   HeatmapData,
   TranscodeJob,
-} from '../../core/types';
-import type { FileSystemEntry } from '../../core/file-system';
+} from '../../core/media/types';
+import type { FileSystemEntry } from '../../core/media/file-system';
 
 export interface LoadResult {
   type: 'data-url' | 'http-url' | 'error';

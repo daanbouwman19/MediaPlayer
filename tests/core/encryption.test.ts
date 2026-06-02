@@ -15,7 +15,7 @@ describe('Encryption Utils', () => {
     const mockKey = crypto.randomBytes(32).toString('hex');
     vi.stubEnv('MASTER_KEY', mockKey);
     const { encrypt, decrypt } =
-      await import('../../src/core/utils/encryption.ts');
+      await import('../../src/core/auth/encryption.ts');
 
     const original = 'my-secret-token-123';
     const encrypted = encrypt(original);
@@ -28,14 +28,14 @@ describe('Encryption Utils', () => {
   });
 
   it('should return original text if decryption fails (legacy support)', async () => {
-    const { decrypt } = await import('../../src/core/utils/encryption.ts');
+    const { decrypt } = await import('../../src/core/auth/encryption.ts');
     const legacy = '{"access_token":"foo"}';
     const result = decrypt(legacy);
     expect(result).toBe(legacy);
   });
 
   it('should return original text if format looks valid but lengths are wrong', async () => {
-    const { decrypt } = await import('../../src/core/utils/encryption.ts');
+    const { decrypt } = await import('../../src/core/auth/encryption.ts');
     // Correct format but wrong lengths (too short auth tag)
     const invalid = '000000000000000000000000:0000:deadbeef';
     const result = decrypt(invalid);
@@ -44,7 +44,7 @@ describe('Encryption Utils', () => {
 
   it('should return null if format is correct but decryption fails (wrong key)', async () => {
     vi.stubEnv('MASTER_KEY', crypto.randomBytes(32).toString('hex'));
-    const { encrypt } = await import('../../src/core/utils/encryption.ts');
+    const { encrypt } = await import('../../src/core/auth/encryption.ts');
 
     const original = 'secret';
     const encrypted = encrypt(original);
@@ -53,7 +53,7 @@ describe('Encryption Utils', () => {
     vi.resetModules();
     vi.stubEnv('MASTER_KEY', crypto.randomBytes(32).toString('hex'));
     const { decrypt: decryptNew } =
-      await import('../../src/core/utils/encryption.ts');
+      await import('../../src/core/auth/encryption.ts');
 
     const result = decryptNew(encrypted);
     expect(result).toBeNull();
@@ -61,7 +61,7 @@ describe('Encryption Utils', () => {
 
   it('should handle different plain texts', async () => {
     const { encrypt, decrypt } =
-      await import('../../src/core/utils/encryption.ts');
+      await import('../../src/core/auth/encryption.ts');
     const texts = ['', 'hello', '👍', JSON.stringify({ a: 1 })];
     for (const t of texts) {
       expect(decrypt(encrypt(t))).toBe(t);

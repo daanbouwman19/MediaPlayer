@@ -134,7 +134,7 @@ import { usePlayerStore } from '../composables/usePlayerStore';
 import { usePlaylistStore } from '../composables/usePlaylistStore';
 import { useUIStore } from '../composables/useUIStore';
 import { useTranscodeQueue } from '../composables/useTranscodeQueue';
-import type { MediaFile } from '../../core/types';
+import type { MediaFile } from '../../core/media/types';
 import MediaGridItem from './MediaGridItem.vue';
 import VirtualScroller from './VirtualScroller.vue';
 import PlaylistIcon from './icons/PlaylistIcon.vue';
@@ -142,7 +142,7 @@ import {
   GRID_BREAKPOINT_SM,
   GRID_BREAKPOINT_LG,
   GRID_BREAKPOINT_XL,
-} from '../../core/constants';
+} from '../../core/media/constants';
 
 const libraryStore = useLibraryStore();
 const playerStore = usePlayerStore();

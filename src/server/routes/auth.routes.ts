@@ -3,10 +3,10 @@
  */
 import { Router } from 'express';
 import crypto from 'crypto';
-import { AppError } from '../../core/errors.ts';
-import { escapeHtml } from '../../core/security.ts';
-import { getQueryParam } from '../../core/utils/http-utils.ts';
-import { MAX_PASSWORD_LENGTH } from '../../core/constants.ts';
+import { AppError } from '../../core/media/errors.ts';
+import { escapeHtml } from '../../core/auth/security.ts';
+import { getQueryParam } from '../../core/network/http-utils.ts';
+import { MAX_PASSWORD_LENGTH } from '../../core/media/constants.ts';
 import {
   generateAuthUrl,
   authenticateWithCode,

@@ -1,9 +1,9 @@
 import type { drive_v3 } from 'googleapis';
 import { getOAuth2Client, loadSavedCredentialsIfExist } from './google-auth.ts';
 import { Readable } from 'stream';
-import type { MediaFile, Album } from '../core/types.ts';
-import { createDrivePath } from '../core/media-utils.ts';
-import { callWithRetry } from '../core/utils/async-utils.ts';
+import type { MediaFile, Album } from '../core/media/types.ts';
+import { createDrivePath } from '../core/media/media-utils.ts';
+import { callWithRetry } from '../core/media/utils/async-utils.ts';
 
 const MAX_SCAN_DEPTH = 5;
 

@@ -7,12 +7,15 @@ import fs from 'fs/promises';
 import { fileURLToPath } from 'url';
 import selfsigned from 'selfsigned';
 import { createApp } from './app.ts';
-import { DEFAULT_SERVER_HOST, DEFAULT_SERVER_PORT } from '../core/constants.ts';
-import { MediaService } from '../core/media-service.ts';
-import { MediaRepository } from '../core/repositories/media-repository.ts';
-import { NodeFileSystem } from '../core/infrastructure/node-file-system.ts';
-import { WorkerScannerService } from '../core/infrastructure/worker-scanner-service.ts';
-import { MediaDurationHandler } from '../core/infrastructure/media-duration-handler.ts';
+import {
+  DEFAULT_SERVER_HOST,
+  DEFAULT_SERVER_PORT,
+} from '../core/media/constants.ts';
+import { MediaService } from '../core/media/media-service.ts';
+import { MediaRepository } from '../core/database/repositories/media-repository.ts';
+import { NodeFileSystem } from '../infrastructure/node-file-system.ts';
+import { WorkerScannerService } from '../infrastructure/worker-scanner-service.ts';
+import { MediaDurationHandler } from '../infrastructure/media-duration-handler.ts';
 
 const CERT_DIR = path.join(process.cwd(), 'certs');
 const KEY_PATH = path.join(CERT_DIR, 'server.key');

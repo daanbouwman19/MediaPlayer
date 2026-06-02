@@ -13,8 +13,8 @@ import {
 } from '../utils/albumUtils';
 import { selectWeightedRandom, shuffleArray } from '../utils/selectionUtils';
 import { getCachedExtension } from '../utils/mediaUtils';
-import type { Album, MediaFile } from '../../core/types';
-import { api } from '../api';
+import type { Album, MediaFile } from '../../core/media/types';
+import { api } from '../api/index';
 
 export function useSlideshow() {
   const libraryStore = useLibraryStore();

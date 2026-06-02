@@ -1,23 +1,23 @@
 import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
 import request from 'supertest';
-import * as database from '../../src/core/database';
-import * as security from '../../src/core/security';
+import * as database from '../../src/core/database/database';
+import * as security from '../../src/core/auth/security';
 import * as googleDriveService from '../../src/main/google-drive-service';
-import * as mediaHandler from '../../src/core/media-handler';
+import * as mediaHandler from '../../src/core/media/media-handler';
 import * as googleAuth from '../../src/main/google-auth';
 
-import * as mediaSource from '../../src/core/media-source';
-import * as fileSystem from '../../src/core/file-system';
+import * as mediaSource from '../../src/core/media/media-source';
+import * as fileSystem from '../../src/core/media/file-system';
 
 // Auto-mock dependencies
-vi.mock('../../src/core/database');
-vi.mock('../../src/core/rate-limiter', () => ({
+vi.mock('../../src/core/database/database');
+vi.mock('../../src/core/network/rate-limiter', () => ({
   createRateLimiter: vi.fn(() => (_req: any, _res: any, next: any) => next()),
 }));
-vi.mock('../../src/core/file-system');
+vi.mock('../../src/core/media/file-system');
 vi.mock('../../src/main/google-drive-service');
 vi.mock('../../src/main/drive-cache-manager');
-vi.mock('../../src/core/media-source');
+vi.mock('../../src/core/media/media-source');
 const { MockMediaHandler, getLastMediaHandler } = vi.hoisted(() => {
   class MockMediaHandler {
     static lastInstance: MockMediaHandler | undefined;
@@ -43,7 +43,7 @@ const { MockMediaHandler, getLastMediaHandler } = vi.hoisted(() => {
   return { MockMediaHandler, getLastMediaHandler };
 });
 
-vi.mock('../../src/core/media-handler', () => ({
+vi.mock('../../src/core/media/media-handler', () => ({
   MediaHandler: MockMediaHandler,
   serveMetadata: vi.fn(),
   serveTranscodedStream: vi.fn(),
@@ -60,9 +60,9 @@ vi.mock('../../src/core/media-handler', () => ({
 vi.mock('../../src/main/google-auth');
 
 // Partially mock security to keep escapeHtml but mock others
-vi.mock('../../src/core/security', async (importOriginal) => {
+vi.mock('../../src/core/auth/security', async (importOriginal) => {
   const actual =
-    await importOriginal<typeof import('../../src/core/security')>();
+    await importOriginal<typeof import('../../src/core/auth/security')>();
   return {
     ...actual,
     authorizeFilePath: vi.fn(),

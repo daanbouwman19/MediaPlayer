@@ -4,7 +4,7 @@ import { createApp } from '../../src/server/server';
 import { authenticateWithCode } from '../../src/main/google-auth';
 import { createTestMediaService } from '../utils/test-factory';
 
-vi.mock('../../src/core/database', () => ({
+vi.mock('../../src/core/database/database', () => ({
   initDatabase: vi.fn(),
   addMediaDirectory: vi.fn().mockResolvedValue(undefined),
   getMediaDirectories: vi.fn().mockResolvedValue([]),
@@ -23,7 +23,7 @@ vi.mock('../../src/core/database', () => ({
   getRecentlyPlayed: vi.fn(),
 }));
 
-vi.mock('../../src/core/transcode-queue-manager', () => ({
+vi.mock('../../src/core/media/transcode-queue-manager', () => ({
   TranscodeQueueManager: {
     getInstance: vi.fn(() => ({ start: vi.fn(), enqueue: vi.fn() })),
     resetInstance: vi.fn(),
@@ -44,9 +44,9 @@ vi.mock('fs/promises', () => ({
     realpath: vi.fn((p) => Promise.resolve(p)),
   },
 }));
-vi.mock('../../src/core/security', async (importOriginal) => {
+vi.mock('../../src/core/auth/security', async (importOriginal) => {
   const actual =
-    await importOriginal<typeof import('../../src/core/security')>();
+    await importOriginal<typeof import('../../src/core/auth/security')>();
   return {
     ...actual,
     authorizeFilePath: vi.fn().mockResolvedValue({ isAllowed: true }),

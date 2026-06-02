@@ -29,7 +29,7 @@ describe('FFmpeg Utils Coverage Boost', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     vi.resetModules();
-    const mod = await import('../../../src/core/utils/ffmpeg-utils');
+    const mod = await import('../../../src/infrastructure/ffmpeg-utils');
     detectFFmpegCapabilities = mod.detectFFmpegCapabilities;
     getHardwareCodec = mod.getHardwareCodec;
     getHlsTranscodeArgs = mod.getHlsTranscodeArgs;

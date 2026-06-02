@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { generateFileUrl } from '../../src/core/media-handler';
-import * as security from '../../src/core/security';
-import * as providerFactory from '../../src/core/fs-provider-factory';
+import { generateFileUrl } from '../../src/core/media/media-handler';
+import * as security from '../../src/core/auth/security';
+import * as providerFactory from '../../src/infrastructure/fs-provider-factory';
 
-vi.mock('../../src/core/security');
-vi.mock('../../src/core/fs-provider-factory');
-vi.mock('../../src/core/media-utils');
+vi.mock('../../src/core/auth/security');
+vi.mock('../../src/infrastructure/fs-provider-factory');
+vi.mock('../../src/core/media/media-utils');
 
 describe('generateFileUrl Security Check', () => {
   beforeEach(() => {

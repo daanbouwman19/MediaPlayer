@@ -6,9 +6,9 @@ import AmbientBackground from '../../../src/renderer/components/AmbientBackgroun
 import { usePlayerStore } from '../../../src/renderer/composables/usePlayerStore';
 import { usePlaylistStore } from '../../../src/renderer/composables/usePlaylistStore';
 import { useLibraryStore } from '../../../src/renderer/composables/useLibraryStore';
-import { api } from '../../../src/renderer/api';
+import { api } from '../../../src/renderer/api/index';
 
-vi.mock('../../../src/renderer/api');
+vi.mock('../../../src/renderer/api/index');
 
 describe('AmbientBackground.vue', () => {
   beforeEach(() => {

@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
 import FileExplorer from '../../../src/renderer/components/FileExplorer.vue';
-import { api } from '../../../src/renderer/api';
+import { api } from '../../../src/renderer/api/index';
 
 // Mock the API
-vi.mock('../../../src/renderer/api', () => ({
+vi.mock('../../../src/renderer/api/index', () => ({
   api: {
     listDirectory: vi.fn(),
     getParentDirectory: vi.fn(),

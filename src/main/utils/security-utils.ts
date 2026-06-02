@@ -1,6 +1,6 @@
-import { authorizeFilePath } from '../../core/security';
-export { filterAuthorizedPaths } from '../../core/security';
-import { isDrivePath } from '../../core/media-utils';
+import { authorizeFilePath } from '../../core/auth/security';
+export { filterAuthorizedPaths } from '../../core/auth/security';
+import { isDrivePath } from '../../core/media/media-utils';
 
 /**
  * Validates access to a file path. Throws if access is denied.

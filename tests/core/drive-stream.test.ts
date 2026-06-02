@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { getDriveStreamWithCache } from '../../src/core/drive-stream';
+import { getDriveStreamWithCache } from '../../src/core/media/drive-stream';
 import fs from 'fs';
 import { PassThrough } from 'stream';
 

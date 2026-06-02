@@ -8,11 +8,11 @@ import {
   stopLocalServer,
   getServerPort,
 } from '../../src/main/local-server';
-import { getMediaDirectories } from '../../src/core/database';
+import { getMediaDirectories } from '../../src/core/database/database';
 import { createTestMediaService } from '../utils/test-factory';
 
 // Mock dependencies
-vi.mock('../../src/core/database', () => ({
+vi.mock('../../src/core/database/database', () => ({
   isFileInLibrary: vi.fn(),
   getMediaDirectories: vi.fn(),
   getPendingTranscodeJobs: vi.fn().mockResolvedValue([]),

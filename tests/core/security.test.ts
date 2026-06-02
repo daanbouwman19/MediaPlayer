@@ -6,11 +6,11 @@ import {
   isRestrictedPath,
   isSensitiveDirectory,
   clearAuthCache,
-} from '../../src/core/security';
+} from '../../src/core/auth/security';
 import path from 'path';
 import fs from 'fs/promises';
-import * as database from '../../src/core/database';
-import { MAX_PATH_LENGTH } from '../../src/core/constants';
+import * as database from '../../src/core/database/database';
+import { MAX_PATH_LENGTH } from '../../src/core/media/constants';
 
 vi.mock('fs/promises', () => {
   const mock = {
@@ -22,7 +22,7 @@ vi.mock('fs/promises', () => {
     default: mock,
   };
 });
-vi.mock('../../src/core/database');
+vi.mock('../../src/core/database/database');
 
 describe('filterAuthorizedPaths Security', () => {
   beforeEach(() => {
@@ -464,7 +464,7 @@ describe('Security Config Loading', () => {
 
     // We need to import security AFTER resetModules to get fresh state
     const { loadSecurityConfig, isRestrictedPath } =
-      await import('../../src/core/security');
+      await import('../../src/core/auth/security');
     // We need to import fs AFTER resetModules to ensure we're mocking the right instance if resetModules is used
     const fsMock = await import('fs/promises');
     vi.mocked(fsMock.readFile).mockResolvedValue(mockConfig);
@@ -479,7 +479,7 @@ describe('Security Config Loading', () => {
     const error: any = new Error('File not found');
     error.code = 'ENOENT';
 
-    const { loadSecurityConfig } = await import('../../src/core/security');
+    const { loadSecurityConfig } = await import('../../src/core/auth/security');
     const fsMock = await import('fs/promises');
     vi.mocked(fsMock.readFile).mockRejectedValue(error);
 
@@ -489,7 +489,7 @@ describe('Security Config Loading', () => {
   });
 
   it('warns and throws on invalid JSON or read error', async () => {
-    const { loadSecurityConfig } = await import('../../src/core/security');
+    const { loadSecurityConfig } = await import('../../src/core/auth/security');
     const fsMock = await import('fs/promises');
     vi.mocked(fsMock.readFile).mockResolvedValue('{ invalid json ');
 

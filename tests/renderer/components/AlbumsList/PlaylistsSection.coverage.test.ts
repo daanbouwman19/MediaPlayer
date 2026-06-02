@@ -6,7 +6,7 @@ import AlbumsList from '../../../../src/renderer/components/AlbumsList.vue';
 import { useLibraryStore } from '../../../../src/renderer/composables/useLibraryStore';
 import { usePlayerStore } from '../../../../src/renderer/composables/usePlayerStore';
 import { useUIStore } from '../../../../src/renderer/composables/useUIStore';
-import { api } from '../../../../src/renderer/api';
+import { api } from '../../../../src/renderer/api/index';
 
 vi.mock('../../../../src/renderer/composables/useSlideshow', () => ({
   useSlideshow: () => ({
@@ -17,7 +17,7 @@ vi.mock('../../../../src/renderer/composables/useSlideshow', () => ({
     openAlbumInGrid: vi.fn(),
   }),
 }));
-vi.mock('../../../../src/renderer/api', () => ({
+vi.mock('../../../../src/renderer/api/index', () => ({
   api: {
     getAllMetadataAndStats: vi.fn(),
     executeSmartPlaylist: vi.fn(),

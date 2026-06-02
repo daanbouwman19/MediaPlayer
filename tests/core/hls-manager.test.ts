@@ -29,7 +29,7 @@ vi.mock('fs/promises', () => ({
   stat: mockFsStat,
 }));
 
-vi.mock('../../src/core/media-source.ts', () => ({
+vi.mock('../../src/core/media/media-source.ts', () => ({
   createMediaSource: vi.fn().mockImplementation((filePath: string) => ({
     getFFmpegInput: vi.fn().mockResolvedValue(filePath),
     getStream: vi.fn(),
@@ -39,7 +39,7 @@ vi.mock('../../src/core/media-source.ts', () => ({
   })),
 }));
 
-vi.mock('../../src/core/utils/ffmpeg-utils.ts', () => ({
+vi.mock('../../src/infrastructure/ffmpeg-utils.ts', () => ({
   getHlsTranscodeArgs: vi.fn().mockReturnValue(['-f', 'hls', 'playlist.m3u8']),
   detectFFmpegCapabilities: vi.fn().mockResolvedValue({
     nvenc: false,
@@ -60,7 +60,7 @@ vi.mock('ffmpeg-static', () => ({
   default: '/usr/bin/ffmpeg',
 }));
 
-import { HlsManager } from '../../src/core/hls-manager.ts';
+import { HlsManager } from '../../src/core/media/hls-manager.ts';
 
 describe('HlsManager Robustness', () => {
   const CACHE_DIR = '/tmp/hls-robust';

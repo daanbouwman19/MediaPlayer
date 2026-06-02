@@ -10,8 +10,8 @@ import {
   RATE_LIMIT_READ_WINDOW_MS,
   RATE_LIMIT_WRITE_MAX_REQUESTS,
   RATE_LIMIT_WRITE_WINDOW_MS,
-} from '../../core/constants.ts';
-import { createRateLimiter } from '../../core/rate-limiter.ts';
+} from '../../core/media/constants.ts';
+import { createRateLimiter } from '../../core/network/rate-limiter.ts';
 
 export interface RateLimiters {
   authLimiter: ReturnType<typeof createRateLimiter>;

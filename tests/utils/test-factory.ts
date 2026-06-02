@@ -1,4 +1,4 @@
-import { MediaService } from '../../src/core/media-service';
+import { MediaService } from '../../src/core/media/media-service';
 import { InMemoryMediaRepository } from '../fakes/in-memory-media-repository';
 import { FakeFileSystem } from '../fakes/fake-file-system';
 import { FakeWorkerService } from '../fakes/fake-worker-service';

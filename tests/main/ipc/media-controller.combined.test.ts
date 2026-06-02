@@ -5,7 +5,7 @@ import { getServerPort } from '../../../src/main/local-server';
 import {
   generateFileUrl,
   getVideoDuration,
-} from '../../../src/core/media-handler';
+} from '../../../src/core/media/media-handler';
 import {
   validatePathAccess,
   filterAuthorizedPaths,
@@ -16,15 +16,15 @@ import {
   getRecentlyPlayed,
   listTranscodeJobs,
   deleteTranscodeJob,
-} from '../../../src/core/database';
+} from '../../../src/core/database/database';
 import {
   getDriveFileMetadata,
   listDriveDirectory,
   getDriveParent,
 } from '../../../src/main/google-drive-service';
-import { MediaService } from '../../../src/core/media-service';
+import { MediaService } from '../../../src/core/media/media-service';
 import { createTestMediaService } from '../../utils/test-factory';
-import { generateSessionId } from '../../../src/core/hls-handler';
+import { generateSessionId } from '../../../src/core/media/hls-handler';
 
 // --- Global Mocks ---
 
@@ -36,7 +36,7 @@ vi.mock('../../../src/main/local-server', () => ({
   getServerPort: vi.fn(),
 }));
 
-vi.mock('../../../src/core/media-handler', () => ({
+vi.mock('../../../src/core/media/media-handler', () => ({
   generateFileUrl: vi.fn(),
   getVideoDuration: vi.fn(),
 }));
@@ -46,7 +46,7 @@ vi.mock('../../../src/main/utils/security-utils', () => ({
   filterAuthorizedPaths: vi.fn(),
 }));
 
-vi.mock('../../../src/core/database', () => ({
+vi.mock('../../../src/core/database/database', () => ({
   isFileInLibrary: vi.fn(),
   recordMediaView: vi.fn(),
   getMediaViewCounts: vi.fn(),
@@ -61,7 +61,7 @@ const mockTranscodeManager = vi.hoisted(() => ({
   cancel: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock('../../../src/core/transcode-queue-manager', () => ({
+vi.mock('../../../src/core/media/transcode-queue-manager', () => ({
   TranscodeQueueManager: {
     getInstance: vi.fn(() => mockTranscodeManager),
   },
@@ -84,7 +84,7 @@ vi.mock('../../../src/main/drive-cache-manager', () => ({
   getDriveCacheManager: vi.fn(() => mockDriveCacheManager),
 }));
 
-vi.mock('../../../src/core/hls-handler', () => ({
+vi.mock('../../../src/core/media/hls-handler', () => ({
   generateSessionId: vi.fn(),
 }));
 
@@ -325,7 +325,8 @@ describe('Media Controller Combined', () => {
         const mockHlsManager = {
           getSessionProgress: vi.fn().mockReturnValue(50),
         };
-        const HlsManagerModule = await import('../../../src/core/hls-manager');
+        const HlsManagerModule =
+          await import('../../../src/core/media/hls-manager');
         vi.spyOn(HlsManagerModule.HlsManager, 'getInstance').mockReturnValue(
           mockHlsManager as any,
         );

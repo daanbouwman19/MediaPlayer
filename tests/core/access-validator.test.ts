@@ -2,13 +2,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   validateFileAccess,
   handleAccessCheck,
-} from '../../src/core/access-validator';
+} from '../../src/core/auth/access-validator';
 
 const { mockAuthorizeFilePath } = vi.hoisted(() => ({
   mockAuthorizeFilePath: vi.fn(),
 }));
 
-vi.mock('../../src/core/security', () => ({
+vi.mock('../../src/core/auth/security', () => ({
   authorizeFilePath: mockAuthorizeFilePath,
 }));
 

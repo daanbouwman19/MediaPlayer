@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import * as mediaScanner from '../../src/core/media-scanner';
+import * as mediaScanner from '../../src/core/media/media-scanner';
 
 // Mock dependencies
-vi.mock('../../src/core/media-scanner', () => ({
+vi.mock('../../src/core/media/media-scanner', () => ({
   performFullMediaScan: vi.fn(),
 }));
 
@@ -39,7 +39,7 @@ describe('scan-worker', () => {
     const tokens = { refresh_token: 'abc' };
     vi.mocked(mediaScanner.performFullMediaScan).mockResolvedValue([]);
 
-    await import('../../src/core/scan-worker');
+    await import('../../src/core/media/scan-worker');
     const callback = mockOn.mock.calls.find(
       (call) => call[0] === 'message',
     )?.[1];
@@ -58,7 +58,7 @@ describe('scan-worker', () => {
   });
 
   it('registers message listener on startup', async () => {
-    await import('../../src/core/scan-worker');
+    await import('../../src/core/media/scan-worker');
     expect(mockOn).toHaveBeenCalledWith('message', expect.any(Function));
   });
 
@@ -68,7 +68,7 @@ describe('scan-worker', () => {
       albums as any,
     );
 
-    await import('../../src/core/scan-worker');
+    await import('../../src/core/media/scan-worker');
 
     // Get the callback
     const callback = mockOn.mock.calls.find(
@@ -97,7 +97,7 @@ describe('scan-worker', () => {
       new Error('Fail'),
     );
 
-    await import('../../src/core/scan-worker');
+    await import('../../src/core/media/scan-worker');
     const callback = mockOn.mock.calls.find(
       (call) => call[0] === 'message',
     )?.[1];
@@ -116,7 +116,7 @@ describe('scan-worker', () => {
   });
 
   it('ignores unknown message types', async () => {
-    await import('../../src/core/scan-worker');
+    await import('../../src/core/media/scan-worker');
     const callback = mockOn.mock.calls.find(
       (call) => call[0] === 'message',
     )?.[1];
@@ -132,7 +132,7 @@ describe('scan-worker', () => {
       'String Error',
     );
 
-    await import('../../src/core/scan-worker');
+    await import('../../src/core/media/scan-worker');
     const callback = mockOn.mock.calls.find(
       (call) => call[0] === 'message',
     )?.[1];

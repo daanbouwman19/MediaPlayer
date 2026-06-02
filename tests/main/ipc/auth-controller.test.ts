@@ -8,7 +8,7 @@ import {
 } from '../../../src/main/google-auth';
 import { startAuthServer } from '../../../src/main/auth-server';
 import { getDriveClient } from '../../../src/main/google-drive-service';
-import { addMediaDirectory } from '../../../src/core/database';
+import { addMediaDirectory } from '../../../src/core/database/database';
 
 vi.mock('../../../src/main/utils/ipc-helper', () => ({
   handleIpc: vi.fn(),
@@ -27,7 +27,7 @@ vi.mock('../../../src/main/google-drive-service', () => ({
   getDriveClient: vi.fn(),
 }));
 
-vi.mock('../../../src/core/database', () => ({
+vi.mock('../../../src/core/database/database', () => ({
   isFileInLibrary: vi.fn(),
   addMediaDirectory: vi.fn(),
 }));

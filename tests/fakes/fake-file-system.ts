@@ -1,4 +1,4 @@
-import { IFileSystem } from '../../src/core/interfaces/file-system.interface';
+import { IFileSystem } from '../../src/core/media/interfaces/file-system.interface';
 
 export class FakeFileSystem implements IFileSystem {
   private stats = new Map<string, { size: number; birthtime: Date }>();

@@ -79,7 +79,7 @@ describe('Database error handling (isolated)', () => {
     it('recordMediaView handles worker failure gracefully', async () => {
       // Arrange
       const dbMain = await import('../../src/main/database.js');
-      const dbCore = await import('../../src/core/database.js');
+      const dbCore = await import('../../src/core/database/database.js');
       await dbMain.initDatabase();
 
       // Act & Assert
@@ -95,7 +95,7 @@ describe('Database error handling (isolated)', () => {
     it('getMediaViewCounts returns empty object on worker failure', async () => {
       // Arrange
       const dbMain = await import('../../src/main/database.js');
-      const dbCore = await import('../../src/core/database.js');
+      const dbCore = await import('../../src/core/database/database.js');
       await dbMain.initDatabase();
 
       // Act

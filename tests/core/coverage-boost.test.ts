@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { MediaHandler } from '../../src/core/media-handler';
-import { MediaService } from '../../src/core/media-service';
+import { MediaHandler } from '../../src/core/media/media-handler';
+import { MediaService } from '../../src/core/media/media-service';
 import { EventEmitter } from 'events';
 
 // Hoist the mock implementation
@@ -19,7 +19,7 @@ const { MockWorkerClient, mockValidateFileAccess } = vi.hoisted(() => {
 });
 
 // Mock access-validator
-vi.mock('../../src/core/access-validator', () => ({
+vi.mock('../../src/core/auth/access-validator', () => ({
   validateFileAccess: mockValidateFileAccess,
   handleAccessCheck: vi.fn((res, access) => {
     if (!access.success) {
@@ -31,8 +31,8 @@ vi.mock('../../src/core/access-validator', () => ({
 }));
 
 // Mock dependencies
-vi.mock('../../src/core/media-source');
-vi.mock('../../src/core/worker-factory', () => ({
+vi.mock('../../src/core/media/media-source');
+vi.mock('../../src/core/database/worker-factory', () => ({
   WorkerFactory: {
     getWorkerPath: vi
       .fn()
@@ -40,14 +40,14 @@ vi.mock('../../src/core/worker-factory', () => ({
   },
 }));
 
-vi.mock('../../src/core/worker-client', () => ({
+vi.mock('../../src/core/database/worker-client', () => ({
   WorkerClient: MockWorkerClient,
 }));
 
 // Mock media-utils to control isDrivePath
-vi.mock('../../src/core/media-utils', async (importOriginal) => {
+vi.mock('../../src/core/media/media-utils', async (importOriginal) => {
   const actual =
-    await importOriginal<typeof import('../../src/core/media-utils')>();
+    await importOriginal<typeof import('../../src/core/media/media-utils')>();
   return {
     ...actual,
     isDrivePath: vi.fn((p) => p && p.startsWith('gdrive://')),
@@ -148,7 +148,7 @@ describe('Coverage Boost - MediaHandler', () => {
       getFFmpegInput: vi.fn().mockResolvedValue('/test.mp4'),
     };
     const sourceSpy = vi.spyOn(
-      await import('../../src/core/media-source'),
+      await import('../../src/core/media/media-source'),
       'createMediaSource',
     );
     sourceSpy.mockReturnValue(sourceMock as any);
@@ -188,7 +188,8 @@ describe('Coverage Boost - MediaHandler', () => {
 
     // We need to bypass the private method protection or export serveRawStream
     // Fortunately serveRawStream is exported
-    const { serveRawStream } = await import('../../src/core/media-handler');
+    const { serveRawStream } =
+      await import('../../src/core/media/media-handler');
 
     await serveRawStream(req, res, mockSource as any);
 
@@ -206,7 +207,7 @@ describe('Coverage Boost - MediaHandler', () => {
 
     // We need to mock getProvider to return a mock provider that returns partial metadata
     const factorySpy = vi.spyOn(
-      await import('../../src/core/fs-provider-factory'),
+      await import('../../src/infrastructure/fs-provider-factory'),
       'getProvider',
     );
     const mockProvider = {
@@ -247,7 +248,7 @@ describe('Coverage Boost - MediaHandler', () => {
 
     // Mock authorizeFilePath to fail
     const authSpy = vi.spyOn(
-      await import('../../src/core/security'),
+      await import('../../src/core/auth/security'),
       'authorizeFilePath',
     );
     authSpy.mockResolvedValueOnce({

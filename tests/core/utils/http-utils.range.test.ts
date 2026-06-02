@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseHttpRange } from '../../../src/core/utils/http-utils';
+import { parseHttpRange } from '../../../src/core/network/http-utils';
 
 describe('parseHttpRange', () => {
   const DEFAULT_SIZE = 1000;

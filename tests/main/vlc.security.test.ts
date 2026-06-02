@@ -54,7 +54,7 @@ vi.mock('../../src/main/database', () => ({
   setDirectoryActiveState: vi.fn(),
 }));
 
-vi.mock('../../src/core/database', () => ({
+vi.mock('../../src/core/database/database', () => ({
   isFileInLibrary: vi.fn(),
   getMediaDirectories: vi.fn(),
   initDatabase: vi.fn(),
@@ -73,7 +73,7 @@ vi.mock('../../src/main/local-server', () => ({
   getMimeType: vi.fn().mockReturnValue('image/jpeg'),
 }));
 
-vi.mock('../../src/core/media-service', () => ({
+vi.mock('../../src/core/media/media-service', () => ({
   getAlbumsWithViewCountsAfterScan: vi.fn(),
   getAlbumsWithViewCounts: vi.fn(),
 }));
@@ -107,7 +107,7 @@ describe('Security: open-in-vlc', () => {
     { timeout: 20000 },
     async () => {
       await setupHandler();
-      const db = await import('../../src/core/database');
+      const db = await import('../../src/core/database/database');
       const cp = await import('child_process');
       const fsPromises = await import('fs/promises');
 

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { createRateLimiter } from '../../src/core/rate-limiter';
+import { createRateLimiter } from '../../src/core/network/rate-limiter';
 import type { Request, Response, NextFunction } from 'express';
 
 describe('createRateLimiter', () => {

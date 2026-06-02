@@ -119,13 +119,13 @@ vi.mock('child_process', () => {
 });
 
 // 5. Mock access-validator
-vi.mock('../../src/core/access-validator', () => ({
+vi.mock('../../src/core/auth/access-validator', () => ({
   validateFileAccess: mockValidateFileAccess,
   handleAccessCheck: mockHandleAccessCheck,
 }));
 
 // 6. Mock worker-client
-vi.mock('../../src/core/worker-client', () => {
+vi.mock('../../src/core/database/worker-client', () => {
   return {
     WorkerClient: class {
       init = mockWorkerClientInstance.init;
@@ -136,7 +136,7 @@ vi.mock('../../src/core/worker-client', () => {
 });
 
 // 7. Mock media-source
-vi.mock('../../src/core/media-source', () => ({
+vi.mock('../../src/core/media/media-source', () => ({
   createMediaSource: vi.fn(() => mockMediaSource),
 }));
 
@@ -154,9 +154,9 @@ vi.mock('readline', () => {
 });
 
 // 9. Mock media-utils (partial)
-vi.mock('../../src/core/media-utils', async (importOriginal) => {
+vi.mock('../../src/core/media/media-utils', async (importOriginal) => {
   const actual =
-    await importOriginal<typeof import('../../src/core/media-utils')>();
+    await importOriginal<typeof import('../../src/core/media/media-utils')>();
   return {
     ...actual,
     isDrivePath: vi.fn((p) => actual.isDrivePath(p)),
@@ -164,7 +164,7 @@ vi.mock('../../src/core/media-utils', async (importOriginal) => {
 });
 
 // 10. Mock media-analyzer
-vi.mock('../../src/core/analysis/media-analyzer', () => ({
+vi.mock('../../src/core/media/analysis/media-analyzer', () => ({
   MediaAnalyzer: {
     getInstance: () => ({
       generateHeatmap: vi.fn().mockRejectedValue(new Error('Heatmap Fail')),
@@ -174,11 +174,11 @@ vi.mock('../../src/core/analysis/media-analyzer', () => ({
 }));
 
 // Import modules
-import * as dbWorker from '../../src/core/database-worker';
-import { MediaService } from '../../src/core/media-service';
-import * as mediaHandler from '../../src/core/media-handler';
-import * as mediaUtils from '../../src/core/media-utils';
-import { MediaRepository } from '../../src/core/repositories/media-repository';
+import * as dbWorker from '../../src/core/database/database-worker';
+import { MediaService } from '../../src/core/media/media-service';
+import * as mediaHandler from '../../src/core/media/media-handler';
+import * as mediaUtils from '../../src/core/media/media-utils';
+import { MediaRepository } from '../../src/core/database/repositories/media-repository';
 import { createTestMediaService } from '../utils/test-factory';
 
 describe('Final Coverage Boost', () => {

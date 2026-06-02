@@ -144,7 +144,7 @@ import { useSlideshow } from '../composables/useSlideshow';
 import PlayIcon from './icons/PlayIcon.vue';
 import GridIcon from './icons/GridIcon.vue';
 import ChevronRightIcon from './icons/ChevronRightIcon.vue';
-import type { Album } from '../../core/types';
+import type { Album } from '../../core/media/types';
 
 const props = withDefaults(
   defineProps<{

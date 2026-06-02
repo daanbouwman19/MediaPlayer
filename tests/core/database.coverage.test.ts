@@ -32,7 +32,7 @@ import {
   updateTranscodeJobStatus,
   deleteTranscodeJob,
   getPendingTranscodeJobs,
-} from '../../src/core/database';
+} from '../../src/core/database/database';
 
 const mocks = vi.hoisted(() => {
   const instance = {
@@ -54,7 +54,7 @@ const mocks = vi.hoisted(() => {
   };
 });
 
-vi.mock('../../src/core/worker-client', () => ({
+vi.mock('../../src/core/database/worker-client', () => ({
   WorkerClient: mocks.WorkerClient,
 }));
 

@@ -7,14 +7,14 @@ vi.mock('../../src/main/google-secrets', () => ({
   getGoogleRedirectUri: vi.fn(() => 'http://localhost:12345/auth/callback'),
 }));
 
-vi.mock('../../src/core/database', () => ({
+vi.mock('../../src/core/database/database', () => ({
   isFileInLibrary: vi.fn(),
   getSetting: vi.fn(),
   saveSetting: vi.fn(),
 }));
 
 // Mock encryption to be deterministic
-vi.mock('../../src/core/utils/encryption', () => ({
+vi.mock('../../src/core/auth/encryption', () => ({
   encrypt: vi.fn((text: string) => `ENCRYPTED[${text}]`),
   decrypt: vi.fn((text: string) =>
     text.startsWith('ENCRYPTED[') ? text.slice(10, -1) : text,
@@ -66,8 +66,8 @@ vi.mock('googleapis', () => {
 });
 
 import * as googleAuth from '../../src/main/google-auth';
-import * as database from '../../src/core/database';
-import * as encryption from '../../src/core/utils/encryption';
+import * as database from '../../src/core/database/database';
+import * as encryption from '../../src/core/auth/encryption';
 
 describe('Google Auth Service', () => {
   beforeEach(() => {

@@ -19,8 +19,8 @@ vi.mock('fs', () => ({
 vi.mock('fs/promises', () => ({ default: mockFs }));
 
 // Mock core modules
-vi.mock('../../src/core/database');
-vi.mock('../../src/core/media-service');
+vi.mock('../../src/core/database/database');
+vi.mock('../../src/core/media/media-service');
 const { MockMediaHandler } = vi.hoisted(() => {
   class MockMediaHandler {
     serveMetadata = vi.fn();
@@ -38,7 +38,7 @@ const { MockMediaHandler } = vi.hoisted(() => {
   return { MockMediaHandler };
 });
 
-vi.mock('../../src/core/media-handler', () => ({
+vi.mock('../../src/core/media/media-handler', () => ({
   MediaHandler: MockMediaHandler,
   serveMetadata: vi.fn(),
   serveTranscodedStream: vi.fn(),

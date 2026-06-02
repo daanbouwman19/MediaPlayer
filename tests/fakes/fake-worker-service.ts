@@ -1,5 +1,5 @@
-import { IWorkerService } from '../../src/core/interfaces/worker-service.interface';
-import { Album } from '../../src/core/types';
+import { IWorkerService } from '../../src/core/media/interfaces/worker-service.interface';
+import { Album } from '../../src/core/media/types';
 
 export class FakeWorkerService implements IWorkerService {
   private result: Album[] = [];

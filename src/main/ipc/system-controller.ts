@@ -13,17 +13,20 @@ import {
   removeMediaDirectory,
   setDirectoryActiveState,
   getMediaDirectories,
-} from '../../core/database';
+} from '../../core/database/database';
 import {
   SUPPORTED_VIDEO_EXTENSIONS,
   SUPPORTED_IMAGE_EXTENSIONS,
   ALL_SUPPORTED_EXTENSIONS,
-} from '../../core/constants';
+} from '../../core/media/constants';
 import { getServerPort } from '../local-server';
-import { openMediaInVlc } from '../../core/vlc-player';
-import { listDirectory } from '../../core/file-system';
+import { openMediaInVlc } from '../../infrastructure/vlc-player';
+import { listDirectory } from '../../core/media/file-system';
 import { handleIpc } from '../utils/ipc-helper';
-import { isSensitiveDirectory, isRestrictedPath } from '../../core/security';
+import {
+  isSensitiveDirectory,
+  isRestrictedPath,
+} from '../../core/auth/security';
 
 export function registerSystemHandlers() {
   handleIpc(

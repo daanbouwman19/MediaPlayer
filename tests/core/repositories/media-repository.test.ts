@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
-import { MediaRepository } from '../../../src/core/repositories/media-repository';
-import * as database from '../../../src/core/database';
+import { MediaRepository } from '../../../src/core/database/repositories/media-repository';
+import * as database from '../../../src/core/database/database';
 
-vi.mock('../../../src/core/database', () => ({
+vi.mock('../../../src/core/database/database', () => ({
   getMediaDirectories: vi.fn(),
   cacheAlbums: vi.fn(),
   getCachedAlbums: vi.fn(),

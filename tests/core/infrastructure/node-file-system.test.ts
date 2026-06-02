@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { NodeFileSystem } from '../../../src/core/infrastructure/node-file-system';
+import { NodeFileSystem } from '../../../src/infrastructure/node-file-system';
 import fs from 'fs/promises';
 
 vi.mock('fs/promises', () => ({

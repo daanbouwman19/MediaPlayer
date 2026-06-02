@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { MediaHandler } from '../../src/core/media-handler';
+import { MediaHandler } from '../../src/core/media/media-handler';
 import { createTestMediaService } from '../utils/test-factory';
 
 const { mockValidateFileAccess, mockHandleAccessCheck } = vi.hoisted(() => ({
@@ -8,12 +8,12 @@ const { mockValidateFileAccess, mockHandleAccessCheck } = vi.hoisted(() => ({
 }));
 
 // Mocks
-vi.mock('../../src/core/access-validator', () => ({
+vi.mock('../../src/core/auth/access-validator', () => ({
   validateFileAccess: mockValidateFileAccess,
   handleAccessCheck: mockHandleAccessCheck,
 }));
 
-vi.mock('../../src/core/analysis/media-analyzer', () => ({
+vi.mock('../../src/core/media/analysis/media-analyzer', () => ({
   MediaAnalyzer: {
     getInstance: () => ({
       generateHeatmap: vi.fn().mockRejectedValue(new Error('Heatmap Fail')),

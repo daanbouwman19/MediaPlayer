@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { authorizeFilePath } from '../../src/core/security';
+import { authorizeFilePath } from '../../src/core/auth/security';
 import path from 'path';
 import fs from 'fs/promises';
-import * as database from '../../src/core/database';
+import * as database from '../../src/core/database/database';
 
 vi.mock('fs/promises', () => {
   return {
@@ -12,7 +12,7 @@ vi.mock('fs/promises', () => {
     },
   };
 });
-vi.mock('../../src/core/database');
+vi.mock('../../src/core/database/database');
 
 describe('authorizeFilePath Extension Security', () => {
   beforeEach(() => {

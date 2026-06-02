@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import * as logger from '../../src/core/utils/logger';
+import * as logger from '../../src/core/media/utils/logger';
 
 // Mock logger
-vi.mock('../../src/core/utils/logger', () => ({
+vi.mock('../../src/core/media/utils/logger', () => ({
   safeLog: vi.fn(),
   safeError: vi.fn(),
   safeWarn: vi.fn(),
@@ -25,7 +25,7 @@ vi.mock('electron', () => createMockElectron());
 
 // Static import
 import * as dbMain from '../../src/main/database';
-import * as db from '../../src/core/database';
+import * as db from '../../src/core/database/database';
 
 describe('Database', () => {
   beforeEach(async () => {

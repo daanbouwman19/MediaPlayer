@@ -3,8 +3,8 @@ import {
   serveHlsMaster,
   serveHlsPlaylist,
   serveHlsSegment,
-} from '../../src/core/hls-handler.ts';
-import { HlsManager } from '../../src/core/hls-manager.ts';
+} from '../../src/core/media/hls-handler.ts';
+import { HlsManager } from '../../src/core/media/hls-manager.ts';
 import fs from 'fs/promises';
 import path from 'path';
 
@@ -14,8 +14,8 @@ const { mockValidateFileAccess, mockHandleAccessCheck } = vi.hoisted(() => ({
 }));
 
 // Mock dependencies
-vi.mock('../../src/core/hls-manager.ts');
-vi.mock('../../src/core/access-validator.ts', () => ({
+vi.mock('../../src/core/media/hls-manager.ts');
+vi.mock('../../src/core/auth/access-validator.ts', () => ({
   validateFileAccess: mockValidateFileAccess,
   handleAccessCheck: mockHandleAccessCheck,
 }));

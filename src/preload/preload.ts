@@ -16,9 +16,9 @@ import type {
   MediaMetadata,
   MediaLibraryItem,
   TranscodeJob,
-} from '../core/types';
+} from '../core/media/types';
 
-import type { FileSystemEntry } from '../core/file-system';
+import type { FileSystemEntry } from '../core/media/file-system';
 
 export interface LoadResult {
   type: 'data-url' | 'http-url' | 'error';

@@ -1,7 +1,7 @@
 /**
  * @file Utilities for media file operations, including caching.
  */
-import type { MediaFile } from '../../core/types';
+import type { MediaFile } from '../../core/media/types';
 
 /**
  * Cache for file extensions to reduce string operations.

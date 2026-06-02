@@ -1,12 +1,14 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import path from 'path';
 import fs from 'fs/promises';
-import { HlsManager } from '../../src/core/hls-manager.ts';
-import { generateSessionId } from '../../src/core/hls-handler.ts';
+import { HlsManager } from '../../src/core/media/hls-manager.ts';
+import { generateSessionId } from '../../src/core/media/hls-handler.ts';
 
 // Mock security to allow our test fixtures
-vi.mock('../../src/core/security.ts', async () => {
-  const actual = (await vi.importActual('../../src/core/security.ts')) as any;
+vi.mock('../../src/core/auth/security.ts', async () => {
+  const actual = (await vi.importActual(
+    '../../src/core/auth/security.ts',
+  )) as any;
   return {
     ...actual,
     authorizeFilePath: vi.fn().mockImplementation(async (p) => ({
@@ -17,7 +19,7 @@ vi.mock('../../src/core/security.ts', async () => {
 });
 
 // Mock database to avoid real connections
-vi.mock('../../src/core/database.ts', () => ({
+vi.mock('../../src/core/database/database.ts', () => ({
   getMediaDirectories: vi.fn().mockResolvedValue([]),
   isFileInLibrary: vi.fn().mockResolvedValue(true),
 }));

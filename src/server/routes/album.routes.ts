@@ -2,8 +2,8 @@
  * @file Album routes.
  */
 import { Router } from 'express';
-import { AppError } from '../../core/errors.ts';
-import { MediaService } from '../../core/media-service.ts';
+import { AppError } from '../../core/media/errors.ts';
+import { MediaService } from '../../core/media/media-service.ts';
 import type { RateLimiters } from '../middleware/rate-limiters.ts';
 import { asyncHandler } from '../middleware/async-handler.ts';
 

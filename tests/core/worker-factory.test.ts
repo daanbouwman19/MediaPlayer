@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { WorkerFactory } from '../../src/core/worker-factory';
+import { WorkerFactory } from '../../src/core/database/worker-factory';
 import path from 'path';
 
 describe('WorkerFactory', () => {
@@ -77,7 +77,7 @@ describe('WorkerFactory', () => {
       isTest: true,
     });
     expect(result.path).toBe(
-      path.resolve(process.cwd(), 'src', 'core', 'scan-worker.ts'),
+      path.resolve(process.cwd(), 'src', 'core', 'media', 'scan-worker.ts'),
     );
   });
 

@@ -4,10 +4,10 @@
  */
 import http from 'http';
 import { AddressInfo } from 'net';
-import { createMediaApp } from '../core/media-handler';
-import { getMimeType as coreGetMimeType } from '../core/utils/mime-types';
-import { MediaService } from '../core/media-service';
-import { getFFmpegStaticPath } from '../core/utils/ffmpeg-static-path';
+import { createMediaApp } from '../core/media/media-handler';
+import { getMimeType as coreGetMimeType } from '../core/media/utils/mime-types';
+import { MediaService } from '../core/media/media-service';
+import { getFFmpegStaticPath } from '../infrastructure/ffmpeg-static-path';
 
 /**
  * Holds the singleton instance of the HTTP server.

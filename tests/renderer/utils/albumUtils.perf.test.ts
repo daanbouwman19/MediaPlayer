@@ -3,7 +3,7 @@ import {
   collectSelectedTextures,
   collectTexturesRecursive,
 } from '../../../src/renderer/utils/albumUtils';
-import type { Album, MediaFile } from '../../../src/core/types';
+import type { Album, MediaFile } from '../../../src/core/media/types';
 
 describe('albumUtils Performance/Stability', () => {
   it('collectSelectedTextures should handle very large albums without stack overflow', () => {

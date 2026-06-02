@@ -7,7 +7,7 @@ import {
   createIndexes,
   migrateMediaDirectories,
   migrateMediaMetadata,
-} from '../../src/core/database-schema';
+} from '../../src/core/database/database-schema';
 
 describe('Database Schema', () => {
   let db: DatabaseSync;

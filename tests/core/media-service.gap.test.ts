@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { MediaService } from '../../src/core/media-service';
+import { MediaService } from '../../src/core/media/media-service';
 import { InMemoryMediaRepository } from '../fakes/in-memory-media-repository';
 
 describe('Media Service Final Gap Fill (DI Refactored)', () => {

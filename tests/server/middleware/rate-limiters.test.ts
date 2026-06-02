@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createRateLimiters } from '../../../src/server/middleware/rate-limiters';
-import * as rateLimiterModule from '../../../src/core/rate-limiter';
+import * as rateLimiterModule from '../../../src/core/network/rate-limiter';
 import {
   RATE_LIMIT_AUTH_MAX_REQUESTS,
   RATE_LIMIT_AUTH_WINDOW_MS,
@@ -10,9 +10,9 @@ import {
   RATE_LIMIT_READ_WINDOW_MS,
   RATE_LIMIT_WRITE_MAX_REQUESTS,
   RATE_LIMIT_WRITE_WINDOW_MS,
-} from '../../../src/core/constants';
+} from '../../../src/core/media/constants';
 
-vi.mock('../../../src/core/rate-limiter');
+vi.mock('../../../src/core/network/rate-limiter');
 
 describe('Rate Limiters Factory', () => {
   it('should create all required rate limiters with correct configuration', () => {

@@ -61,16 +61,16 @@ vi.mock('node:sqlite', () => {
   };
 });
 
-vi.mock('../../src/core/database-schema', () => ({
+vi.mock('../../src/core/database/database-schema', () => ({
   initializeSchema: vi.fn(),
   migrateMediaDirectories: vi.fn(),
   migrateMediaMetadata: vi.fn(),
   createIndexes: vi.fn(),
 }));
 
-vi.mock('../../src/core/media-utils', async (importOriginal) => {
+vi.mock('../../src/core/media/media-utils', async (importOriginal) => {
   const actual =
-    await importOriginal<typeof import('../../src/core/media-utils')>();
+    await importOriginal<typeof import('../../src/core/media/media-utils')>();
   return {
     ...actual,
     isDrivePath: vi.fn((p) => p && p.startsWith('gdrive://')),
@@ -99,7 +99,7 @@ vi.mock('fs/promises', async () => {
   };
 });
 
-import * as worker from '../../src/core/database-worker';
+import * as worker from '../../src/core/database/database-worker';
 import { DatabaseSync } from 'node:sqlite';
 
 describe('Database Worker Coverage', () => {

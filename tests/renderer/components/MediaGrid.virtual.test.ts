@@ -3,14 +3,14 @@ import { mount, flushPromises } from '@vue/test-utils';
 import { setActivePinia } from 'pinia';
 import { createTestingPinia } from '@pinia/testing';
 import MediaGrid from '../../../src/renderer/components/MediaGrid.vue';
-import type { MediaFile } from '../../../src/core/types';
+import type { MediaFile } from '../../../src/core/media/types';
 import { useLibraryStore } from '../../../src/renderer/composables/useLibraryStore';
 import { usePlayerStore } from '../../../src/renderer/composables/usePlayerStore';
 import { useUIStore } from '../../../src/renderer/composables/useUIStore';
 import { usePlaylistStore } from '../../../src/renderer/composables/usePlaylistStore';
 import VirtualScroller from '../../../src/renderer/components/VirtualScroller.vue';
 
-vi.mock('../../../src/renderer/api', () => ({
+vi.mock('../../../src/renderer/api/index', () => ({
   api: {
     getMediaUrlGenerator: vi.fn(),
     getThumbnailUrlGenerator: vi.fn(),

@@ -3,10 +3,10 @@ import request from 'supertest';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createMediaRoutes } from '../../src/server/routes/media.routes';
 import { errorHandler } from '../../src/server/middleware/error-handler';
-import * as database from '../../src/core/database';
-import * as security from '../../src/core/security';
-import * as mediaHandler from '../../src/core/media-handler';
-import * as mediaSource from '../../src/core/media-source';
+import * as database from '../../src/core/database/database';
+import * as security from '../../src/core/auth/security';
+import * as mediaHandler from '../../src/core/media/media-handler';
+import * as mediaSource from '../../src/core/media/media-source';
 import { createTestMediaService } from '../utils/test-factory';
 
 type TestAppResult = {
@@ -39,7 +39,7 @@ const { MockMediaHandler } = vi.hoisted(() => {
   return { MockMediaHandler };
 });
 
-vi.mock('../../src/core/database', () => ({
+vi.mock('../../src/core/database/database', () => ({
   getAllMetadataAndStats: vi.fn(),
   getMediaViewCounts: vi.fn(),
   getMetadata: vi.fn(),
@@ -49,19 +49,19 @@ vi.mock('../../src/core/database', () => ({
   upsertMetadata: vi.fn(),
 }));
 
-vi.mock('../../src/core/security', () => ({
+vi.mock('../../src/core/auth/security', () => ({
   authorizeFilePath: vi.fn(),
   filterAuthorizedPaths: vi.fn(),
 }));
 
-vi.mock('../../src/core/media-handler', () => ({
+vi.mock('../../src/core/media/media-handler', () => ({
   MediaHandler: MockMediaHandler,
   serveRawStream: vi.fn(),
   serveTranscodedStream: vi.fn(),
   validateFileAccess: vi.fn(),
 }));
 
-vi.mock('../../src/core/media-source', () => ({
+vi.mock('../../src/core/media/media-source', () => ({
   createMediaSource: vi.fn(),
 }));
 

@@ -6,7 +6,7 @@ import {
   LocalMediaSource,
   DriveMediaSource,
   createMediaSource,
-} from '../../src/core/media-source';
+} from '../../src/core/media/media-source';
 
 // Mocks
 const {
@@ -23,7 +23,7 @@ const {
 
 // REMOVED vi.mock('fs')
 
-vi.mock('../../src/core/security', () => ({
+vi.mock('../../src/core/auth/security', () => ({
   authorizeFilePath: mockAuthorizeFilePath,
 }));
 
@@ -31,12 +31,12 @@ vi.mock('../../src/main/google-drive-service', () => ({
   getDriveFileMetadata: mockGetDriveFileMetadata,
 }));
 
-vi.mock('../../src/core/drive-stream', () => ({
+vi.mock('../../src/core/media/drive-stream', () => ({
   getDriveStreamWithCache: mockGetDriveStreamWithCache,
 }));
 
 // Mock InternalMediaProxy singleton
-vi.mock('../../src/core/media-proxy', () => ({
+vi.mock('../../src/core/media/media-proxy', () => ({
   InternalMediaProxy: {
     getInstance: () => ({
       getUrlForFile: mockProxyGetUrlForFile,

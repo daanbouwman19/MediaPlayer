@@ -1,7 +1,7 @@
 import { ref } from 'vue';
 import { storeToRefs } from 'pinia';
-import type { MediaFile } from '../../core/types';
-import { LEGACY_VIDEO_EXTENSIONS } from '../../core/constants';
+import type { MediaFile } from '../../core/media/types';
+import { LEGACY_VIDEO_EXTENSIONS } from '../../core/media/constants';
 import { useLibraryStore } from './useLibraryStore';
 
 export function useMediaLoader() {

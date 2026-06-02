@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { performFullMediaScan } from '../../src/core/media-scanner';
+import { performFullMediaScan } from '../../src/core/media/media-scanner';
 import * as driveService from '../../src/main/google-drive-service';
 
 // --- Mocks ---

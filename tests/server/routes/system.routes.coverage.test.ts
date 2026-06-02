@@ -3,14 +3,14 @@ import request from 'supertest';
 import express from 'express';
 import bodyParser from 'body-parser';
 import * as systemRoutes from '../../../src/server/routes/system.routes';
-import * as security from '../../../src/core/security';
+import * as security from '../../../src/core/auth/security';
 import fs from 'fs/promises';
-import { ALL_SUPPORTED_EXTENSIONS } from '../../../src/core/constants';
+import { ALL_SUPPORTED_EXTENSIONS } from '../../../src/core/media/constants';
 
 // Mocks
-vi.mock('../../../src/core/database');
-vi.mock('../../../src/core/file-system');
-vi.mock('../../../src/core/security');
+vi.mock('../../../src/core/database/database');
+vi.mock('../../../src/core/media/file-system');
+vi.mock('../../../src/core/auth/security');
 vi.mock('../../../src/main/google-drive-service');
 vi.mock('fs/promises', () => ({
   default: {

@@ -18,8 +18,11 @@ const __dirname = path.dirname(__filename);
 log.initialize();
 
 import { initDatabase } from './database';
-import { closeDatabase } from '../core/database';
-import { loadSecurityConfig, registerSensitiveFile } from '../core/security';
+import { closeDatabase } from '../core/database/database';
+import {
+  loadSecurityConfig,
+  registerSensitiveFile,
+} from '../core/auth/security';
 import {
   startLocalServer,
   stopLocalServer,
@@ -36,11 +39,11 @@ import { registerSystemHandlers } from './ipc/system-controller';
 import { registerMediaHandlers } from './ipc/media-controller';
 import { registerDatabaseHandlers } from './ipc/database-controller';
 
-import { MediaService } from '../core/media-service';
-import { MediaRepository } from '../core/repositories/media-repository';
-import { NodeFileSystem } from '../core/infrastructure/node-file-system';
-import { WorkerScannerService } from '../core/infrastructure/worker-scanner-service';
-import { MediaDurationHandler } from '../core/infrastructure/media-duration-handler';
+import { MediaService } from '../core/media/media-service';
+import { MediaRepository } from '../core/database/repositories/media-repository';
+import { NodeFileSystem } from '../infrastructure/node-file-system';
+import { WorkerScannerService } from '../infrastructure/worker-scanner-service';
+import { MediaDurationHandler } from '../infrastructure/media-duration-handler';
 
 // Initialize Media Service and Dependencies
 const mediaRepo = new MediaRepository();

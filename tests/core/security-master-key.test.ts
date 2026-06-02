@@ -2,8 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   authorizeFilePath,
   isSensitiveFilename,
-} from '../../src/core/security';
-import * as database from '../../src/core/database';
+} from '../../src/core/auth/security';
+import * as database from '../../src/core/database/database';
 import fs from 'fs/promises';
 import path from 'path';
 
@@ -14,7 +14,7 @@ vi.mock('fs/promises', () => {
     },
   };
 });
-vi.mock('../../src/core/database');
+vi.mock('../../src/core/database/database');
 
 describe('Master Key Security', () => {
   beforeEach(() => {

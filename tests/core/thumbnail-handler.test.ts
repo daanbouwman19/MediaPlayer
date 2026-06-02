@@ -4,7 +4,7 @@ import fs from 'fs'; // Import for spying
 import {
   serveThumbnail,
   generateLocalThumbnail,
-} from '../../src/core/thumbnail-handler';
+} from '../../src/core/media/thumbnail-handler';
 
 const {
   mockRunFFmpeg,
@@ -27,37 +27,42 @@ vi.mock('../../src/main/google-drive-service', () => ({
   getDriveFileThumbnail: mockGetDriveFileThumbnail,
 }));
 
-vi.mock('../../src/core/security', () => ({
+vi.mock('../../src/core/auth/security', () => ({
   authorizeFilePath: mockAuthorizeFilePath,
 }));
 
-vi.mock('../../src/core/access-validator', () => ({
+vi.mock('../../src/core/auth/access-validator', () => ({
   validateFileAccess: mockValidateFileAccess,
   handleAccessCheck: mockHandleAccessCheck,
 }));
 
-vi.mock('../../src/core/media-utils', async (importOriginal) => {
+vi.mock('../../src/core/media/media-utils', async (importOriginal) => {
   const actual =
-    await importOriginal<typeof import('../../src/core/media-utils')>();
+    await importOriginal<typeof import('../../src/core/media/media-utils')>();
   return {
     ...actual,
     getThumbnailCachePath: mockGetThumbnailCachePath,
   };
 });
 
-vi.mock('../../src/core/utils/ffmpeg-utils', () => ({
+vi.mock('../../src/infrastructure/ffmpeg-utils', () => ({
   getThumbnailArgs: vi.fn(),
   runFFmpeg: mockRunFFmpeg,
 }));
 
-vi.mock('../../src/core/fs-provider-factory', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('../../src/core/fs-provider-factory')>();
-  return {
-    ...actual,
-    getProvider: vi.fn().mockImplementation(actual.getProvider),
-  };
-});
+vi.mock(
+  '../../src/infrastructure/fs-provider-factory',
+  async (importOriginal) => {
+    const actual =
+      await importOriginal<
+        typeof import('../../src/infrastructure/fs-provider-factory')
+      >();
+    return {
+      ...actual,
+      getProvider: vi.fn().mockImplementation(actual.getProvider),
+    };
+  },
+);
 
 describe('thumbnail-handler unit tests', () => {
   let req: any;

@@ -3,7 +3,7 @@ import { DatabaseSync } from 'node:sqlite';
 import {
   initializeSchema,
   migrateMediaMetadata,
-} from '../../src/core/database-schema';
+} from '../../src/core/database/database-schema';
 
 describe('Database Schema vs Application Types', () => {
   let db: DatabaseSync;

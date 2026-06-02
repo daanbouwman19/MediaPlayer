@@ -4,7 +4,7 @@ import {
   isValidDirectory,
   listDrives,
   clearDrivesCache,
-} from '../../src/core/file-system';
+} from '../../src/core/media/file-system';
 import fs from 'fs/promises';
 import path from 'path';
 import { execa } from 'execa';

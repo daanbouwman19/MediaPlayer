@@ -59,7 +59,7 @@ vi.mock('../../src/main/database', () => ({
   setDirectoryActiveState: vi.fn(),
 }));
 
-vi.mock('../../src/core/database', () => ({
+vi.mock('../../src/core/database/database', () => ({
   isFileInLibrary: vi.fn(),
   getMediaDirectories: vi.fn(),
   initDatabase: vi.fn(),
@@ -82,7 +82,7 @@ vi.mock('../../src/main/local-server', () => ({
 vi.mock('express', () => ({
   default: vi.fn(),
 }));
-vi.mock('../../src/core/analysis/media-analyzer.ts', () => ({
+vi.mock('../../src/core/media/analysis/media-analyzer.ts', () => ({
   MediaAnalyzer: {
     getInstance: vi.fn().mockReturnValue({
       generateHeatmap: vi.fn(),
@@ -90,12 +90,12 @@ vi.mock('../../src/core/analysis/media-analyzer.ts', () => ({
     }),
   },
 }));
-vi.mock('../../src/core/hls-handler.ts', () => ({
+vi.mock('../../src/core/media/hls-handler.ts', () => ({
   serveHlsMaster: vi.fn(),
   serveHlsPlaylist: vi.fn(),
   serveHlsSegment: vi.fn(),
 }));
-vi.mock('../../src/core/thumbnail-handler.ts', () => ({
+vi.mock('../../src/core/media/thumbnail-handler.ts', () => ({
   serveThumbnail: vi.fn(),
 }));
 
@@ -132,7 +132,7 @@ describe('Security: load-file-as-data-url', () => {
 
   it('should allow access to files within allowed media directories', async () => {
     const fsPromises = await import('fs/promises');
-    const db = await import('../../src/core/database');
+    const db = await import('../../src/core/database/database');
 
     // Setup allowed directories
     const allowedDir = '/allowed/media';
@@ -162,7 +162,7 @@ describe('Security: load-file-as-data-url', () => {
 
   it('should deny access to files outside allowed media directories', async () => {
     const fsPromises = await import('fs/promises');
-    const db = await import('../../src/core/database');
+    const db = await import('../../src/core/database/database');
 
     // Setup allowed directories
     (db.getMediaDirectories as unknown as Mock).mockResolvedValue([
@@ -190,7 +190,7 @@ describe('Security: load-file-as-data-url', () => {
 
   it('should deny path traversal attempts', async () => {
     const fsPromises = await import('fs/promises');
-    const db = await import('../../src/core/database');
+    const db = await import('../../src/core/database/database');
 
     const allowedDir = '/allowed/media';
     (db.getMediaDirectories as unknown as Mock).mockResolvedValue([
@@ -220,7 +220,7 @@ describe('Security: load-file-as-data-url', () => {
 
   it('should deny symlink traversal attacks', async () => {
     const fsPromises = await import('fs/promises');
-    const db = await import('../../src/core/database');
+    const db = await import('../../src/core/database/database');
 
     const allowedDir = '/allowed/media';
     (db.getMediaDirectories as unknown as Mock).mockResolvedValue([

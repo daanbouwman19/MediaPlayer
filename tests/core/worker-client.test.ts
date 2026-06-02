@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { WorkerClient } from '../../src/core/worker-client';
+import { WorkerClient } from '../../src/core/database/worker-client';
 import { Worker } from 'worker_threads';
-import * as logger from '../../src/core/utils/logger';
+import * as logger from '../../src/core/media/utils/logger';
 
 // Mock logger
-vi.mock('../../src/core/utils/logger', () => ({
+vi.mock('../../src/core/media/utils/logger', () => ({
   safeLog: vi.fn(),
   safeError: vi.fn(),
   safeWarn: vi.fn(),

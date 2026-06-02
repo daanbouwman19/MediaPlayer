@@ -235,7 +235,7 @@ import { useMediaLoader } from '../composables/useMediaLoader';
 import { useSlideshow } from '../composables/useSlideshow';
 import { useUIStore } from '../composables/useUIStore';
 import { useToast } from '../composables/useToast';
-import { api } from '../api';
+import { api } from '../api/index';
 import MenuIcon from './icons/MenuIcon.vue';
 import PlaylistIcon from './icons/PlaylistIcon.vue';
 import SpinnerIcon from './icons/SpinnerIcon.vue';

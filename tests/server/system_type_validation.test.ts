@@ -3,10 +3,10 @@ import request from 'supertest';
 import { createApp } from '../../src/server/server';
 
 // Mock dependencies
-vi.mock('../../src/core/database');
-vi.mock('../../src/core/media-service');
-vi.mock('../../src/core/file-system');
-vi.mock('../../src/core/media-handler', () => ({
+vi.mock('../../src/core/database/database');
+vi.mock('../../src/core/media/media-service');
+vi.mock('../../src/core/media/file-system');
+vi.mock('../../src/core/media/media-handler', () => ({
   MediaHandler: class {},
 }));
 vi.mock('../../src/main/google-auth');

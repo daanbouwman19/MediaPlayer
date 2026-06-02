@@ -4,7 +4,10 @@ import {
   validatePathAccess,
   filterAuthorizedPaths,
 } from '../utils/security-utils';
-import { generateFileUrl, getVideoDuration } from '../../core/media-handler';
+import {
+  generateFileUrl,
+  getVideoDuration,
+} from '../../core/media/media-handler';
 import {
   getDriveFileMetadata,
   listDriveDirectory,
@@ -17,16 +20,16 @@ import {
   getRecentlyPlayed,
   listTranscodeJobs,
   deleteTranscodeJob,
-} from '../../core/database';
-import { TranscodeQueueManager } from '../../core/transcode-queue-manager';
-import { MediaService } from '../../core/media-service';
-import { isDrivePath, getDriveId } from '../../core/media-utils';
-import { MediaAnalyzer } from '../../core/analysis/media-analyzer';
-import { HlsManager } from '../../core/hls-manager';
-import { generateSessionId } from '../../core/hls-handler';
+} from '../../core/database/database';
+import { TranscodeQueueManager } from '../../core/media/transcode-queue-manager';
+import { MediaService } from '../../core/media/media-service';
+import { isDrivePath, getDriveId } from '../../core/media/media-utils';
+import { MediaAnalyzer } from '../../core/media/analysis/media-analyzer';
+import { HlsManager } from '../../core/media/hls-manager';
+import { generateSessionId } from '../../core/media/hls-handler';
 import { getServerPort } from '../local-server';
 import { handleIpc } from '../utils/ipc-helper';
-import { getFFmpegStaticPath } from '../../core/utils/ffmpeg-static-path';
+import { getFFmpegStaticPath } from '../../infrastructure/ffmpeg-static-path';
 
 async function getFFmpegPath(): Promise<string | null> {
   return getFFmpegStaticPath();

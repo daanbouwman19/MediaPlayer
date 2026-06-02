@@ -7,9 +7,9 @@ import {
   removeMediaDirectory,
   setDirectoryActiveState,
   getMediaDirectories,
-} from '../../../src/core/database';
-import { openMediaInVlc } from '../../../src/core/vlc-player';
-import { listDirectory } from '../../../src/core/file-system';
+} from '../../../src/core/database/database';
+import { openMediaInVlc } from '../../../src/infrastructure/vlc-player';
+import { listDirectory } from '../../../src/core/media/file-system';
 import { getServerPort } from '../../../src/main/local-server';
 import { shell, dialog, ipcMain, nativeTheme } from 'electron';
 import fs from 'fs/promises';
@@ -18,7 +18,7 @@ vi.mock('../../../src/main/utils/ipc-helper', () => ({
   handleIpc: vi.fn(),
 }));
 
-vi.mock('../../../src/core/database', () => ({
+vi.mock('../../../src/core/database/database', () => ({
   isFileInLibrary: vi.fn(),
   addMediaDirectory: vi.fn(),
   removeMediaDirectory: vi.fn(),
@@ -26,11 +26,11 @@ vi.mock('../../../src/core/database', () => ({
   getMediaDirectories: vi.fn(),
 }));
 
-vi.mock('../../../src/core/vlc-player', () => ({
+vi.mock('../../../src/infrastructure/vlc-player', () => ({
   openMediaInVlc: vi.fn(),
 }));
 
-vi.mock('../../../src/core/file-system', () => ({
+vi.mock('../../../src/core/media/file-system', () => ({
   listDirectory: vi.fn(),
 }));
 

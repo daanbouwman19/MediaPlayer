@@ -12,7 +12,7 @@ import {
   upsertMetadata,
   recordMediaView,
   executeSmartPlaylist,
-} from '../../src/core/database-worker';
+} from '../../src/core/database/database-worker';
 
 describe('Smart Playlist SQL Generation', () => {
   const TEST_DB_PATH = path.join(__dirname, 'test_smart_playlist.sqlite');

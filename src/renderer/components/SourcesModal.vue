@@ -482,7 +482,7 @@ import { useUIStore } from '../composables/useUIStore';
 import { usePlayerStore } from '../composables/usePlayerStore'; // For resetting slideshow state
 import { usePlaylistStore } from '../composables/usePlaylistStore';
 import { selectAllAlbums } from '../utils/albumUtils';
-import { api } from '../api';
+import { api } from '../api/index';
 import { ref, onMounted } from 'vue';
 import { storeToRefs } from 'pinia';
 import FileExplorer from './FileExplorer.vue';

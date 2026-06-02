@@ -7,8 +7,8 @@ import type {
   MediaLibraryItem,
   HeatmapData,
   TranscodeJob,
-} from '../../core/types';
-import type { FileSystemEntry } from '../../core/file-system';
+} from '../../core/media/types';
+import type { FileSystemEntry } from '../../core/media/file-system';
 
 export class WebAdapter implements IMediaBackend {
   async getLockStatus(): Promise<AuthStatus> {
