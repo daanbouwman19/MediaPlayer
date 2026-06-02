@@ -17,7 +17,7 @@ export class WorkerScannerService implements IWorkerService {
   }): Promise<Album[]> {
     const isElectron = !!process.versions['electron'];
 
-    const isProd = process.env.NODE_ENV === 'production';
+    const isProd = process.env.NODE_ENV === 'production' || isElectron;
     const currentDirname = isProd
       ? WORKER_DIRNAME
       : path.join(WORKER_DIRNAME, '..');

@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { WorkerScannerService } from '../../../src/infrastructure/worker-scanner-service';
 import { WorkerClient } from '../../../src/core/database/worker-client';
 import { WorkerFactory } from '../../../src/core/database/worker-factory';
+import path from 'path';
 
 vi.mock('../../../src/core/database/worker-client');
 vi.mock('../../../src/core/database/worker-factory');
@@ -89,7 +90,9 @@ describe('WorkerScannerService', () => {
     expect(WorkerFactory.getWorkerPath).toHaveBeenCalledWith(
       'scan-worker',
       expect.objectContaining({
-        currentDirname: expect.stringContaining('src/infrastructure'),
+        currentDirname: expect.stringContaining(
+          path.join('src', 'infrastructure'),
+        ),
         currentUrl: expect.stringContaining('worker-scanner-service.ts'),
       }),
     );
