@@ -23,7 +23,7 @@ export class WorkerScannerService implements IWorkerService {
       : path.join(WORKER_DIRNAME, '..');
     const currentUrl = isProd
       ? import.meta.url
-      : new URL('../', import.meta.url).href;
+      : new URL('../core/media/', import.meta.url).href;
 
     const { path: workerPath, options: workerOptions } =
       await WorkerFactory.getWorkerPath('scan-worker', {
