@@ -513,12 +513,45 @@ describe('Database Worker Combined Tests', () => {
     it('should handle updateWatchedSegments message', async () => {
       const filePath = path.join(tempDir, 'watched.mp4');
       fs.writeFileSync(filePath, 'data');
-      const segments = '[{start:0, end:10}]';
+      const segments = JSON.stringify([{ start: 0, end: 10 }]);
       const result = await sendMessage('updateWatchedSegments', {
         filePath,
         segmentsJson: segments,
       });
       expect(result.success).toBe(true);
+    });
+
+    it('should round-trip watched segments through the segments table', async () => {
+      const filePath = path.join(tempDir, 'roundtrip.mp4');
+      fs.writeFileSync(filePath, 'data');
+      await sendMessage('upsertMetadata', { filePath, duration: 60 });
+      const segments = [
+        { start: 5, end: 10 },
+        { start: 0, end: 3 },
+      ];
+      await sendMessage('updateWatchedSegments', {
+        filePath,
+        segmentsJson: JSON.stringify(segments),
+      });
+
+      const res = await sendMessage('getMetadata', { filePaths: [filePath] });
+      expect(res.success).toBe(true);
+      const meta = (res.data as any)[filePath];
+      // Segments come back ordered by start time
+      expect(JSON.parse(meta.watchedSegments)).toEqual([
+        { start: 0, end: 3 },
+        { start: 5, end: 10 },
+      ]);
+    });
+
+    it('should reject invalid watched segments JSON', async () => {
+      const filePath = path.join(tempDir, 'invalid.mp4');
+      fs.writeFileSync(filePath, 'data');
+      const result = await sendMessage('updateWatchedSegments', {
+        filePath,
+        segmentsJson: '[{start:0, end:10}]',
+      });
+      expect(result.success).toBe(false);
     });
 
     it('should handle getAllMetadata message', async () => {
@@ -552,6 +585,77 @@ describe('Database Worker Combined Tests', () => {
       const res = await sendMessage('getPendingMetadata', {});
       expect(res.success).toBe(true);
       expect(Array.isArray(res.data)).toBe(true);
+    });
+  });
+
+  describe('Job Queue', () => {
+    beforeEach(async () => {
+      await sendMessage('init', { dbPath });
+    });
+
+    it('should handle the transcode job lifecycle', async () => {
+      const filePath = '/videos/job.mp4';
+      const addRes = await sendMessage('addTranscodeJob', { filePath });
+      expect(addRes.success).toBe(true);
+
+      const pendingRes = await sendMessage('getPendingTranscodeJobs', {});
+      expect(pendingRes.data).toEqual([filePath]);
+
+      await sendMessage('updateTranscodeJobStatus', {
+        filePath,
+        status: 'done',
+        error: null,
+      });
+      const listRes = await sendMessage('listTranscodeJobs', {});
+      const jobs = listRes.data as any[];
+      expect(jobs).toHaveLength(1);
+      expect(jobs[0].status).toBe('done');
+      expect(jobs[0].type).toBe('transcode');
+
+      await sendMessage('deleteTranscodeJob', { filePath });
+      const emptyRes = await sendMessage('listTranscodeJobs', {});
+      expect(emptyRes.data).toEqual([]);
+    });
+
+    it('should isolate jobs by type', async () => {
+      const filePath = '/videos/typed.mp4';
+      await sendMessage('addTranscodeJob', { filePath });
+      await sendMessage('addJob', { jobType: 'thumbnail', filePath });
+
+      const transcodePending = await sendMessage('getPendingTranscodeJobs', {});
+      expect(transcodePending.data).toEqual([filePath]);
+
+      const thumbPending = await sendMessage('getPendingJobs', {
+        jobType: 'thumbnail',
+      });
+      expect(thumbPending.data).toEqual([filePath]);
+
+      await sendMessage('deleteJob', { jobType: 'thumbnail', filePath });
+      const thumbAfter = await sendMessage('listJobs', {
+        jobType: 'thumbnail',
+      });
+      expect(thumbAfter.data).toEqual([]);
+
+      // Transcode job untouched by thumbnail deletion
+      const transcodeAfter = await sendMessage('listTranscodeJobs', {});
+      expect(transcodeAfter.data).toHaveLength(1);
+    });
+
+    it('should handle updateJobStatus for a generic job type', async () => {
+      const filePath = '/videos/generic.mp4';
+      await sendMessage('addJob', { jobType: 'thumbnail', filePath });
+      const updateRes = await sendMessage('updateJobStatus', {
+        jobType: 'thumbnail',
+        filePath,
+        status: 'failed',
+        error: 'boom',
+      });
+      expect(updateRes.success).toBe(true);
+
+      const listRes = await sendMessage('listJobs', { jobType: 'thumbnail' });
+      const jobs = listRes.data as any[];
+      expect(jobs[0].status).toBe('failed');
+      expect(jobs[0].error).toBe('boom');
     });
   });
 });

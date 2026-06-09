@@ -251,58 +251,26 @@ describe('Final Coverage Boost', () => {
       consoleSpy.mockRestore();
     });
 
-    it('recordMediaView: handles unique constraint violation by falling back', async () => {
+    it('recordMediaView: records a view with a single upsert', async () => {
       const initRes = dbWorker.initDatabase(':memory:');
       if (!initRes.success) throw new Error(`Init failed: ${initRes.error}`);
 
       mockStatement.run.mockClear();
 
-      // We need to queue enough mock implementations to cover potential extra calls or retries
-      // sequence: insert -> updatePath -> updateFallback
-      mockStatement.run
-        .mockImplementationOnce(() => {})
-        .mockImplementationOnce(() => {
-          const e: any = new Error('Constraint');
-          e.code = 'SQLITE_CONSTRAINT_UNIQUE';
-          throw e;
-        })
-        .mockImplementationOnce(() => {});
-
-      await dbWorker.recordMediaView('/test/view.mp4');
-
-      expect(mockStatement.run).toHaveBeenCalledTimes(3);
+      const result = await dbWorker.recordMediaView('/test/view.mp4');
+      expect(result.success).toBe(true);
+      expect(mockStatement.run).toHaveBeenCalledTimes(1);
     });
 
-    it('recordMediaView: handles unique constraint error message string violation by falling back', async () => {
+    it('recordMediaView: returns failure on statement error', async () => {
       const initRes = dbWorker.initDatabase(':memory:');
       if (!initRes.success) throw new Error(`Init failed: ${initRes.error}`);
 
       mockStatement.run.mockClear();
 
-      // sequence: insert -> updatePath -> updateFallback
-      mockStatement.run
-        .mockImplementationOnce(() => {})
-        .mockImplementationOnce(() => {
-          throw new Error('UNIQUE constraint failed: media_views.file_path');
-        })
-        .mockImplementationOnce(() => {});
-
-      await dbWorker.recordMediaView('/test/view.mp4');
-
-      expect(mockStatement.run).toHaveBeenCalledTimes(3);
-    });
-
-    it('recordMediaView: throws on non-constraint error', async () => {
-      const initRes = dbWorker.initDatabase(':memory:');
-      if (!initRes.success) throw new Error(`Init failed: ${initRes.error}`);
-
-      mockStatement.run.mockClear();
-
-      mockStatement.run
-        .mockImplementationOnce(() => {})
-        .mockImplementationOnce(() => {
-          throw new Error('Random DB Error');
-        });
+      mockStatement.run.mockImplementationOnce(() => {
+        throw new Error('Random DB Error');
+      });
 
       const result = await dbWorker.recordMediaView('/test/view.mp4');
       expect(result.success).toBe(false);

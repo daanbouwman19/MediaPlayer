@@ -62,10 +62,10 @@ vi.mock('node:sqlite', () => {
 });
 
 vi.mock('../../src/core/database/database-schema', () => ({
-  initializeSchema: vi.fn(),
-  migrateMediaDirectories: vi.fn(),
-  migrateMediaMetadata: vi.fn(),
+  initializeDatabase: vi.fn(),
   createIndexes: vi.fn(),
+  JOB_TYPE_TRANSCODE: 'transcode',
+  SEGMENT_TYPE_WATCHED: 'watched',
 }));
 
 vi.mock('../../src/core/media/media-utils', async (importOriginal) => {
@@ -249,14 +249,14 @@ describe('Database Worker Coverage', () => {
     expect(mockStatement.all.mock.calls.length).toBeGreaterThanOrEqual(2);
   });
 
-  it('recordMediaView - handles transaction error', async () => {
-    mockDbInstance.exec.mockImplementationOnce(() => {
-      throw new Error('Transaction failed');
+  it('recordMediaView - handles statement error', async () => {
+    mockStatement.run.mockImplementationOnce(() => {
+      throw new Error('Insert failed');
     });
 
     const result = await worker.recordMediaView('/test.mp4');
     expect(result.success).toBe(false);
-    expect(result.error).toBe('Transaction failed');
+    expect(result.error).toBe('Insert failed');
   });
 
   it('getMediaViewCounts - handles error', async () => {
@@ -399,9 +399,23 @@ describe('Database Worker Coverage', () => {
       null, // createdAt
       null, // rating
       null, // status
-      null, // watchedSegments
       null, // playbackPosition
     );
+  });
+
+  it('upsertMetadata - rejects invalid watched segments JSON', async () => {
+    const result = await worker.upsertMetadata({
+      filePath: '/test.mp4',
+      watchedSegments: '{not json',
+    });
+    expect(result.success).toBe(false);
+    expect(result.error).toBe('Invalid watched segments JSON');
+  });
+
+  it('updateWatchedSegments - rejects non-array JSON', async () => {
+    const result = await worker.updateWatchedSegments('/test.mp4', '{}');
+    expect(result.success).toBe(false);
+    expect(result.error).toBe('Watched segments must be a JSON array');
   });
 
   it('bulkUpsertMetadata - handles undefined fields in batch', async () => {
@@ -416,7 +430,6 @@ describe('Database Worker Coverage', () => {
       null, // createdAt
       null, // rating
       null, // status
-      null, // watchedSegments
       null, // playbackPosition
     );
   });
@@ -452,14 +465,14 @@ describe('Database Worker Coverage', () => {
     );
     lastCall = prepareSpy.mock.calls[prepareSpy.mock.calls.length - 1];
     sql = lastCall[0];
-    expect(sql).toContain('COALESCE(v.view_count, 0) >= ?');
-    expect(sql).toContain('COALESCE(v.view_count, 0) <= ?');
+    expect(sql).toContain('COALESCE(view_count, 0) >= ?');
+    expect(sql).toContain('COALESCE(view_count, 0) <= ?');
 
     // 3. Test Days Since View
     worker.executeSmartPlaylist(JSON.stringify({ minDaysSinceView: 30 }));
     lastCall = prepareSpy.mock.calls[prepareSpy.mock.calls.length - 1];
     sql = lastCall[0];
-    expect(sql).toContain("julianday('now') - julianday(v.last_viewed)) >= ?");
+    expect(sql).toContain("julianday('now') - julianday(last_viewed)) >= ?");
   });
 
   it('getMetadata - handles large batch', async () => {
