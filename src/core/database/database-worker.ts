@@ -12,10 +12,9 @@ import path from 'path';
 import type { Album } from '../media/types.ts';
 import { generateFileId } from '../media/utils/file-id.ts';
 import {
-  initializeSchema,
-  migrateMediaDirectories,
-  migrateMediaMetadata,
-  createIndexes,
+  initializeDatabase,
+  JOB_TYPE_TRANSCODE,
+  SEGMENT_TYPE_WATCHED,
 } from './database-schema.ts';
 
 // Extract the Statement type from return value of DatabaseSync.prepare or mock it
@@ -28,7 +27,7 @@ let db: DatabaseSync | null = null;
 
 /**
  * Cache for prepared statements to improve performance of repeated queries.
- * Keys are the statement names (e.g., 'insertMediaView'), and values are the prepared SQLite statements.
+ * Keys are the statement names (e.g., 'recordView'), and values are the prepared SQLite statements.
  */
 const statements: { [key: string]: StatementSync } = {};
 
@@ -37,6 +36,14 @@ const statements: { [key: string]: StatementSync } = {};
  * 900 is chosen to be safely within SQLite's default limit of 999 parameters.
  */
 const SQL_BATCH_SIZE = 900;
+
+/**
+ * Correlated subquery that reassembles watched segments for the current
+ * media_metadata row into the legacy JSON format ({start, end}[]), or NULL
+ * when the file has no watched segments. Keeps the worker's message
+ * contract unchanged while segments live in the media_segments table.
+ */
+const WATCHED_SEGMENTS_JSON = `NULLIF((SELECT json_group_array(json_object('start', s.start_time, 'end', s.end_time) ORDER BY s.start_time) FROM media_segments s WHERE s.file_path_hash = media_metadata.file_path_hash AND s.type = '${SEGMENT_TYPE_WATCHED}'), '[]')`;
 
 // Helper Functions
 
@@ -122,29 +129,23 @@ async function generateFileIdsBatched(
 
 /**
  * Helper to get an existing file ID from the database or generate one if not found.
- * Checks media_metadata first, then media_views, then falls back to generation (fs.stat).
+ * Checks media_metadata first, then falls back to generation (fs.stat).
  */
 async function getExistingIdOrGenerate(filePath: string): Promise<string> {
-  const statementsToTry = [
-    statements.getFileIdFromMetadata,
-    statements.getFileIdByPath,
-  ];
-
-  for (const stmt of statementsToTry) {
-    try {
-      const row = stmt.get(filePath) as { file_path_hash: string } | undefined;
-      if (row) {
-        return row.file_path_hash;
-      }
-    } catch (error) {
-      console.warn(
-        `[worker] DB error while checking for existing file ID for ${filePath}:`,
-        error,
-      );
+  try {
+    const row = statements.getFileIdByPath.get(filePath) as
+      | { file_path_hash: string }
+      | undefined;
+    if (row) {
+      return row.file_path_hash;
     }
+  } catch (error) {
+    console.warn(
+      `[worker] DB error while checking for existing file ID for ${filePath}:`,
+      error,
+    );
   }
 
-  // 3. Generate (fs.stat)
   return generateFileId(filePath);
 }
 
@@ -216,31 +217,21 @@ export function initDatabase(dbPath: string): WorkerResult {
     // db.pragma does not exist in node:sqlite! Use db.exec instead.
     db.exec('PRAGMA journal_mode = WAL');
 
-    initializeSchema(db);
-    migrateMediaDirectories(db);
-    migrateMediaMetadata(db);
-    createIndexes(db);
+    initializeDatabase(db);
     db.prepare(
-      `UPDATE transcode_jobs SET status='pending', updated_at=CURRENT_TIMESTAMP WHERE status='processing'`,
+      `UPDATE jobs SET status='pending', updated_at=CURRENT_TIMESTAMP WHERE status='processing'`,
     ).run();
 
     // Prepare statements for reuse
-    statements.insertMediaView = db.prepare(
-      `INSERT OR IGNORE INTO media_views (file_path_hash, file_path, view_count, last_viewed) VALUES (?, ?, 0, ?)`,
-    );
-    statements.updateMediaView = db.prepare(
-      `UPDATE media_views SET view_count = view_count + 1, last_viewed = ? WHERE file_path_hash = ?`,
-    );
-    statements.updateMediaViewWithPath = db.prepare(
-      `UPDATE media_views SET view_count = view_count + 1, last_viewed = ?, file_path = ? WHERE file_path_hash = ?`,
-    );
-    statements.getMediaView = db.prepare(
-      `SELECT file_path_hash, view_count FROM media_views WHERE file_path_hash = ?`,
+    statements.recordView = db.prepare(
+      `INSERT INTO media_metadata (file_path_hash, file_path, view_count, last_viewed)
+       VALUES (?, ?, 1, ?)
+       ON CONFLICT(file_path_hash) DO UPDATE SET
+       view_count = COALESCE(media_metadata.view_count, 0) + 1,
+       last_viewed = excluded.last_viewed,
+       file_path = COALESCE(excluded.file_path, media_metadata.file_path)`,
     );
     statements.getFileIdByPath = db.prepare(
-      `SELECT file_path_hash FROM media_views WHERE file_path = ?`,
-    );
-    statements.getFileIdFromMetadata = db.prepare(
       `SELECT file_path_hash FROM media_metadata WHERE file_path = ?`,
     );
     statements.cacheAlbum = db.prepare(
@@ -264,8 +255,8 @@ export function initDatabase(dbPath: string): WorkerResult {
       'UPDATE media_directories SET is_active = ? WHERE path = ?',
     );
     statements.upsertMetadata = db.prepare(
-      `INSERT INTO media_metadata (file_path_hash, file_path, duration, size, created_at, rating, extraction_status, watched_segments, playback_position)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO media_metadata (file_path_hash, file_path, duration, size, created_at, rating, extraction_status, playback_position, in_library)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
        ON CONFLICT(file_path_hash) DO UPDATE SET
        file_path = excluded.file_path,
        duration = COALESCE(excluded.duration, media_metadata.duration),
@@ -273,11 +264,11 @@ export function initDatabase(dbPath: string): WorkerResult {
        created_at = COALESCE(excluded.created_at, media_metadata.created_at),
        rating = COALESCE(excluded.rating, media_metadata.rating),
        extraction_status = COALESCE(excluded.extraction_status, media_metadata.extraction_status),
-       watched_segments = COALESCE(excluded.watched_segments, media_metadata.watched_segments),
-       playback_position = COALESCE(excluded.playback_position, media_metadata.playback_position)`,
+       playback_position = COALESCE(excluded.playback_position, media_metadata.playback_position),
+       in_library = 1`,
     );
     statements.getPendingMetadata = db.prepare(
-      `SELECT file_path FROM media_metadata WHERE (extraction_status = 'pending' OR extraction_status IS NULL) AND file_path IS NOT NULL LIMIT 100`,
+      `SELECT file_path FROM media_metadata WHERE (extraction_status = 'pending' OR extraction_status IS NULL) AND file_path IS NOT NULL AND in_library = 1 LIMIT 100`,
     );
     statements.updateRating = db.prepare(
       // Only update rating if the row exists, or insert if capable?
@@ -286,9 +277,14 @@ export function initDatabase(dbPath: string): WorkerResult {
       `INSERT INTO media_metadata (file_path_hash, rating) VALUES (?, ?)
        ON CONFLICT(file_path_hash) DO UPDATE SET rating = excluded.rating`,
     );
-    statements.updateWatchedSegments = db.prepare(
-      `INSERT INTO media_metadata (file_path_hash, watched_segments) VALUES (?, ?)
-       ON CONFLICT(file_path_hash) DO UPDATE SET watched_segments = excluded.watched_segments`,
+    statements.ensureMetadataRow = db.prepare(
+      `INSERT OR IGNORE INTO media_metadata (file_path_hash) VALUES (?)`,
+    );
+    statements.deleteWatchedSegments = db.prepare(
+      `DELETE FROM media_segments WHERE file_path_hash = ? AND type = '${SEGMENT_TYPE_WATCHED}'`,
+    );
+    statements.insertWatchedSegment = db.prepare(
+      `INSERT INTO media_segments (file_path_hash, type, start_time, end_time) VALUES (?, '${SEGMENT_TYPE_WATCHED}', ?, ?)`,
     );
     statements.updatePlaybackPosition = db.prepare(
       `INSERT INTO media_metadata (file_path_hash, playback_position) VALUES (?, ?)
@@ -302,20 +298,18 @@ export function initDatabase(dbPath: string): WorkerResult {
     );
     statements.getRecentlyPlayed = db.prepare(
       `SELECT
-        v.file_path,
-        v.file_path_hash,
-        v.view_count,
-        v.last_viewed,
-        m.duration,
-        m.size,
-        m.rating,
-        m.created_at,
-        m.watched_segments,
-        v.last_viewed
-       FROM media_views v
-       LEFT JOIN media_metadata m ON v.file_path_hash = m.file_path_hash
-       WHERE v.last_viewed IS NOT NULL
-       ORDER BY v.last_viewed DESC
+        file_path,
+        file_path_hash,
+        view_count,
+        last_viewed,
+        duration,
+        size,
+        rating,
+        created_at,
+        ${WATCHED_SEGMENTS_JSON} as watched_segments
+       FROM media_metadata
+       WHERE last_viewed IS NOT NULL
+       ORDER BY last_viewed DESC
        LIMIT ?`,
     );
     statements.deleteSmartPlaylist = db.prepare(
@@ -332,38 +326,37 @@ export function initDatabase(dbPath: string): WorkerResult {
     );
     statements.executeSmartPlaylist = db.prepare(`
       SELECT
-        m.file_path_hash,
-        m.file_path,
-        m.duration,
-        m.rating,
-        m.created_at,
-        COALESCE(v.view_count, 0) as view_count,
-        v.last_viewed,
-        m.playback_position
-      FROM media_metadata m
-      LEFT JOIN media_views v ON m.file_path_hash = v.file_path_hash
-      WHERE m.file_path IS NOT NULL
+        file_path_hash,
+        file_path,
+        duration,
+        rating,
+        created_at,
+        COALESCE(view_count, 0) as view_count,
+        last_viewed,
+        playback_position
+      FROM media_metadata
+      WHERE in_library = 1 AND file_path IS NOT NULL
     `);
-    statements.addTranscodeJob = db.prepare(
-      `INSERT OR REPLACE INTO transcode_jobs (file_path, file_path_hash, status, updated_at) VALUES (?, ?, 'pending', CURRENT_TIMESTAMP)`,
+    statements.addJob = db.prepare(
+      `INSERT OR REPLACE INTO jobs (type, file_path, file_path_hash, status, updated_at) VALUES (?, ?, ?, 'pending', CURRENT_TIMESTAMP)`,
     );
-    statements.listTranscodeJobs = db.prepare(
-      `SELECT file_path, file_path_hash, status, error, created_at, updated_at FROM transcode_jobs ORDER BY created_at DESC`,
+    statements.listJobs = db.prepare(
+      `SELECT type, file_path, file_path_hash, status, error, created_at, updated_at FROM jobs WHERE type = ? ORDER BY created_at DESC`,
     );
-    statements.updateTranscodeJobStatus = db.prepare(
-      `UPDATE transcode_jobs SET status=?, error=?, updated_at=CURRENT_TIMESTAMP WHERE file_path=?`,
+    statements.updateJobStatus = db.prepare(
+      `UPDATE jobs SET status=?, error=?, updated_at=CURRENT_TIMESTAMP WHERE type=? AND file_path=?`,
     );
-    statements.deleteTranscodeJob = db.prepare(
-      `DELETE FROM transcode_jobs WHERE file_path=?`,
+    statements.deleteJob = db.prepare(
+      `DELETE FROM jobs WHERE type=? AND file_path=?`,
     );
-    statements.getPendingTranscodeJobs = db.prepare(
-      `SELECT file_path FROM transcode_jobs WHERE status='pending' ORDER BY created_at ASC`,
+    statements.getPendingJobs = db.prepare(
+      `SELECT file_path FROM jobs WHERE type=? AND status='pending' ORDER BY created_at ASC`,
     );
 
     // Optimized batch statements
     const placeholders = Array(SQL_BATCH_SIZE).fill('?').join(',');
     statements.getMediaViewCountsBatch = db.prepare(
-      `SELECT file_path, view_count FROM media_views WHERE file_path IN (${placeholders})`,
+      `SELECT file_path, view_count FROM media_metadata WHERE file_path IN (${placeholders})`,
     );
     statements.getMetadataBatch = db.prepare(
       `SELECT
@@ -373,9 +366,9 @@ export function initDatabase(dbPath: string): WorkerResult {
         created_at as createdAt,
         rating,
         extraction_status as status,
-        watched_segments as watchedSegments,
+        ${WATCHED_SEGMENTS_JSON} as watchedSegments,
         playback_position as playbackPosition
-       FROM media_metadata WHERE file_path_hash IN (${placeholders})`,
+       FROM media_metadata WHERE file_path_hash IN (${placeholders}) AND in_library = 1`,
     );
     // Optimization: Select only necessary columns and alias them to match MediaMetadata interface
     statements.getAllMetadata = db.prepare(
@@ -386,19 +379,19 @@ export function initDatabase(dbPath: string): WorkerResult {
         created_at as createdAt,
         rating,
         extraction_status as status,
-        watched_segments as watchedSegments,
+        ${WATCHED_SEGMENTS_JSON} as watchedSegments,
         playback_position as playbackPosition
-       FROM media_metadata WHERE file_path IS NOT NULL`,
+       FROM media_metadata WHERE file_path IS NOT NULL AND in_library = 1`,
     );
 
-    // Optimized query for metadata verification (skips duration, rating, watched_segments)
+    // Optimized query for metadata verification (skips duration, rating, watched segments)
     statements.getAllMetadataVerification = db.prepare(
       `SELECT
         file_path as filePath,
         size,
         created_at as createdAt,
         extraction_status as status
-       FROM media_metadata WHERE file_path IS NOT NULL`,
+       FROM media_metadata WHERE file_path IS NOT NULL AND in_library = 1`,
     );
 
     // Filter Optimization: Get successful paths in batch
@@ -431,6 +424,57 @@ interface MetadataPayload {
 }
 
 /**
+ * Replaces the watched segments for a file with the contents of a JSON
+ * blob in the legacy {start, end}[] format. Entries without a numeric
+ * start are skipped. Throws on malformed JSON.
+ */
+function replaceWatchedSegments(fileId: string, segmentsJson: string): void {
+  let segments: unknown;
+  try {
+    segments = JSON.parse(segmentsJson);
+  } catch {
+    throw new Error('Invalid watched segments JSON');
+  }
+  if (!Array.isArray(segments)) {
+    throw new Error('Watched segments must be a JSON array');
+  }
+  statements.deleteWatchedSegments.run(fileId);
+  for (const seg of segments) {
+    const s = seg as { start?: unknown; end?: unknown };
+    if (s && typeof s.start === 'number') {
+      statements.insertWatchedSegment.run(
+        fileId,
+        s.start,
+        typeof s.end === 'number' ? s.end : null,
+      );
+    }
+  }
+}
+
+/**
+ * Runs the metadata upsert (and segments replacement, when present) for a
+ * single payload. Does not manage transactions — callers do.
+ */
+function runMetadataUpsert(fileId: string, payload: MetadataPayload): void {
+  statements.upsertMetadata.run(
+    fileId,
+    payload.filePath,
+    payload.duration === undefined ? null : payload.duration,
+    payload.size === undefined ? null : payload.size,
+    payload.createdAt === undefined ? null : payload.createdAt,
+    payload.rating === undefined ? null : payload.rating,
+    payload.status === undefined ? null : payload.status,
+    payload.playbackPosition === undefined ? null : payload.playbackPosition,
+  );
+  if (
+    payload.watchedSegments !== undefined &&
+    payload.watchedSegments !== null
+  ) {
+    replaceWatchedSegments(fileId, payload.watchedSegments);
+  }
+}
+
+/**
  * Upserts metadata for a file.
  */
 export async function upsertMetadata(
@@ -439,17 +483,29 @@ export async function upsertMetadata(
   if (!db) return { success: false, error: 'Database not initialized' };
   try {
     const fileId = await getExistingIdOrGenerate(payload.filePath);
-    statements.upsertMetadata.run(
-      fileId,
-      payload.filePath,
-      payload.duration === undefined ? null : payload.duration,
-      payload.size === undefined ? null : payload.size,
-      payload.createdAt === undefined ? null : payload.createdAt,
-      payload.rating === undefined ? null : payload.rating,
-      payload.status === undefined ? null : payload.status,
-      payload.watchedSegments === undefined ? null : payload.watchedSegments,
-      payload.playbackPosition === undefined ? null : payload.playbackPosition,
-    );
+    if (
+      payload.watchedSegments === undefined ||
+      payload.watchedSegments === null
+    ) {
+      runMetadataUpsert(fileId, payload);
+    } else {
+      // Segment replacement spans multiple statements; keep it atomic.
+      db.exec('BEGIN');
+      try {
+        runMetadataUpsert(fileId, payload);
+        db.exec('COMMIT');
+      } catch (e) {
+        try {
+          db.exec('ROLLBACK');
+        } catch (rollbackErr) {
+          console.error(
+            '[worker] Failed to rollback transaction:',
+            rollbackErr,
+          );
+        }
+        throw e;
+      }
+    }
     return { success: true };
   } catch (error: unknown) {
     return { success: false, error: (error as Error).message };
@@ -483,7 +539,21 @@ export async function updateWatchedSegments(
   if (!db) return { success: false, error: 'Database not initialized' };
   try {
     const fileId = await getExistingIdOrGenerate(filePath);
-    statements.updateWatchedSegments.run(fileId, segmentsJson);
+    db.exec('BEGIN');
+    try {
+      // Keep a metadata row around so the file's ID stays stable even when
+      // only segments are known for it.
+      statements.ensureMetadataRow.run(fileId);
+      replaceWatchedSegments(fileId, segmentsJson);
+      db.exec('COMMIT');
+    } catch (e) {
+      try {
+        db.exec('ROLLBACK');
+      } catch (rollbackErr) {
+        console.error('[worker] Failed to rollback transaction:', rollbackErr);
+      }
+      throw e;
+    }
     return { success: true };
   } catch (error: unknown) {
     return { success: false, error: (error as Error).message };
@@ -579,17 +649,7 @@ export async function bulkUpsertMetadata(
     db.exec('BEGIN');
     try {
       for (const item of itemsWithIds) {
-        statements.upsertMetadata.run(
-          item.fileId,
-          item.filePath,
-          item.duration === undefined ? null : item.duration,
-          item.size === undefined ? null : item.size,
-          item.createdAt === undefined ? null : item.createdAt,
-          item.rating === undefined ? null : item.rating,
-          item.status === undefined ? null : item.status,
-          item.watchedSegments === undefined ? null : item.watchedSegments,
-          item.playbackPosition === undefined ? null : item.playbackPosition,
-        );
+        runMetadataUpsert(item.fileId, item);
       }
       db.exec('COMMIT');
     } catch (e) {
@@ -632,7 +692,7 @@ export function getAllMetadata(): WorkerResult {
 
 /**
  * Retrieves lightweight metadata for verification checks.
- * Skips heavy columns like watched_segments and rating.
+ * Skips heavy columns like watched segments and rating.
  */
 export function getAllMetadataVerification(): WorkerResult {
   if (!db) return { success: false, error: 'Database not initialized' };
@@ -877,16 +937,15 @@ export function executeSmartPlaylist(criteriaJson?: string): WorkerResult {
 
     let sql = `
       SELECT
-        m.file_path_hash,
-        m.file_path,
-        m.duration,
-        m.rating,
-        m.created_at,
-        COALESCE(v.view_count, 0) as view_count,
-        v.last_viewed
-      FROM media_metadata m
-      LEFT JOIN media_views v ON m.file_path_hash = v.file_path_hash
-      WHERE m.file_path IS NOT NULL
+        file_path_hash,
+        file_path,
+        duration,
+        rating,
+        created_at,
+        COALESCE(view_count, 0) as view_count,
+        last_viewed
+      FROM media_metadata
+      WHERE in_library = 1 AND file_path IS NOT NULL
     `;
     const params: (number | string)[] = [];
 
@@ -895,25 +954,25 @@ export function executeSmartPlaylist(criteriaJson?: string): WorkerResult {
         const criteria = JSON.parse(criteriaJson);
 
         if (typeof criteria.minRating === 'number') {
-          sql += ' AND m.rating >= ?';
+          sql += ' AND rating >= ?';
           params.push(criteria.minRating);
         }
         if (typeof criteria.minDuration === 'number') {
-          sql += ' AND m.duration >= ?';
+          sql += ' AND duration >= ?';
           params.push(criteria.minDuration);
         }
         if (typeof criteria.minViews === 'number') {
-          sql += ' AND COALESCE(v.view_count, 0) >= ?';
+          sql += ' AND COALESCE(view_count, 0) >= ?';
           params.push(criteria.minViews);
         }
         if (typeof criteria.maxViews === 'number') {
-          sql += ' AND COALESCE(v.view_count, 0) <= ?';
+          sql += ' AND COALESCE(view_count, 0) <= ?';
           params.push(criteria.maxViews);
         }
         if (typeof criteria.minDaysSinceView === 'number') {
           // Logic: item matches if (now - last_viewed) >= minDays OR last_viewed is NULL
           sql +=
-            " AND (v.last_viewed IS NULL OR (julianday('now') - julianday(v.last_viewed)) >= ?)";
+            " AND (last_viewed IS NULL OR (julianday('now') - julianday(last_viewed)) >= ?)";
           params.push(criteria.minDaysSinceView);
         }
       } catch (e) {
@@ -933,6 +992,9 @@ export function executeSmartPlaylist(criteriaJson?: string): WorkerResult {
 
 /**
  * Records a view for a media file.
+ * Views recorded for files the library scan has not indexed create a
+ * stats-only row (in_library = 0), which keeps them out of smart playlists
+ * while preserving their view history.
  * @param filePath - The path of the file that was viewed.
  * @returns The result of the operation.
  */
@@ -941,37 +1003,8 @@ export async function recordMediaView(filePath: string): Promise<WorkerResult> {
 
   try {
     const fileId = await getExistingIdOrGenerate(filePath);
-
     const now = new Date().toISOString();
-
-    db.exec('BEGIN');
-    try {
-      statements.insertMediaView.run(fileId, filePath, now);
-      // Attempt to update path (handles renames/moves), but fallback if unique constraint violated
-      try {
-        statements.updateMediaViewWithPath.run(now, filePath, fileId);
-      } catch (err: unknown) {
-        // If unique constraint failed (path already exists on another ID),
-        // fallback to legacy update (update count only, keep old path)
-        if (
-          (err as { code?: string }).code === 'SQLITE_CONSTRAINT_UNIQUE' ||
-          (err instanceof Error &&
-            err.message.includes('UNIQUE constraint failed'))
-        ) {
-          statements.updateMediaView.run(now, fileId);
-        } else {
-          throw err;
-        }
-      }
-      db.exec('COMMIT');
-    } catch (e) {
-      try {
-        db.exec('ROLLBACK');
-      } catch (rollbackErr) {
-        console.error('[worker] Failed to rollback transaction:', rollbackErr);
-      }
-      throw e;
-    }
+    statements.recordView.run(fileId, filePath, now);
     return { success: true };
   } catch (error: unknown) {
     console.error(`[worker] Error recording view for ${filePath}:`, error);
@@ -1236,55 +1269,63 @@ export function setDirectoryActiveState(
   }
 }
 
-export async function addTranscodeJob(filePath: string): Promise<WorkerResult> {
+// Generic background-job functions. Jobs are keyed on (type, file_path);
+// the transcode queue uses JOB_TYPE_TRANSCODE, and future pipelines
+// (thumbnails, previews, hashing) can add their own types.
+
+export async function addJob(
+  jobType: string,
+  filePath: string,
+): Promise<WorkerResult> {
   if (!db) return { success: false, error: 'Database not initialized' };
   try {
     const fileId = await getExistingIdOrGenerate(filePath);
-    statements.addTranscodeJob.run(filePath, fileId);
+    statements.addJob.run(jobType, filePath, fileId);
     return { success: true };
   } catch (error: unknown) {
     return { success: false, error: (error as Error).message };
   }
 }
 
-export function listTranscodeJobs(): WorkerResult {
+export function listJobs(jobType: string): WorkerResult {
   if (!db) return { success: false, error: 'Database not initialized' };
   try {
-    const rows = statements.listTranscodeJobs.all();
+    const rows = statements.listJobs.all(jobType);
     return { success: true, data: rows };
   } catch (error: unknown) {
     return { success: false, error: (error as Error).message };
   }
 }
 
-export function updateTranscodeJobStatus(
+export function updateJobStatus(
+  jobType: string,
   filePath: string,
   status: string,
   error: string | null,
 ): WorkerResult {
   if (!db) return { success: false, error: 'Database not initialized' };
   try {
-    statements.updateTranscodeJobStatus.run(status, error, filePath);
+    statements.updateJobStatus.run(status, error, jobType, filePath);
     return { success: true };
   } catch (err: unknown) {
     return { success: false, error: (err as Error).message };
   }
 }
 
-export function deleteTranscodeJob(filePath: string): WorkerResult {
+export function deleteJob(jobType: string, filePath: string): WorkerResult {
   if (!db) return { success: false, error: 'Database not initialized' };
   try {
-    statements.deleteTranscodeJob.run(filePath);
+    statements.deleteJob.run(jobType, filePath);
     return { success: true };
   } catch (error: unknown) {
     return { success: false, error: (error as Error).message };
   }
 }
 
-export function getPendingTranscodeJobs(): WorkerResult {
+export function getPendingJobs(jobType: string): WorkerResult {
   if (!db) return { success: false, error: 'Database not initialized' };
   try {
-    const rows = statements.getPendingTranscodeJobs.all() as {
+    const rows = statements.getPendingJobs.all(jobType) as {
       file_path: string;
     }[];
     return { success: true, data: rows.map((r) => r.file_path) };
@@ -1409,23 +1450,44 @@ if (parentPort) {
           result = await filterProcessingNeeded(payload.filePaths);
           break;
         case 'addTranscodeJob':
-          result = await addTranscodeJob(payload.filePath);
+          result = await addJob(JOB_TYPE_TRANSCODE, payload.filePath);
           break;
         case 'listTranscodeJobs':
-          result = listTranscodeJobs();
+          result = listJobs(JOB_TYPE_TRANSCODE);
           break;
         case 'updateTranscodeJobStatus':
-          result = updateTranscodeJobStatus(
+          result = updateJobStatus(
+            JOB_TYPE_TRANSCODE,
             payload.filePath,
             payload.status,
             payload.error ?? null,
           );
           break;
         case 'deleteTranscodeJob':
-          result = deleteTranscodeJob(payload.filePath);
+          result = deleteJob(JOB_TYPE_TRANSCODE, payload.filePath);
           break;
         case 'getPendingTranscodeJobs':
-          result = getPendingTranscodeJobs();
+          result = getPendingJobs(JOB_TYPE_TRANSCODE);
+          break;
+        case 'addJob':
+          result = await addJob(payload.jobType, payload.filePath);
+          break;
+        case 'listJobs':
+          result = listJobs(payload.jobType);
+          break;
+        case 'updateJobStatus':
+          result = updateJobStatus(
+            payload.jobType,
+            payload.filePath,
+            payload.status,
+            payload.error ?? null,
+          );
+          break;
+        case 'deleteJob':
+          result = deleteJob(payload.jobType, payload.filePath);
+          break;
+        case 'getPendingJobs':
+          result = getPendingJobs(payload.jobType);
           break;
         default:
           result = { success: false, error: `Unknown message type: ${type}` };

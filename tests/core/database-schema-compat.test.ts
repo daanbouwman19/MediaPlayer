@@ -1,17 +1,13 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { DatabaseSync } from 'node:sqlite';
-import {
-  initializeSchema,
-  migrateMediaMetadata,
-} from '../../src/core/database/database-schema';
+import { initializeDatabase } from '../../src/core/database/database-schema';
 
 describe('Database Schema vs Application Types', () => {
   let db: DatabaseSync;
 
   beforeAll(() => {
     db = new DatabaseSync(':memory:');
-    initializeSchema(db);
-    migrateMediaMetadata(db);
+    initializeDatabase(db);
   });
 
   afterAll(() => {
@@ -20,8 +16,8 @@ describe('Database Schema vs Application Types', () => {
 
   it('verifies that aliasing columns produces camelCase properties matching application types', () => {
     const insertStmt = db.prepare(`
-      INSERT INTO media_metadata (file_path_hash, file_path, duration, size, created_at, rating, extraction_status, watched_segments)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO media_metadata (file_path_hash, file_path, duration, size, created_at, rating, extraction_status, in_library)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 1)
     `);
 
     insertStmt.run(
@@ -32,10 +28,13 @@ describe('Database Schema vs Application Types', () => {
       '2023-01-01T00:00:00.000Z',
       5,
       'success',
-      null,
     );
+    db.prepare(
+      `INSERT INTO media_segments (file_path_hash, type, start_time, end_time) VALUES (?, 'watched', ?, ?)`,
+    ).run('hash1', 0, 10);
 
-    // This query simulates the fix we are applying in database-worker.ts
+    // This query mirrors the aliasing used in database-worker.ts, including
+    // the JSON reconstruction of watched segments.
     const row = db
       .prepare(
         `
@@ -46,7 +45,7 @@ describe('Database Schema vs Application Types', () => {
         created_at as createdAt,
         rating,
         extraction_status as status,
-        watched_segments as watchedSegments
+        NULLIF((SELECT json_group_array(json_object('start', s.start_time, 'end', s.end_time) ORDER BY s.start_time) FROM media_segments s WHERE s.file_path_hash = media_metadata.file_path_hash AND s.type = 'watched'), '[]') as watchedSegments
       FROM media_metadata WHERE file_path = ?
     `,
       )
@@ -62,5 +61,7 @@ describe('Database Schema vs Application Types', () => {
     expect(row).not.toHaveProperty('watched_segments');
     expect(row.createdAt).toBe('2023-01-01T00:00:00.000Z');
     expect(row.status).toBe('success');
+    // watchedSegments reconstructs the legacy JSON contract
+    expect(JSON.parse(row.watchedSegments)).toEqual([{ start: 0, end: 10 }]);
   });
 });
