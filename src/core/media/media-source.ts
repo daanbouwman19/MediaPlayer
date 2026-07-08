@@ -86,8 +86,7 @@ export class LocalMediaSource implements IMediaSource {
 export class DriveMediaSource implements IMediaSource {
   private fileId: string;
   private metadataPromise:
-    | Promise<import('googleapis').drive_v3.Schema$File>
-    | undefined;
+    Promise<import('googleapis').drive_v3.Schema$File> | undefined;
 
   constructor(filePath: string) {
     this.fileId = getDriveId(filePath);

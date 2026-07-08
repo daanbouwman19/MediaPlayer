@@ -134,8 +134,7 @@ async function generateFileIdsBatched(
 async function getExistingIdOrGenerate(filePath: string): Promise<string> {
   try {
     const row = statements.getFileIdByPath.get(filePath) as
-      | { file_path_hash: string }
-      | undefined;
+      { file_path_hash: string } | undefined;
     if (row) {
       return row.file_path_hash;
     }
@@ -1140,8 +1139,7 @@ export function getCachedAlbums(cacheKey: string): WorkerResult {
   if (!db) return { success: false, error: 'Database not initialized' };
   try {
     const row = statements.getCachedAlbum.get(cacheKey) as
-      | { cache_value: string }
-      | undefined;
+      { cache_value: string } | undefined;
     const data = row && row.cache_value ? JSON.parse(row.cache_value) : null;
     return { success: true, data };
   } catch (error: unknown) {
