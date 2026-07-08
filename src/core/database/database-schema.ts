@@ -98,8 +98,7 @@ export const DB_INDEXES = {
  */
 export function getUserVersion(db: DatabaseSync): number {
   const row = db.prepare('PRAGMA user_version').get() as
-    | { user_version: number }
-    | undefined;
+    { user_version: number } | undefined;
   return row?.user_version ?? 0;
 }
 
