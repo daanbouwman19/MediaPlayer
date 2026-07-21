@@ -146,6 +146,9 @@
     "vue-tsc": "^3.3.7",
     "wait-on": "^9.0.5"
   },
+  "overrides": {
+    "shell-quote": "^1.10.0"
+  },
   "allowScripts": {
     "electron-winstaller@5.4.0": true,
     "esbuild@0.28.0": true,
