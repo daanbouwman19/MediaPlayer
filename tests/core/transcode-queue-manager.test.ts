@@ -168,6 +168,35 @@ describe('TranscodeQueueManager', () => {
     expect(mockUnpinSession).toHaveBeenCalledWith('sess-abc');
   });
 
+  it('deduplicates enqueue of the same path while it is queued', async () => {
+    let releaseWait!: (v: string) => void;
+    mockWaitForSession.mockImplementation(
+      () => new Promise<string>((resolve) => (releaseWait = resolve)),
+    );
+    const manager = TranscodeQueueManager.getInstance();
+
+    await manager.enqueue('/dup.mp4');
+    await manager.enqueue('/dup.mp4');
+    // Let the first processJob start and block on waitForSession
+    await vi.waitFor(() => expect(mockPinSession).toHaveBeenCalledTimes(1));
+
+    releaseWait('complete');
+    await vi.waitFor(() =>
+      expect(mockUpdateTranscodeJobStatus).toHaveBeenCalledWith(
+        '/dup.mp4',
+        'done',
+        null,
+      ),
+    );
+    // Second enqueue was skipped — only one job ran
+    expect(mockPinSession).toHaveBeenCalledTimes(1);
+
+    // After completion the path can be enqueued again
+    mockWaitForSession.mockResolvedValue('complete');
+    await manager.enqueue('/dup.mp4');
+    await vi.waitFor(() => expect(mockPinSession).toHaveBeenCalledTimes(2));
+  });
+
   it('cancel skips processing of the job', async () => {
     const manager = TranscodeQueueManager.getInstance();
     await manager.cancel('/skip.mp4');

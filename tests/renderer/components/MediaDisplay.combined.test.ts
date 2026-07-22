@@ -150,6 +150,38 @@ describe('MediaDisplay Combined Tests', () => {
     expect(mockSlideshow.navigateMedia).toHaveBeenCalledWith(1);
   });
 
+  it('discards a stale item change that resumes after a slow getMetadata', async () => {
+    // Item A's metadata fetch resolves only after the user has already
+    // switched to item B. The stale invocation must not call loadMedia —
+    // doing so would bump the loader's request id and clobber B's mediaUrl.
+    let resolveMetaA!: (v: Record<string, unknown>) => void;
+    (api.getMetadata as Mock).mockImplementation((paths: string[]) => {
+      if (paths[0] === '/a.mp4') {
+        return new Promise((resolve) => (resolveMetaA = resolve));
+      }
+      return Promise.resolve({ [paths[0]]: { playbackPosition: 0 } });
+    });
+
+    mount(MediaDisplay);
+    await flushPromises();
+    mockMediaLoader.loadMedia.mockClear();
+
+    usePlaylistStore().currentItem = { path: '/a.mp4' } as any;
+    await Promise.resolve(); // let the watch start and block on getMetadata
+
+    usePlaylistStore().currentItem = { path: '/b.mp4' } as any;
+    await flushPromises();
+
+    resolveMetaA({ '/a.mp4': { playbackPosition: 42, duration: 100 } });
+    await flushPromises();
+
+    const loadedPaths = mockMediaLoader.loadMedia.mock.calls.map(
+      (call: any[]) => call[0].path,
+    );
+    expect(loadedPaths).toContain('/b.mp4');
+    expect(loadedPaths).not.toContain('/a.mp4');
+  });
+
   describe('Slideshow Video Handling', () => {
     it('should navigate to next slide if video ends and timer is NOT running', async () => {
       usePlayerStore().isTimerRunning = false;

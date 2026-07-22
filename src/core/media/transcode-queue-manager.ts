@@ -11,6 +11,7 @@ export class TranscodeQueueManager {
   private static instance: TranscodeQueueManager | null = null;
   private queue = new PQueue({ concurrency: 2 });
   private cancelled = new Set<string>();
+  private queued = new Set<string>();
 
   private constructor() {}
 
@@ -25,6 +26,7 @@ export class TranscodeQueueManager {
     if (TranscodeQueueManager.instance) {
       TranscodeQueueManager.instance.queue.clear();
       TranscodeQueueManager.instance.cancelled.clear();
+      TranscodeQueueManager.instance.queued.clear();
       TranscodeQueueManager.instance = null;
     }
   }
@@ -48,7 +50,13 @@ export class TranscodeQueueManager {
   }
 
   private scheduleJob(filePath: string): void {
-    this.queue.add(() => this.processJob(filePath));
+    // Dedup: a path already queued or processing would otherwise get a
+    // second processJob run (DB churn + wasted queue slot).
+    if (this.queued.has(filePath)) return;
+    this.queued.add(filePath);
+    this.queue.add(() =>
+      this.processJob(filePath).finally(() => this.queued.delete(filePath)),
+    );
   }
 
   private async processJob(filePath: string): Promise<void> {

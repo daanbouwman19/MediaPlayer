@@ -218,14 +218,23 @@ class DriveCacheManager extends EventEmitter {
     stream.pipe(fileStream);
 
     return new Promise((resolve, reject) => {
+      // The promise resolves on 'ready' but the stream keeps downloading;
+      // 'settled' distinguishes pre-ready failures (must reject so callers
+      // in activeDownloads don't await forever) from post-ready ones.
+      let settled = false;
+
       fileStream.on('ready', () => {
+        settled = true;
         resolve(filePath);
       });
 
       fileStream.on('error', (err) => {
         console.error('[DriveCache] File write error for %s:', fileId, err);
         this.activeDownloads.delete(fileId);
-        reject(err);
+        if (!settled) {
+          settled = true;
+          reject(err);
+        }
       });
 
       stream.on('error', (err) => {
@@ -244,6 +253,10 @@ class DriveCacheManager extends EventEmitter {
         });
         this.metadataCache.delete(fileId);
         this.accessOrder.delete(fileId);
+        if (!settled) {
+          settled = true;
+          reject(err);
+        }
       });
 
       fileStream.on('finish', () => {

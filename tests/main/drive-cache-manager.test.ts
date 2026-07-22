@@ -905,6 +905,57 @@ describe('DriveCacheManager', () => {
       expect(instance).toBe(driveCacheManager);
     });
 
+    it('rejects the download promise when the drive stream errors before ready', async () => {
+      const fileId = 'pre-ready-stream-error';
+      statMock().mockRejectedValue(
+        Object.assign(new Error('Not Found'), { code: 'ENOENT' }),
+      );
+
+      const driveService = await import('../../src/main/google-drive-service');
+      vi.mocked(driveService.getDriveFileMetadata).mockResolvedValue({
+        size: '100',
+        mimeType: 'video/mp4',
+      } as any);
+
+      const mockSourceStream = new EventEmitter();
+      (mockSourceStream as any).pipe = vi.fn();
+      vi.mocked(driveService.getDriveFileStream).mockResolvedValue(
+        mockSourceStream as any,
+      );
+
+      const writeStream = new EventEmitter();
+      (writeStream as any).close = vi.fn();
+      // Never emit 'ready' — the failure happens first
+      setupMockWriteStream(writeStream, { ready: false });
+
+      const consoleSpy = vi
+        .spyOn(console, 'error')
+        .mockImplementation(() => {});
+
+      const promise = driveCacheManager.getCachedFilePath(fileId);
+      setTimeout(() => {
+        mockSourceStream.emit('error', new Error('Network Down'));
+      }, 10);
+
+      // Without the reject, this promise would stay pending forever and
+      // block every later request for the same fileId via activeDownloads.
+      await expect(promise).rejects.toThrow('Network Down');
+
+      // A retry must start a fresh download instead of awaiting the dead one
+      const retryStream = new EventEmitter();
+      (retryStream as any).pipe = vi.fn();
+      vi.mocked(driveService.getDriveFileStream).mockResolvedValue(
+        retryStream as any,
+      );
+      const retryWriteStream = new EventEmitter();
+      setupMockWriteStream(retryWriteStream);
+
+      const retry = await driveCacheManager.getCachedFilePath(fileId);
+      expect(retry.path).toContain(fileId);
+      expect(driveService.getDriveFileStream).toHaveBeenCalledTimes(2);
+      consoleSpy.mockRestore();
+    });
+
     it('handles file write stream error during startDownload', async () => {
       const fileId = 'write-error-file';
       statMock().mockRejectedValue(
