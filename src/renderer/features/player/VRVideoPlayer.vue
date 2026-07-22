@@ -130,6 +130,9 @@ let renderer: THREE.WebGLRenderer | null = null;
 let controls: OrbitControls | null = null;
 let video: HTMLVideoElement | null = null;
 let videoTexture: THREE.VideoTexture | null = null;
+let sphereGeometry: THREE.SphereGeometry | null = null;
+let sphereMaterial: THREE.MeshBasicMaterial | null = null;
+let sphereMesh: THREE.Mesh | null = null;
 let animationId: number | null = null;
 
 // Motion Control State
@@ -328,7 +331,7 @@ const initThree = () => {
   // Geometry: Half sphere for 180 video
   // Radius 500, 60 width segments, 40 height segments
   // phiStart: 0, phiLength: Math.PI (180 degrees)
-  const geometry = new THREE.SphereGeometry(
+  sphereGeometry = new THREE.SphereGeometry(
     SPHERE_RADIUS,
     SPHERE_WIDTH_SEGMENTS,
     SPHERE_HEIGHT_SEGMENTS,
@@ -338,16 +341,16 @@ const initThree = () => {
     Math.PI,
   );
   // Invert geometry to view from inside
-  geometry.scale(-1, 1, 1);
+  sphereGeometry.scale(-1, 1, 1);
 
-  const material = new THREE.MeshBasicMaterial({ map: videoTexture });
-  const mesh = new THREE.Mesh(geometry, material);
+  sphereMaterial = new THREE.MeshBasicMaterial({ map: videoTexture });
+  sphereMesh = new THREE.Mesh(sphereGeometry, sphereMaterial);
 
   // The SphereGeometry (0 to PI) is already centered at -Z (Front) relative to the camera
   // so no rotation is needed.
-  mesh.rotation.y = 0;
+  sphereMesh.rotation.y = 0;
 
-  scene.add(mesh);
+  scene.add(sphereMesh);
 
   // Controls
   controls = new OrbitControls(camera, renderer.domElement);
@@ -435,11 +438,36 @@ onBeforeUnmount(() => {
   window.removeEventListener('deviceorientation', onDeviceOrientation);
   window.removeEventListener('orientationchange', onScreenOrientationChange);
 
+  // Dispose GPU-side resources explicitly: renderer.dispose() does not free
+  // scene geometries, materials, or textures, and OrbitControls keeps DOM
+  // listeners on the canvas — without this, repeated VR open/close leaks.
+  if (controls) {
+    controls.dispose();
+    controls = null;
+  }
+  if (sphereMesh && scene) {
+    scene.remove(sphereMesh);
+  }
+  sphereMesh = null;
+  if (sphereGeometry) {
+    sphereGeometry.dispose();
+    sphereGeometry = null;
+  }
+  if (sphereMaterial) {
+    sphereMaterial.dispose();
+    sphereMaterial = null;
+  }
+  if (videoTexture) {
+    videoTexture.dispose();
+    videoTexture = null;
+  }
   if (renderer) {
     renderer.dispose();
   }
   if (video) {
     video.pause();
+    video.removeEventListener('timeupdate', handleTimeUpdate);
+    video.removeEventListener('loadedmetadata', handleLoadedMetadata);
     video.src = '';
     video.load();
   }
