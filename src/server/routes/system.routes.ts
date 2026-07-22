@@ -14,6 +14,7 @@ import {
   addMediaDirectory,
   createSmartPlaylist,
   deleteSmartPlaylist,
+  executeSmartPlaylist,
   getMediaDirectories,
   getSmartPlaylists,
   removeMediaDirectory,
@@ -83,6 +84,23 @@ export function createSystemRoutes(limiters: RateLimiters) {
       }
       const result = await createSmartPlaylist(name, criteria);
       res.json(result);
+    }),
+  );
+
+  router.post(
+    '/api/smart-playlists/execute',
+    limiters.readLimiter,
+    asyncHandler(async (req, res) => {
+      const { criteria } = req.body;
+      if (
+        !criteria ||
+        typeof criteria !== 'string' ||
+        criteria.length > 10000
+      ) {
+        throw new AppError(400, 'Invalid criteria');
+      }
+      const items = await executeSmartPlaylist(criteria);
+      res.json(items);
     }),
   );
 

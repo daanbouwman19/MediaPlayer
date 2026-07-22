@@ -134,8 +134,9 @@ describe('MediaHandler Extra Coverage', () => {
 
     // Should NOT use sendFile
     expect(res.sendFile).not.toHaveBeenCalled();
-    // Should call serveRawStream -> sets headers
-    expect(res.status).toHaveBeenCalledWith(206);
+    // Should call serveRawStream -> sets headers. With no Range header this is
+    // now a full-content 200 OK (BUG 7 fix), not 206.
+    expect(res.status).toHaveBeenCalledWith(200);
   });
 
   it('STREAM route handles Access denied from source', async () => {

@@ -473,8 +473,9 @@ describe('Final Coverage Boost', () => {
       await handler.handleStreamRequest(req, res);
 
       expect(res.sendFile).toHaveBeenCalled();
-      // Should fall through to raw stream (status 206)
-      expect(res.status).toHaveBeenCalledWith(206);
+      // Should fall through to raw stream. With no Range header the response is
+      // now a full-content 200 OK (BUG 7 fix), not 206.
+      expect(res.status).toHaveBeenCalledWith(200);
     });
 
     it('processStream: handles missing ffmpegPath when forced', async () => {

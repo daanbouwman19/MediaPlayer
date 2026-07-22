@@ -162,49 +162,25 @@ export class HlsManager extends EventEmitter {
   }
 
   async ensureSession(sessionId: string, filePath: string): Promise<string> {
-    if (!this.cacheDir) {
-      throw new Error('HlsManager: cacheDir not set');
-    }
-
-    const existing = this.sessions.get(sessionId);
-    if (existing) {
-      if (
-        existing.status === HlsSessionStatus.ACTIVE ||
-        existing.status === HlsSessionStatus.COMPLETE
-      ) {
-        this.touchSession(sessionId);
-        return existing.playlistPath;
-      }
-    }
-
-    if (this.pendingSessions.has(sessionId)) {
-      await this.pendingSessions.get(sessionId);
-      return this.sessions.get(sessionId)!.playlistPath;
-    }
-
-    this.startCleanupInterval();
-
-    if (this.sessions.size >= MAX_CONCURRENT_TRANSCODES) {
-      throw new Error('Server too busy. Please try again later.');
-    }
-
-    const spawnPromise = (async () => {
-      try {
-        await this.startSession(sessionId, filePath);
-      } finally {
-        this.pendingSessions.delete(sessionId);
-      }
-    })();
-
-    this.pendingSessions.set(sessionId, spawnPromise);
-    await spawnPromise;
-
-    return this.sessions.get(sessionId)!.playlistPath;
+    return this.ensureSessionInternal(sessionId, filePath, true);
   }
 
   async ensureSessionUnthrottled(
     sessionId: string,
     filePath: string,
+  ): Promise<string> {
+    return this.ensureSessionInternal(sessionId, filePath, false);
+  }
+
+  /**
+   * Shared implementation for ensureSession (throttled) and
+   * ensureSessionUnthrottled. The only functional difference is the
+   * concurrency cap, which is applied when `throttle` is true.
+   */
+  private async ensureSessionInternal(
+    sessionId: string,
+    filePath: string,
+    throttle: boolean,
   ): Promise<string> {
     if (!this.cacheDir) {
       throw new Error('HlsManager: cacheDir not set');
@@ -221,11 +197,15 @@ export class HlsManager extends EventEmitter {
       }
     }
 
-    this.startCleanupInterval();
-
     if (this.pendingSessions.has(sessionId)) {
       await this.pendingSessions.get(sessionId);
       return this.sessions.get(sessionId)!.playlistPath;
+    }
+
+    this.startCleanupInterval();
+
+    if (throttle && this.sessions.size >= MAX_CONCURRENT_TRANSCODES) {
+      throw new Error('Server too busy. Please try again later.');
     }
 
     const spawnPromise = (async () => {

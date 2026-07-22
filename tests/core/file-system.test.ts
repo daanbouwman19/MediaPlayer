@@ -288,4 +288,44 @@ describe('file-system', () => {
       expect(await isValidDirectory('/missing')).toBe(false);
     });
   });
+
+  // [SECURITY] In web-server mode, with no explicit ALLOWED_FS_ROOTS, directory
+  // browsing must be confined to the user's home directory instead of exposing
+  // every drive / the filesystem root.
+  describe('web-mode filesystem confinement', () => {
+    let originalAllowedRoots: string | undefined;
+    let originalWebMode: string | undefined;
+
+    beforeEach(() => {
+      originalAllowedRoots = process.env.ALLOWED_FS_ROOTS;
+      originalWebMode = process.env.MEDIAPLAYER_WEB_MODE;
+      delete process.env.ALLOWED_FS_ROOTS;
+      process.env.MEDIAPLAYER_WEB_MODE = '1';
+    });
+
+    afterEach(() => {
+      if (originalAllowedRoots === undefined)
+        delete process.env.ALLOWED_FS_ROOTS;
+      else process.env.ALLOWED_FS_ROOTS = originalAllowedRoots;
+      if (originalWebMode === undefined)
+        delete process.env.MEDIAPLAYER_WEB_MODE;
+      else process.env.MEDIAPLAYER_WEB_MODE = originalWebMode;
+    });
+
+    it('allows listing inside the home directory', async () => {
+      vi.mocked(fs.readdir).mockResolvedValue([
+        { name: 'Movies', isDirectory: () => true },
+      ] as any);
+      const result = await listDirectory(os.homedir());
+      expect(result).toHaveLength(1);
+      expect(result[0].name).toBe('Movies');
+    });
+
+    it('denies listing outside the home directory', async () => {
+      const outside = path.resolve(os.homedir(), '..', '..', 'someone-else');
+      await expect(listDirectory(outside)).rejects.toThrow(
+        /outside allowed roots/,
+      );
+    });
+  });
 });

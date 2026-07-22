@@ -91,7 +91,7 @@ export const collectTexturesRecursive = (album: Album): MediaFile[] => {
  */
 export const getAlbumAndChildrenIds = (album: Album): readonly string[] => {
   if (albumIdsCache.has(album)) {
-    // Bolt Optimization: Return cached instance directly to avoid array allocation/copy.
+    // Return cached instance directly to avoid array allocation/copy.
     // Consumers must treat this as readonly.
     return albumIdsCache.get(album)!;
   }

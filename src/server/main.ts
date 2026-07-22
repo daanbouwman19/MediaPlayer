@@ -50,6 +50,12 @@ async function ensureCertificates() {
 }
 
 export async function bootstrap() {
+  // [SECURITY] Mark this process as web-server mode so core services can apply
+  // network-appropriate defaults (e.g. confining /api/fs/* directory browsing
+  // to the user's home dir unless ALLOWED_FS_ROOTS is set). The Electron build
+  // never runs this bootstrap.
+  process.env.MEDIAPLAYER_WEB_MODE = '1';
+
   await ensureCertificates();
 
   const mediaRepo = new MediaRepository();

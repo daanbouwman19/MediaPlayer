@@ -71,6 +71,56 @@ describe('useLibraryStore - Recently Played', () => {
     );
   });
 
+  it('fetchHistory items expose only MediaFile fields and no allMediaFilesMap', async () => {
+    const mockItems: MediaLibraryItem[] = [
+      {
+        file_path: '/media/clip.mp4',
+        file_path_hash: 'hash-clip',
+        view_count: 3,
+        last_viewed: '2023-05-01T08:00:00.000Z',
+        rating: 2,
+        duration: 250,
+        size: 2048,
+        created_at: '2022-06-01',
+        watched_segments: null,
+        playback_position: 42,
+      },
+    ];
+
+    (api.getRecentlyPlayed as any).mockResolvedValue(mockItems);
+
+    await store.fetchHistory(5);
+
+    expect(store.historyMedia).toHaveLength(1);
+    const item = store.historyMedia[0];
+
+    // Regression: the mapped history item must NOT leak the store's
+    // allMediaFilesMap computed onto each MediaFile.
+    expect(item).not.toHaveProperty('allMediaFilesMap');
+    expect(Object.keys(item).sort()).toEqual(
+      [
+        'duration',
+        'lastViewed',
+        'name',
+        'path',
+        'playbackPosition',
+        'rating',
+        'viewCount',
+      ].sort(),
+    );
+
+    // Expected fields are populated from the DB row.
+    expect(item.name).toBe('clip.mp4');
+    expect(item.path).toBe('/media/clip.mp4');
+    expect(item.viewCount).toBe(3);
+    expect(item.rating).toBe(2);
+    expect(item.duration).toBe(250);
+    expect(item.playbackPosition).toBe(42);
+    expect(item.lastViewed).toBe(
+      new Date('2023-05-01T08:00:00.000Z').getTime(),
+    );
+  });
+
   it('fetchHistory should handle API errors gracefully', async () => {
     (api.getRecentlyPlayed as any).mockRejectedValue(
       new Error('Network error'),

@@ -400,23 +400,35 @@ describe('Server Combined Tests', () => {
 
   // --- Transcode Concurrency (from server.transcode-limit.test.ts) ---
   describe('Server Transcode Concurrency', () => {
+    const TRANSCODE_LIMIT = 2;
     let transcodeBarrier: Promise<void>;
     let releaseTranscode: () => void;
     let transcodeStartedCount = 0;
+    let activeTranscodes = 0;
 
     beforeEach(async () => {
       transcodeStartedCount = 0;
+      activeTranscodes = 0;
       transcodeBarrier = new Promise((resolve) => {
         releaseTranscode = resolve;
       });
 
-      // Override mock implementation for this test suite
+      // The transcode concurrency cap now lives inside serveTranscodedStream
+      // (shared by both server and Electron modes) rather than the /api/stream
+      // route. Since this suite mocks serveTranscodedStream, the mock reproduces
+      // that shared guard so the route's delegation/503 surfacing is exercised.
       vi.mocked(mediaHandler.serveTranscodedStream).mockImplementation(
         async (_req, res) => {
+          if (activeTranscodes >= TRANSCODE_LIMIT) {
+            res.status(503).send('Server too busy. Please try again later.');
+            return;
+          }
+          activeTranscodes++;
           transcodeStartedCount++;
           res.write('chunk');
           await transcodeBarrier;
           res.end();
+          activeTranscodes--;
         },
       );
 

@@ -390,6 +390,29 @@ describe('HlsManager Coverage Boost', () => {
     );
   });
 
+  it('ensureSessionUnthrottled does NOT throw at the concurrency cap (BUG 6)', async () => {
+    // Fill sessions well past MAX_CONCURRENT_TRANSCODES.
+    for (let i = 0; i < 10; i++) {
+      (hlsManager as any).sessions.set(`dummy-${i}`, {
+        status: 'active',
+        playlistPath: '/dummy',
+        progress: {},
+      });
+    }
+
+    const mockProcess = createMockProcess();
+    mockSpawn.mockReturnValue(mockProcess);
+
+    // The unthrottled path bypasses the size-cap guard, so it must spawn a new
+    // session rather than rejecting with "Server too busy".
+    const promise = hlsManager.ensureSessionUnthrottled('new-id', '/v.mp4');
+    await vi.advanceTimersByTimeAsync(500);
+    const result = await promise;
+
+    expect(result).toContain('playlist.m3u8');
+    expect(mockSpawn).toHaveBeenCalledTimes(1);
+  });
+
   it('ensureSessionUnthrottled reuses existing COMPLETE session', async () => {
     const sessionId = 'unthrottled-complete-reuse';
     (hlsManager as any).sessions.set(sessionId, {

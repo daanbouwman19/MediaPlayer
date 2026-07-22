@@ -86,7 +86,6 @@ export const useLibraryStore = defineStore('library', () => {
       historyMedia.value = items.map((item) => {
         const name = item.file_path.split(/[\/\\]/).pop() || item.file_path;
         return {
-          allMediaFilesMap,
           name,
           path: item.file_path,
           viewCount: item.view_count || 0,

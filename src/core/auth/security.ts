@@ -20,7 +20,7 @@ export interface AuthorizationResult {
   message?: string;
 }
 
-// Bolt Optimization: Cache for authorization results to avoid redundant fs.realpath calls
+// Cache for authorization results to avoid redundant fs.realpath calls
 // and DB queries for high-frequency checks (e.g., HLS streaming).
 const authCache = new Map<string, { res: AuthorizationResult; time: number }>();
 const CACHE_TTL_MS = 5000;
@@ -183,7 +183,7 @@ export async function authorizeFilePath(
     }
   }
 
-  // Bolt Optimization: Cache result
+  // Cache result
   if (!mediaDirectories) {
     cacheAuthResult(filePath, result);
   }

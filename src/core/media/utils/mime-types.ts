@@ -21,7 +21,7 @@ export function getMimeType(filePath: string): string {
     return 'application/octet-stream';
   }
 
-  // Bolt Optimization: Use Set for O(1) lookup and avoid substring(1) until needed
+  // Use Set for O(1) lookup and avoid substring(1) until needed
   const ext = path.extname(filePath).toLowerCase();
 
   if (SUPPORTED_IMAGE_EXTENSIONS_SET.has(ext)) {

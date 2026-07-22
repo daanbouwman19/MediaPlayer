@@ -21,6 +21,15 @@ async function getAllowedFsRoots(): Promise<string[]> {
   if (configuredRoots && configuredRoots.length > 0) {
     return configuredRoots;
   }
+  // [SECURITY] In web-server mode the /api/fs/* listing endpoints are reachable
+  // over the network. Without an explicit allowlist, confine browsing to the
+  // user's home directory rather than exposing every drive / the filesystem
+  // root. Operators can still broaden this with ALLOWED_FS_ROOTS. The Electron
+  // desktop build never sets MEDIAPLAYER_WEB_MODE, so its local directory
+  // picker keeps full access.
+  if (process.env.MEDIAPLAYER_WEB_MODE === '1') {
+    return [os.homedir()];
+  }
   if (process.platform === 'win32') {
     const drives = await listDrives();
     const drivePaths: string[] = [];
@@ -124,7 +133,7 @@ export async function listDirectory(
 
     const items = await fs.readdir(resolvedPath, { withFileTypes: true });
 
-    // Bolt Optimization: Replace .filter().map() with a for...of loop to avoid
+    // Replace .filter().map() with a for...of loop to avoid
     // creating intermediate arrays and reduce GC pressure for large directories.
     const entries: FileSystemEntry[] = [];
     for (const item of items) {
@@ -191,7 +200,7 @@ export async function listDrives(): Promise<FileSystemEntry[]> {
     const drivesLine = stdout.replace('Drives:', '').trim();
     const drivesRaw = drivesLine.split(/\s+/);
 
-    // Bolt Optimization: Replace .filter().map() with a for...of loop to avoid
+    // Replace .filter().map() with a for...of loop to avoid
     // creating intermediate arrays and reduce GC pressure.
     const mappedDrives: FileSystemEntry[] = [];
     for (const drive of drivesRaw) {

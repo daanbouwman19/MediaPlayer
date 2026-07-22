@@ -45,7 +45,54 @@ const SQL_BATCH_SIZE = 900;
  */
 const WATCHED_SEGMENTS_JSON = `NULLIF((SELECT json_group_array(json_object('start', s.start_time, 'end', s.end_time) ORDER BY s.start_time) FROM media_segments s WHERE s.file_path_hash = media_metadata.file_path_hash AND s.type = '${SEGMENT_TYPE_WATCHED}'), '[]')`;
 
+/**
+ * Base SELECT shared by both smart-playlist execution paths (the cached
+ * empty-criteria statement and the dynamic-criteria query) so their row
+ * shapes stay identical. Includes playback_position so resume position is
+ * preserved regardless of whether criteria are present.
+ */
+const SMART_PLAYLIST_BASE_SELECT = `
+      SELECT
+        file_path_hash,
+        file_path,
+        duration,
+        rating,
+        created_at,
+        COALESCE(view_count, 0) as view_count,
+        last_viewed,
+        playback_position
+      FROM media_metadata
+      WHERE in_library = 1 AND file_path IS NOT NULL`;
+
 // Helper Functions
+
+/**
+ * Runs a prepared statement whose parameter list is exactly SQL_BATCH_SIZE
+ * placeholders, over `keys` split into SQL_BATCH_SIZE-sized chunks. A short
+ * final chunk is padded with NULLs so the cached statement is reused instead of
+ * recompiling for a variable parameter count. Each returned row is handed to
+ * `onRow`. Exceptions from the underlying query propagate to the caller.
+ *
+ * This centralizes the null-padding batch pattern that several read paths
+ * (file-id, metadata, view-count, and existence lookups) would otherwise
+ * duplicate.
+ */
+function forEachBatchedRow<T>(
+  stmt: StatementSync,
+  keys: string[],
+  onRow: (row: T) => void,
+): void {
+  for (let i = 0; i < keys.length; i += SQL_BATCH_SIZE) {
+    const batch = keys.slice(i, i + SQL_BATCH_SIZE);
+    if (batch.length === 0) continue;
+    const args: (string | null)[] =
+      batch.length === SQL_BATCH_SIZE
+        ? batch
+        : Object.assign(new Array(SQL_BATCH_SIZE).fill(null), batch);
+    const rows = stmt.all(...args) as T[];
+    for (const row of rows) onRow(row);
+  }
+}
 
 /**
  * Helper to generate file IDs in batches to avoid EMFILE errors.
@@ -59,46 +106,27 @@ async function generateFileIdsBatched(
   const pathIdMap = new Map<string, string>();
 
   // 1. Check Database for existing IDs (avoid fs.stat)
-  // Use SQL_BATCH_SIZE (900) for DB queries
   if (db && statements.getFileIdsByPathsBatch) {
-    for (let i = 0; i < filePaths.length; i += SQL_BATCH_SIZE) {
-      const batchPaths = filePaths.slice(i, i + SQL_BATCH_SIZE);
-      let rows: { file_path: string; file_path_hash: string }[];
-
-      try {
-        if (batchPaths.length === SQL_BATCH_SIZE) {
-          rows = statements.getFileIdsByPathsBatch.all(...batchPaths) as {
-            file_path: string;
-            file_path_hash: string;
-          }[];
-        } else {
-          // Pad with nulls for cached statement
-          const args = new Array(SQL_BATCH_SIZE).fill(null);
-          for (let k = 0; k < batchPaths.length; k++) {
-            args[k] = batchPaths[k];
-          }
-          rows = statements.getFileIdsByPathsBatch.all(...args) as {
-            file_path: string;
-            file_path_hash: string;
-          }[];
-        }
-
-        for (const row of rows) {
+    try {
+      forEachBatchedRow<{ file_path: string; file_path_hash: string }>(
+        statements.getFileIdsByPathsBatch,
+        filePaths,
+        (row) => {
           if (row.file_path) {
             pathIdMap.set(row.file_path, row.file_path_hash);
           }
-        }
-      } catch (err) {
-        console.warn(
-          '[worker] Failed to query existing file IDs (falling back to generation):',
-          err,
-        );
-      }
+        },
+      );
+    } catch (err) {
+      console.warn(
+        '[worker] Failed to query existing file IDs (falling back to generation):',
+        err,
+      );
     }
   }
 
   // 2. Identify missing paths
-  // Bolt Optimization: Use manual loop instead of Array.prototype.filter to avoid allocation overhead
+  // Use manual loop instead of Array.prototype.filter to avoid allocation overhead
   const missingPaths: string[] = [];
   for (const p of filePaths) {
     if (!pathIdMap.has(p)) {
@@ -157,29 +185,18 @@ function getExistingPathsBatch(filePaths: string[]): Set<string> {
   const existingPaths = new Set<string>();
   if (!db || !statements.getFileIdsByPathsBatch) return existingPaths;
 
-  for (let i = 0; i < filePaths.length; i += SQL_BATCH_SIZE) {
-    const batchPaths = filePaths.slice(i, i + SQL_BATCH_SIZE);
-    if (batchPaths.length === 0) continue;
-
-    let rows: { file_path: string; file_path_hash: string }[];
-    try {
-      const args = new Array(SQL_BATCH_SIZE).fill(null);
-      for (let k = 0; k < batchPaths.length; k++) {
-        args[k] = batchPaths[k];
-      }
-      rows = statements.getFileIdsByPathsBatch.all(...args) as {
-        file_path: string;
-        file_path_hash: string;
-      }[];
-
-      for (const row of rows) {
+  try {
+    forEachBatchedRow<{ file_path: string; file_path_hash: string }>(
+      statements.getFileIdsByPathsBatch,
+      filePaths,
+      (row) => {
         if (row.file_path) {
           existingPaths.add(row.file_path);
         }
-      }
-    } catch (err) {
-      console.warn('[worker] Error checking existing paths:', err);
-    }
+      },
+    );
+  } catch (err) {
+    console.warn('[worker] Error checking existing paths:', err);
   }
   return existingPaths;
 }
@@ -323,19 +340,7 @@ export function initDatabase(dbPath: string): WorkerResult {
     statements.getSetting = db.prepare(
       'SELECT value FROM settings WHERE key = ?',
     );
-    statements.executeSmartPlaylist = db.prepare(`
-      SELECT
-        file_path_hash,
-        file_path,
-        duration,
-        rating,
-        created_at,
-        COALESCE(view_count, 0) as view_count,
-        last_viewed,
-        playback_position
-      FROM media_metadata
-      WHERE in_library = 1 AND file_path IS NOT NULL
-    `);
+    statements.executeSmartPlaylist = db.prepare(SMART_PLAYLIST_BASE_SELECT);
     statements.addJob = db.prepare(
       `INSERT OR REPLACE INTO jobs (type, file_path, file_path_hash, status, updated_at) VALUES (?, ?, ?, 'pending', CURRENT_TIMESTAMP)`,
     );
@@ -588,7 +593,7 @@ export async function bulkUpsertMetadata(
 ): Promise<WorkerResult> {
   if (!db) return { success: false, error: 'Database not initialized' };
   try {
-    // Bolt Optimization: Filter out payloads that are just "path confirmation" (no new data)
+    // Filter out payloads that are just "path confirmation" (no new data)
     // and already exist in the database. This avoids thousands of redundant INSERT ... ON CONFLICT calls.
     const pathOnlyPayloads: MetadataPayload[] = [];
     const updatePayloads: MetadataPayload[] = [];
@@ -620,7 +625,7 @@ export async function bulkUpsertMetadata(
       const paths = pathOnlyPayloads.map((p) => p.filePath);
       const existingPaths = getExistingPathsBatch(paths);
 
-      // Bolt Optimization: Use manual loop instead of Array.prototype.filter and spread operator to avoid allocation overhead and call stack limits
+      // Use manual loop instead of Array.prototype.filter and spread operator to avoid allocation overhead and call stack limits
       for (const p of pathOnlyPayloads) {
         if (!existingPaths.has(p.filePath)) {
           payloadsToProcess.push(p);
@@ -703,7 +708,7 @@ export function getAllMetadataVerification(): WorkerResult {
       status: string;
     }[];
 
-    // Bolt Optimization: Return raw rows to avoid blocking worker with heavy transformation.
+    // Return raw rows to avoid blocking worker with heavy transformation.
     // The transformation to a map will be handled by the consumer.
     return { success: true, data: rows };
   } catch (error: unknown) {
@@ -728,36 +733,12 @@ export async function filterProcessingNeeded(
 
     const successfulPathsSet = new Set<string>();
 
-    for (let i = 0; i < filePaths.length; i += SQL_BATCH_SIZE) {
-      const batchPaths = filePaths.slice(i, i + SQL_BATCH_SIZE);
-      if (batchPaths.length === 0) continue;
+    forEachBatchedRow<{ file_path: string }>(
+      statements.getSuccessfulPathsBatch,
+      filePaths,
+      (row) => successfulPathsSet.add(row.file_path),
+    );
 
-      let rows: { file_path: string }[];
-
-      if (batchPaths.length === SQL_BATCH_SIZE) {
-        // Use cached prepared statement for full batches
-        rows = statements.getSuccessfulPathsBatch.all(...batchPaths) as {
-          file_path: string;
-        }[];
-      } else {
-        // Pad the batch with nulls to use the cached statement
-        // This avoids recompiling the statement for variable batch sizes
-        // Bolt Optimization: Use Object.assign for faster array copy
-        const args = Object.assign(
-          new Array(SQL_BATCH_SIZE).fill(null),
-          batchPaths,
-        );
-        rows = statements.getSuccessfulPathsBatch.all(...args) as {
-          file_path: string;
-        }[];
-      }
-
-      for (const row of rows) {
-        successfulPathsSet.add(row.file_path);
-      }
-    }
-
-    // Bolt Optimization: Use allocation-free iteration to reduce GC pressure
     const neededPaths: string[] = [];
     for (const p of filePaths) {
       if (!successfulPathsSet.has(p)) {
@@ -785,34 +766,15 @@ export async function getMetadata(filePaths: string[]): Promise<WorkerResult> {
 
     const metadataMap: { [key: string]: unknown } = {};
 
-    for (let i = 0; i < allFileIds.length; i += SQL_BATCH_SIZE) {
-      const batchIds = allFileIds.slice(i, i + SQL_BATCH_SIZE);
-      if (batchIds.length === 0) continue;
-
-      let rows: { filePath: string; [key: string]: unknown }[];
-
-      if (batchIds.length === SQL_BATCH_SIZE) {
-        rows = statements.getMetadataBatch.all(...batchIds) as {
-          filePath: string;
-          [key: string]: unknown;
-        }[];
-      } else {
-        const args = new Array(SQL_BATCH_SIZE).fill(null);
-        for (let k = 0; k < batchIds.length; k++) {
-          args[k] = batchIds[k];
-        }
-        rows = statements.getMetadataBatch.all(...args) as {
-          filePath: string;
-          [key: string]: unknown;
-        }[];
-      }
-
-      for (const row of rows) {
+    forEachBatchedRow<{ filePath: string; [key: string]: unknown }>(
+      statements.getMetadataBatch,
+      allFileIds,
+      (row) => {
         if (row && row.filePath) {
           metadataMap[row.filePath] = row;
         }
-      }
-    }
+      },
+    );
 
     return { success: true, data: metadataMap };
   } catch (error: unknown) {
@@ -927,25 +889,14 @@ export function getSetting(key: string): WorkerResult {
 export function executeSmartPlaylist(criteriaJson?: string): WorkerResult {
   if (!db) return { success: false, error: 'Database not initialized' };
   try {
-    // Bolt Optimization: Use cached prepared statement for empty criteria
+    // Use cached prepared statement for empty criteria
     // This avoids recompiling the SQL statement for the default "view all" case
     if (!criteriaJson || criteriaJson === '{}') {
       const rows = statements.executeSmartPlaylist.all();
       return { success: true, data: rows };
     }
 
-    let sql = `
-      SELECT
-        file_path_hash,
-        file_path,
-        duration,
-        rating,
-        created_at,
-        COALESCE(view_count, 0) as view_count,
-        last_viewed
-      FROM media_metadata
-      WHERE in_library = 1 AND file_path IS NOT NULL
-    `;
+    let sql = SMART_PLAYLIST_BASE_SELECT;
     const params: (number | string)[] = [];
 
     if (criteriaJson && criteriaJson !== '{}') {
@@ -980,7 +931,7 @@ export function executeSmartPlaylist(criteriaJson?: string): WorkerResult {
       }
     }
 
-    // Bolt Optimization: Filter in SQL instead of fetching all rows
+    // Filter in SQL instead of fetching all rows
     const stmt = db.prepare(sql);
     const rows = stmt.all(...params);
     return { success: true, data: rows };
@@ -1029,34 +980,13 @@ export async function getMediaViewCounts(
 
     // Optimization: Direct path lookup instead of fs.stat -> hash -> lookup.
     // This assumes paths in DB are kept up-to-date by recordMediaView.
-    for (let i = 0; i < filePaths.length; i += SQL_BATCH_SIZE) {
-      const batchPaths = filePaths.slice(i, i + SQL_BATCH_SIZE);
-      let rows: { file_path: string; view_count: number }[];
-
-      if (batchPaths.length === SQL_BATCH_SIZE) {
-        // Use cached prepared statement for full batches
-        // No iteration allocation needed, just spread
-        rows = statements.getMediaViewCountsBatch.all(...batchPaths) as {
-          file_path: string;
-          view_count: number;
-        }[];
-      } else {
-        // Pad the batch with nulls to use the cached statement
-        // This avoids recompiling the statement for variable batch sizes
-        const args = new Array(SQL_BATCH_SIZE).fill(null);
-        for (let k = 0; k < batchPaths.length; k++) {
-          args[k] = batchPaths[k];
-        }
-        rows = statements.getMediaViewCountsBatch.all(...args) as {
-          file_path: string;
-          view_count: number;
-        }[];
-      }
-
-      for (const row of rows) {
+    forEachBatchedRow<{ file_path: string; view_count: number }>(
+      statements.getMediaViewCountsBatch,
+      filePaths,
+      (row) => {
         viewCountsMap[row.file_path] = row.view_count;
-      }
-    }
+      },
+    );
 
     // Fill in 0 for paths not found
     for (const filePath of filePaths) {
@@ -1094,7 +1024,7 @@ export async function cacheAlbums(
         const album = stack.pop();
         if (album) {
           if (album.textures && Array.isArray(album.textures)) {
-            // Bolt Optimization: Use manual loop to avoid multiple intermediate arrays
+            // Use manual loop to avoid multiple intermediate arrays
             for (const t of album.textures) {
               if (t && t.path) {
                 paths.push(t.path);
@@ -1434,7 +1364,7 @@ if (parentPort) {
         case 'getRecentlyPlayed':
           result = getRecentlyPlayed(payload.limit);
           break;
-        case 'getPendingMetadata':
+        case 'getPendingMetadata': {
           if (!db) {
             result = { success: false, error: 'DB not ready' };
             break;
@@ -1444,6 +1374,7 @@ if (parentPort) {
           }[];
           result = { success: true, data: pending.map((p) => p.file_path) };
           break;
+        }
         case 'filterProcessingNeeded':
           result = await filterProcessingNeeded(payload.filePaths);
           break;

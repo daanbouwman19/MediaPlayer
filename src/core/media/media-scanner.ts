@@ -37,7 +37,7 @@ function processFileItem(
 
   const fileExtension = path.extname(item.name).toLowerCase();
 
-  // Bolt Optimization: Set.has is O(1) vs Array.includes O(N)
+  // Set.has is O(1) vs Array.includes O(N)
   if (!ALL_SUPPORTED_EXTENSIONS_SET.has(fileExtension)) return null;
 
   const fullPath = path.join(directoryPath, item.name);
@@ -199,7 +199,7 @@ async function performFullMediaScan(
     );
 
     const countFiles = (albums: Album[]): number => {
-      // Bolt Optimization: Replace recursive reduce with an iterative stack
+      // Replace recursive reduce with an iterative stack
       // to prevent stack overflows on deeply nested directories and reduce GC pressure.
       let count = 0;
       const stack: Album[] = albums.slice();

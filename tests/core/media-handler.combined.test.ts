@@ -51,6 +51,7 @@ import {
   generateFileUrl,
   createMediaApp,
   MediaHandler,
+  resetTranscodeConcurrency,
 } from '../../src/core/media/media-handler';
 
 vi.mock('../../src/main/google-drive-service', () => ({
@@ -210,6 +211,9 @@ describe('MediaHandler Combined Tests', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
+    // Reset the module-level transcode concurrency counter so leaked increments
+    // from mock responses that never emit 'finish'/'close' do not bleed across tests.
+    resetTranscodeConcurrency();
     service = createTestMediaService().service;
 
     // Reset all persistent mocks prevents cross-test state pollution
@@ -599,6 +603,68 @@ describe('MediaHandler Combined Tests', () => {
       );
       consoleSpy.mockRestore();
     });
+
+    it('rejects with 503 once MAX_CONCURRENT_TRANSCODES is reached (BUG 8)', async () => {
+      const ffmpegPath = '/usr/bin/ffmpeg';
+      vi.mocked(mockMediaSource.getFFmpegInput).mockResolvedValue('/in.mp4');
+
+      const makeProc = () => ({
+        stdout: new PassThrough(),
+        stderr: new PassThrough(),
+        on: vi.fn(),
+        kill: vi.fn(),
+      });
+      mockSpawn.mockImplementation(() => makeProc());
+
+      // A writable-shaped response mock that pipe() can target. It never emits
+      // 'finish'/'close', so each call keeps its transcode slot occupied.
+      const makeRes = (): any => ({
+        set: vi.fn(),
+        status: vi.fn().mockReturnThis(),
+        send: vi.fn(),
+        on: vi.fn(),
+        once: vi.fn(),
+        emit: vi.fn(),
+        write: vi.fn(),
+        end: vi.fn(),
+      });
+
+      // MAX_CONCURRENT_TRANSCODES = 2, so these two occupy both slots.
+      const res1 = makeRes();
+      const res2 = makeRes();
+      await serveTranscodedStream(
+        req,
+        res1,
+        mockMediaSource,
+        ffmpegPath,
+        undefined,
+      );
+      await serveTranscodedStream(
+        req,
+        res2,
+        mockMediaSource,
+        ffmpegPath,
+        undefined,
+      );
+      expect(mockSpawn).toHaveBeenCalledTimes(2);
+
+      // Third concurrent forced transcode is rejected by the shared guard.
+      const res3 = makeRes();
+      await serveTranscodedStream(
+        req,
+        res3,
+        mockMediaSource,
+        ffmpegPath,
+        undefined,
+      );
+
+      expect(res3.status).toHaveBeenCalledWith(503);
+      expect(res3.send).toHaveBeenCalledWith(
+        'Server too busy. Please try again later.',
+      );
+      // No new FFmpeg process spawned for the rejected request.
+      expect(mockSpawn).toHaveBeenCalledTimes(2);
+    });
   });
 
   describe('serveRawStream', () => {
@@ -618,12 +684,18 @@ describe('MediaHandler Combined Tests', () => {
         start: 0,
         end: 999,
       });
-      expect(res.status).toHaveBeenCalledWith(206);
+      // No Range header => full-content 200 OK (not 206) and no Content-Range.
+      expect(res.status).toHaveBeenCalledWith(200);
       expect(res.set).toHaveBeenCalledWith(
         expect.objectContaining({
-          'Content-Range': 'bytes 0-999/1000',
+          'Accept-Ranges': 'bytes',
           'Content-Length': '1000',
           'Content-Type': 'video/mp4',
+        }),
+      );
+      expect(res.set).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          'Content-Range': expect.anything(),
         }),
       );
     });
@@ -744,6 +816,54 @@ describe('MediaHandler Combined Tests', () => {
 
       consoleSpy.mockRestore();
     });
+
+    it('returns 200 (not 206) for a request with no Range header (BUG 7)', async () => {
+      req.headers = {}; // no Range header
+      vi.mocked(mockMediaSource.getSize).mockResolvedValue(2048);
+      vi.mocked(mockMediaSource.getMimeType).mockResolvedValue('video/mp4');
+      vi.mocked(mockMediaSource.getStream).mockResolvedValue({
+        stream: new PassThrough(),
+        length: 2048,
+      });
+
+      await serveRawStream(req, res, mockMediaSource);
+
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.status).not.toHaveBeenCalledWith(206);
+      const setArg = res.set.mock.calls[0][0];
+      expect(setArg['Accept-Ranges']).toBe('bytes');
+      expect(setArg['Content-Length']).toBe('2048');
+      expect(setArg['Content-Type']).toBe('video/mp4');
+      expect(setArg['Content-Range']).toBeUndefined();
+    });
+
+    it('destroys response/stream on error once headers are already sent (BUG 7)', async () => {
+      vi.mocked(mockMediaSource.getSize).mockResolvedValue(1000);
+      vi.mocked(mockMediaSource.getMimeType).mockResolvedValue('video/mp4');
+      const mockStream = new PassThrough();
+      vi.mocked(mockMediaSource.getStream).mockResolvedValue({
+        stream: mockStream,
+        length: 1000,
+      });
+      res.destroy = vi.fn();
+      const streamDestroySpy = vi.spyOn(mockStream, 'destroy');
+      const consoleSpy = vi
+        .spyOn(console, 'error')
+        .mockImplementation(() => {});
+
+      await serveRawStream(req, res, mockMediaSource);
+
+      // Simulate headers having been flushed by the pipe.
+      res.headersSent = true;
+      mockStream.emit('error', new Error('Late failure'));
+
+      // Cannot change status after headers sent: tear the pipe down instead.
+      expect(res.status).not.toHaveBeenCalledWith(500);
+      expect(res.destroy).toHaveBeenCalled();
+      expect(streamDestroySpy).toHaveBeenCalled();
+
+      consoleSpy.mockRestore();
+    });
   });
 
   describe('serveStaticFile', () => {
@@ -859,8 +979,8 @@ describe('MediaHandler Combined Tests', () => {
       // serveRawStream logic will be called.
       await handleStreamRequest(req, res, 'ffmpeg');
 
-      // serveRawStream calls res.status(206)
-      expect(res.status).toHaveBeenCalledWith(206);
+      // No Range header on this request => serveRawStream replies 200 OK
+      expect(res.status).toHaveBeenCalledWith(200);
     });
 
     it('handles initialization errors', async () => {

@@ -4,6 +4,7 @@ import express from 'express';
 import bodyParser from 'body-parser';
 import * as systemRoutes from '../../../src/server/routes/system.routes';
 import * as security from '../../../src/core/auth/security';
+import * as database from '../../../src/core/database/database';
 import fs from 'fs/promises';
 import { ALL_SUPPORTED_EXTENSIONS } from '../../../src/core/media/constants';
 
@@ -126,6 +127,43 @@ describe('System Routes Coverage', () => {
     it('DELETE /api/smart-playlists/:id invalid id', async () => {
       const res = await request(app).delete('/api/smart-playlists/abc');
       expect(res.status).toBe(400);
+    });
+
+    it('POST /api/smart-playlists/execute missing criteria', async () => {
+      const res = await request(app)
+        .post('/api/smart-playlists/execute')
+        .send({});
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('Invalid criteria');
+    });
+
+    it('POST /api/smart-playlists/execute non-string criteria', async () => {
+      const res = await request(app)
+        .post('/api/smart-playlists/execute')
+        .send({ criteria: { minRating: 4 } });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('Invalid criteria');
+    });
+
+    it('POST /api/smart-playlists/execute over-length criteria', async () => {
+      const res = await request(app)
+        .post('/api/smart-playlists/execute')
+        .send({ criteria: 'x'.repeat(10001) });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('Invalid criteria');
+    });
+
+    it('POST /api/smart-playlists/execute returns executeSmartPlaylist output', async () => {
+      const items = [{ id: 1, path: '/a.mp4' }] as any;
+      vi.mocked(database.executeSmartPlaylist).mockResolvedValue(items);
+      const res = await request(app)
+        .post('/api/smart-playlists/execute')
+        .send({ criteria: '{"minRating":4}' });
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual(items);
+      expect(database.executeSmartPlaylist).toHaveBeenCalledWith(
+        '{"minRating":4}',
+      );
     });
 
     it('POST /api/directories missing path', async () => {

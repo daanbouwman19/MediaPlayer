@@ -85,7 +85,7 @@ onUnmounted(() => {
 const startIndex = ref(0);
 const endIndex = ref(0);
 
-// Bolt Optimization: Decouple scroll position from visible items computation.
+// Decouple scroll position from visible items computation.
 // Only update visible range when the indices actually change.
 // This prevents recreating the visibleItems array on every scroll frame,
 // reducing garbage collection and patch overhead.

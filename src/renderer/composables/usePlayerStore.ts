@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { ref } from 'vue';
+import { ref, shallowRef } from 'vue';
 
 export const usePlayerStore = defineStore('player', () => {
   const isSlideshowActive = ref(false);
@@ -10,7 +10,10 @@ export const usePlayerStore = defineStore('player', () => {
   const timerStartTime = ref<number | null>(null);
   const timerEndTime = ref<number | null>(null);
   const pauseTimerOnPlay = ref(false);
-  const mainVideoElement = ref<HTMLVideoElement | null>(null);
+  // Use shallowRef: the video element is a live DOM node driven imperatively
+  // (currentTime, play/pause). Deep reactive proxying adds overhead and can
+  // interfere with the native element, and nothing here relies on it.
+  const mainVideoElement = shallowRef<HTMLVideoElement | null>(null);
 
   const resetPlayerState = () => {
     isSlideshowActive.value = false;
