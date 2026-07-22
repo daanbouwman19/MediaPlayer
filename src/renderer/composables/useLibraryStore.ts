@@ -53,14 +53,21 @@ export const useLibraryStore = defineStore('library', () => {
     () => new Set(supportedExtensions.value.videos),
   );
 
+  // Debounced: a "select all" over a large tree fires this watcher per key;
+  // one trailing write is enough for a UX preference.
+  let persistSelectionTimer: ReturnType<typeof setTimeout> | null = null;
   watch(
     albumsSelectedForSlideshow,
     (newSelection: { [key: string]: boolean }) => {
-      try {
-        localStorage.setItem('albumSelection', JSON.stringify(newSelection));
-      } catch (e) {
-        console.error('Failed to save album selection:', e);
-      }
+      if (persistSelectionTimer) clearTimeout(persistSelectionTimer);
+      persistSelectionTimer = setTimeout(() => {
+        persistSelectionTimer = null;
+        try {
+          localStorage.setItem('albumSelection', JSON.stringify(newSelection));
+        } catch (e) {
+          console.error('Failed to save album selection:', e);
+        }
+      }, 300);
     },
     { deep: true },
   );
