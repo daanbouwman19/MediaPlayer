@@ -77,7 +77,23 @@ function createWindow() {
       preload: preloadPath,
       contextIsolation: true,
       nodeIntegration: false,
+      sandbox: true,
     },
+  });
+
+  // [SECURITY] The renderer displays local media only; it must never open
+  // child windows or navigate away from the app shell.
+  mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  mainWindow.webContents.on('will-navigate', (event, navigationUrl) => {
+    const devServerURL =
+      process.env.VITE_DEV_SERVER_URL || 'http://localhost:5173';
+    const isAllowed = isDev
+      ? navigationUrl.startsWith(devServerURL)
+      : navigationUrl.startsWith('file://');
+    if (!isAllowed) {
+      log.warn('[main.js] Blocked navigation to:', navigationUrl);
+      event.preventDefault();
+    }
   });
 
   if (isDev) {

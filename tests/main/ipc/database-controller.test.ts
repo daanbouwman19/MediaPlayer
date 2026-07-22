@@ -130,6 +130,31 @@ describe('database-controller', () => {
     });
   });
 
+  describe('DB_EXECUTE_SMART_PLAYLIST', () => {
+    const getValidator = () => {
+      const call = (handleIpc as Mock).mock.calls.find(
+        (c) => c[0] === IPC_CHANNELS.DB_EXECUTE_SMART_PLAYLIST,
+      )!;
+      return call[2].validators[0];
+    };
+
+    it('accepts a valid criteria string', async () => {
+      await expect(getValidator()('{"minRating":3}')).resolves.toBeUndefined();
+    });
+
+    it('rejects non-string criteria', async () => {
+      await expect(getValidator()({ evil: true })).rejects.toThrow(
+        'Invalid criteria',
+      );
+    });
+
+    it('rejects oversized criteria', async () => {
+      await expect(getValidator()('x'.repeat(10001))).rejects.toThrow(
+        'Invalid criteria',
+      );
+    });
+  });
+
   describe('DB_UPDATE_WATCHED_SEGMENTS', () => {
     it('updates watched segments', async () => {
       const handler = getHandler(IPC_CHANNELS.DB_UPDATE_WATCHED_SEGMENTS);

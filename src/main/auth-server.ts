@@ -2,7 +2,10 @@ import http from 'http';
 
 let authServer: http.Server | null = null;
 
-export function startAuthServer(port: number = 3000): Promise<void> {
+export function startAuthServer(
+  port: number = 3000,
+  getExpectedState?: () => string | null,
+): Promise<void> {
   return new Promise((resolve) => {
     if (authServer) {
       console.log('[AuthServer] Server already running.');
@@ -14,6 +17,16 @@ export function startAuthServer(port: number = 3000): Promise<void> {
       const url = new URL(req.url || '', `http://localhost:${port}`);
       if (url.pathname === '/auth/google/callback') {
         const code = url.searchParams.get('code');
+        const state = url.searchParams.get('state');
+
+        if (getExpectedState) {
+          const expected = getExpectedState();
+          if (!expected || state !== expected) {
+            res.writeHead(400, { 'Content-Type': 'text/plain' });
+            res.end('Invalid state parameter');
+            return;
+          }
+        }
 
         if (code) {
           const safeCode = escapeHtml(code);

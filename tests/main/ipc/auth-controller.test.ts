@@ -17,6 +17,7 @@ vi.mock('../../../src/main/utils/ipc-helper', () => ({
 vi.mock('../../../src/main/google-auth', () => ({
   generateAuthUrl: vi.fn(),
   authenticateWithCode: vi.fn(),
+  getPendingAuthState: vi.fn(() => 'test-state'),
 }));
 
 vi.mock('../../../src/main/auth-server', () => ({
@@ -66,7 +67,7 @@ describe('auth-controller', () => {
       const result = await handler();
 
       expect(generateAuthUrl).toHaveBeenCalled();
-      expect(startAuthServer).toHaveBeenCalledWith(3000);
+      expect(startAuthServer).toHaveBeenCalledWith(3000, expect.any(Function));
       expect(result).toBe('http://auth-url');
     });
 

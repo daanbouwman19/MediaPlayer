@@ -235,10 +235,36 @@ describe('Google Auth Service', () => {
         expect.objectContaining({
           access_type: 'offline',
           scope: expect.any(Array),
+          state: expect.any(String),
           code_challenge: expect.any(String),
           code_challenge_method: 'S256',
         }),
       );
+    });
+
+    it('exposes the pending state and generates a fresh one per flow', () => {
+      mockOAuth2Client.generateAuthUrl.mockReturnValue('http://auth-url');
+
+      googleAuth.generateAuthUrl();
+      const firstState = googleAuth.getPendingAuthState();
+      expect(firstState).toEqual(expect.any(String));
+
+      googleAuth.generateAuthUrl();
+      const secondState = googleAuth.getPendingAuthState();
+      expect(secondState).not.toBe(firstState);
+    });
+
+    it('clears the pending state after a code exchange attempt', async () => {
+      mockOAuth2Client.generateAuthUrl.mockReturnValue('http://auth-url');
+      googleAuth.generateAuthUrl();
+      expect(googleAuth.getPendingAuthState()).not.toBeNull();
+
+      mockOAuth2Client.getToken.mockResolvedValue({
+        tokens: { refresh_token: 'tok' },
+      });
+      await googleAuth.authenticateWithCode('test-code');
+
+      expect(googleAuth.getPendingAuthState()).toBeNull();
     });
   });
 

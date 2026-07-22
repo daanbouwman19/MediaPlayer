@@ -390,6 +390,16 @@ export async function getDriveFileThumbnail(fileId: string): Promise<Readable> {
   );
 
   if (meta.data.thumbnailLink) {
+    // [SECURITY] The OAuth bearer token is attached below; only send it to
+    // Google-controlled hosts, never wherever the returned URL happens to point.
+    const thumbnailHost = new URL(meta.data.thumbnailLink).hostname;
+    if (
+      !thumbnailHost.endsWith('.googleusercontent.com') &&
+      !thumbnailHost.endsWith('.google.com')
+    ) {
+      throw new Error('Untrusted thumbnail URL host');
+    }
+
     // We need to fetch this URL. The googleapis library doesn't have a helper for arbitrary URLs.
     // We can use the global fetch (Node 18+) or axios if available.
     // We need to attach the Auth header.

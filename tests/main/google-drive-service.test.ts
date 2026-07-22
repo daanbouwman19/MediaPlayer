@@ -247,7 +247,10 @@ describe('Google Drive Service', () => {
       });
 
       const mockMeta = {
-        data: { thumbnailLink: 'http://thumb.link', mimeType: 'image/jpeg' },
+        data: {
+          thumbnailLink: 'https://lh3.googleusercontent.com/thumb',
+          mimeType: 'image/jpeg',
+        },
       };
       (mockDrive.files.get as any).mockResolvedValue(mockMeta);
 
@@ -279,9 +282,31 @@ describe('Google Drive Service', () => {
       }
       expect(chunks.length).toBe(1);
       expect(chunks[0]).toEqual(Buffer.from([1, 2, 3]));
-      expect(global.fetch).toHaveBeenCalledWith('http://thumb.link', {
-        headers: { Authorization: 'Bearer access_token' },
+      expect(global.fetch).toHaveBeenCalledWith(
+        'https://lh3.googleusercontent.com/thumb',
+        {
+          headers: { Authorization: 'Bearer access_token' },
+        },
+      );
+    });
+
+    it('should refuse to send the bearer token to a non-Google host', async () => {
+      (googleAuth.getOAuth2Client as any).mockReturnValue({
+        credentials: { refresh_token: 'valid' },
+        getAccessToken: vi.fn().mockResolvedValue({ token: 'access_token' }),
       });
+
+      const mockMeta = {
+        data: { thumbnailLink: 'https://evil.example.com/thumb' },
+      };
+      (mockDrive.files.get as any).mockResolvedValue(mockMeta);
+
+      global.fetch = vi.fn();
+
+      await expect(
+        driveService.getDriveFileThumbnail('fileId'),
+      ).rejects.toThrow('Untrusted thumbnail URL host');
+      expect(global.fetch).not.toHaveBeenCalled();
     });
 
     it('should throw if no thumbnail link', async () => {
@@ -304,7 +329,7 @@ describe('Google Drive Service', () => {
       });
 
       const mockMeta = {
-        data: { thumbnailLink: 'http://thumb.link' },
+        data: { thumbnailLink: 'https://lh3.googleusercontent.com/thumb' },
       };
       (mockDrive.files.get as any).mockResolvedValue(mockMeta);
 

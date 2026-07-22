@@ -198,7 +198,9 @@ describe('Google Drive Service Coverage', () => {
   it('getDriveFileThumbnail handles fetch success', async () => {
     const driveService = await import('../../src/main/google-drive-service');
     const getMock = mockDrive.files.get as any;
-    getMock.mockResolvedValueOnce({ data: { thumbnailLink: 'http://thumb' } });
+    getMock.mockResolvedValueOnce({
+      data: { thumbnailLink: 'https://lh3.googleusercontent.com/thumb' },
+    });
 
     // Mock web stream - create a proper ReadableStream
     const mockStream = new ReadableStream({
@@ -215,7 +217,7 @@ describe('Google Drive Service Coverage', () => {
     const stream = await driveService.getDriveFileThumbnail('id');
     expect(stream).toBeInstanceOf(Readable);
     expect(mockFetch).toHaveBeenCalledWith(
-      'http://thumb',
+      'https://lh3.googleusercontent.com/thumb',
       expect.objectContaining({
         headers: { Authorization: 'Bearer access_token' },
       }),
@@ -225,7 +227,9 @@ describe('Google Drive Service Coverage', () => {
   it('getDriveFileThumbnail throws if fetch fails', async () => {
     const driveService = await import('../../src/main/google-drive-service');
     const getMock = mockDrive.files.get as any;
-    getMock.mockResolvedValueOnce({ data: { thumbnailLink: 'http://thumb' } });
+    getMock.mockResolvedValueOnce({
+      data: { thumbnailLink: 'https://lh3.googleusercontent.com/thumb' },
+    });
 
     mockFetch.mockResolvedValueOnce({
       ok: false,
