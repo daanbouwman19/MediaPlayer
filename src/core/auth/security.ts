@@ -136,6 +136,10 @@ export async function filterAuthorizedPaths(
   return results.filter((p): p is string => p !== null);
 }
 
+// Deduplicates concurrent cache misses for the same path (e.g. an HLS
+// segment storm) so realpath/DB work runs once instead of per request.
+const pendingAuth = new Map<string, Promise<AuthorizationResult>>();
+
 export async function authorizeFilePath(
   filePath: string,
   mediaDirectories?: MediaDirectory[],
@@ -155,8 +159,24 @@ export async function authorizeFilePath(
       }
       authCache.delete(filePath);
     }
+
+    const pending = pendingAuth.get(filePath);
+    if (pending) return pending;
+
+    const promise = resolveAuthorization(filePath, undefined).finally(() =>
+      pendingAuth.delete(filePath),
+    );
+    pendingAuth.set(filePath, promise);
+    return promise;
   }
 
+  return resolveAuthorization(filePath, mediaDirectories);
+}
+
+async function resolveAuthorization(
+  filePath: string,
+  mediaDirectories?: MediaDirectory[],
+): Promise<AuthorizationResult> {
   const dirs = mediaDirectories || (await getMediaDirectories());
   const allowedPaths = dirs.map((d) => d.path);
 

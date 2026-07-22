@@ -98,6 +98,31 @@ describe('filterAuthorizedPaths Security', () => {
     expect(database.getMediaDirectories).toHaveBeenCalledTimes(1);
   });
 
+  it('deduplicates concurrent authorization of the same path', async () => {
+    clearAuthCache();
+    vi.clearAllMocks();
+    vi.mocked(database.getMediaDirectories).mockResolvedValue([
+      {
+        path: '/allowed',
+        type: 'local',
+        id: '1',
+        name: 'Allowed',
+        isActive: true,
+      },
+    ]);
+
+    // Two concurrent cache misses for the same path share one resolution:
+    // getMediaDirectories (and realpath) run once, not per caller.
+    const [a, b] = await Promise.all([
+      authorizeFilePath('/allowed/concurrent.mp4'),
+      authorizeFilePath('/allowed/concurrent.mp4'),
+    ]);
+
+    expect(a.isAllowed).toBe(true);
+    expect(b.isAllowed).toBe(true);
+    expect(database.getMediaDirectories).toHaveBeenCalledTimes(1);
+  });
+
   it('returns canonical paths from filterAuthorizedPaths', async () => {
     (vi.mocked(fs.realpath) as any).mockImplementation(async (p: string) => {
       // simulate resolving symlinks or ..

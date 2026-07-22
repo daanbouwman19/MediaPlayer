@@ -66,6 +66,42 @@ describe('useLibraryStore', () => {
     );
   });
 
+  it('debounces persistence of the slideshow album selection', async () => {
+    vi.useFakeTimers();
+    try {
+      const setItemSpy = vi.spyOn(Storage.prototype, 'setItem');
+
+      // Rapid successive changes (e.g. "select all" toggling many keys)
+      store.albumsSelectedForSlideshow = { a: true };
+      await vi.advanceTimersByTimeAsync(100);
+      store.albumsSelectedForSlideshow = { a: true, b: true };
+      await vi.advanceTimersByTimeAsync(100);
+      store.albumsSelectedForSlideshow = { a: true, b: true, c: true };
+
+      // Nothing persisted yet — still inside the debounce window
+      expect(setItemSpy).not.toHaveBeenCalledWith(
+        'albumSelection',
+        expect.any(String),
+      );
+
+      await vi.advanceTimersByTimeAsync(350);
+
+      // One trailing write with the final state
+      const albumWrites = setItemSpy.mock.calls.filter(
+        (c) => c[0] === 'albumSelection',
+      );
+      expect(albumWrites).toHaveLength(1);
+      expect(JSON.parse(albumWrites[0][1])).toEqual({
+        a: true,
+        b: true,
+        c: true,
+      });
+      setItemSpy.mockRestore();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('should select all albums recursively', () => {
     const albums = [
       { id: '1', name: 'A1', children: [{ id: '1.1', name: 'A1.1' }] },

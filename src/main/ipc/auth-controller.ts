@@ -4,6 +4,7 @@ import {
   generateAuthUrl,
   authenticateWithCode,
   checkGoogleDriveAuth,
+  getPendingAuthState,
 } from '../google-auth';
 import { startAuthServer } from '../auth-server';
 import { getDriveClient } from '../google-drive-service';
@@ -17,7 +18,9 @@ export function registerAuthHandlers() {
 
   handleIpc(IPC_CHANNELS.AUTH_GOOGLE_DRIVE_START, async () => {
     const url = generateAuthUrl();
-    startAuthServer(3000).catch((err) =>
+    // Pass a getter (not the current value) so a restarted auth flow
+    // validates against the freshest state on the long-lived server.
+    startAuthServer(3000, getPendingAuthState).catch((err) =>
       console.error('Failed to start auth server', err),
     );
     return url;

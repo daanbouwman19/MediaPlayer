@@ -11,6 +11,7 @@ import {
   generateAuthUrl,
   authenticateWithCode,
   checkGoogleDriveAuth,
+  getPendingAuthState,
 } from '../../main/google-auth.ts';
 import { getGoogleAuthSuccessPage } from '../auth-views.ts';
 import type { RateLimiters } from '../middleware/rate-limiters.ts';
@@ -157,6 +158,12 @@ export function createAuthRoutes(limiters: RateLimiters) {
       const code = getQueryParam(req.query, 'code');
       if (!code || typeof code !== 'string') {
         throw new AppError(400, 'Missing or invalid code parameter');
+      }
+
+      const state = getQueryParam(req.query, 'state');
+      const expectedState = getPendingAuthState();
+      if (!expectedState || state !== expectedState) {
+        throw new AppError(400, 'Invalid state parameter');
       }
 
       const safeCode = escapeHtml(code);

@@ -8,6 +8,7 @@ vi.mock('three', () => {
   const Scene = vi.fn(function () {
     return {
       add: vi.fn(),
+      remove: vi.fn(),
     };
   });
   const PerspectiveCamera = vi.fn(function () {
@@ -33,14 +34,18 @@ vi.mock('three', () => {
       offset: { set: vi.fn() },
       wrapS: 0,
       wrapT: 0,
+      dispose: vi.fn(),
     };
   });
   const SphereGeometry = vi.fn(function () {
     return {
       scale: vi.fn(),
+      dispose: vi.fn(),
     };
   });
-  const MeshBasicMaterial = vi.fn();
+  const MeshBasicMaterial = vi.fn(function () {
+    return { dispose: vi.fn() };
+  });
   const Mesh = vi.fn(function () {
     return {
       rotation: { y: 0 },
@@ -81,6 +86,7 @@ vi.mock('three/examples/jsm/controls/OrbitControls.js', () => ({
     return {
       target: { set: vi.fn() },
       update: vi.fn(),
+      dispose: vi.fn(),
       enableZoom: true,
       enablePan: true,
       enableDamping: true,
@@ -121,6 +127,31 @@ describe('VRVideoPlayer.vue', () => {
     expect(emitted![0][0]).toBeInstanceOf(HTMLVideoElement);
     const videoElement = emitted![0][0] as HTMLVideoElement;
     expect(videoElement.poster).toContain('test-poster.jpg');
+  });
+
+  it('disposes Three.js resources on unmount', async () => {
+    const { OrbitControls } =
+      await import('three/examples/jsm/controls/OrbitControls.js');
+    const wrapper = mount(VRVideoPlayer, { props: defaultProps });
+    await wrapper.vm.$nextTick();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const texture = vi.mocked(THREE.VideoTexture).mock.results[0].value;
+    const geometry = vi.mocked(THREE.SphereGeometry).mock.results[0].value;
+    const material = vi.mocked(THREE.MeshBasicMaterial).mock.results[0].value;
+    const scene = vi.mocked(THREE.Scene).mock.results[0].value;
+    const renderer = vi.mocked(THREE.WebGLRenderer).mock.results[0].value;
+    const controls = vi.mocked(OrbitControls).mock.results[0].value;
+
+    wrapper.unmount();
+
+    // renderer.dispose() alone does not free these — each needs its own call
+    expect(controls.dispose).toHaveBeenCalled();
+    expect(texture.dispose).toHaveBeenCalled();
+    expect(geometry.dispose).toHaveBeenCalled();
+    expect(material.dispose).toHaveBeenCalled();
+    expect(scene.remove).toHaveBeenCalled();
+    expect(renderer.dispose).toHaveBeenCalled();
   });
 
   it('initializes Three.js on mount', async () => {

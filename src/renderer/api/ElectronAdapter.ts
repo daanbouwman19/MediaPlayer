@@ -11,6 +11,35 @@ import type {
 } from '../../core/media/types';
 import type { FileSystemEntry } from '../../core/media/file-system';
 
+/**
+ * URL cache with LRU eviction: hits refresh recency, overflow evicts only
+ * the oldest entry (a full clear would thrash for large libraries).
+ */
+function createLruUrlCache(maxSize: number) {
+  const cache = new Map<string, string>();
+  return {
+    get(key: string): string | undefined {
+      const value = cache.get(key);
+      if (value !== undefined) {
+        cache.delete(key);
+        cache.set(key, value);
+      }
+      return value;
+    },
+    set(key: string, value: string): void {
+      if (cache.size >= maxSize) {
+        const oldest = cache.keys().next().value;
+        if (oldest !== undefined) {
+          cache.delete(oldest);
+        }
+      }
+      cache.set(key, value);
+    },
+  };
+}
+
+const URL_CACHE_MAX_SIZE = 10000;
+
 export class ElectronAdapter implements IMediaBackend {
   constructor(private bridge = window.electronAPI) {}
 
@@ -88,12 +117,12 @@ export class ElectronAdapter implements IMediaBackend {
 
   async getMediaUrlGenerator(): Promise<(filePath: string) => string> {
     const port = await this.invoke(this.bridge.getServerPort());
-    const cache = new Map<string, string>();
-    const MAX_CACHE_SIZE = 10000;
+    const cache = createLruUrlCache(URL_CACHE_MAX_SIZE);
 
     return (filePath: string) => {
-      if (cache.has(filePath)) {
-        return cache.get(filePath)!;
+      const cached = cache.get(filePath);
+      if (cached !== undefined) {
+        return cached;
       }
 
       let url: string;
@@ -109,10 +138,6 @@ export class ElectronAdapter implements IMediaBackend {
         url = `http://localhost:${port}/${pathForUrl}`;
       }
 
-      // Simple cache eviction strategy
-      if (cache.size >= MAX_CACHE_SIZE) {
-        cache.clear();
-      }
       cache.set(filePath, url);
       return url;
     };
@@ -120,19 +145,16 @@ export class ElectronAdapter implements IMediaBackend {
 
   async getThumbnailUrlGenerator(): Promise<(filePath: string) => string> {
     const port = await this.invoke(this.bridge.getServerPort());
-    const cache = new Map<string, string>();
-    const MAX_CACHE_SIZE = 10000;
+    const cache = createLruUrlCache(URL_CACHE_MAX_SIZE);
 
     return (filePath: string) => {
-      if (cache.has(filePath)) {
-        return cache.get(filePath)!;
+      const cached = cache.get(filePath);
+      if (cached !== undefined) {
+        return cached;
       }
 
       const url = `http://localhost:${port}/video/thumbnail?file=${encodeURIComponent(filePath)}`;
 
-      if (cache.size >= MAX_CACHE_SIZE) {
-        cache.clear();
-      }
       cache.set(filePath, url);
       return url;
     };

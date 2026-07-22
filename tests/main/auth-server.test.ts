@@ -244,6 +244,87 @@ describe('Auth Server', () => {
     expect(res.end).toHaveBeenCalledWith(expect.stringContaining('Copied!')); // Check for some JS part
   });
 
+  describe('OAuth state validation', () => {
+    const mountServer = async (getExpectedState: () => string | null) => {
+      const listenMock = vi.fn((_port, cb) => cb && cb());
+      server = {
+        listen: listenMock,
+        close: vi.fn(),
+        on: vi.fn(),
+        address: () => ({ port: 3000 }),
+      };
+      (http.createServer as any).mockImplementation((handler: any) => {
+        requestHandler = handler;
+        return server;
+      });
+      await startAuthServer(3000, getExpectedState);
+    };
+
+    const makeRes = () => ({ writeHead: vi.fn(), end: vi.fn() });
+
+    it('accepts a callback with the expected state', async () => {
+      await mountServer(() => 'expected-state');
+      const res = makeRes();
+      requestHandler(
+        {
+          url: 'http://localhost:3000/auth/google/callback?code=123&state=expected-state',
+          headers: { host: 'localhost:3000' },
+        },
+        res,
+      );
+      expect(res.writeHead).toHaveBeenCalledWith(
+        200,
+        expect.objectContaining({ 'Content-Type': 'text/html' }),
+      );
+    });
+
+    it('rejects a callback with a mismatched state', async () => {
+      await mountServer(() => 'expected-state');
+      const res = makeRes();
+      requestHandler(
+        {
+          url: 'http://localhost:3000/auth/google/callback?code=123&state=attacker-state',
+          headers: { host: 'localhost:3000' },
+        },
+        res,
+      );
+      expect(res.writeHead).toHaveBeenCalledWith(400, {
+        'Content-Type': 'text/plain',
+      });
+      expect(res.end).toHaveBeenCalledWith('Invalid state parameter');
+    });
+
+    it('rejects a callback with a missing state', async () => {
+      await mountServer(() => 'expected-state');
+      const res = makeRes();
+      requestHandler(
+        {
+          url: 'http://localhost:3000/auth/google/callback?code=123',
+          headers: { host: 'localhost:3000' },
+        },
+        res,
+      );
+      expect(res.writeHead).toHaveBeenCalledWith(400, {
+        'Content-Type': 'text/plain',
+      });
+    });
+
+    it('rejects a callback when no flow is pending', async () => {
+      await mountServer(() => null);
+      const res = makeRes();
+      requestHandler(
+        {
+          url: 'http://localhost:3000/auth/google/callback?code=123&state=anything',
+          headers: { host: 'localhost:3000' },
+        },
+        res,
+      );
+      expect(res.writeHead).toHaveBeenCalledWith(400, {
+        'Content-Type': 'text/plain',
+      });
+    });
+  });
+
   it('handles request with undefined url', async () => {
     const listenMock = vi.fn((_port, cb) => cb && cb());
     server = {

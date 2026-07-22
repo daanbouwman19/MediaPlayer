@@ -113,6 +113,16 @@ export function registerDatabaseHandlers() {
     async (_event: IpcMainInvokeEvent, criteria: string) => {
       return executeSmartPlaylist(criteria);
     },
+    {
+      validators: [
+        // Mirrors the web route's guard in system.routes.ts
+        async (criteria) => {
+          if (typeof criteria !== 'string' || criteria.length > 10000) {
+            throw new Error('Invalid criteria');
+          }
+        },
+      ],
+    },
   );
 
   handleIpc(IPC_CHANNELS.DB_GET_ALL_METADATA_AND_STATS, async () => {

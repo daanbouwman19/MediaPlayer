@@ -479,7 +479,15 @@ onBeforeUnmount(() => {
 
 watch(
   currentMediaItem,
-  async (newItem, oldItem) => {
+  async (newItem, oldItem, onCleanup) => {
+    // A stale invocation resuming after an await must not touch state:
+    // calling loadMedia here would bump currentLoadRequestId and clobber
+    // the newer item's mediaUrl.
+    let cancelled = false;
+    onCleanup(() => {
+      cancelled = true;
+    });
+
     // Persist final position from the previous file before swapping.
     if (
       oldItem &&
@@ -507,6 +515,7 @@ watch(
       if (isVideo) {
         try {
           const meta = await api.getMetadata([newItem.path]);
+          if (cancelled) return;
           const saved = meta[newItem.path]?.playbackPosition;
           const duration = meta[newItem.path]?.duration ?? 0;
           // Resume only if there's a non-trivial saved position and we
@@ -525,7 +534,9 @@ watch(
         }
       }
 
+      if (cancelled) return;
       await loadMedia(newItem, (_, reqId) => tryTranscoding(0, reqId));
+      if (cancelled) return;
       if (isImage.value && !isTimerRunning.value) {
         resumeSlideshowTimer();
       }

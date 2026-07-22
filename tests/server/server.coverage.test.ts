@@ -273,11 +273,28 @@ describe('Server Coverage', () => {
       // This relies on getGoogleAuthSuccessPage which is imported in server.ts
       // Since it's a relative import, it's not mocked by default unless we mock it.
       // It seems safe to leave it real as it just returns a string.
+      vi.mocked(googleAuth.getPendingAuthState).mockReturnValue('valid-state');
       const res = await request(app)
         .get('/auth/google/callback')
-        .query({ code: '123' });
+        .query({ code: '123', state: 'valid-state' });
       expect(res.status).toBe(200);
       expect(res.text).toContain('Authentication Successful');
+    });
+
+    it('GET /auth/google/callback rejects mismatched state', async () => {
+      vi.mocked(googleAuth.getPendingAuthState).mockReturnValue('valid-state');
+      const res = await request(app)
+        .get('/auth/google/callback')
+        .query({ code: '123', state: 'attacker-state' });
+      expect(res.status).toBe(400);
+    });
+
+    it('GET /auth/google/callback rejects when no flow is pending', async () => {
+      vi.mocked(googleAuth.getPendingAuthState).mockReturnValue(null);
+      const res = await request(app)
+        .get('/auth/google/callback')
+        .query({ code: '123', state: 'anything' });
+      expect(res.status).toBe(400);
     });
 
     it('GET /api/drive/files returns list', async () => {

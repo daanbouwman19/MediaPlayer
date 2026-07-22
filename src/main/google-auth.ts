@@ -19,6 +19,14 @@ let oauth2Client: OAuth2Client | null = null;
 // This assumes single-user context (local desktop app).
 let pendingCodeVerifier: string | null = null;
 
+// Random state for the current auth flow; callbacks reject on mismatch
+// (OAuth CSRF defense-in-depth on top of PKCE).
+let pendingAuthState: string | null = null;
+
+export function getPendingAuthState(): string | null {
+  return pendingAuthState;
+}
+
 export function initializeManualCredentials(credentials: Credentials): void {
   const client = getOAuth2Client();
   client.setCredentials(credentials);
@@ -155,11 +163,13 @@ export function generateAuthUrl(): string {
 
   // Store the verifier for the callback exchange step
   pendingCodeVerifier = verifier;
+  pendingAuthState = base64UrlEncode(crypto.randomBytes(16));
 
   return client.generateAuthUrl({
     access_type: 'offline',
     scope: GOOGLE_DRIVE_SCOPES,
     prompt: 'consent',
+    state: pendingAuthState,
     code_challenge: challenge,
     // The library uses an enum for CodeChallengeMethod, but 'S256' as a string is the underlying value.
     // However, TypeScript requires the enum or a cast if strict.
@@ -192,5 +202,6 @@ export async function authenticateWithCode(code: string): Promise<void> {
   } finally {
     // Clear the verifier after attempt (success or failure) to prevent reuse/leakage
     pendingCodeVerifier = null;
+    pendingAuthState = null;
   }
 }

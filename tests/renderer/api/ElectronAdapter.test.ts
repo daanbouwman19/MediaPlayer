@@ -122,6 +122,32 @@ describe('ElectronAdapter', () => {
     );
   });
 
+  it('URL caches serve hits and survive overflow past the size limit', async () => {
+    mockElectronAPI.getServerPort.mockResolvedValue({
+      success: true,
+      data: 3000,
+    });
+    const adapter = new ElectronAdapter(mockElectronAPI as any);
+    const generator = await adapter.getMediaUrlGenerator();
+    const thumbGenerator = await adapter.getThumbnailUrlGenerator();
+
+    // Repeat access = cache hit path
+    expect(generator('/repeat')).toBe(generator('/repeat'));
+    expect(thumbGenerator('/repeat')).toBe(thumbGenerator('/repeat'));
+
+    // Exceed the 10,000 entry limit; LRU evicts one entry per insert
+    // instead of clearing, so results stay correct throughout
+    for (let i = 0; i < 10001; i++) {
+      generator(`/file-${i}`);
+      thumbGenerator(`/file-${i}`);
+    }
+    expect(generator('/file-10000')).toBe('http://localhost:3000//file-10000');
+    expect(generator('/file-0')).toBe('http://localhost:3000//file-0');
+    expect(thumbGenerator('/file-0')).toBe(
+      'http://localhost:3000/video/thumbnail?file=%2Ffile-0',
+    );
+  });
+
   it('getVideoMetadata throws if duration undefined', async () => {
     mockElectronAPI.getVideoMetadata.mockResolvedValue({
       success: true,

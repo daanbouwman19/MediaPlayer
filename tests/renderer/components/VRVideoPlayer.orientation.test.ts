@@ -8,6 +8,7 @@ vi.mock('three', () => {
   const Scene = vi.fn(function () {
     return {
       add: vi.fn(),
+      remove: vi.fn(),
     };
   });
   const PerspectiveCamera = vi.fn(function () {
@@ -33,14 +34,18 @@ vi.mock('three', () => {
       offset: { set: vi.fn() },
       wrapS: 0,
       wrapT: 0,
+      dispose: vi.fn(),
     };
   });
   const SphereGeometry = vi.fn(function () {
     return {
       scale: vi.fn(),
+      dispose: vi.fn(),
     };
   });
-  const MeshBasicMaterial = vi.fn();
+  const MeshBasicMaterial = vi.fn(function () {
+    return { dispose: vi.fn() };
+  });
   const Mesh = vi.fn(function () {
     return {
       rotation: { y: -1 }, // Start with a non-zero value to ensure the component sets it.
@@ -81,6 +86,7 @@ vi.mock('three/examples/jsm/controls/OrbitControls.js', () => ({
     return {
       target: { set: vi.fn() },
       update: vi.fn(),
+      dispose: vi.fn(),
       enableZoom: true,
       enablePan: true,
       enableDamping: true,
