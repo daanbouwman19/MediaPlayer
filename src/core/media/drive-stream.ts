@@ -22,8 +22,8 @@ export async function getDriveStreamWithCache(
     const stats = await fs.promises.stat(cachedPath).catch(() => ({ size: 0 }));
     const cachedSize = stats.size;
 
-    const start = range?.start || 0;
-    const end = range?.end || totalSize - 1;
+    const start = range?.start ?? 0;
+    const end = range?.end ?? totalSize - 1;
 
     // Hybrid Caching Logic
     if (start < cachedSize) {
@@ -43,8 +43,8 @@ export async function getDriveStreamWithCache(
     // Fallback
     const meta = await getDriveFileMetadata(fileId);
     const totalSize = Number(meta.size);
-    const start = range?.start || 0;
-    const end = range?.end || totalSize - 1;
+    const start = range?.start ?? 0;
+    const end = range?.end ?? totalSize - 1;
     const length = end - start + 1;
 
     const stream = await getDriveFileStream(fileId, range);

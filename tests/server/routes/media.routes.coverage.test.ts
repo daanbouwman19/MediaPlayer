@@ -204,8 +204,16 @@ describe('Media Routes Coverage', () => {
       expect(res.text).toBe('Denied');
     });
 
-    it('GET /api/stream transcode limit reached', async () => {
-      transcodeState.current = 1000; // Force limit
+    it('GET /api/stream surfaces 503 from the shared transcode guard', async () => {
+      // The concurrency cap now lives inside serveTranscodedStream (shared by
+      // both server and Electron modes). The route simply delegates and
+      // surfaces whatever the shared guard produces — including its 503.
+      vi.mocked(mediaHandler.serveTranscodedStream).mockImplementation(
+        (_req, res: any) => {
+          res.status(503).send('Server too busy. Please try again later.');
+          return Promise.resolve();
+        },
+      );
       const res = await request(app).get(
         '/api/stream?file=/v.mp4&transcode=true',
       );

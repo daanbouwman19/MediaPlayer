@@ -56,9 +56,11 @@ export class TranscodeQueueManager {
       this.cancelled.delete(filePath);
       return;
     }
+    // Compute the session id up front so it is in scope for the finally block
+    // that unpins the session regardless of how the job terminates.
+    const sessionId = await generateSessionId(filePath);
     try {
       await updateTranscodeJobStatus(filePath, 'processing', null);
-      const sessionId = await generateSessionId(filePath);
       // Pin before starting so the exit handler marks it COMPLETE, not STOPPED
       HlsManager.getInstance().pinSession(sessionId);
       await HlsManager.getInstance().ensureSessionUnthrottled(
@@ -82,6 +84,12 @@ export class TranscodeQueueManager {
         'failed',
         (err as Error).message,
       );
+    } finally {
+      // Unpin now that the job has reached a terminal state (success, error, or
+      // cancellation). Leaving it pinned would exempt the finished session from
+      // the periodic idle cleanup, leaking the session object and its on-disk
+      // HLS output directory forever.
+      HlsManager.getInstance().unpinSession(sessionId);
     }
   }
 }

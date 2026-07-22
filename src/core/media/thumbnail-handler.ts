@@ -35,7 +35,7 @@ export async function tryServeFromCache(
   cacheFile: string,
 ): Promise<boolean> {
   return new Promise((resolve) => {
-    // Bolt Optimization: Use res.sendFile instead of fs.access + fs.createReadStream.
+    // Use res.sendFile instead of fs.access + fs.createReadStream.
     // This saves a syscall and leverages kernel sendfile optimization.
     // If file doesn't exist, we get an error in callback and return false.
     res.sendFile(
@@ -115,7 +115,7 @@ export async function generateLocalThumbnail(
       runFFmpegThumbnail(authorizedPath, cacheFile, ffmpegPath),
     );
 
-    // Bolt Optimization: Use res.sendFile instead of fs.stat + fs.createReadStream
+    // Use res.sendFile instead of fs.stat + fs.createReadStream
     res.sendFile(
       cacheFile,
       {

@@ -136,6 +136,31 @@ describe('drive-stream unit tests', () => {
     expect(result.length).toBe(5000);
   });
 
+  it('honors a zero-length request (bytes=0-0) as length 1 from cache', async () => {
+    const fileId = 'file-123';
+    const cachedPath = '/cache/file-123';
+    const totalSize = 1000;
+
+    mockGetCachedFilePath.mockResolvedValue({ path: cachedPath, totalSize });
+    statSpy.mockResolvedValue({ size: totalSize } as any);
+
+    const mockFsStream = new PassThrough();
+    createReadStreamSpy.mockReturnValue(mockFsStream as any);
+
+    // Regression: end === 0 must be honored via `??`, not coerced away by `||`.
+    // A `Range: bytes=0-0` request asks for exactly one byte, not the whole file.
+    const result = await getDriveStreamWithCache(fileId, { start: 0, end: 0 });
+
+    expect(fs.createReadStream).toHaveBeenCalledWith(cachedPath, {
+      start: 0,
+      end: 0,
+    });
+    expect(result.stream).toBe(mockFsStream);
+    expect(result.length).toBe(1);
+    // Must NOT serve the entire file.
+    expect(result.length).not.toBe(totalSize);
+  });
+
   it('handles stat failure by treating cached size as 0', async () => {
     const fileId = 'file-123';
     const cachedPath = '/cache/file-123';

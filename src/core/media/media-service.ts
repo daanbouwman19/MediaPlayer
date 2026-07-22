@@ -50,7 +50,7 @@ function collectAllFilePaths(albums: Album[]): string[] {
 
 /**
  * Enriches albums to attach stats (view count, duration, rating) iteratively.
- * Bolt Optimization: Mutates the albums array in-place to avoid expensive deep copying
+ * Mutates the albums array in-place to avoid expensive deep copying
  * of the entire library structure.
  */
 function enrichAlbumsWithStats(
@@ -180,7 +180,7 @@ export class MediaService implements IMediaService {
 
     (async () => {
       try {
-        // Bolt Optimization: Filter paths that are already "success" in DB
+        // Filter paths that are already "success" in DB
         // to avoid fetching ALL metadata or processing known files.
         const pathsToProcess =
           await this.mediaRepo.filterProcessingNeeded(allFilePaths);
@@ -230,7 +230,7 @@ export class MediaService implements IMediaService {
     }
 
     const items = await this.mediaRepo.getAllMetadataAndStats();
-    // Bolt Optimization: Create map for O(1) lookup
+    // Create map for O(1) lookup
     const statsMap = new Map<string, MediaLibraryItem>();
     for (const item of items) {
       if (item.file_path) {
@@ -252,7 +252,7 @@ export class MediaService implements IMediaService {
     }
 
     const items = await this.mediaRepo.getAllMetadataAndStats();
-    // Bolt Optimization: Create map for O(1) lookup
+    // Create map for O(1) lookup
     const statsMap = new Map<string, MediaLibraryItem>();
     for (const item of items) {
       if (item.file_path) {

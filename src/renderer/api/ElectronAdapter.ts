@@ -100,7 +100,7 @@ export class ElectronAdapter implements IMediaBackend {
       if (filePath.startsWith('gdrive://')) {
         url = `http://localhost:${port}/${encodeURIComponent(filePath)}`;
       } else {
-        // Bolt Optimization: Standardize path separators and encode segments
+        // Standardize path separators and encode segments
         let pathForUrl = filePath.replace(/\\/g, '/');
         pathForUrl = pathForUrl
           .split('/')

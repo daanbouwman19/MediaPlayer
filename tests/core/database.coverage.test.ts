@@ -33,6 +33,7 @@ import {
   deleteTranscodeJob,
   getPendingTranscodeJobs,
 } from '../../src/core/database/database';
+import * as security from '../../src/core/auth/security';
 
 const mocks = vi.hoisted(() => {
   const instance = {
@@ -396,6 +397,27 @@ describe('database.ts coverage', () => {
     await expect(setDirectoryActiveState('/path', true)).rejects.toThrow(
       'Fail',
     );
+  });
+
+  // A directory change can flip a path's authorization decision, so the auth
+  // cache must be invalidated on every mutation (not just the media-directory
+  // cache).
+  it('addMediaDirectory invalidates the auth cache', async () => {
+    const spy = vi.spyOn(security, 'clearAuthCache');
+    await addMediaDirectory('/path');
+    expect(spy).toHaveBeenCalledTimes(1);
+  });
+
+  it('removeMediaDirectory invalidates the auth cache', async () => {
+    const spy = vi.spyOn(security, 'clearAuthCache');
+    await removeMediaDirectory('/path');
+    expect(spy).toHaveBeenCalledTimes(1);
+  });
+
+  it('setDirectoryActiveState invalidates the auth cache', async () => {
+    const spy = vi.spyOn(security, 'clearAuthCache');
+    await setDirectoryActiveState('/path', true);
+    expect(spy).toHaveBeenCalledTimes(1);
   });
 
   it('cacheAlbums sends correct message', async () => {

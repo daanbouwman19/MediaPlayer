@@ -343,13 +343,10 @@ export class WebAdapter implements IMediaBackend {
   }
 
   async executeSmartPlaylist(criteria: string): Promise<MediaLibraryItem[]> {
-    void criteria;
-    // For web version, fallback to fetching all and filtering client-side if needed,
-    // or just fetch all for now.
-    console.warn(
-      'WebAdapter: executeSmartPlaylist not fully implemented, returning all metadata.',
-    );
-    return this.getAllMetadataAndStats();
+    return this.request<MediaLibraryItem[]>('/api/smart-playlists/execute', {
+      method: 'POST',
+      body: JSON.stringify({ criteria }),
+    });
   }
 
   async getAllMetadataAndStats(): Promise<MediaLibraryItem[]> {

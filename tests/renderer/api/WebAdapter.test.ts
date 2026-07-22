@@ -329,22 +329,19 @@ describe('WebAdapter', () => {
       expect(res).toBe(50);
     });
 
-    it('executeSmartPlaylist falls back to all metadata', async () => {
+    it('executeSmartPlaylist POSTs criteria to the execute route', async () => {
       fetchMock.mockResolvedValue({
         ok: true,
         headers: { get: () => 'application/json' },
         json: () => Promise.resolve([{ id: 1 }]),
       });
-      const consoleWarnSpy = vi
-        .spyOn(console, 'warn')
-        .mockImplementation(() => {});
       const adapter = new WebAdapter();
-      const res = await adapter.executeSmartPlaylist('criteria');
+      const res = await adapter.executeSmartPlaylist('{"minRating":4}');
       expect(res).toEqual([{ id: 1 }]);
-      expect(consoleWarnSpy).toHaveBeenCalledWith(
-        'WebAdapter: executeSmartPlaylist not fully implemented, returning all metadata.',
-      );
-      consoleWarnSpy.mockRestore();
+      expect(fetchMock.mock.calls[0][0]).toBe('/api/smart-playlists/execute');
+      const options = fetchMock.mock.calls[0][1];
+      expect(options.method).toBe('POST');
+      expect(JSON.parse(options.body)).toEqual({ criteria: '{"minRating":4}' });
     });
 
     it('updateWatchedSegments acts as empty void', async () => {

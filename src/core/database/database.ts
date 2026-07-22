@@ -14,6 +14,7 @@ import type {
   MediaLibraryItem,
 } from '../media/types.ts';
 import { WorkerClient } from './worker-client.ts';
+import { clearAuthCache } from '../auth/security.ts';
 
 /**
  * The database worker client instance.
@@ -180,6 +181,10 @@ async function addMediaDirectory(
 ): Promise<void> {
   try {
     cachedMediaDirectories = null;
+    // The authorization cache keys file paths to allow/deny decisions derived
+    // from the media-directory set. Changing that set can flip a decision, so
+    // invalidate it here to avoid serving stale allows/denies within the TTL.
+    clearAuthCache();
     const payload =
       typeof directory === 'string' ? { path: directory } : directory;
 
@@ -224,6 +229,7 @@ async function getMediaDirectories(): Promise<MediaDirectory[]> {
 async function removeMediaDirectory(directoryPath: string): Promise<void> {
   try {
     cachedMediaDirectories = null;
+    clearAuthCache();
     await getClient().sendMessage<void>('removeMediaDirectory', {
       directoryPath,
     });
@@ -250,6 +256,7 @@ async function setDirectoryActiveState(
 ): Promise<void> {
   try {
     cachedMediaDirectories = null;
+    clearAuthCache();
     await getClient().sendMessage<void>('setDirectoryActiveState', {
       directoryPath,
       isActive,
@@ -400,7 +407,7 @@ async function getAllMetadataVerification(): Promise<{
       }[]
     >('getAllMetadataVerification');
 
-    // Bolt Optimization: Use a standard for loop instead of reduce
+    // Use a standard for loop instead of reduce
     // to avoid allocation overhead on large arrays and improve iteration speed.
     const result: { [path: string]: MediaMetadata } = {};
     for (const row of rows) {

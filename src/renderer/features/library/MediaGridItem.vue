@@ -42,7 +42,7 @@
           />
         </svg>
       </div>
-      <!-- Bolt Optimization: Removed loading="lazy" because this component is used inside a VirtualScroller.
+      <!-- Removed loading="lazy" because this component is used inside a VirtualScroller.
            The scroller manages visibility (mounting/unmounting), so we want images in the buffer
            to load immediately (eagerly) rather than waiting for the browser's lazy load threshold. -->
       <img
@@ -78,7 +78,7 @@
         class="h-full w-full object-cover rounded block"
         @error="handleVideoError"
       ></video>
-      <!-- Bolt Optimization: Use img for video thumbnails to save memory/CPU -->
+      <!-- Use img for video thumbnails to save memory/CPU -->
       <img
         v-else
         :src="posterUrl"

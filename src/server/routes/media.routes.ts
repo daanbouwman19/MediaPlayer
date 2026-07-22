@@ -21,10 +21,7 @@ import {
   filterAuthorizedPaths,
 } from '../../core/auth/security.ts';
 import { getQueryParam } from '../../core/network/http-utils.ts';
-import {
-  MAX_API_BATCH_SIZE,
-  MAX_CONCURRENT_TRANSCODES,
-} from '../../core/media/constants.ts';
+import { MAX_API_BATCH_SIZE } from '../../core/media/constants.ts';
 import {
   MediaHandler,
   serveRawStream,
@@ -60,7 +57,6 @@ const requireFileQueryParam = (
 export function createMediaRoutes({
   limiters,
   mediaHandler,
-  transcodeState,
   ffmpegPath,
 }: MediaRoutesOptions) {
   const router = Router();
@@ -260,36 +256,20 @@ export function createMediaRoutes({
       const source = createMediaSource(authorizedPath);
 
       if (isTranscode) {
-        if (transcodeState.current >= MAX_CONCURRENT_TRANSCODES) {
-          throw new AppError(503, 'Server too busy. Please try again later.');
-        }
-
         if (!ffmpegPath) {
           return res.status(500).send('FFmpeg not found');
         }
 
-        transcodeState.current += 1;
-        const cleanup = () => {
-          transcodeState.current -= 1;
-          res.removeListener('finish', cleanup);
-          res.removeListener('close', cleanup);
-        };
-
-        res.on('finish', cleanup);
-        res.on('close', cleanup);
-
-        try {
-          await serveTranscodedStream(
-            req,
-            res,
-            source,
-            ffmpegPath,
-            startTime || undefined,
-          );
-        } catch (error) {
-          cleanup();
-          throw error;
-        }
+        // Transcode concurrency is enforced centrally inside
+        // serveTranscodedStream (shared by both server and Electron modes), so
+        // the route no longer maintains its own counter to avoid double-counting.
+        await serveTranscodedStream(
+          req,
+          res,
+          source,
+          ffmpegPath,
+          startTime || undefined,
+        );
         return;
       }
 

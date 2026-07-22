@@ -38,6 +38,7 @@ import {
   DATA_URL_THRESHOLD_BYTES,
   RATE_LIMIT_FILE_WINDOW_MS,
   RATE_LIMIT_FILE_MAX_REQUESTS,
+  MAX_CONCURRENT_TRANSCODES,
 } from './constants.ts';
 import { createRateLimiter } from '../network/rate-limiter.ts';
 import { MediaRoutes } from './routes.ts';
@@ -109,6 +110,23 @@ export class MediaHandler {
 
 // Re-export for compatibility
 export { validateFileAccess };
+
+/**
+ * Module-level counter of in-flight forced (FFmpeg) transcodes.
+ *
+ * This is the single source of truth for the transcode concurrency cap so that
+ * BOTH deployment modes (the Electron `createMediaApp` path and the Express
+ * `/api/stream` route) are bounded by `MAX_CONCURRENT_TRANSCODES`. The cap is
+ * enforced inside `serveTranscodedStream`, which is shared by both.
+ */
+let activeTranscodes = 0;
+
+/**
+ * Resets the in-flight transcode counter. Intended for test isolation only.
+ */
+export function resetTranscodeConcurrency(): void {
+  activeTranscodes = 0;
+}
 
 /**
  * Helper: Attempts to serve a local file directly using Express's sendFile.
@@ -211,7 +229,7 @@ export async function getVideoDuration(
   ffmpegPath: string,
 ): Promise<{ duration: number } | { error: string }> {
   try {
-    // Bolt Optimization: Skip provider metadata check for local files
+    // Skip provider metadata check for local files
     // as LocalFileSystemProvider does not provide duration and performs redundant fs.stat
     if (isDrivePath(filePath)) {
       const provider = getProvider(filePath);
@@ -271,6 +289,7 @@ export async function serveRawStream(
   const totalSize = await source.getSize();
   const mimeType = await source.getMimeType();
   const rangeHeader = req.headers.range;
+  const hasRange = rangeHeader !== undefined && rangeHeader !== '';
 
   const { start, end, error } = parseHttpRange(totalSize, rangeHeader);
 
@@ -285,25 +304,41 @@ export async function serveRawStream(
   const { stream, length } = await source.getStream({ start, end });
   const actualEnd = start + length - 1;
 
-  res.status(206).set({
-    'Content-Range': `bytes ${start}-${actualEnd}/${totalSize}`,
+  const headers: Record<string, string> = {
     'Accept-Ranges': 'bytes',
     'Content-Length': length.toString(),
     'Content-Type': mimeType,
-  });
+  };
 
-  stream.pipe(res);
+  if (hasRange) {
+    // A Range header was present and satisfiable: reply with a partial response.
+    headers['Content-Range'] = `bytes ${start}-${actualEnd}/${totalSize}`;
+    res.status(206).set(headers);
+  } else {
+    // No Range header: this is a full-content response, so 200 OK (no Content-Range).
+    res.status(200).set(headers);
+  }
 
+  // Attach the error/close handlers BEFORE piping. Once pipe() flushes the
+  // headers, res.headersSent becomes true, so an error handler registered after
+  // pipe() could never take the "!headersSent" recovery path.
   stream.on('error', (err) => {
     console.error('[RawStream] Stream error:', err);
     if (!res.headersSent) {
       res.status(500).end();
+    } else {
+      // Headers already flushed: we can no longer change the status, so just
+      // tear down both ends of the pipe.
+      res.destroy();
+      stream.destroy();
     }
   });
 
   req.on('close', () => {
     stream.destroy();
   });
+
+  stream.pipe(res);
 }
 
 /**
@@ -316,13 +351,41 @@ export async function serveTranscodedStream(
   ffmpegPath: string,
   startTime: string | undefined,
 ) {
+  // Shared concurrency cap so both Electron (createMediaApp) and the Express
+  // /api/stream route are bounded by MAX_CONCURRENT_TRANSCODES. Without this,
+  // Electron mode could spawn unbounded FFmpeg processes.
+  if (activeTranscodes >= MAX_CONCURRENT_TRANSCODES) {
+    res.status(503).send('Server too busy. Please try again later.');
+    return;
+  }
+
   const inputPath = await source.getFFmpegInput();
 
   res.set({
     'Content-Type': 'video/mp4',
   });
 
+  // getTranscodeArgs validates startTime and may throw; run it before we count
+  // this request against the cap so a rejected request does not leak a slot.
   const ffmpegArgs = getTranscodeArgs(inputPath, startTime);
+
+  activeTranscodes += 1;
+  let released = false;
+  const release = () => {
+    if (released) return;
+    released = true;
+    activeTranscodes -= 1;
+  };
+
+  // Release the slot exactly once when the response completes/aborts. The
+  // `released` guard prevents a double-decrement when both events fire. These
+  // are attached before spawn so the slot is still freed if the response ends
+  // due to a spawn failure surfacing through the error middleware.
+  if (typeof res.on === 'function') {
+    res.on('finish', release);
+    res.on('close', release);
+  }
+
   const ffmpegProcess = spawn(ffmpegPath, ffmpegArgs);
 
   ffmpegProcess.stdout.pipe(res);
@@ -334,6 +397,7 @@ export async function serveTranscodedStream(
 
   ffmpegProcess.on('error', (err) => {
     console.error('[Transcode] Spawn Error:', err);
+    release();
   });
 
   req.on('close', () => {

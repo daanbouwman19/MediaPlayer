@@ -7,6 +7,7 @@ const {
   mockGetPendingTranscodeJobs,
   mockEnsureSessionUnthrottled,
   mockPinSession,
+  mockUnpinSession,
   mockWaitForSession,
   mockStopSession,
   mockGenerateSessionId,
@@ -16,6 +17,7 @@ const {
   mockGetPendingTranscodeJobs: vi.fn().mockResolvedValue([]),
   mockEnsureSessionUnthrottled: vi.fn().mockResolvedValue('/hls/session.m3u8'),
   mockPinSession: vi.fn(),
+  mockUnpinSession: vi.fn(),
   mockWaitForSession: vi.fn().mockResolvedValue('complete'),
   mockStopSession: vi.fn().mockResolvedValue(undefined),
   mockGenerateSessionId: vi.fn().mockResolvedValue('sess-abc'),
@@ -39,6 +41,7 @@ vi.mock('../../src/core/media/hls-manager.ts', () => ({
     getInstance: vi.fn(() => ({
       ensureSessionUnthrottled: mockEnsureSessionUnthrottled,
       pinSession: mockPinSession,
+      unpinSession: mockUnpinSession,
       waitForSession: mockWaitForSession,
       stopSession: mockStopSession,
     })),
@@ -129,6 +132,40 @@ describe('TranscodeQueueManager', () => {
         'HLS error',
       ),
     );
+  });
+
+  it('unpins the session after a job completes successfully (BUG 5)', async () => {
+    const manager = TranscodeQueueManager.getInstance();
+    await manager.enqueue('/video.mp4');
+
+    await vi.waitFor(() =>
+      expect(mockUpdateTranscodeJobStatus).toHaveBeenCalledWith(
+        '/video.mp4',
+        'done',
+        null,
+      ),
+    );
+
+    // The session must be unpinned so periodic idle cleanup can evict the
+    // finished session and delete its on-disk output directory.
+    expect(mockPinSession).toHaveBeenCalledWith('sess-abc');
+    expect(mockUnpinSession).toHaveBeenCalledWith('sess-abc');
+  });
+
+  it('unpins the session even when the job fails (BUG 5)', async () => {
+    mockEnsureSessionUnthrottled.mockRejectedValueOnce(new Error('HLS error'));
+    const manager = TranscodeQueueManager.getInstance();
+    await manager.enqueue('/fail.mp4');
+
+    await vi.waitFor(() =>
+      expect(mockUpdateTranscodeJobStatus).toHaveBeenCalledWith(
+        '/fail.mp4',
+        'failed',
+        'HLS error',
+      ),
+    );
+
+    expect(mockUnpinSession).toHaveBeenCalledWith('sess-abc');
   });
 
   it('cancel skips processing of the job', async () => {
