@@ -18,12 +18,15 @@ export default defineConfig(({ mode }) => {
         emptyOutDir: true,
         lib: {
           entry: {
-            index: resolve(__dirname, 'src/main/main.ts'),
+            index: resolve(import.meta.dirname, 'src/main/main.ts'),
             'database-worker': resolve(
-              __dirname,
+              import.meta.dirname,
               'src/main/database-worker.ts',
             ),
-            'scan-worker': resolve(__dirname, 'src/core/media/scan-worker.ts'),
+            'scan-worker': resolve(
+              import.meta.dirname,
+              'src/core/media/scan-worker.ts',
+            ),
           },
           formats: ['es'],
         },
@@ -59,7 +62,7 @@ export default defineConfig(({ mode }) => {
         emptyOutDir: true,
         lib: {
           entry: {
-            preload: resolve(__dirname, 'src/preload/preload.ts'),
+            preload: resolve(import.meta.dirname, 'src/preload/preload.ts'),
           },
           formats: ['cjs'],
         },
@@ -100,13 +103,13 @@ export default defineConfig(({ mode }) => {
         emptyOutDir: true,
         rollupOptions: {
           input: {
-            index: resolve(__dirname, 'index.html'),
+            index: resolve(import.meta.dirname, 'index.html'),
           },
         },
       },
       resolve: {
         alias: {
-          '@': resolve(__dirname, 'src/renderer'),
+          '@': resolve(import.meta.dirname, 'src/renderer'),
         },
       },
     } as UserConfig;
@@ -119,9 +122,15 @@ export default defineConfig(({ mode }) => {
         ssr: true,
         lib: {
           entry: {
-            index: resolve(__dirname, 'src/server/main.ts'),
-            worker: resolve(__dirname, 'src/core/database/database-worker.ts'),
-            'scan-worker': resolve(__dirname, 'src/core/media/scan-worker.ts'),
+            index: resolve(import.meta.dirname, 'src/server/main.ts'),
+            worker: resolve(
+              import.meta.dirname,
+              'src/core/database/database-worker.ts',
+            ),
+            'scan-worker': resolve(
+              import.meta.dirname,
+              'src/core/media/scan-worker.ts',
+            ),
           },
           formats: ['es'],
         },
@@ -163,8 +172,8 @@ export default defineConfig(({ mode }) => {
         host: '0.0.0.0',
         port: 5173,
         https: {
-          key: resolve(__dirname, 'certs/server.key'),
-          cert: resolve(__dirname, 'certs/server.cert'),
+          key: resolve(import.meta.dirname, 'certs/server.key'),
+          cert: resolve(import.meta.dirname, 'certs/server.cert'),
         },
         proxy: {
           '/api': {
@@ -176,7 +185,7 @@ export default defineConfig(({ mode }) => {
       },
       resolve: {
         alias: {
-          '@': resolve(__dirname, 'src/renderer'),
+          '@': resolve(import.meta.dirname, 'src/renderer'),
         },
       },
       build: {
@@ -186,7 +195,7 @@ export default defineConfig(({ mode }) => {
         chunkSizeWarningLimit: 1000,
         rollupOptions: {
           input: {
-            index: resolve(__dirname, 'index.html'),
+            index: resolve(import.meta.dirname, 'index.html'),
           },
           output: {
             manualChunks(id) {
