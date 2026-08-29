@@ -43,21 +43,25 @@ export function getOAuth2Client(): OAuth2Client {
         'Google OAuth credentials not configured. Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in your .env file.',
       );
     }
-    oauth2Client = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
-    const initializedClient = oauth2Client;
+    const client = new google.auth.OAuth2(
+      clientId,
+      clientSecret,
+      redirectUri,
+    ) as unknown as OAuth2Client;
+    oauth2Client = client;
 
     // [PERSISTENCE] Automatically save tokens whenever they are refreshed
-    const tokenEventsClient = oauth2Client as OAuth2Client & {
+    const tokenEventsClient = client as OAuth2Client & {
       on?: (event: 'tokens', listener: (tokens: Credentials) => void) => void;
     };
 
     tokenEventsClient.on?.('tokens', (tokens) => {
       // Merge tokens into current credentials to ensure we don't lose existing ones
-      initializedClient.setCredentials({
-        ...initializedClient.credentials,
+      client.setCredentials({
+        ...client.credentials,
         ...tokens,
       });
-      callWithRetry(() => saveCredentials(initializedClient), {
+      callWithRetry(() => saveCredentials(client), {
         retries: 2,
         initialDelay: 500,
       }).catch((err) => {
