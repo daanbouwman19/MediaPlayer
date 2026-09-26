@@ -144,7 +144,7 @@ export class WebAdapter implements IMediaBackend {
   ): Promise<void> {
     await this.request<void>('/api/directories/active', {
       method: 'PUT',
-      body: JSON.stringify({ directoryPath, isActive }),
+      body: JSON.stringify({ path: directoryPath, isActive }),
     });
   }
 

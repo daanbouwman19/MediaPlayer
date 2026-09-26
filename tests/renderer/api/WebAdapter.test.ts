@@ -400,7 +400,7 @@ describe('WebAdapter', () => {
       const options = fetchMock.mock.calls[0][1];
       expect(options.method).toBe('PUT');
       expect(JSON.parse(options.body)).toEqual({
-        directoryPath: '/path',
+        path: '/path',
         isActive: false,
       });
     });
