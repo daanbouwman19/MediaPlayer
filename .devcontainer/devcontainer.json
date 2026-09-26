@@ -19,5 +19,5 @@
     "source=${localEnv:HOME}${localEnv:USERPROFILE}/.ssh,target=/home/builduser/.ssh,readonly,type=bind,consistency=cached"
   ],
   "postCreateCommand": "npm install && npx electron-builder install-app-deps",
-  "postStartCommand": "/usr/local/share/desktop-init.sh && npm run dev"
+  "postStartCommand": "/usr/local/share/desktop-init.sh && npm run electron:dev"
 }
