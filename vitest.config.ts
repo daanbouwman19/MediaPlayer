@@ -2,31 +2,53 @@ import { defineConfig } from 'vite-plus';
 import { resolve } from 'path';
 import vue from '@vitejs/plugin-vue';
 
+const EXCLUDED = [
+  'node_modules',
+  'out',
+  'release',
+  '.vite',
+  'dist',
+  'tests/e2e/**',
+  'coverage/**',
+  'cache/**',
+];
+
+const NODE_TESTS = [
+  'tests/main/**/*.{test,spec}.{js,ts}',
+  'tests/server/**/*.{test,spec}.{js,ts}',
+  'tests/core/**/*.{test,spec}.{js,ts}',
+  'tests/**/*.node.test.ts',
+];
+
 export default defineConfig({
   plugins: [vue()],
   test: {
-    environment: 'happy-dom',
-    environmentMatchGlobs: [
-      ['tests/main/**', 'node'],
-      ['tests/server/**', 'node'],
-      ['tests/core/**', 'node'],
-      ['**/*.node.test.ts', 'node'],
+    // Main-process, server and core tests run in Node; everything else
+    // (renderer and component tests) runs in happy-dom.
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: 'node',
+          environment: 'node',
+          include: NODE_TESTS,
+          exclude: EXCLUDED,
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'dom',
+          environment: 'happy-dom',
+          include: ['tests/**/*.{test,spec}.{js,ts}'],
+          exclude: [...EXCLUDED, ...NODE_TESTS],
+        },
+      },
     ],
     setupFiles: ['tests/renderer/setup.ts'],
     globals: true,
     silent: true,
     testTimeout: 10000,
-    include: ['tests/**/*.{test,spec}.{js,ts}'],
-    exclude: [
-      'node_modules',
-      'out',
-      'release',
-      '.vite',
-      'dist',
-      'tests/e2e/**',
-      'coverage/**',
-      'cache/**',
-    ],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html', 'lcov'],
