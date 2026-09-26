@@ -39,10 +39,8 @@ describe('scan-worker', () => {
     const tokens = { refresh_token: 'abc' };
     vi.mocked(mediaScanner.performFullMediaScan).mockResolvedValue([]);
 
-    await import('../../src/core/media/scan-worker');
-    const callback = mockOn.mock.calls.find(
-      (call) => call[0] === 'message',
-    )?.[1];
+    const { handleScanMessage: callback } =
+      await import('../../src/core/media/scan-worker');
 
     await callback({
       id: 1,
@@ -62,18 +60,31 @@ describe('scan-worker', () => {
     expect(mockOn).toHaveBeenCalledWith('message', expect.any(Function));
   });
 
+  it('forwards messages from the registered listener to the handler', async () => {
+    vi.mocked(mediaScanner.performFullMediaScan).mockResolvedValue([]);
+    await import('../../src/core/media/scan-worker');
+    const listener = mockOn.mock.calls.find(
+      (call) => call[0] === 'message',
+    )?.[1];
+
+    listener({ id: 7, type: 'START_SCAN', payload: { directories: [] } });
+
+    await vi.waitFor(() =>
+      expect(mockPostMessage).toHaveBeenCalledWith({
+        id: 7,
+        result: { success: true, data: [] },
+      }),
+    );
+  });
+
   it('performs scan and posts results on START_SCAN', async () => {
     const albums = [{ id: '1' }];
     vi.mocked(mediaScanner.performFullMediaScan).mockResolvedValue(
       albums as any,
     );
 
-    await import('../../src/core/media/scan-worker');
-
-    // Get the callback
-    const callback = mockOn.mock.calls.find(
-      (call) => call[0] === 'message',
-    )?.[1];
+    const { handleScanMessage: callback } =
+      await import('../../src/core/media/scan-worker');
     expect(callback).toBeDefined();
 
     await callback({
@@ -97,10 +108,8 @@ describe('scan-worker', () => {
       new Error('Fail'),
     );
 
-    await import('../../src/core/media/scan-worker');
-    const callback = mockOn.mock.calls.find(
-      (call) => call[0] === 'message',
-    )?.[1];
+    const { handleScanMessage: callback } =
+      await import('../../src/core/media/scan-worker');
     expect(callback).toBeDefined();
 
     await callback({
@@ -116,10 +125,8 @@ describe('scan-worker', () => {
   });
 
   it('ignores unknown message types', async () => {
-    await import('../../src/core/media/scan-worker');
-    const callback = mockOn.mock.calls.find(
-      (call) => call[0] === 'message',
-    )?.[1];
+    const { handleScanMessage: callback } =
+      await import('../../src/core/media/scan-worker');
 
     await callback({ id: 1, type: 'UNKNOWN', payload: {} });
 
@@ -132,10 +139,8 @@ describe('scan-worker', () => {
       'String Error',
     );
 
-    await import('../../src/core/media/scan-worker');
-    const callback = mockOn.mock.calls.find(
-      (call) => call[0] === 'message',
-    )?.[1];
+    const { handleScanMessage: callback } =
+      await import('../../src/core/media/scan-worker');
 
     await callback({
       id: 1,

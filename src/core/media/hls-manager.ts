@@ -286,7 +286,7 @@ export class HlsManager extends EventEmitter {
         await this.waitForPlaylist(session);
         this.setSessionStatus(session, HlsSessionStatus.ACTIVE);
       } catch (err) {
-        this.stopSession(sessionId);
+        void this.stopSession(sessionId);
         throw err;
       }
     });
@@ -294,7 +294,7 @@ export class HlsManager extends EventEmitter {
 
   private setupProcessHandlers(session: HlsSession, proc: ChildProcess) {
     let stderrBuffer = '';
-    proc.stderr!.on('data', (data) => {
+    proc.stderr!.on('data', (data: Buffer) => {
       const s = this.sessions.get(session.id);
       if (!s) return;
 
@@ -414,7 +414,7 @@ export class HlsManager extends EventEmitter {
         return false;
       };
 
-      const onStatus = async (status: HlsSessionStatus) => {
+      const onStatus = (status: HlsSessionStatus) => {
         if (status === HlsSessionStatus.ERROR) {
           cleanup();
           reject(
@@ -426,11 +426,12 @@ export class HlsManager extends EventEmitter {
           status === HlsSessionStatus.COMPLETE
         ) {
           // If stopped/completed naturally, check one last time before rejecting
-          const isReady = await checkFile();
-          if (!isReady) {
-            cleanup();
-            reject(new Error('HLS session finished but playlist not found'));
-          }
+          void checkFile().then((isReady) => {
+            if (!isReady) {
+              cleanup();
+              reject(new Error('HLS session finished but playlist not found'));
+            }
+          });
         }
       };
 
@@ -438,8 +439,8 @@ export class HlsManager extends EventEmitter {
       this.on(`status:${session.id}`, onStatus);
 
       // Safety check and periodic fallback for cases where FFmpeg misses logging or size=0
-      checkFile();
-      checkInterval = setInterval(checkFile, 500);
+      void checkFile();
+      checkInterval = setInterval(() => void checkFile(), 500);
     });
   }
 
@@ -545,7 +546,7 @@ export class HlsManager extends EventEmitter {
   private startCleanupInterval() {
     if (!this.cleanupInterval) {
       this.cleanupInterval = setInterval(() => {
-        this.cleanup();
+        void this.cleanup();
       }, CLEANUP_INTERVAL_MS);
     }
   }

@@ -204,7 +204,7 @@ class DriveCacheManager extends EventEmitter {
     const metadata = this.metadataCache.get(fileId);
     const total = metadata ? metadata.size : 0;
 
-    stream.on('data', (chunk) => {
+    stream.on('data', (chunk: Buffer) => {
       downloadedBytes += chunk.length;
       const progress = total > 0 ? downloadedBytes / total : 0;
       this.emit('progress', {

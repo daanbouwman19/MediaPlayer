@@ -8,11 +8,7 @@ export interface ContractTestOptions {
 export function runBackendContractTests(
   adapterName: string,
   createAdapter: () => IMediaBackend,
-  primeBackend: (
-    method: keyof IMediaBackend | string,
-    result?: any,
-    error?: any,
-  ) => void,
+  primeBackend: (method: string, result?: any, error?: any) => void,
   options: ContractTestOptions,
 ) {
   describe(`Shared Contract: ${adapterName}`, () => {

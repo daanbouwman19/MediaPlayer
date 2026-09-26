@@ -166,7 +166,10 @@ vi.mock('../../src/core/media/hls-manager', () => ({
 
 vi.mock('../../src/core/media/transcode-queue-manager', () => ({
   TranscodeQueueManager: {
-    getInstance: vi.fn(() => ({ start: vi.fn(), enqueue: vi.fn() })),
+    getInstance: vi.fn(() => ({
+      start: vi.fn().mockResolvedValue(undefined),
+      enqueue: vi.fn(),
+    })),
   },
 }));
 
@@ -265,7 +268,7 @@ describe('MediaHandler Combined Tests', () => {
     });
 
     // Default mock implementation for authorizeFilePath
-    mockAuthorizeFilePath.mockImplementation((p: string | any) => {
+    mockAuthorizeFilePath.mockImplementation((p: any) => {
       const pathStr = typeof p === 'string' ? p : '';
       if (
         pathStr.includes('secret') ||
@@ -339,11 +342,7 @@ describe('MediaHandler Combined Tests', () => {
       set: vi.fn().mockReturnThis(),
 
       sendFile: vi.fn(
-        (
-          _path: string,
-          optOrCb?: any | ((err?: Error) => void),
-          cb?: (err?: Error) => void,
-        ) => {
+        (_path: string, optOrCb?: any, cb?: (err?: Error) => void) => {
           const callback =
             typeof optOrCb === 'function'
               ? optOrCb
@@ -1386,13 +1385,11 @@ describe('MediaHandler Combined Tests', () => {
         end: vi.fn(),
         on: vi.fn(),
       };
-      res.sendFile = vi.fn(
-        (_path: string, optOrCb: any | (() => void), cb?: () => void) => {
-          const callback = typeof optOrCb === 'function' ? optOrCb : cb;
-          if (callback) callback();
-          return res;
-        },
-      );
+      res.sendFile = vi.fn((_path: string, optOrCb: any, cb?: () => void) => {
+        const callback = typeof optOrCb === 'function' ? optOrCb : cb;
+        if (callback) callback();
+        return res;
+      });
 
       // Need to mock serveThumbnail import or it will call real one (which is mocked in this file).
 

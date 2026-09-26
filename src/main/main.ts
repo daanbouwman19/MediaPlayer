@@ -155,7 +155,7 @@ app.on('ready', () => {
       const cacheDir = path.join(app.getPath('userData'), 'thumbnails');
       await fs.mkdir(cacheDir, { recursive: true });
 
-      startLocalServer(cacheDir, mediaService, () => {
+      await startLocalServer(cacheDir, mediaService, () => {
         log.info('[main.js] Local server started in background.');
       });
     })
@@ -179,7 +179,9 @@ app.on('activate', () => {
       createWindow();
     } else {
       const cacheDir = path.join(app.getPath('userData'), 'thumbnails');
-      startLocalServer(cacheDir, mediaService, createWindow);
+      startLocalServer(cacheDir, mediaService, createWindow).catch((error) => {
+        log.error('[main.js] Failed to start local server on activate:', error);
+      });
     }
   }
 });
@@ -189,6 +191,8 @@ app.on('will-quit', () => {
     log.info('[main.js] Local server stopped during will-quit.');
   });
   stopAuthServer();
-  closeDatabase();
+  closeDatabase().catch((error) => {
+    log.error('[main.js] Failed to close database during will-quit:', error);
+  });
   cleanupDriveCacheManager();
 });

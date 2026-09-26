@@ -66,9 +66,9 @@ describe('Local Server Encoding Bug', () => {
 
   it('should handle file paths with percent characters without crashing', async () => {
     const { service } = createTestMediaService();
-    await new Promise<void>((resolve) =>
-      startLocalServer('/tmp', service, resolve),
-    );
+    await new Promise<void>((resolve) => {
+      void startLocalServer('/tmp', service, resolve);
+    });
     const port = getServerPort();
 
     // A file name with a '%' that is NOT followed by two hex digits.

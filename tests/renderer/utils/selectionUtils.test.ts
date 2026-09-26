@@ -11,7 +11,8 @@ describe('selectionUtils', () => {
       const shuffled = shuffleArray(originalArray);
 
       expect(shuffled).toHaveLength(originalArray.length);
-      expect(shuffled.sort()).toEqual(originalArray.sort());
+      const byValue = (a: number, b: number) => a - b;
+      expect(shuffled.sort(byValue)).toEqual(originalArray.sort(byValue));
     });
 
     it('should produce a different order (most of the time)', () => {

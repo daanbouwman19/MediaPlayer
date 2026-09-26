@@ -151,7 +151,7 @@ describe('ConcurrencyLimiter', () => {
     await Promise.all(promises);
 
     expect(results).toHaveLength(5);
-    expect(results.sort()).toEqual([1, 2, 3, 4, 5]);
+    expect(results.sort((a, b) => a - b)).toEqual([1, 2, 3, 4, 5]);
   });
 
   it('should handle errors correctly', async () => {

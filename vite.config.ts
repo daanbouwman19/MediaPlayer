@@ -219,12 +219,25 @@ function targetConfig(mode: string): UserConfig {
   return {} as UserConfig;
 }
 
-// Oxlint config (`vp lint` / `vp check`): Oxlint's `correctness` category only,
-// i.e. code that is outright wrong or useless.
+// Oxlint config (`vp lint` / `vp check`): the `correctness` category (code that
+// is outright wrong or useless, including the type-aware rules such as
+// no-floating-promises), plus rules that keep `any` out of src/.
+const noAnyRules = {
+  'typescript/no-explicit-any': 'error',
+  'typescript/no-unsafe-argument': 'error',
+  'typescript/no-unsafe-assignment': 'error',
+  'typescript/no-unsafe-call': 'error',
+  'typescript/no-unsafe-member-access': 'error',
+  'typescript/no-unsafe-return': 'error',
+} as const;
+
 const lint: UserConfig['lint'] = {
   plugins: ['oxc', 'typescript', 'unicorn', 'vue'],
   categories: {
     correctness: 'error',
+  },
+  options: {
+    typeAware: true,
   },
   env: {
     builtin: true,
@@ -245,9 +258,27 @@ const lint: UserConfig['lint'] = {
     'dist-web',
   ],
   rules: {
+    ...noAnyRules,
+    'typescript/no-misused-promises': 'error',
+    'typescript/switch-exhaustiveness-check': 'error',
+    'typescript/only-throw-error': 'error',
+    'typescript/prefer-promise-reject-errors': 'error',
     // `new Array(n)` preallocation is intentional in hot paths (see AGENTS.md).
     'unicorn/no-new-array': 'off',
   },
+  overrides: [
+    {
+      // Tests may use `any` for mocks, pass unbound mock methods to expect(),
+      // and `await` synchronous calls (e.g. `await vm.$emit()`) to flush
+      // pending microtasks before asserting.
+      files: ['tests/**', '__mocks__/**'],
+      rules: {
+        ...Object.fromEntries(Object.keys(noAnyRules).map((r) => [r, 'off'])),
+        'typescript/unbound-method': 'off',
+        'typescript/await-thenable': 'off',
+      },
+    },
+  ],
 };
 
 // Oxfmt config (run via `vp fmt` / `vp check`). Converted from the former

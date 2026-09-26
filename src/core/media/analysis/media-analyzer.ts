@@ -87,7 +87,7 @@ export class MediaAnalyzer {
       if (cachePath) {
         try {
           const cached = await fs.readFile(cachePath, 'utf-8');
-          return JSON.parse(cached);
+          return JSON.parse(cached) as HeatmapData;
         } catch {
           // Cache miss
         }
@@ -186,8 +186,8 @@ export class MediaAnalyzer {
         stderrBuffer = '',
         durationSec = 0;
 
-      proc.stdout?.on('data', (d) => (output += d.toString()));
-      proc.stderr?.on('data', (d) => {
+      proc.stdout?.on('data', (d: Buffer) => (output += d.toString()));
+      proc.stderr?.on('data', (d: Buffer) => {
         stderrBuffer += d.toString();
         const lines = stderrBuffer.split(/[\r\n]+/);
         stderrBuffer = lines.pop() || ''; // Keep partial line

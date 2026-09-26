@@ -132,7 +132,9 @@ export const useLibraryStore = defineStore('library', () => {
       const savedSelection = localStorage.getItem('albumSelection');
       if (savedSelection) {
         try {
-          albumsSelectedForSlideshow.value = JSON.parse(savedSelection);
+          albumsSelectedForSlideshow.value = JSON.parse(savedSelection) as {
+            [albumName: string]: boolean;
+          };
         } catch (e) {
           console.error('Failed to parse saved album selection:', e);
           selectAllAlbumsRecursively(allAlbums.value);

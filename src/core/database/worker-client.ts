@@ -189,7 +189,7 @@ export class WorkerClient {
         );
         clearTimeout(timeoutId);
         this.pendingMessages.delete(id);
-        reject(error);
+        reject(error instanceof Error ? error : new Error(String(error)));
       }
     });
   }

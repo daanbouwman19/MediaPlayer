@@ -56,7 +56,7 @@ vi.mock('../../../src/core/database/database', () => ({
 }));
 
 const mockTranscodeManager = vi.hoisted(() => ({
-  start: vi.fn(),
+  start: vi.fn().mockResolvedValue(undefined),
   enqueue: vi.fn().mockResolvedValue(undefined),
   cancel: vi.fn().mockResolvedValue(undefined),
 }));

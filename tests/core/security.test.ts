@@ -171,7 +171,9 @@ describe('authorizeFilePath Security', () => {
     // Case 1: File does not exist -> fs.realpath throws ENOENT for any path
     vi.mocked(fs.realpath).mockRejectedValue(new Error('ENOENT'));
     (vi.mocked(fs.realpath) as any).mockImplementation(async (p: string) => {
-      if (p.includes('missing')) throw { code: 'ENOENT' };
+      if (p.includes('missing')) {
+        throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+      }
       return p; // Return same path for roots etc.
     });
 

@@ -50,7 +50,7 @@ export function createAuthRoutes(limiters: RateLimiters) {
     '/api/auth/unlock',
     limiters.authLimiter,
     asyncHandler(async (req, res) => {
-      const { password } = req.body;
+      const { password } = req.body as { password?: unknown };
       const globalPassword = process.env.GLOBAL_PASSWORD;
 
       if (!globalPassword) {
@@ -125,8 +125,8 @@ export function createAuthRoutes(limiters: RateLimiters) {
     '/api/auth/google-drive/code',
     limiters.authLimiter,
     asyncHandler(async (req, res) => {
-      const { code } = req.body;
-      if (!code) {
+      const { code } = req.body as { code?: unknown };
+      if (!code || typeof code !== 'string') {
         throw new AppError(400, 'Missing code');
       }
 

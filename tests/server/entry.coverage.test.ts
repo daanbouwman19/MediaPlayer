@@ -166,7 +166,7 @@ describe('Server entry coverage', () => {
     vi.resetModules();
     process.argv[1] = 'vitest';
 
-    const bootstrapMock = vi.fn();
+    const bootstrapMock = vi.fn().mockResolvedValue(undefined);
     vi.doMock('../../src/server/main.ts', async (importOriginal) => {
       const actual =
         await importOriginal<typeof import('../../src/server/main.ts')>();
@@ -185,7 +185,7 @@ describe('Server entry coverage', () => {
     vi.resetModules();
     process.argv[1] = '';
 
-    const bootstrapMock = vi.fn();
+    const bootstrapMock = vi.fn().mockResolvedValue(undefined);
     vi.doMock('../../src/server/main.ts', async (importOriginal) => {
       const actual =
         await importOriginal<typeof import('../../src/server/main.ts')>();
@@ -204,7 +204,7 @@ describe('Server entry coverage', () => {
     vi.resetModules();
     process.argv[1] = path.resolve(process.cwd(), 'src', 'server', 'server.ts');
 
-    const bootstrapMock = vi.fn();
+    const bootstrapMock = vi.fn().mockResolvedValue(undefined);
     vi.doMock('../../src/server/main.ts', async (importOriginal) => {
       const actual =
         await importOriginal<typeof import('../../src/server/main.ts')>();
@@ -217,6 +217,38 @@ describe('Server entry coverage', () => {
     await import('../../src/server/server.ts');
 
     expect(bootstrapMock).toHaveBeenCalled();
+  });
+
+  it('server entry logs and exits when bootstrap fails', async () => {
+    vi.resetModules();
+    process.argv[1] = path.resolve(process.cwd(), 'src', 'server', 'server.ts');
+
+    const bootstrapMock = vi.fn().mockRejectedValue(new Error('boom'));
+    vi.doMock('../../src/server/main.ts', async (importOriginal) => {
+      const actual =
+        await importOriginal<typeof import('../../src/server/main.ts')>();
+      return {
+        ...actual,
+        bootstrap: bootstrapMock,
+      };
+    });
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const exitSpy = vi
+      .spyOn(process, 'exit')
+      .mockImplementation((() => undefined) as never);
+
+    try {
+      await import('../../src/server/server.ts');
+
+      await vi.waitFor(() => expect(exitSpy).toHaveBeenCalledWith(1));
+      expect(errorSpy).toHaveBeenCalledWith(
+        'Failed to start server:',
+        expect.any(Error),
+      );
+    } finally {
+      exitSpy.mockRestore();
+      errorSpy.mockRestore();
+    }
   });
 
   it('main entry does not auto-bootstrap when argv entry is missing', async () => {

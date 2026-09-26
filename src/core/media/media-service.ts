@@ -180,7 +180,7 @@ export class MediaService implements IMediaService {
   ): void {
     const allFilePaths = collectAllFilePaths(albums);
 
-    (async () => {
+    void (async () => {
       try {
         // Filter paths that are already "success" in DB
         // to avoid fetching ALL metadata or processing known files.
@@ -312,7 +312,8 @@ export class MediaService implements IMediaService {
         continue;
       }
 
-      queue.add(async () => {
+      // Each task handles its own errors, so the returned promise never rejects.
+      void queue.add(async () => {
         try {
           if (isDrivePath(filePath)) {
             return;

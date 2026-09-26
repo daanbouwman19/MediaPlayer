@@ -39,6 +39,15 @@ const {
   };
 });
 
+/**
+ * The http listener starts handleRequest without awaiting it, so tests call
+ * handleRequest directly and assert once the request has been fully handled.
+ */
+const getHandler =
+  () =>
+  (req: any, res: any): Promise<void> =>
+    (InternalMediaProxy.getInstance() as any).handleRequest(req, res);
+
 vi.mock('http', () => ({
   default: {
     createServer: mockCreateServer,
@@ -114,6 +123,16 @@ describe('InternalMediaProxy', () => {
     expect(url).toContain('?token=');
   });
 
+  it('server listener forwards requests to handleRequest', async () => {
+    (InternalMediaProxy as any).instance = null;
+    InternalMediaProxy.getInstance();
+    const res = { writeHead: vi.fn(), end: vi.fn(), headersSent: false };
+
+    getCallback()({ url: '/stream/x', headers: {}, on: vi.fn() }, res);
+
+    await vi.waitFor(() => expect(res.writeHead).toHaveBeenCalledWith(403));
+  });
+
   describe('Request Handling', () => {
     let handler: any;
     let req: any;
@@ -124,7 +143,7 @@ describe('InternalMediaProxy', () => {
       (InternalMediaProxy as any).instance = null; // Reset singleton to get fresh token
       const proxy = InternalMediaProxy.getInstance(); // Ensure instance created
       authToken = (proxy as any).authToken;
-      handler = getCallback();
+      handler = getHandler();
       req = { url: '', headers: { host: 'localhost:54321' }, on: vi.fn() };
       res = {
         writeHead: vi.fn(),
@@ -372,7 +391,7 @@ describe('InternalMediaProxy', () => {
     (InternalMediaProxy as any).instance = null;
     const proxy = InternalMediaProxy.getInstance();
     const authToken = (proxy as any).authToken;
-    const handler = getCallback();
+    const handler = getHandler();
     const req = {
       url: `/stream/file-error?token=${authToken}`,
       headers: { host: 'localhost:54321' },
@@ -396,7 +415,7 @@ describe('InternalMediaProxy', () => {
     (InternalMediaProxy as any).instance = null;
     const proxy = InternalMediaProxy.getInstance();
     const authToken = (proxy as any).authToken;
-    const handler = getCallback();
+    const handler = getHandler();
     const req = {
       url: `/stream/file-not-in-lib?token=${authToken}`,
       headers: { host: 'localhost:54321' },

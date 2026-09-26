@@ -79,18 +79,17 @@ export function registerSensitiveFile(filename: string): void {
 export async function loadSecurityConfig(configPath: string): Promise<void> {
   try {
     const content = await fs.readFile(configPath, 'utf-8');
-    const config = JSON.parse(content);
+    const config = JSON.parse(content) as { sensitiveSubdirectories?: unknown };
+    const dirs: unknown = config.sensitiveSubdirectories;
     if (
-      Array.isArray(config.sensitiveSubdirectories) &&
-      config.sensitiveSubdirectories.every(
-        (i: unknown) => typeof i === 'string',
-      )
+      Array.isArray(dirs) &&
+      dirs.every((i): i is string => typeof i === 'string')
     ) {
-      for (const dir of config.sensitiveSubdirectories) {
+      for (const dir of dirs) {
         registerSensitiveFile(dir);
       }
       console.log(
-        `[Security] Loaded ${config.sensitiveSubdirectories.length} custom sensitive directories.`,
+        `[Security] Loaded ${dirs.length} custom sensitive directories.`,
       );
     }
   } catch (error) {
@@ -451,10 +450,7 @@ const LINUX_RESTRICTED_PATHS = [
 /**
  * Attempts to resolve the real path, handling symlinks and errors.
  */
-function resolvePath(
-  dirPath: string,
-  p: typeof path.win32 | typeof path.posix,
-): string {
+function resolvePath(dirPath: string, p: typeof path): string {
   try {
     // Attempt to resolve real path to handle symlinks (security bypass)
     // We only call realpathSync if the targeted platform matches the actual host platform

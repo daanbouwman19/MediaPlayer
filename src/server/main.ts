@@ -32,7 +32,7 @@ async function ensureCertificates() {
         'An unexpected error occurred while checking for SSL certificates:',
         error,
       );
-      throw error;
+      throw e;
     }
 
     console.log('Generating SSL Certificates...');
@@ -119,5 +119,8 @@ export function shouldAutoBootstrap(entryArg = process.argv[1]) {
 }
 
 if (shouldAutoBootstrap()) {
-  bootstrap();
+  bootstrap().catch((error: unknown) => {
+    console.error('Failed to start server:', error);
+    process.exit(1);
+  });
 }

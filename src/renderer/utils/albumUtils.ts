@@ -67,15 +67,13 @@ export const collectTexturesRecursive = (album: Album): MediaFile[] => {
   const total = countTextures(album);
   if (total === 0) return [];
 
-  const results = new Array(total);
+  const results = new Array<MediaFile>(total);
   let index = 0;
 
   for (const node of traverseAlbumTree(album)) {
     if (node.textures) {
-      // Manual loop is faster than for...of for arrays in hot paths
-      const len = node.textures.length;
-      for (let i = 0; i < len; i++) {
-        results[index++] = node.textures[i];
+      for (const texture of node.textures) {
+        results[index++] = texture;
       }
     }
   }

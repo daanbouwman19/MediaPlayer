@@ -143,7 +143,7 @@ export async function runFFmpeg(
     try {
       proc = spawn(command, args);
     } catch (err) {
-      return reject(err);
+      return reject(err instanceof Error ? err : new Error(String(err)));
     }
 
     let stdout = '';
@@ -156,11 +156,11 @@ export async function runFFmpeg(
       reject(new Error(`Process timed out after ${timeoutMs}ms`));
     }, timeoutMs);
 
-    proc.stdout?.on('data', (data) => {
+    proc.stdout?.on('data', (data: Buffer) => {
       stdout += data.toString();
     });
 
-    proc.stderr?.on('data', (data) => {
+    proc.stderr?.on('data', (data: Buffer) => {
       stderr += data.toString();
     });
 

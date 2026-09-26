@@ -937,6 +937,15 @@ export function getSetting(key: string): WorkerResult {
   }
 }
 
+/** Parsed smart playlist criteria; each field is validated before use. */
+interface SmartPlaylistCriteria {
+  minRating?: unknown;
+  minDuration?: unknown;
+  minViews?: unknown;
+  maxViews?: unknown;
+  minDaysSinceView?: unknown;
+}
+
 /**
  * Executes a smart playlist criteria to find matching files.
  */
@@ -955,7 +964,7 @@ export function executeSmartPlaylist(criteriaJson?: string): WorkerResult {
 
     if (criteriaJson && criteriaJson !== '{}') {
       try {
-        const criteria = JSON.parse(criteriaJson);
+        const criteria = JSON.parse(criteriaJson) as SmartPlaylistCriteria;
 
         if (typeof criteria.minRating === 'number') {
           sql += ' AND rating >= ?';
@@ -1126,7 +1135,8 @@ export function getCachedAlbums(cacheKey: string): WorkerResult {
     const row = getStatement('getCachedAlbum').get(cacheKey) as
       | { cache_value: string }
       | undefined;
-    const data = row && row.cache_value ? JSON.parse(row.cache_value) : null;
+    const data: unknown =
+      row && row.cache_value ? JSON.parse(row.cache_value) : null;
     return { success: true, data };
   } catch (error: unknown) {
     console.error('[worker] Error reading cached albums:', error);
@@ -1321,69 +1331,143 @@ export function getPendingJobs(jobType: string): WorkerResult {
   }
 }
 
+type FilePathPayload = { filePath: string };
+type JobPayload = { jobType: string; filePath: string };
+type JobStatusPayload = {
+  filePath: string;
+  status: string;
+  error?: string | null;
+};
+
+/** A request sent by the main thread; `type` selects the handler below. */
+type WorkerRequest = { id: number } & (
+  | { type: 'init'; payload: { dbPath: string } }
+  | { type: 'recordMediaView'; payload: FilePathPayload }
+  | { type: 'getMediaViewCounts'; payload: { filePaths: string[] } }
+  | { type: 'cacheAlbums'; payload: { cacheKey: string; albums: unknown } }
+  | { type: 'getCachedAlbums'; payload: { cacheKey: string } }
+  | { type: 'close'; payload?: undefined }
+  | {
+      type: 'addMediaDirectory';
+      payload: { directoryObj: Parameters<typeof addMediaDirectory>[0] };
+    }
+  | { type: 'getMediaDirectories'; payload?: undefined }
+  | { type: 'removeMediaDirectory'; payload: { directoryPath: string } }
+  | {
+      type: 'setDirectoryActiveState';
+      payload: { directoryPath: string; isActive: boolean };
+    }
+  | { type: 'upsertMetadata'; payload: MetadataPayload }
+  | { type: 'bulkUpsertMetadata'; payload: MetadataPayload[] }
+  | { type: 'setRating'; payload: { filePath: string; rating: number } }
+  | {
+      type: 'updateWatchedSegments';
+      payload: { filePath: string; segmentsJson: string };
+    }
+  | {
+      type: 'updatePlaybackPosition';
+      payload: { filePath: string; position: number };
+    }
+  | { type: 'getAllMetadata'; payload?: undefined }
+  | { type: 'getAllMetadataVerification'; payload?: undefined }
+  | { type: 'getMetadata'; payload: { filePaths: string[] } }
+  | { type: 'createSmartPlaylist'; payload: { name: string; criteria: string } }
+  | { type: 'getSmartPlaylists'; payload?: undefined }
+  | { type: 'deleteSmartPlaylist'; payload: { id: number } }
+  | {
+      type: 'updateSmartPlaylist';
+      payload: { id: number; name: string; criteria: string };
+    }
+  | { type: 'saveSetting'; payload: { key: string; value: string } }
+  | { type: 'getSetting'; payload: { key: string } }
+  | { type: 'executeSmartPlaylist'; payload: { criteria?: string } }
+  | { type: 'getRecentlyPlayed'; payload: { limit: number } }
+  | { type: 'getPendingMetadata'; payload?: undefined }
+  | { type: 'filterProcessingNeeded'; payload: { filePaths: string[] } }
+  | { type: 'addTranscodeJob'; payload: FilePathPayload }
+  | { type: 'listTranscodeJobs'; payload?: undefined }
+  | { type: 'updateTranscodeJobStatus'; payload: JobStatusPayload }
+  | { type: 'deleteTranscodeJob'; payload: FilePathPayload }
+  | { type: 'getPendingTranscodeJobs'; payload?: undefined }
+  | { type: 'addJob'; payload: JobPayload }
+  | { type: 'listJobs'; payload: { jobType: string } }
+  | { type: 'updateJobStatus'; payload: JobPayload & JobStatusPayload }
+  | { type: 'deleteJob'; payload: JobPayload }
+  | { type: 'getPendingJobs'; payload: { jobType: string } }
+);
+
 if (parentPort) {
   /**
    * Listen for messages from the main thread.
    */
-  parentPort.on('message', async (message) => {
-    const { id, type, payload } = message;
+  const handleMessage = async (rawMessage: unknown): Promise<void> => {
+    // Messages cross a thread boundary untyped; WorkerRequest describes what
+    // the main thread sends (see worker-client.ts / database.ts).
+    const message = rawMessage as WorkerRequest;
+    const { id } = message;
     let result: WorkerResult;
 
     try {
-      switch (type) {
+      switch (message.type) {
         case 'init':
-          result = initDatabase(payload.dbPath);
+          result = initDatabase(message.payload.dbPath);
           break;
         case 'recordMediaView':
-          result = await recordMediaView(payload.filePath);
+          result = await recordMediaView(message.payload.filePath);
           break;
         case 'getMediaViewCounts':
-          result = await getMediaViewCounts(payload.filePaths);
+          result = await getMediaViewCounts(message.payload.filePaths);
           break;
         case 'cacheAlbums':
-          result = await cacheAlbums(payload.cacheKey, payload.albums);
+          result = await cacheAlbums(
+            message.payload.cacheKey,
+            message.payload.albums,
+          );
           break;
         case 'getCachedAlbums':
-          result = getCachedAlbums(payload.cacheKey);
+          result = getCachedAlbums(message.payload.cacheKey);
           break;
         case 'close':
           result = closeDatabase();
           break;
         case 'addMediaDirectory':
           // Accepts simple string or object now
-          result = addMediaDirectory(payload.directoryObj);
+          result = addMediaDirectory(message.payload.directoryObj);
           break;
         case 'getMediaDirectories':
           result = getMediaDirectories();
           break;
         case 'removeMediaDirectory':
-          result = removeMediaDirectory(payload.directoryPath);
+          result = removeMediaDirectory(message.payload.directoryPath);
           break;
         case 'setDirectoryActiveState':
           result = setDirectoryActiveState(
-            payload.directoryPath,
-            payload.isActive,
+            message.payload.directoryPath,
+            message.payload.isActive,
           );
           break;
         case 'upsertMetadata':
-          result = await upsertMetadata(payload);
+          result = await upsertMetadata(message.payload);
           break;
         case 'bulkUpsertMetadata':
-          result = await bulkUpsertMetadata(payload);
+          result = await bulkUpsertMetadata(message.payload);
           break;
         case 'setRating':
-          result = await setRating(payload.filePath, payload.rating);
+          result = await setRating(
+            message.payload.filePath,
+            message.payload.rating,
+          );
           break;
         case 'updateWatchedSegments':
           result = await updateWatchedSegments(
-            payload.filePath,
-            payload.segmentsJson,
+            message.payload.filePath,
+            message.payload.segmentsJson,
           );
           break;
         case 'updatePlaybackPosition':
           result = await updatePlaybackPosition(
-            payload.filePath,
-            payload.position,
+            message.payload.filePath,
+            message.payload.position,
           );
           break;
         case 'getAllMetadata':
@@ -1393,35 +1477,38 @@ if (parentPort) {
           result = getAllMetadataVerification();
           break;
         case 'getMetadata':
-          result = await getMetadata(payload.filePaths);
+          result = await getMetadata(message.payload.filePaths);
           break;
         case 'createSmartPlaylist':
-          result = createSmartPlaylist(payload.name, payload.criteria);
+          result = createSmartPlaylist(
+            message.payload.name,
+            message.payload.criteria,
+          );
           break;
         case 'getSmartPlaylists':
           result = getSmartPlaylists();
           break;
         case 'deleteSmartPlaylist':
-          result = deleteSmartPlaylist(payload.id);
+          result = deleteSmartPlaylist(message.payload.id);
           break;
         case 'updateSmartPlaylist':
           result = updateSmartPlaylist(
-            payload.id,
-            payload.name,
-            payload.criteria,
+            message.payload.id,
+            message.payload.name,
+            message.payload.criteria,
           );
           break;
         case 'saveSetting':
-          result = saveSetting(payload.key, payload.value);
+          result = saveSetting(message.payload.key, message.payload.value);
           break;
         case 'getSetting':
-          result = getSetting(payload.key);
+          result = getSetting(message.payload.key);
           break;
         case 'executeSmartPlaylist':
-          result = executeSmartPlaylist(payload.criteria);
+          result = executeSmartPlaylist(message.payload.criteria);
           break;
         case 'getRecentlyPlayed':
-          result = getRecentlyPlayed(payload.limit);
+          result = getRecentlyPlayed(message.payload.limit);
           break;
         case 'getPendingMetadata': {
           if (!db) {
@@ -1435,10 +1522,10 @@ if (parentPort) {
           break;
         }
         case 'filterProcessingNeeded':
-          result = await filterProcessingNeeded(payload.filePaths);
+          result = await filterProcessingNeeded(message.payload.filePaths);
           break;
         case 'addTranscodeJob':
-          result = await addJob(JOB_TYPE_TRANSCODE, payload.filePath);
+          result = await addJob(JOB_TYPE_TRANSCODE, message.payload.filePath);
           break;
         case 'listTranscodeJobs':
           result = listJobs(JOB_TYPE_TRANSCODE);
@@ -1446,49 +1533,59 @@ if (parentPort) {
         case 'updateTranscodeJobStatus':
           result = updateJobStatus(
             JOB_TYPE_TRANSCODE,
-            payload.filePath,
-            payload.status,
-            payload.error ?? null,
+            message.payload.filePath,
+            message.payload.status,
+            message.payload.error ?? null,
           );
           break;
         case 'deleteTranscodeJob':
-          result = deleteJob(JOB_TYPE_TRANSCODE, payload.filePath);
+          result = deleteJob(JOB_TYPE_TRANSCODE, message.payload.filePath);
           break;
         case 'getPendingTranscodeJobs':
           result = getPendingJobs(JOB_TYPE_TRANSCODE);
           break;
         case 'addJob':
-          result = await addJob(payload.jobType, payload.filePath);
+          result = await addJob(
+            message.payload.jobType,
+            message.payload.filePath,
+          );
           break;
         case 'listJobs':
-          result = listJobs(payload.jobType);
+          result = listJobs(message.payload.jobType);
           break;
         case 'updateJobStatus':
           result = updateJobStatus(
-            payload.jobType,
-            payload.filePath,
-            payload.status,
-            payload.error ?? null,
+            message.payload.jobType,
+            message.payload.filePath,
+            message.payload.status,
+            message.payload.error ?? null,
           );
           break;
         case 'deleteJob':
-          result = deleteJob(payload.jobType, payload.filePath);
+          result = deleteJob(message.payload.jobType, message.payload.filePath);
           break;
         case 'getPendingJobs':
-          result = getPendingJobs(payload.jobType);
+          result = getPendingJobs(message.payload.jobType);
           break;
         default:
-          result = { success: false, error: `Unknown message type: ${type}` };
+          result = {
+            success: false,
+            error: `Unknown message type: ${String((message as { type: unknown }).type)}`,
+          };
       }
     } catch (error: unknown) {
       console.error(
-        `[worker] Error processing message id=${id}, type=${type}:`,
+        `[worker] Error processing message id=${id}, type=${message.type}:`,
         error,
       );
       result = { success: false, error: (error as Error).message };
     }
 
     parentPort!.postMessage({ id, result });
+  };
+
+  parentPort.on('message', (rawMessage: unknown) => {
+    void handleMessage(rawMessage);
   });
 
   console.log('[database-worker.js] Worker thread started and ready.');

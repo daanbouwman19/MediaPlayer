@@ -54,6 +54,15 @@ const requireFileQueryParam = (
   next();
 };
 
+/** Returns the file path stored by {@link requireFileQueryParam}. */
+const validatedFilePath = (res: Response): string => {
+  const { filePath } = res.locals as { filePath?: unknown };
+  if (typeof filePath !== 'string') {
+    throw new AppError(400, 'Missing file');
+  }
+  return filePath;
+};
+
 export function createMediaRoutes({
   limiters,
   mediaHandler,
@@ -66,7 +75,7 @@ export function createMediaRoutes({
     '/api/media/view',
     writeLimiter,
     asyncHandler(async (req, res) => {
-      const { filePath } = req.body;
+      const { filePath } = req.body as { filePath?: unknown };
       if (!filePath || typeof filePath !== 'string') {
         throw new AppError(400, 'Missing or invalid filePath');
       }
@@ -85,7 +94,7 @@ export function createMediaRoutes({
     '/api/media/views',
     readLimiter,
     asyncHandler(async (req, res) => {
-      const { filePaths } = req.body;
+      const { filePaths } = req.body as { filePaths?: unknown };
       if (
         !Array.isArray(filePaths) ||
         !filePaths.every((p) => typeof p === 'string')
@@ -110,7 +119,10 @@ export function createMediaRoutes({
     '/api/media/rate',
     writeLimiter,
     asyncHandler(async (req, res) => {
-      const { filePath, rating } = req.body;
+      const { filePath, rating } = req.body as {
+        filePath?: unknown;
+        rating?: unknown;
+      };
       if (
         !filePath ||
         typeof filePath !== 'string' ||
@@ -133,7 +145,10 @@ export function createMediaRoutes({
     '/api/media/playback-position',
     writeLimiter,
     asyncHandler(async (req, res) => {
-      const { filePath, position } = req.body;
+      const { filePath, position } = req.body as {
+        filePath?: unknown;
+        position?: unknown;
+      };
       if (
         !filePath ||
         typeof filePath !== 'string' ||
@@ -181,8 +196,16 @@ export function createMediaRoutes({
     '/api/media/metadata',
     writeLimiter,
     asyncHandler(async (req, res) => {
-      const { filePath, metadata } = req.body;
-      if (!filePath || typeof filePath !== 'string' || !metadata) {
+      const { filePath, metadata } = req.body as {
+        filePath?: unknown;
+        metadata?: unknown;
+      };
+      if (
+        !filePath ||
+        typeof filePath !== 'string' ||
+        !metadata ||
+        typeof metadata !== 'object'
+      ) {
         return res.status(400).send('Missing or invalid arguments');
       }
 
@@ -200,7 +223,7 @@ export function createMediaRoutes({
     '/api/media/metadata/batch',
     readLimiter,
     asyncHandler(async (req, res) => {
-      const { filePaths } = req.body;
+      const { filePaths } = req.body as { filePaths?: unknown };
       if (
         !Array.isArray(filePaths) ||
         !filePaths.every((p) => typeof p === 'string')
@@ -227,7 +250,7 @@ export function createMediaRoutes({
     fileLimiter,
     requireFileQueryParam,
     asyncHandler(async (req, res) => {
-      await mediaHandler.serveMetadata(req, res, res.locals.filePath);
+      await mediaHandler.serveMetadata(req, res, validatedFilePath(res));
     }),
   );
 
@@ -284,7 +307,7 @@ export function createMediaRoutes({
     fileLimiter,
     requireFileQueryParam,
     asyncHandler(async (req, res) => {
-      await mediaHandler.serveThumbnail(req, res, res.locals.filePath);
+      await mediaHandler.serveThumbnail(req, res, validatedFilePath(res));
     }),
   );
 
@@ -293,7 +316,7 @@ export function createMediaRoutes({
     fileLimiter,
     requireFileQueryParam,
     asyncHandler(async (req, res) => {
-      await mediaHandler.serveHeatmap(req, res, res.locals.filePath);
+      await mediaHandler.serveHeatmap(req, res, validatedFilePath(res));
     }),
   );
 
@@ -302,7 +325,7 @@ export function createMediaRoutes({
     fileLimiter,
     requireFileQueryParam,
     asyncHandler(async (req, res) => {
-      await mediaHandler.serveHeatmapProgress(req, res, res.locals.filePath);
+      await mediaHandler.serveHeatmapProgress(req, res, validatedFilePath(res));
     }),
   );
 
@@ -312,7 +335,7 @@ export function createMediaRoutes({
     fileLimiter,
     requireFileQueryParam,
     asyncHandler(async (req, res) => {
-      await mediaHandler.serveHlsMaster(req, res, res.locals.filePath);
+      await mediaHandler.serveHlsMaster(req, res, validatedFilePath(res));
     }),
   );
 
@@ -322,7 +345,7 @@ export function createMediaRoutes({
     fileLimiter,
     requireFileQueryParam,
     asyncHandler(async (req, res) => {
-      await mediaHandler.serveHlsPlaylist(req, res, res.locals.filePath);
+      await mediaHandler.serveHlsPlaylist(req, res, validatedFilePath(res));
     }),
   );
 
@@ -332,7 +355,7 @@ export function createMediaRoutes({
     fileLimiter,
     requireFileQueryParam,
     asyncHandler(async (req, res) => {
-      await mediaHandler.serveHlsStatus(req, res, res.locals.filePath);
+      await mediaHandler.serveHlsStatus(req, res, validatedFilePath(res));
     }),
   );
 
@@ -349,7 +372,7 @@ export function createMediaRoutes({
       await mediaHandler.serveHlsSegment(
         req,
         res,
-        res.locals.filePath,
+        validatedFilePath(res),
         segment,
       );
     }),

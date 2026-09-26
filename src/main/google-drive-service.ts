@@ -404,7 +404,7 @@ export async function getDriveFileThumbnail(fileId: string): Promise<Readable> {
     // We need to fetch this URL. The googleapis library doesn't have a helper for arbitrary URLs.
     // We can use the global fetch (Node 18+) or axios if available.
     // We need to attach the Auth header.
-    const auth = await getOAuth2Client();
+    const auth = getOAuth2Client();
     const token = await auth.getAccessToken(); // ensuring we have a token
 
     const res = await fetch(meta.data.thumbnailLink, {

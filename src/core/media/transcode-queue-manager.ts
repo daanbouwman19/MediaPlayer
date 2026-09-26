@@ -54,8 +54,12 @@ export class TranscodeQueueManager {
     // second processJob run (DB churn + wasted queue slot).
     if (this.queued.has(filePath)) return;
     this.queued.add(filePath);
-    this.queue.add(() =>
-      this.processJob(filePath).finally(() => this.queued.delete(filePath)),
+    void this.queue.add(() =>
+      this.processJob(filePath)
+        .catch((err: unknown) => {
+          console.error(`[TranscodeQueue] Job failed for ${filePath}:`, err);
+        })
+        .finally(() => this.queued.delete(filePath)),
     );
   }
 
