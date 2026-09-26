@@ -19,7 +19,9 @@ npm run rebuild:electron # Rebuild native modules (e.g. ffmpeg-static) for Elect
 npm run rebuild:node    # Rebuild native modules for Node/server mode
 ```
 
-To run a single test file: `npx vitest run tests/path/to/file.test.ts`
+To run a single test file: `npx vp test run tests/path/to/file.test.ts`
+
+Tooling runs through [Vite+](https://viteplus.dev) (`vp`): `vp fmt` (Oxfmt), `vp lint` (Oxlint), `vp test` (Vitest), `vp build`/`vp dev` (Vite). Lint and format settings live in the `lint` and `fmt` blocks of `vite.config.ts`; test settings stay in `vitest.config.js`. Type checking still uses `vue-tsc` (TypeScript 6), because TypeScript 7 cannot type-check `.vue` files yet.
 
 ## Architecture
 

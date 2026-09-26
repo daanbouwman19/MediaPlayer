@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vite-plus/test';
 import { setActivePinia, createPinia } from 'pinia';
 // We must mock access to localStorage via stubGlobal BEFORE importing the module if we wanted to control it specifically during module init,
 // but for runtime access (inside functions), stubbing in beforeEach is fine.

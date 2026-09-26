@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vite-plus/test';
 import request from 'supertest';
 import express from 'express';
 import bodyParser from 'body-parser';
@@ -70,7 +70,6 @@ describe('Media Routes Coverage', () => {
     );
 
     // Error handler
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     app.use((err: any, _req: any, res: any, _next: any) => {
       res.status(err.statusCode || 500).json({ error: err.message });
     });

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vite-plus/test';
 import { WorkerScannerService } from '../../../src/infrastructure/worker-scanner-service';
 import { WorkerClient } from '../../../src/core/database/worker-client';
 import { WorkerFactory } from '../../../src/core/database/worker-factory';

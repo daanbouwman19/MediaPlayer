@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'vite-plus/test';
 import { isValidTimeFormat } from '../../src/infrastructure/ffmpeg-utils';
 
 describe('isValidTimeFormat Security & Validation', () => {

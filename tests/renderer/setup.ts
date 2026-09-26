@@ -1,4 +1,4 @@
-import { beforeEach } from 'vitest';
+import { beforeEach } from 'vite-plus/test';
 import { setActivePinia, createPinia } from 'pinia';
 
 process.env.GLOBAL_PASSWORD = '';

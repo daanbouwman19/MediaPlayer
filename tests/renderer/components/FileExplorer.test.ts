@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vite-plus/test';
 import { mount, flushPromises } from '@vue/test-utils';
 import FileExplorer from '@/features/library/FileExplorer.vue';
 import { api } from '../../../src/renderer/api/index';

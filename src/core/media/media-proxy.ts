@@ -44,7 +44,7 @@ export class InternalMediaProxy {
 
         // Expected URL: /stream/:fileId (optional extension)
         // Capture only the ID (Base64url characters)
-        const match = urlObj.pathname.match(/^\/stream\/([a-zA-Z0-9_\-]+)/);
+        const match = urlObj.pathname.match(/^\/stream\/([a-zA-Z0-9_-]+)/);
 
         if (!match) {
           res.writeHead(404);

@@ -22,3 +22,4 @@ master.key
 
 .antigravitycli/
 gha-creds-*.json
+.vitest/

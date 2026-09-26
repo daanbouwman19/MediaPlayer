@@ -1,4 +1,11 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import {
+  describe,
+  it,
+  expect,
+  vi,
+  beforeEach,
+  afterEach,
+} from 'vite-plus/test';
 import { HlsManager } from '../../src/core/media/hls-manager.ts';
 import { MAX_CONCURRENT_TRANSCODES } from '../../src/core/media/constants.ts';
 import EventEmitter from 'events';

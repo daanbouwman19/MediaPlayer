@@ -62,7 +62,8 @@ export interface MediaLibraryItem {
 }
 
 export type IpcResult<T = unknown> =
-  { success: true; data: T } | { success: false; error: string };
+  | { success: true; data: T }
+  | { success: false; error: string };
 
 export interface HeatmapData {
   audio: number[];

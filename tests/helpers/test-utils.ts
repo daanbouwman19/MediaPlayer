@@ -1,5 +1,5 @@
 import { PassThrough, EventEmitter } from 'stream';
-import { Mock, vi } from 'vitest';
+import { Mock, vi } from 'vite-plus/test';
 
 /**
  * Creates a mock child process with stdout/stderr streams and basic methods.

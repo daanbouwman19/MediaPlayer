@@ -244,10 +244,10 @@ export class MediaAnalyzer {
     const motion: number[] = [],
       audio: number[] = [];
     output.split(/[\r\n]+/).forEach((line) => {
-      const mMatch = line.match(/lavfi\.signalstats\.YDIF\s*=\s*([0-9\.]+)/);
+      const mMatch = line.match(/lavfi\.signalstats\.YDIF\s*=\s*([0-9.]+)/);
       if (mMatch) motion.push(parseFloat(mMatch[1]));
       const aMatch = line.match(
-        /lavfi\.astats\.Overall\.RMS_level\s*=\s*([0-9\.\-]+)/,
+        /lavfi\.astats\.Overall\.RMS_level\s*=\s*([0-9.-]+)/,
       );
       if (aMatch) audio.push(parseFloat(aMatch[1]));
     });

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vite-plus/test';
 import { MediaAnalyzer } from '../../../src/core/media/analysis/media-analyzer';
 import fs from 'fs/promises';
 import { EventEmitter } from 'events';

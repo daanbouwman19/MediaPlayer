@@ -1,4 +1,12 @@
-import { describe, it, expect, vi, beforeEach, afterEach, test } from 'vitest';
+import {
+  describe,
+  it,
+  expect,
+  vi,
+  beforeEach,
+  afterEach,
+  test,
+} from 'vite-plus/test';
 import {
   isDrivePath,
   getDriveId,

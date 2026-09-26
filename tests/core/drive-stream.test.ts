@@ -1,4 +1,11 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import {
+  describe,
+  it,
+  expect,
+  vi,
+  beforeEach,
+  afterEach,
+} from 'vite-plus/test';
 import { getDriveStreamWithCache } from '../../src/core/media/drive-stream';
 import fs from 'fs';
 import { PassThrough } from 'stream';

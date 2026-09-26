@@ -1,5 +1,13 @@
 // @vitest-environment node
-import { describe, it, expect, vi, beforeEach, Mock, afterEach } from 'vitest';
+import {
+  describe,
+  it,
+  expect,
+  vi,
+  beforeEach,
+  Mock,
+  afterEach,
+} from 'vite-plus/test';
 import { IMediaSource } from '../../src/core/media/media-source-types';
 import { PassThrough, EventEmitter } from 'stream';
 import path from 'path';

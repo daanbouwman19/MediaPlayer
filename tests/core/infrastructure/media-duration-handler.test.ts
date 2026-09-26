@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi } from 'vite-plus/test';
 import { MediaDurationHandler } from '../../../src/infrastructure/media-duration-handler';
 import * as mediaHandler from '../../../src/core/media/media-handler';
 

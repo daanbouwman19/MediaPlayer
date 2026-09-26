@@ -1,4 +1,11 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import {
+  describe,
+  it,
+  expect,
+  vi,
+  beforeEach,
+  afterEach,
+} from 'vite-plus/test';
 import { createRateLimiter } from '../../src/core/network/rate-limiter';
 import type { Request, Response, NextFunction } from 'express';
 

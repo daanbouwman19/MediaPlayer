@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vite-plus/test';
 import { MediaHandler } from '../../src/core/media/media-handler';
 import { MediaService } from '../../src/core/media/media-service';
 import { EventEmitter } from 'events';
@@ -215,7 +215,7 @@ describe('Coverage Boost - MediaHandler', () => {
     };
     factorySpy.mockReturnValue(mockProvider as any);
 
-    await await handler.serveMetadata(req, res, 'gdrive://123');
+    await handler.serveMetadata(req, res, 'gdrive://123');
 
     expect(res.json).toHaveBeenCalledWith({ error: 'Duration not available' });
   });

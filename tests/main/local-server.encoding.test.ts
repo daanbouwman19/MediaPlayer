@@ -1,4 +1,12 @@
-import { describe, it, expect, afterEach, beforeEach, vi, Mock } from 'vitest';
+import {
+  describe,
+  it,
+  expect,
+  afterEach,
+  beforeEach,
+  vi,
+  Mock,
+} from 'vite-plus/test';
 import http from 'http';
 import cp from 'child_process'; // Import for spying
 import EventEmitter from 'events';

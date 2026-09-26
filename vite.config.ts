@@ -1,11 +1,11 @@
-import { defineConfig } from 'vite';
-import type { UserConfig } from 'vite';
+import { defineConfig } from 'vite-plus';
+import type { UserConfig } from 'vite-plus';
 import vue from '@vitejs/plugin-vue';
 import tailwindcss from '@tailwindcss/vite';
 import { visualizer } from 'rollup-plugin-visualizer';
 import { resolve } from 'path';
 
-export default defineConfig(({ mode }) => {
+function targetConfig(mode: string): UserConfig {
   const target = process.env.VITE_TARGET || 'server'; // default to server if not specified
 
   if (target === 'main') {
@@ -216,4 +216,62 @@ export default defineConfig(({ mode }) => {
   }
 
   return {} as UserConfig;
-});
+}
+
+// Oxlint config (`vp lint` / `vp check`): Oxlint's `correctness` category only,
+// i.e. code that is outright wrong or useless.
+const lint: UserConfig['lint'] = {
+  plugins: ['oxc', 'typescript', 'unicorn', 'vue'],
+  categories: {
+    correctness: 'error',
+  },
+  env: {
+    builtin: true,
+    browser: true,
+    node: true,
+    es2024: true,
+  },
+  ignorePatterns: [
+    'dist',
+    'out',
+    'node_modules',
+    'coverage',
+    '.vite',
+    'release',
+    '.cache',
+    'cache',
+    'dist-server',
+    'dist-web',
+  ],
+  rules: {
+    // `new Array(n)` preallocation is intentional in hot paths (see AGENTS.md).
+    'unicorn/no-new-array': 'off',
+  },
+};
+
+// Oxfmt config (run via `vp fmt` / `vp check`). Converted from the former
+// .prettierrc.json and .prettierignore.
+const fmt: UserConfig['fmt'] = {
+  semi: true,
+  trailingComma: 'all',
+  singleQuote: true,
+  printWidth: 80,
+  tabWidth: 2,
+  sortPackageJson: false,
+  ignorePatterns: [
+    'build',
+    'coverage',
+    'dist',
+    'node_modules',
+    'package-lock.json',
+    'yarn.lock',
+    '*.log',
+    '.cache/',
+  ],
+};
+
+export default defineConfig(({ mode }) => ({
+  ...targetConfig(mode),
+  lint,
+  fmt,
+}));

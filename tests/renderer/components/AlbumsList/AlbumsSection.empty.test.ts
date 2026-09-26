@@ -1,5 +1,5 @@
 import { mount } from '@vue/test-utils';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vite-plus/test';
 import { setActivePinia } from 'pinia';
 import { createTestingPinia } from '@pinia/testing';
 import AlbumsSection from '@/features/library/AlbumsList/AlbumsSection.vue';

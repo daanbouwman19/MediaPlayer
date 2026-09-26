@@ -1,5 +1,12 @@
 import { mount, flushPromises } from '@vue/test-utils';
-import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
+import {
+  describe,
+  it,
+  expect,
+  vi,
+  beforeEach,
+  type Mock,
+} from 'vite-plus/test';
 import { setActivePinia } from 'pinia';
 import { createTestingPinia } from '@pinia/testing';
 import PlaylistsSection from '@/features/library/AlbumsList/PlaylistsSection.vue';

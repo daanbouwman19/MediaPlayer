@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vite-plus/test';
 import path from 'path';
 import fs from 'fs/promises';
 import { HlsManager } from '../../src/core/media/hls-manager.ts';

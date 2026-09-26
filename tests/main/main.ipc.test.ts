@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, Mock } from 'vitest';
+import { describe, it, expect, vi, beforeEach, Mock } from 'vite-plus/test';
 import { registerMediaHandlers } from '../../src/main/ipc/media-controller';
 import { createTestMediaService } from '../utils/test-factory';
 import { IPC_CHANNELS } from '../../src/shared/ipc-channels';

@@ -1,4 +1,11 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import {
+  describe,
+  it,
+  expect,
+  vi,
+  beforeEach,
+  afterEach,
+} from 'vite-plus/test';
 import { WorkerClient } from '../../src/core/database/worker-client';
 import { Worker } from 'worker_threads';
 import * as logger from '../../src/core/media/utils/logger';
@@ -12,7 +19,7 @@ vi.mock('../../src/core/media/utils/logger', () => ({
 
 // Mock worker_threads
 vi.mock('worker_threads', async () => {
-  const { vi } = await import('vitest');
+  const { vi } = await import('vite-plus/test');
 
   class MockWorker {
     postMessage = vi.fn();

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vite-plus/test';
 import request from 'supertest';
 import express from 'express';
 import cookieSession from 'cookie-session';

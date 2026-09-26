@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { describe, expect, it, vi, beforeEach } from 'vite-plus/test';
 import { WebAdapter } from '../../../src/renderer/api/WebAdapter';
 import { runBackendContractTests } from './backend.contract';
 

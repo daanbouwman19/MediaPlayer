@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, Mock, beforeEach } from 'vitest';
+import { describe, it, expect, vi, Mock, beforeEach } from 'vite-plus/test';
 import { mount } from '@vue/test-utils';
 import { nextTick } from 'vue';
 import VideoPlayer from '@/features/player/VideoPlayer.vue';

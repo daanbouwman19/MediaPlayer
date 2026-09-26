@@ -1,4 +1,12 @@
-import { describe, it, expect, afterEach, vi, beforeEach, Mock } from 'vitest';
+import {
+  describe,
+  it,
+  expect,
+  afterEach,
+  vi,
+  beforeEach,
+  Mock,
+} from 'vite-plus/test';
 import http from 'http';
 import fs from 'fs';
 import path from 'path';

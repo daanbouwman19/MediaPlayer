@@ -91,7 +91,7 @@ export const useLibraryStore = defineStore('library', () => {
     try {
       const items = await api.getRecentlyPlayed(limit);
       historyMedia.value = items.map((item) => {
-        const name = item.file_path.split(/[\/\\]/).pop() || item.file_path;
+        const name = item.file_path.split(/[/\\]/).pop() || item.file_path;
         return {
           name,
           path: item.file_path,

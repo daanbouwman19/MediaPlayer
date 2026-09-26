@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'vite-plus/test';
 import path from 'path';
 import fs from 'fs';
 import { spawn } from 'child_process';

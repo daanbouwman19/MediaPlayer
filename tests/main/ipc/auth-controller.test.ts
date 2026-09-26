@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, Mock } from 'vitest';
+import { describe, it, expect, vi, beforeEach, Mock } from 'vite-plus/test';
 import { registerAuthHandlers } from '../../../src/main/ipc/auth-controller';
 import { IPC_CHANNELS } from '../../../src/shared/ipc-channels';
 import { handleIpc } from '../../../src/main/utils/ipc-helper';

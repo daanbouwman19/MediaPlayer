@@ -1,4 +1,12 @@
-import { describe, it, expect, vi, beforeEach, beforeAll, Mock } from 'vitest';
+import {
+  describe,
+  it,
+  expect,
+  vi,
+  beforeEach,
+  beforeAll,
+  Mock,
+} from 'vite-plus/test';
 import { ipcMain } from 'electron';
 import path from 'path';
 import { Readable } from 'stream';

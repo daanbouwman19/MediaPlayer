@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vite-plus/test';
 import { createMockElectron } from './mocks/electron';
 
 // Hoist the control variable so it can be used in the hoisted vi.mock factory

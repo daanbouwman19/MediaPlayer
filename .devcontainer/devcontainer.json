@@ -6,12 +6,7 @@
   "remoteUser": "builduser",
   "customizations": {
     "vscode": {
-      "extensions": [
-        "Vue.volar",
-        "vitest.explorer",
-        "esbenp.prettier-vscode",
-        "dbaeumer.vscode-eslint"
-      ]
+      "extensions": ["Vue.volar", "VoidZero.vite-plus-extension-pack"]
     }
   },
   "features": {

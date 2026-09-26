@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vite-plus/test';
 import { mount } from '@vue/test-utils';
 import { useToast } from '../../../src/renderer/composables/useToast';
 import ToastContainer from '@/components/organisms/ToastContainer.vue';

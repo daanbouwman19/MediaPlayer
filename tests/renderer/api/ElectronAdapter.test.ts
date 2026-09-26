@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vite-plus/test';
 import { ElectronAdapter } from '../../../src/renderer/api/ElectronAdapter';
 import { runBackendContractTests } from './backend.contract';
 
