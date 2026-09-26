@@ -132,7 +132,7 @@ export function createAuthRoutes(limiters: RateLimiters) {
 
       try {
         await authenticateWithCode(code);
-        res.sendStatus(200);
+        return res.sendStatus(200);
       } catch (e: unknown) {
         const error = e as {
           code?: number;

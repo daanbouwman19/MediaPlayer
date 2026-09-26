@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.web.json",
+  "compilerOptions": {
+    "noUncheckedIndexedAccess": false,
+    "tsBuildInfoFile": "./node_modules/.cache/tsconfig.web.test.tsbuildinfo"
+  },
+  "include": [
+    "src/renderer/**/*.d.ts",
+    "tests/renderer/**/*",
+    "tests/components/**/*"
+  ]
+}

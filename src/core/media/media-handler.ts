@@ -189,7 +189,8 @@ export async function handleStreamRequest(
   const isTranscodeForced = req.query.transcode === 'true';
 
   if (!filePath) {
-    return res.status(400).send('Missing file parameter');
+    res.status(400).send('Missing file parameter');
+    return;
   }
 
   try {

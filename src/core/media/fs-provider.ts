@@ -6,8 +6,8 @@ export { FileSystemEntry };
 export interface FileMetadata {
   size: number;
   mimeType: string;
-  lastModified?: Date;
-  duration?: number; // In seconds
+  lastModified?: Date | undefined;
+  duration?: number | undefined; // In seconds
 }
 
 export interface FileSystemProvider {

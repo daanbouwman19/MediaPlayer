@@ -177,7 +177,7 @@ export function createSystemRoutes(limiters: RateLimiters) {
       }
 
       await addMediaDirectory(resolvedPath);
-      res.json(resolvedPath);
+      return res.json(resolvedPath);
     }),
   );
 
@@ -272,7 +272,7 @@ export function createSystemRoutes(limiters: RateLimiters) {
       if (parent === dirPath) {
         return res.json({ parent: null });
       }
-      res.json({ parent });
+      return res.json({ parent });
     }),
   );
 

@@ -111,7 +111,8 @@ export function decrypt(text: string): string | null {
     return text;
   }
 
-  const [ivHex, authTagHex, encryptedHex] = parts;
+  // The length check above guarantees all three parts exist.
+  const [ivHex = '', authTagHex = '', encryptedHex = ''] = parts;
 
   // Basic validation of hex strings
   // IV is 12 bytes = 24 hex chars

@@ -196,19 +196,21 @@ export class MediaAnalyzer {
           if (!durationSec) {
             const match = line.match(/Duration: (\d+):(\d+):(\d+)\.(\d+)/);
             if (match) {
+              const [, h = '0', m = '0', sec = '0', frac = '0'] = match;
               durationSec =
-                parseInt(match[1], 10) * 3600 +
-                parseInt(match[2], 10) * 60 +
-                parseFloat(`${match[3]}.${match[4]}`);
+                parseInt(h, 10) * 3600 +
+                parseInt(m, 10) * 60 +
+                parseFloat(`${sec}.${frac}`);
             }
           }
           if (durationSec > 0) {
             const match = line.match(/time=(\d+):(\d+):(\d+)\.(\d+)/);
             if (match) {
+              const [, h = '0', m = '0', sec = '0', frac = '0'] = match;
               const currentSec =
-                parseInt(match[1], 10) * 3600 +
-                parseInt(match[2], 10) * 60 +
-                parseFloat(`${match[3]}.${match[4]}`);
+                parseInt(h, 10) * 3600 +
+                parseInt(m, 10) * 60 +
+                parseFloat(`${sec}.${frac}`);
               const job = this.activeJobs.get(filePath);
               if (job) {
                 job.progress = Math.min(
@@ -245,11 +247,11 @@ export class MediaAnalyzer {
       audio: number[] = [];
     output.split(/[\r\n]+/).forEach((line) => {
       const mMatch = line.match(/lavfi\.signalstats\.YDIF\s*=\s*([0-9.]+)/);
-      if (mMatch) motion.push(parseFloat(mMatch[1]));
+      if (mMatch?.[1]) motion.push(parseFloat(mMatch[1]));
       const aMatch = line.match(
         /lavfi\.astats\.Overall\.RMS_level\s*=\s*([0-9.-]+)/,
       );
-      if (aMatch) audio.push(parseFloat(aMatch[1]));
+      if (aMatch?.[1]) audio.push(parseFloat(aMatch[1]));
     });
     return { motion, audio };
   }

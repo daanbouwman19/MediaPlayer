@@ -270,8 +270,9 @@ export function initializeDatabase(db: DatabaseSync): void {
     return;
   }
 
-  for (let version = currentVersion; version < LATEST_DB_VERSION; version++) {
-    const migrate = MIGRATIONS[version];
+  const pending = MIGRATIONS.slice(currentVersion);
+  for (const [offset, migrate] of pending.entries()) {
+    const version = currentVersion + offset;
     db.exec('BEGIN');
     try {
       migrate(db);

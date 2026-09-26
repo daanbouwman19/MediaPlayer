@@ -13,18 +13,22 @@
     "incremental": true,
     "tsBuildInfoFile": "./node_modules/.cache/tsconfig.node.tsbuildinfo",
     "allowImportingTsExtensions": true,
-    "noEmit": true
+    "noEmit": true,
+    "noImplicitOverride": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "exactOptionalPropertyTypes": true,
+    "noUncheckedIndexedAccess": true
   },
   "include": [
     "src/main/**/*",
     "src/preload/**/*",
     "src/server/**/*",
     "src/core/**/*",
-    "vite.main.config.ts",
-    "vite.preload.config.ts",
-    "vite.renderer.config.ts",
-    "tests/main/**/*",
-    "tests/core/**/*",
-    "tests/server/**/*"
+    "src/infrastructure/**/*",
+    "src/shared/**/*",
+    "vite.config.ts",
+    "vitest.config.ts",
+    "playwright.config.ts"
   ]
 }

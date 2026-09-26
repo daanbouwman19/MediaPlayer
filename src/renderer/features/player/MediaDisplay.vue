@@ -427,17 +427,13 @@ const addWatchedSegment = (start: number, end: number) => {
 
   segments.sort((a, b) => a.start - b.start);
   const merged: { start: number; end: number }[] = [];
-  if (segments.length > 0) {
-    let current = segments[0];
-    for (let i = 1; i < segments.length; i++) {
-      if (segments[i].start <= current.end + 0.5) {
-        current.end = Math.max(current.end, segments[i].end);
-      } else {
-        merged.push(current);
-        current = segments[i];
-      }
+  for (const segment of segments) {
+    const last = merged[merged.length - 1];
+    if (last && segment.start <= last.end + 0.5) {
+      last.end = Math.max(last.end, segment.end);
+    } else {
+      merged.push(segment);
     }
-    merged.push(current);
   }
 
   mediaControlsRef.value.watchedSegments = merged;

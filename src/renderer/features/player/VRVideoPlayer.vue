@@ -103,7 +103,7 @@ const SPHERE_HEIGHT_SEGMENTS = 40;
 
 const props = defineProps<{
   src: string;
-  poster?: string;
+  poster?: string | undefined;
   isPlaying: boolean;
   initialTime?: number;
   isControlsVisible: boolean;

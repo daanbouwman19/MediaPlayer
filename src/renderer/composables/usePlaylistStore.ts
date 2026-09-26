@@ -22,8 +22,8 @@ export const usePlaylistStore = defineStore('playlist', () => {
     ) {
       return;
     }
-    const [movedItem] = queue.value.splice(fromIndex, 1);
-    queue.value.splice(toIndex, 0, movedItem);
+    const moved = queue.value.splice(fromIndex, 1);
+    queue.value.splice(toIndex, 0, ...moved);
   };
 
   const clearPlaylist = () => {

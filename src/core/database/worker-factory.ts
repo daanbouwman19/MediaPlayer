@@ -11,7 +11,7 @@ export interface WorkerFactoryOptions {
   isElectron?: boolean;
   isPackaged?: boolean;
   isTest?: boolean;
-  electronAppPath?: string;
+  electronAppPath?: string | undefined;
   workerDir?: string;
   serverWorkerAlias?: string;
 }
@@ -20,7 +20,10 @@ export class WorkerFactory {
   static async getWorkerPath(
     workerName: WorkerName,
     options: WorkerFactoryOptions,
-  ): Promise<{ path: string | URL; options?: { execArgv: string[] } }> {
+  ): Promise<{
+    path: string | URL;
+    options?: { execArgv: string[] } | undefined;
+  }> {
     const isElectron = options.isElectron ?? !!process.versions.electron;
     let isPackaged = options.isPackaged;
     if (isElectron && isPackaged === undefined) {

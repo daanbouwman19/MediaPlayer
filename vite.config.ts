@@ -208,6 +208,7 @@ function targetConfig(mode: string): UserConfig {
                 }
                 return 'vendor';
               }
+              return undefined;
             },
           },
         },

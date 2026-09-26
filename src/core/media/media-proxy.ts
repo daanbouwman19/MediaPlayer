@@ -44,15 +44,15 @@ export class InternalMediaProxy {
 
         // Expected URL: /stream/:fileId (optional extension)
         // Capture only the ID (Base64url characters)
-        const match = urlObj.pathname.match(/^\/stream\/([a-zA-Z0-9_-]+)/);
+        const fileId = urlObj.pathname.match(
+          /^\/stream\/([a-zA-Z0-9_-]+)/,
+        )?.[1];
 
-        if (!match) {
+        if (!fileId) {
           res.writeHead(404);
           res.end('Not Found');
           return;
         }
-
-        const fileId = match[1];
 
         // [SECURITY] IDOR Prevention
         // Verify that the requested file ID corresponds to a file that is actually in our library.
@@ -79,7 +79,8 @@ export class InternalMediaProxy {
 
         if (error) {
           res.writeHead(416, { 'Content-Range': `bytes */${totalSize}` });
-          return res.end('Requested range not satisfiable.');
+          res.end('Requested range not satisfiable.');
+          return;
         }
 
         const { stream, length } = await getDriveStreamWithCache(fileId, {

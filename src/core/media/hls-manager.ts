@@ -42,9 +42,9 @@ interface HlsSession {
   status: HlsSessionStatus;
   error?: Error;
   progress: HlsProgress;
-  killTimeout?: NodeJS.Timeout;
+  killTimeout?: NodeJS.Timeout | undefined;
   consumers: number;
-  idleTimer?: NodeJS.Timeout;
+  idleTimer?: NodeJS.Timeout | undefined;
 }
 
 const SESSION_TIMEOUT_MS = 5 * 60 * 1000;
@@ -346,18 +346,20 @@ export class HlsManager extends EventEmitter {
     if (session.progress.duration === 0) {
       const durMatch = line.match(/Duration: (\d+):(\d+):(\d+)\.(\d+)/);
       if (durMatch) {
-        const h = parseInt(durMatch[1], 10);
-        const m = parseInt(durMatch[2], 10);
-        const s = parseFloat(`${durMatch[3]}.${durMatch[4]}`);
+        const [, hh = '0', mm = '0', ss = '0', frac = '0'] = durMatch;
+        const h = parseInt(hh, 10);
+        const m = parseInt(mm, 10);
+        const s = parseFloat(`${ss}.${frac}`);
         session.progress.duration = h * 3600 + m * 60 + s;
       }
     }
 
     const timeMatch = line.match(/time=(\d+):(\d+):(\d+)\.(\d+)/);
     if (timeMatch) {
-      const h = parseInt(timeMatch[1], 10);
-      const m = parseInt(timeMatch[2], 10);
-      const s = parseFloat(`${timeMatch[3]}.${timeMatch[4]}`);
+      const [, hh = '0', mm = '0', ss = '0', frac = '0'] = timeMatch;
+      const h = parseInt(hh, 10);
+      const m = parseInt(mm, 10);
+      const s = parseFloat(`${ss}.${frac}`);
       session.progress.currentTime = h * 3600 + m * 60 + s;
 
       if (session.progress.duration > 0) {
@@ -368,12 +370,12 @@ export class HlsManager extends EventEmitter {
     }
 
     const fpsMatch = line.match(/fps=\s*(\d+)/);
-    if (fpsMatch) {
+    if (fpsMatch?.[1]) {
       session.progress.fps = parseInt(fpsMatch[1], 10);
     }
 
     const speedMatch = line.match(/speed=\s*(\d+\.?\d*x)/);
-    if (speedMatch) {
+    if (speedMatch?.[1]) {
       session.progress.speed = speedMatch[1];
     }
   }

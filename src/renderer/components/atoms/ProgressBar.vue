@@ -143,12 +143,14 @@ const drawHeatmap = () => {
       // Standardize value to 0-1 range
       let value = 0.1; // Min height
 
-      if (data.motion && data.motion[i] !== undefined) {
-        value = Math.max(value, (data.motion[i] * HEATMAP_MOTION_SCALE) / 10);
+      const motion = data.motion?.[i];
+      const audio = data.audio?.[i];
+      if (motion !== undefined) {
+        value = Math.max(value, (motion * HEATMAP_MOTION_SCALE) / 10);
         // Dividing by 10 as rough normalization if YDIF is around 0-20ish
-      } else if (data.audio && data.audio[i] !== undefined) {
+      } else if (audio !== undefined) {
         // Audio is often -90 to 0. Normalize.
-        const audioNorm = Math.max(0, (data.audio[i] + 60) / 60);
+        const audioNorm = Math.max(0, (audio + 60) / 60);
         value = Math.max(value, audioNorm);
       }
 
@@ -257,15 +259,11 @@ const calculateTimeFromEvent = (event: MouseEvent | TouchEvent) => {
   const container = (event.target as HTMLElement).closest(
     '.progress-container',
   );
-  if (!container) return 0;
+  const point = 'touches' in event ? event.touches[0] : event;
+  if (!container || !point) return 0;
 
   const rect = container.getBoundingClientRect();
-  const clientX =
-    'touches' in event
-      ? event.touches[0].clientX
-      : (event as MouseEvent).clientX;
-
-  const offsetX = Math.min(Math.max(0, clientX - rect.left), rect.width);
+  const offsetX = Math.min(Math.max(0, point.clientX - rect.left), rect.width);
   const percentage = offsetX / rect.width;
 
   return percentage * props.duration;

@@ -184,9 +184,8 @@ const selectionState = computed(() => {
   // creating intermediate arrays. This significantly reduces memory pressure during
   // frequent selection updates on large trees.
   let selectedCount = 0;
-  const len = allChildrenIds.length;
-  for (let i = 0; i < len; i++) {
-    if (props.selection[allChildrenIds[i]] === true) {
+  for (const id of allChildrenIds) {
+    if (props.selection[id] === true) {
       selectedCount++;
     }
   }
@@ -194,7 +193,7 @@ const selectionState = computed(() => {
   if (selectedCount === 0) {
     return 'none';
   }
-  if (selectedCount === len) {
+  if (selectedCount === allChildrenIds.length) {
     return 'all';
   }
   return 'some';

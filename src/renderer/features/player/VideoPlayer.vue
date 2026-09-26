@@ -49,7 +49,7 @@ import Hls from 'hls.js';
 
 const props = defineProps<{
   src: string | null;
-  poster?: string;
+  poster?: string | undefined;
   isTranscodingMode: boolean;
   isControlsVisible: boolean;
   transcodedDuration: number;

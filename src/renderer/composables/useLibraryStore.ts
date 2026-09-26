@@ -80,7 +80,8 @@ export const useLibraryStore = defineStore('library', () => {
       newSelection[album.id] = true;
       if (album.children && album.children.length > 0) {
         for (let i = album.children.length - 1; i >= 0; i--) {
-          stack.push(album.children[i]);
+          const child = album.children[i];
+          if (child) stack.push(child);
         }
       }
     }

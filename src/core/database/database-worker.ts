@@ -25,11 +25,62 @@ type StatementSync = ReturnType<DatabaseSync['prepare']>;
  */
 let db: DatabaseSync | null = null;
 
+/** Names of the statements prepared by {@link initDatabase}. */
+type StatementName =
+  | 'addJob'
+  | 'addMediaDirectory'
+  | 'cacheAlbum'
+  | 'createSmartPlaylist'
+  | 'deleteJob'
+  | 'deleteSmartPlaylist'
+  | 'deleteWatchedSegments'
+  | 'ensureMetadataRow'
+  | 'executeSmartPlaylist'
+  | 'getAllMetadata'
+  | 'getAllMetadataVerification'
+  | 'getCachedAlbum'
+  | 'getFileIdByPath'
+  | 'getFileIdsByPathsBatch'
+  | 'getMediaDirectories'
+  | 'getMediaViewCountsBatch'
+  | 'getMetadataBatch'
+  | 'getPendingJobs'
+  | 'getPendingMetadata'
+  | 'getRecentlyPlayed'
+  | 'getSetting'
+  | 'getSmartPlaylists'
+  | 'getSuccessfulPathsBatch'
+  | 'insertWatchedSegment'
+  | 'listJobs'
+  | 'recordView'
+  | 'removeMediaDirectory'
+  | 'saveSetting'
+  | 'setDirectoryActiveState'
+  | 'updateJobStatus'
+  | 'updatePlaybackPosition'
+  | 'updateRating'
+  | 'updateSmartPlaylist'
+  | 'upsertMetadata';
+
 /**
  * Cache for prepared statements to improve performance of repeated queries.
  * Keys are the statement names (e.g., 'recordView'), and values are the prepared SQLite statements.
+ * Empty until {@link initDatabase} succeeds and after {@link closeDatabase}.
  */
-const statements: { [key: string]: StatementSync } = {};
+const statements: Partial<Record<StatementName, StatementSync>> = {};
+
+/**
+ * Returns a prepared statement, throwing if the database has not been initialized.
+ */
+function getStatement(name: StatementName): StatementSync {
+  const statement = statements[name];
+  if (!statement) {
+    throw new Error(
+      `Statement "${name}" is not prepared; database not initialized`,
+    );
+  }
+  return statement;
+}
 
 /**
  * Default batch size for SQL operations.
@@ -161,7 +212,7 @@ async function generateFileIdsBatched(
  */
 async function getExistingIdOrGenerate(filePath: string): Promise<string> {
   try {
-    const row = statements.getFileIdByPath.get(filePath) as
+    const row = getStatement('getFileIdByPath').get(filePath) as
       | { file_path_hash: string }
       | undefined;
     if (row) {
@@ -443,11 +494,11 @@ function replaceWatchedSegments(fileId: string, segmentsJson: string): void {
   if (!Array.isArray(segments)) {
     throw new Error('Watched segments must be a JSON array');
   }
-  statements.deleteWatchedSegments.run(fileId);
+  getStatement('deleteWatchedSegments').run(fileId);
   for (const seg of segments) {
     const s = seg as { start?: unknown; end?: unknown };
     if (s && typeof s.start === 'number') {
-      statements.insertWatchedSegment.run(
+      getStatement('insertWatchedSegment').run(
         fileId,
         s.start,
         typeof s.end === 'number' ? s.end : null,
@@ -461,7 +512,7 @@ function replaceWatchedSegments(fileId: string, segmentsJson: string): void {
  * single payload. Does not manage transactions — callers do.
  */
 function runMetadataUpsert(fileId: string, payload: MetadataPayload): void {
-  statements.upsertMetadata.run(
+  getStatement('upsertMetadata').run(
     fileId,
     payload.filePath,
     payload.duration === undefined ? null : payload.duration,
@@ -527,7 +578,7 @@ export async function setRating(
   if (!db) return { success: false, error: 'Database not initialized' };
   try {
     const fileId = await getExistingIdOrGenerate(filePath);
-    statements.updateRating.run(fileId, rating);
+    getStatement('updateRating').run(fileId, rating);
     return { success: true };
   } catch (error: unknown) {
     return { success: false, error: (error as Error).message };
@@ -548,7 +599,7 @@ export async function updateWatchedSegments(
     try {
       // Keep a metadata row around so the file's ID stays stable even when
       // only segments are known for it.
-      statements.ensureMetadataRow.run(fileId);
+      getStatement('ensureMetadataRow').run(fileId);
       replaceWatchedSegments(fileId, segmentsJson);
       db.exec('COMMIT');
     } catch (e) {
@@ -576,7 +627,7 @@ export async function updatePlaybackPosition(
   if (!db) return { success: false, error: 'Database not initialized' };
   try {
     const fileId = await getExistingIdOrGenerate(filePath);
-    statements.updatePlaybackPosition.run(
+    getStatement('updatePlaybackPosition').run(
       fileId,
       Number.isFinite(position) ? Math.max(0, position) : 0,
     );
@@ -677,7 +728,7 @@ export async function bulkUpsertMetadata(
 export function getAllMetadata(): WorkerResult {
   if (!db) return { success: false, error: 'Database not initialized' };
   try {
-    const rows = statements.getAllMetadata.all() as {
+    const rows = getStatement('getAllMetadata').all() as {
       filePath: string;
       [key: string]: unknown;
     }[];
@@ -702,7 +753,7 @@ export function getAllMetadata(): WorkerResult {
 export function getAllMetadataVerification(): WorkerResult {
   if (!db) return { success: false, error: 'Database not initialized' };
   try {
-    const rows = statements.getAllMetadataVerification.all() as {
+    const rows = getStatement('getAllMetadataVerification').all() as {
       filePath: string;
       size: number;
       createdAt: string;
@@ -735,7 +786,7 @@ export async function filterProcessingNeeded(
     const successfulPathsSet = new Set<string>();
 
     forEachBatchedRow<{ file_path: string }>(
-      statements.getSuccessfulPathsBatch,
+      getStatement('getSuccessfulPathsBatch'),
       filePaths,
       (row) => successfulPathsSet.add(row.file_path),
     );
@@ -768,7 +819,7 @@ export async function getMetadata(filePaths: string[]): Promise<WorkerResult> {
     const metadataMap: { [key: string]: unknown } = {};
 
     forEachBatchedRow<{ filePath: string; [key: string]: unknown }>(
-      statements.getMetadataBatch,
+      getStatement('getMetadataBatch'),
       allFileIds,
       (row) => {
         if (row && row.filePath) {
@@ -794,7 +845,7 @@ export function createSmartPlaylist(
 ): WorkerResult {
   if (!db) return { success: false, error: 'Database not initialized' };
   try {
-    const result = statements.createSmartPlaylist.run(name, criteria);
+    const result = getStatement('createSmartPlaylist').run(name, criteria);
     return { success: true, data: { id: result.lastInsertRowid } };
   } catch (error: unknown) {
     return { success: false, error: (error as Error).message };
@@ -807,7 +858,7 @@ export function createSmartPlaylist(
 export function getSmartPlaylists(): WorkerResult {
   if (!db) return { success: false, error: 'Database not initialized' };
   try {
-    const playlists = statements.getSmartPlaylists.all();
+    const playlists = getStatement('getSmartPlaylists').all();
     return { success: true, data: playlists };
   } catch (error: unknown) {
     return { success: false, error: (error as Error).message };
@@ -820,7 +871,7 @@ export function getSmartPlaylists(): WorkerResult {
 export function deleteSmartPlaylist(id: number): WorkerResult {
   if (!db) return { success: false, error: 'Database not initialized' };
   try {
-    statements.deleteSmartPlaylist.run(id);
+    getStatement('deleteSmartPlaylist').run(id);
     return { success: true };
   } catch (error: unknown) {
     return { success: false, error: (error as Error).message };
@@ -837,7 +888,7 @@ export function updateSmartPlaylist(
 ): WorkerResult {
   if (!db) return { success: false, error: 'Database not initialized' };
   try {
-    statements.updateSmartPlaylist.run(name, criteria, id);
+    getStatement('updateSmartPlaylist').run(name, criteria, id);
     return { success: true };
   } catch (error: unknown) {
     return { success: false, error: (error as Error).message };
@@ -851,7 +902,7 @@ export function updateSmartPlaylist(
 export function getRecentlyPlayed(limit: number): WorkerResult {
   if (!db) return { success: false, error: 'Database not initialized' };
   try {
-    const rows = statements.getRecentlyPlayed.all(limit);
+    const rows = getStatement('getRecentlyPlayed').all(limit);
     return { success: true, data: rows };
   } catch (error: unknown) {
     return { success: false, error: (error as Error).message };
@@ -864,7 +915,7 @@ export function getRecentlyPlayed(limit: number): WorkerResult {
 export function saveSetting(key: string, value: string): WorkerResult {
   if (!db) return { success: false, error: 'Database not initialized' };
   try {
-    statements.saveSetting.run(key, value, new Date().toISOString());
+    getStatement('saveSetting').run(key, value, new Date().toISOString());
     return { success: true };
   } catch (error: unknown) {
     return { success: false, error: (error as Error).message };
@@ -877,7 +928,9 @@ export function saveSetting(key: string, value: string): WorkerResult {
 export function getSetting(key: string): WorkerResult {
   if (!db) return { success: false, error: 'Database not initialized' };
   try {
-    const row = statements.getSetting.get(key) as { value: string } | undefined;
+    const row = getStatement('getSetting').get(key) as
+      | { value: string }
+      | undefined;
     return { success: true, data: row ? row.value : null };
   } catch (error: unknown) {
     return { success: false, error: (error as Error).message };
@@ -893,7 +946,7 @@ export function executeSmartPlaylist(criteriaJson?: string): WorkerResult {
     // Use cached prepared statement for empty criteria
     // This avoids recompiling the SQL statement for the default "view all" case
     if (!criteriaJson || criteriaJson === '{}') {
-      const rows = statements.executeSmartPlaylist.all();
+      const rows = getStatement('executeSmartPlaylist').all();
       return { success: true, data: rows };
     }
 
@@ -955,7 +1008,7 @@ export async function recordMediaView(filePath: string): Promise<WorkerResult> {
   try {
     const fileId = await getExistingIdOrGenerate(filePath);
     const now = new Date().toISOString();
-    statements.recordView.run(fileId, filePath, now);
+    getStatement('recordView').run(fileId, filePath, now);
     return { success: true };
   } catch (error: unknown) {
     console.error(`[worker] Error recording view for ${filePath}:`, error);
@@ -982,7 +1035,7 @@ export async function getMediaViewCounts(
     // Optimization: Direct path lookup instead of fs.stat -> hash -> lookup.
     // This assumes paths in DB are kept up-to-date by recordMediaView.
     forEachBatchedRow<{ file_path: string; view_count: number }>(
-      statements.getMediaViewCountsBatch,
+      getStatement('getMediaViewCountsBatch'),
       filePaths,
       (row) => {
         viewCountsMap[row.file_path] = row.view_count;
@@ -1034,7 +1087,8 @@ export async function cacheAlbums(
           }
           if (album.children && Array.isArray(album.children)) {
             for (let i = album.children.length - 1; i >= 0; i--) {
-              stack.push(album.children[i]);
+              const child = album.children[i];
+              if (child) stack.push(child);
             }
           }
         }
@@ -1049,7 +1103,7 @@ export async function cacheAlbums(
       }
     }
 
-    statements.cacheAlbum.run(
+    getStatement('cacheAlbum').run(
       cacheKey,
       JSON.stringify(albums),
       new Date().toISOString(),
@@ -1069,7 +1123,7 @@ export async function cacheAlbums(
 export function getCachedAlbums(cacheKey: string): WorkerResult {
   if (!db) return { success: false, error: 'Database not initialized' };
   try {
-    const row = statements.getCachedAlbum.get(cacheKey) as
+    const row = getStatement('getCachedAlbum').get(cacheKey) as
       | { cache_value: string }
       | undefined;
     const data = row && row.cache_value ? JSON.parse(row.cache_value) : null;
@@ -1090,7 +1144,7 @@ export function closeDatabase(): WorkerResult {
     db.close();
     db = null;
     // Clear statements cache
-    for (const key in statements) {
+    for (const key of Object.keys(statements) as StatementName[]) {
       delete statements[key];
     }
     console.log('[worker] Database connection closed.');
@@ -1118,7 +1172,7 @@ export function addMediaDirectory(payload: {
     const type = payload.type || 'local';
     const name = payload.name || path.basename(payload.path) || payload.path;
 
-    statements.addMediaDirectory.run(id, payload.path, type, name);
+    getStatement('addMediaDirectory').run(id, payload.path, type, name);
     return { success: true };
   } catch (error: unknown) {
     console.error(
@@ -1136,7 +1190,7 @@ export function addMediaDirectory(payload: {
 export function getMediaDirectories(): WorkerResult {
   if (!db) return { success: false, error: 'Database not initialized' };
   try {
-    const rows = statements.getMediaDirectories.all() as {
+    const rows = getStatement('getMediaDirectories').all() as {
       id: string;
       path: string;
       type: string;
@@ -1165,7 +1219,7 @@ export function getMediaDirectories(): WorkerResult {
 export function removeMediaDirectory(directoryPath: string): WorkerResult {
   if (!db) return { success: false, error: 'Database not initialized' };
   try {
-    statements.removeMediaDirectory.run(directoryPath);
+    getStatement('removeMediaDirectory').run(directoryPath);
     return { success: true };
   } catch (error: unknown) {
     console.error(
@@ -1188,7 +1242,10 @@ export function setDirectoryActiveState(
 ): WorkerResult {
   if (!db) return { success: false, error: 'Database not initialized' };
   try {
-    statements.setDirectoryActiveState.run(isActive ? 1 : 0, directoryPath);
+    getStatement('setDirectoryActiveState').run(
+      isActive ? 1 : 0,
+      directoryPath,
+    );
     return { success: true };
   } catch (error: unknown) {
     console.error(
@@ -1210,7 +1267,7 @@ export async function addJob(
   if (!db) return { success: false, error: 'Database not initialized' };
   try {
     const fileId = await getExistingIdOrGenerate(filePath);
-    statements.addJob.run(jobType, filePath, fileId);
+    getStatement('addJob').run(jobType, filePath, fileId);
     return { success: true };
   } catch (error: unknown) {
     return { success: false, error: (error as Error).message };
@@ -1220,7 +1277,7 @@ export async function addJob(
 export function listJobs(jobType: string): WorkerResult {
   if (!db) return { success: false, error: 'Database not initialized' };
   try {
-    const rows = statements.listJobs.all(jobType);
+    const rows = getStatement('listJobs').all(jobType);
     return { success: true, data: rows };
   } catch (error: unknown) {
     return { success: false, error: (error as Error).message };
@@ -1235,7 +1292,7 @@ export function updateJobStatus(
 ): WorkerResult {
   if (!db) return { success: false, error: 'Database not initialized' };
   try {
-    statements.updateJobStatus.run(status, error, jobType, filePath);
+    getStatement('updateJobStatus').run(status, error, jobType, filePath);
     return { success: true };
   } catch (err: unknown) {
     return { success: false, error: (err as Error).message };
@@ -1245,7 +1302,7 @@ export function updateJobStatus(
 export function deleteJob(jobType: string, filePath: string): WorkerResult {
   if (!db) return { success: false, error: 'Database not initialized' };
   try {
-    statements.deleteJob.run(jobType, filePath);
+    getStatement('deleteJob').run(jobType, filePath);
     return { success: true };
   } catch (error: unknown) {
     return { success: false, error: (error as Error).message };
@@ -1255,7 +1312,7 @@ export function deleteJob(jobType: string, filePath: string): WorkerResult {
 export function getPendingJobs(jobType: string): WorkerResult {
   if (!db) return { success: false, error: 'Database not initialized' };
   try {
-    const rows = statements.getPendingJobs.all(jobType) as {
+    const rows = getStatement('getPendingJobs').all(jobType) as {
       file_path: string;
     }[];
     return { success: true, data: rows.map((r) => r.file_path) };
@@ -1371,7 +1428,7 @@ if (parentPort) {
             result = { success: false, error: 'DB not ready' };
             break;
           }
-          const pending = statements.getPendingMetadata.all() as {
+          const pending = getStatement('getPendingMetadata').all() as {
             file_path: string;
           }[];
           result = { success: true, data: pending.map((p) => p.file_path) };

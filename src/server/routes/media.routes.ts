@@ -77,7 +77,7 @@ export function createMediaRoutes({
       }
 
       await recordMediaView(filePath);
-      res.sendStatus(200);
+      return res.sendStatus(200);
     }),
   );
 
@@ -102,7 +102,7 @@ export function createMediaRoutes({
       const allowedPaths = await filterAuthorizedPaths(filePaths);
 
       const counts = await getMediaViewCounts(allowedPaths);
-      res.json(counts);
+      return res.json(counts);
     }),
   );
 
@@ -125,7 +125,7 @@ export function createMediaRoutes({
       }
 
       await setRating(filePath, rating);
-      res.sendStatus(200);
+      return res.sendStatus(200);
     }),
   );
 
@@ -149,7 +149,7 @@ export function createMediaRoutes({
       }
 
       await updatePlaybackPosition(filePath, Math.max(0, position));
-      res.sendStatus(200);
+      return res.sendStatus(200);
     }),
   );
 
@@ -192,7 +192,7 @@ export function createMediaRoutes({
       }
 
       await upsertMetadata(filePath, metadata);
-      res.sendStatus(200);
+      return res.sendStatus(200);
     }),
   );
 
@@ -217,7 +217,7 @@ export function createMediaRoutes({
       const allowedPaths = await filterAuthorizedPaths(filePaths);
 
       const result = await getMetadata(allowedPaths);
-      res.json(result);
+      return res.json(result);
     }),
   );
 
@@ -241,7 +241,8 @@ export function createMediaRoutes({
       const isTranscode = getQueryParam(req.query, 'transcode') === 'true';
 
       if (!filePath) {
-        return res.status(400).send('Missing file');
+        res.status(400).send('Missing file');
+        return;
       }
 
       const access = await validateFileAccess(filePath);
@@ -257,7 +258,8 @@ export function createMediaRoutes({
 
       if (isTranscode) {
         if (!ffmpegPath) {
-          return res.status(500).send('FFmpeg not found');
+          res.status(500).send('FFmpeg not found');
+          return;
         }
 
         // Transcode concurrency is enforced centrally inside
@@ -341,9 +343,9 @@ export function createMediaRoutes({
     requireFileQueryParam,
     asyncHandler(async (req, res) => {
       const segmentParam = req.params.segment;
-      const segment = Array.isArray(segmentParam)
-        ? segmentParam[0]
-        : segmentParam;
+      // A missing segment is rejected by serveHlsSegment's name validation.
+      const segment =
+        (Array.isArray(segmentParam) ? segmentParam[0] : segmentParam) ?? '';
       await mediaHandler.serveHlsSegment(
         req,
         res,
@@ -403,7 +405,7 @@ export function createMediaRoutes({
         }
         await manager.enqueue(p);
       }
-      res.status(204).send();
+      return res.status(204).send();
     }),
   );
 
@@ -428,7 +430,7 @@ export function createMediaRoutes({
       }
       await TranscodeQueueManager.getInstance().cancel(filePath);
       await deleteTranscodeJob(filePath);
-      res.status(204).send();
+      return res.status(204).send();
     }),
   );
 
