@@ -57,7 +57,7 @@ export class TranscodeQueueManager {
     void this.queue.add(() =>
       this.processJob(filePath)
         .catch((err: unknown) => {
-          console.error(`[TranscodeQueue] Job failed for ${filePath}:`, err);
+          console.error('[TranscodeQueue] Job failed for %s:', filePath, err);
         })
         .finally(() => this.queued.delete(filePath)),
     );
