@@ -9,7 +9,6 @@
     "tests/core/**/*",
     "tests/server/**/*",
     "tests/fakes/**/*",
-    "tests/helpers/**/*",
     "tests/utils/**/*",
     "tests/e2e/**/*"
   ]
