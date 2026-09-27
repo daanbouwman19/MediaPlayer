@@ -20,7 +20,8 @@ export function* traverseAlbumTree(roots: Album | Album[]): Generator<Album> {
     if (node.children && node.children.length > 0) {
       // Push children in reverse order so they are processed in original order
       for (let i = node.children.length - 1; i >= 0; i--) {
-        stack.push(node.children[i]);
+        const child = node.children[i];
+        if (child) stack.push(child);
       }
     }
   }
@@ -66,15 +67,13 @@ export const collectTexturesRecursive = (album: Album): MediaFile[] => {
   const total = countTextures(album);
   if (total === 0) return [];
 
-  const results = new Array(total);
+  const results = new Array<MediaFile>(total);
   let index = 0;
 
   for (const node of traverseAlbumTree(album)) {
     if (node.textures) {
-      // Manual loop is faster than for...of for arrays in hot paths
-      const len = node.textures.length;
-      for (let i = 0; i < len; i++) {
-        results[index++] = node.textures[i];
+      for (const texture of node.textures) {
+        results[index++] = texture;
       }
     }
   }
@@ -139,9 +138,8 @@ export const collectSelectedTextures = (
     if (selection[node.id] && node.textures) {
       // Optimization: Use a loop instead of push(...spread) to avoid stack overflow
       // on large arrays (>65k items) and reduce stack overhead.
-      const len = node.textures.length;
-      for (let i = 0; i < len; i++) {
-        textures.push(node.textures[i]);
+      for (const texture of node.textures) {
+        textures.push(texture);
       }
     }
   }

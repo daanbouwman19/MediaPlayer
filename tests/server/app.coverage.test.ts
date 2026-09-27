@@ -1,4 +1,11 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import {
+  describe,
+  it,
+  expect,
+  vi,
+  beforeEach,
+  afterEach,
+} from 'vite-plus/test';
 import { Router } from 'express';
 import request from 'supertest';
 import fs from 'fs/promises';
@@ -44,7 +51,10 @@ vi.mock('../../src/core/media/hls-manager.ts', () => ({
 
 vi.mock('../../src/core/media/transcode-queue-manager', () => ({
   TranscodeQueueManager: {
-    getInstance: vi.fn(() => ({ start: vi.fn(), enqueue: vi.fn() })),
+    getInstance: vi.fn(() => ({
+      start: vi.fn().mockResolvedValue(undefined),
+      enqueue: vi.fn(),
+    })),
     resetInstance: vi.fn(),
   },
 }));
@@ -145,6 +155,32 @@ describe('Server app additional coverage', () => {
     await expect(createApp(service)).rejects.toThrow('process.exit');
     expect(consoleSpy).toHaveBeenCalled();
     expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
+  it('logs when resuming pending transcode jobs fails', async () => {
+    process.env.NODE_ENV = 'test';
+    process.env.VITEST = 'true';
+
+    vi.resetModules();
+    const { TranscodeQueueManager } =
+      await import('../../src/core/media/transcode-queue-manager');
+    vi.mocked(TranscodeQueueManager.getInstance).mockReturnValue({
+      start: vi.fn().mockRejectedValue(new Error('queue fail')),
+      enqueue: vi.fn(),
+    } as any);
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const { createApp } = await import('../../src/server/app.ts');
+    const { createTestMediaService } = await import('../utils/test-factory.ts');
+    const { service } = createTestMediaService();
+    await createApp(service);
+
+    await vi.waitFor(() =>
+      expect(consoleSpy).toHaveBeenCalledWith(
+        '[TranscodeQueue] Failed to resume pending jobs:',
+        expect.any(Error),
+      ),
+    );
   });
 
   it('serves index.html in production mode', async () => {

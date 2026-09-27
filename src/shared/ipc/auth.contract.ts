@@ -20,6 +20,6 @@ export interface AuthIpcContract {
   };
   [AUTH_IPC_CHANNELS.ADD_GOOGLE_DRIVE_SOURCE]: {
     payload: [string];
-    response: { name?: string };
+    response: { name?: string | undefined };
   };
 }

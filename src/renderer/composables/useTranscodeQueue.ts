@@ -24,8 +24,8 @@ export function useTranscodeQueue() {
 
   const startPolling = () => {
     if (!pollTimer) {
-      poll();
-      pollTimer = setInterval(poll, 2000);
+      void poll();
+      pollTimer = setInterval(() => void poll(), 2000);
     }
   };
 
@@ -43,7 +43,7 @@ export function useTranscodeQueue() {
 
   const cancelJob = async (path: string) => {
     await api.cancelTranscodeJob(path);
-    poll();
+    void poll();
   };
 
   return { jobStatusMap, startPolling, stopPolling, addJobs, cancelJob };

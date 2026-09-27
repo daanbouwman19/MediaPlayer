@@ -6,12 +6,7 @@
   "remoteUser": "builduser",
   "customizations": {
     "vscode": {
-      "extensions": [
-        "Vue.volar",
-        "vitest.explorer",
-        "esbenp.prettier-vscode",
-        "dbaeumer.vscode-eslint"
-      ]
+      "extensions": ["Vue.volar", "VoidZero.vite-plus-extension-pack"]
     }
   },
   "features": {
@@ -24,5 +19,5 @@
     "source=${localEnv:HOME}${localEnv:USERPROFILE}/.ssh,target=/home/builduser/.ssh,readonly,type=bind,consistency=cached"
   ],
   "postCreateCommand": "npm install && npx electron-builder install-app-deps",
-  "postStartCommand": "/usr/local/share/desktop-init.sh && npm run dev"
+  "postStartCommand": "/usr/local/share/desktop-init.sh && npm run electron:dev"
 }

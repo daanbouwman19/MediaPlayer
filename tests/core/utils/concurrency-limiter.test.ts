@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'vite-plus/test';
 import { ConcurrencyLimiter } from '../../../src/core/media/utils/concurrency-limiter';
 
 // Helper to create a controlled promise
@@ -151,7 +151,7 @@ describe('ConcurrencyLimiter', () => {
     await Promise.all(promises);
 
     expect(results).toHaveLength(5);
-    expect(results.sort()).toEqual([1, 2, 3, 4, 5]);
+    expect(results.sort((a, b) => a - b)).toEqual([1, 2, 3, 4, 5]);
   });
 
   it('should handle errors correctly', async () => {

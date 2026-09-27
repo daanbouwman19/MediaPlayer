@@ -54,6 +54,15 @@ const requireFileQueryParam = (
   next();
 };
 
+/** Returns the file path stored by {@link requireFileQueryParam}. */
+const validatedFilePath = (res: Response): string => {
+  const { filePath } = res.locals as { filePath?: unknown };
+  if (typeof filePath !== 'string') {
+    throw new AppError(400, 'Missing file');
+  }
+  return filePath;
+};
+
 export function createMediaRoutes({
   limiters,
   mediaHandler,
@@ -66,7 +75,7 @@ export function createMediaRoutes({
     '/api/media/view',
     writeLimiter,
     asyncHandler(async (req, res) => {
-      const { filePath } = req.body;
+      const { filePath } = req.body as { filePath?: unknown };
       if (!filePath || typeof filePath !== 'string') {
         throw new AppError(400, 'Missing or invalid filePath');
       }
@@ -77,7 +86,7 @@ export function createMediaRoutes({
       }
 
       await recordMediaView(filePath);
-      res.sendStatus(200);
+      return res.sendStatus(200);
     }),
   );
 
@@ -85,7 +94,7 @@ export function createMediaRoutes({
     '/api/media/views',
     readLimiter,
     asyncHandler(async (req, res) => {
-      const { filePaths } = req.body;
+      const { filePaths } = req.body as { filePaths?: unknown };
       if (
         !Array.isArray(filePaths) ||
         !filePaths.every((p) => typeof p === 'string')
@@ -102,7 +111,7 @@ export function createMediaRoutes({
       const allowedPaths = await filterAuthorizedPaths(filePaths);
 
       const counts = await getMediaViewCounts(allowedPaths);
-      res.json(counts);
+      return res.json(counts);
     }),
   );
 
@@ -110,7 +119,10 @@ export function createMediaRoutes({
     '/api/media/rate',
     writeLimiter,
     asyncHandler(async (req, res) => {
-      const { filePath, rating } = req.body;
+      const { filePath, rating } = req.body as {
+        filePath?: unknown;
+        rating?: unknown;
+      };
       if (
         !filePath ||
         typeof filePath !== 'string' ||
@@ -125,7 +137,7 @@ export function createMediaRoutes({
       }
 
       await setRating(filePath, rating);
-      res.sendStatus(200);
+      return res.sendStatus(200);
     }),
   );
 
@@ -133,7 +145,10 @@ export function createMediaRoutes({
     '/api/media/playback-position',
     writeLimiter,
     asyncHandler(async (req, res) => {
-      const { filePath, position } = req.body;
+      const { filePath, position } = req.body as {
+        filePath?: unknown;
+        position?: unknown;
+      };
       if (
         !filePath ||
         typeof filePath !== 'string' ||
@@ -149,7 +164,7 @@ export function createMediaRoutes({
       }
 
       await updatePlaybackPosition(filePath, Math.max(0, position));
-      res.sendStatus(200);
+      return res.sendStatus(200);
     }),
   );
 
@@ -181,8 +196,16 @@ export function createMediaRoutes({
     '/api/media/metadata',
     writeLimiter,
     asyncHandler(async (req, res) => {
-      const { filePath, metadata } = req.body;
-      if (!filePath || typeof filePath !== 'string' || !metadata) {
+      const { filePath, metadata } = req.body as {
+        filePath?: unknown;
+        metadata?: unknown;
+      };
+      if (
+        !filePath ||
+        typeof filePath !== 'string' ||
+        !metadata ||
+        typeof metadata !== 'object'
+      ) {
         return res.status(400).send('Missing or invalid arguments');
       }
 
@@ -192,7 +215,7 @@ export function createMediaRoutes({
       }
 
       await upsertMetadata(filePath, metadata);
-      res.sendStatus(200);
+      return res.sendStatus(200);
     }),
   );
 
@@ -200,7 +223,7 @@ export function createMediaRoutes({
     '/api/media/metadata/batch',
     readLimiter,
     asyncHandler(async (req, res) => {
-      const { filePaths } = req.body;
+      const { filePaths } = req.body as { filePaths?: unknown };
       if (
         !Array.isArray(filePaths) ||
         !filePaths.every((p) => typeof p === 'string')
@@ -217,7 +240,7 @@ export function createMediaRoutes({
       const allowedPaths = await filterAuthorizedPaths(filePaths);
 
       const result = await getMetadata(allowedPaths);
-      res.json(result);
+      return res.json(result);
     }),
   );
 
@@ -227,7 +250,7 @@ export function createMediaRoutes({
     fileLimiter,
     requireFileQueryParam,
     asyncHandler(async (req, res) => {
-      await mediaHandler.serveMetadata(req, res, res.locals.filePath);
+      await mediaHandler.serveMetadata(req, res, validatedFilePath(res));
     }),
   );
 
@@ -241,7 +264,8 @@ export function createMediaRoutes({
       const isTranscode = getQueryParam(req.query, 'transcode') === 'true';
 
       if (!filePath) {
-        return res.status(400).send('Missing file');
+        res.status(400).send('Missing file');
+        return;
       }
 
       const access = await validateFileAccess(filePath);
@@ -257,7 +281,8 @@ export function createMediaRoutes({
 
       if (isTranscode) {
         if (!ffmpegPath) {
-          return res.status(500).send('FFmpeg not found');
+          res.status(500).send('FFmpeg not found');
+          return;
         }
 
         // Transcode concurrency is enforced centrally inside
@@ -282,7 +307,7 @@ export function createMediaRoutes({
     fileLimiter,
     requireFileQueryParam,
     asyncHandler(async (req, res) => {
-      await mediaHandler.serveThumbnail(req, res, res.locals.filePath);
+      await mediaHandler.serveThumbnail(req, res, validatedFilePath(res));
     }),
   );
 
@@ -291,7 +316,7 @@ export function createMediaRoutes({
     fileLimiter,
     requireFileQueryParam,
     asyncHandler(async (req, res) => {
-      await mediaHandler.serveHeatmap(req, res, res.locals.filePath);
+      await mediaHandler.serveHeatmap(req, res, validatedFilePath(res));
     }),
   );
 
@@ -300,7 +325,7 @@ export function createMediaRoutes({
     fileLimiter,
     requireFileQueryParam,
     asyncHandler(async (req, res) => {
-      await mediaHandler.serveHeatmapProgress(req, res, res.locals.filePath);
+      await mediaHandler.serveHeatmapProgress(req, res, validatedFilePath(res));
     }),
   );
 
@@ -310,7 +335,7 @@ export function createMediaRoutes({
     fileLimiter,
     requireFileQueryParam,
     asyncHandler(async (req, res) => {
-      await mediaHandler.serveHlsMaster(req, res, res.locals.filePath);
+      await mediaHandler.serveHlsMaster(req, res, validatedFilePath(res));
     }),
   );
 
@@ -320,7 +345,7 @@ export function createMediaRoutes({
     fileLimiter,
     requireFileQueryParam,
     asyncHandler(async (req, res) => {
-      await mediaHandler.serveHlsPlaylist(req, res, res.locals.filePath);
+      await mediaHandler.serveHlsPlaylist(req, res, validatedFilePath(res));
     }),
   );
 
@@ -330,7 +355,7 @@ export function createMediaRoutes({
     fileLimiter,
     requireFileQueryParam,
     asyncHandler(async (req, res) => {
-      await mediaHandler.serveHlsStatus(req, res, res.locals.filePath);
+      await mediaHandler.serveHlsStatus(req, res, validatedFilePath(res));
     }),
   );
 
@@ -341,13 +366,13 @@ export function createMediaRoutes({
     requireFileQueryParam,
     asyncHandler(async (req, res) => {
       const segmentParam = req.params.segment;
-      const segment = Array.isArray(segmentParam)
-        ? segmentParam[0]
-        : segmentParam;
+      // A missing segment is rejected by serveHlsSegment's name validation.
+      const segment =
+        (Array.isArray(segmentParam) ? segmentParam[0] : segmentParam) ?? '';
       await mediaHandler.serveHlsSegment(
         req,
         res,
-        res.locals.filePath,
+        validatedFilePath(res),
         segment,
       );
     }),
@@ -403,7 +428,7 @@ export function createMediaRoutes({
         }
         await manager.enqueue(p);
       }
-      res.status(204).send();
+      return res.status(204).send();
     }),
   );
 
@@ -428,7 +453,7 @@ export function createMediaRoutes({
       }
       await TranscodeQueueManager.getInstance().cancel(filePath);
       await deleteTranscodeJob(filePath);
-      res.status(204).send();
+      return res.status(204).send();
     }),
   );
 

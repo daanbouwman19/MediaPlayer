@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vite-plus/test';
 import { MediaHandler } from '../../src/core/media/media-handler';
 import { createTestMediaService } from '../utils/test-factory';
 

@@ -21,7 +21,7 @@ interface PendingMessage<T = unknown> {
 }
 
 interface WorkerClientOptions {
-  workerOptions?: WorkerOptions;
+  workerOptions?: WorkerOptions | undefined;
   operationTimeout?: number;
   name?: string;
   autoRestart?: boolean;
@@ -36,7 +36,7 @@ export class WorkerClient {
   private isTerminating = false;
   private operationTimeout: number;
   private workerPath: string | URL;
-  private workerOptions?: WorkerOptions;
+  private workerOptions: WorkerOptions | undefined;
   private name: string;
 
   // Auto-restart configuration
@@ -189,7 +189,7 @@ export class WorkerClient {
         );
         clearTimeout(timeoutId);
         this.pendingMessages.delete(id);
-        reject(error);
+        reject(error instanceof Error ? error : new Error(String(error)));
       }
     });
   }

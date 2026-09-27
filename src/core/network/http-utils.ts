@@ -26,12 +26,13 @@ export function parseHttpRange(
 
   // Case: Malformed header or other error -> treat as full content (ignore header)
   // ranges === -2 is malformed
-  if (ranges === -2 || !Array.isArray(ranges) || ranges.length === 0) {
+  const first = ranges === -2 ? undefined : ranges[0];
+  if (!first) {
     return { start: 0, end: totalSize - 1 };
   }
 
   // Success: Return the first range
-  return { start: ranges[0].start, end: ranges[0].end };
+  return { start: first.start, end: first.end };
 }
 
 /**

@@ -1,41 +1,59 @@
-import { parentPort } from 'worker_threads';
+import { parentPort, type MessagePort } from 'worker_threads';
+import type { Credentials } from 'google-auth-library';
 import { performFullMediaScan } from './media-scanner.ts';
 import { initializeManualCredentials } from '../../main/google-auth.ts';
 
-const port = parentPort;
-if (!port) {
+if (!parentPort) {
   throw new Error('This module must be run as a worker thread');
 }
+const port: MessagePort = parentPort;
 
-port.on('message', async (message) => {
+/** A request sent by WorkerScannerService through WorkerClient. */
+interface ScanRequest {
+  id: number;
+  type: string;
+  payload?: {
+    directories?: string[];
+    tokens?: Credentials | null;
+    previousPaths?: string[];
+  };
+}
+
+/**
+ * Handles one message from the main thread. Never rejects: failures are
+ * reported back to the caller as `{ success: false }` results.
+ */
+export async function handleScanMessage(message: unknown): Promise<void> {
   // Handle calls that match { id, type, payload } structure for WorkerClient
-  if (message && typeof message === 'object' && 'id' in message) {
-    const { id, type, payload } = message;
+  if (!message || typeof message !== 'object' || !('id' in message)) return;
+  const { id, type, payload } = message as ScanRequest;
 
-    if (type === 'START_SCAN') {
-      try {
-        const { directories, tokens, previousPaths } = payload || {};
+  if (type !== 'START_SCAN') return;
+  try {
+    const { directories = [], tokens, previousPaths } = payload ?? {};
 
-        if (tokens) {
-          initializeManualCredentials(tokens);
-        }
-
-        const knownPaths = new Set((previousPaths as string[]) || []);
-
-        const albums = await performFullMediaScan(directories, knownPaths);
-        port.postMessage({
-          id,
-          result: { success: true, data: albums },
-        });
-      } catch (error) {
-        port.postMessage({
-          id,
-          result: {
-            success: false,
-            error: error instanceof Error ? error.message : String(error),
-          },
-        });
-      }
+    if (tokens) {
+      initializeManualCredentials(tokens);
     }
+
+    const knownPaths = new Set(previousPaths ?? []);
+
+    const albums = await performFullMediaScan(directories, knownPaths);
+    port.postMessage({
+      id,
+      result: { success: true, data: albums },
+    });
+  } catch (error) {
+    port.postMessage({
+      id,
+      result: {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      },
+    });
   }
+}
+
+port.on('message', (message: unknown) => {
+  void handleScanMessage(message);
 });

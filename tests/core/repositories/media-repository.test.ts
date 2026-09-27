@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi } from 'vite-plus/test';
 import { MediaRepository } from '../../../src/core/database/repositories/media-repository';
 import * as database from '../../../src/core/database/database';
 

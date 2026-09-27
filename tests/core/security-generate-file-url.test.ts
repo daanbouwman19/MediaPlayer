@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vite-plus/test';
 import { generateFileUrl } from '../../src/core/media/media-handler';
 import * as security from '../../src/core/auth/security';
 import * as providerFactory from '../../src/infrastructure/fs-provider-factory';

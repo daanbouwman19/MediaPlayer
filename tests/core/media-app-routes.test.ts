@@ -1,4 +1,11 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import {
+  describe,
+  it,
+  expect,
+  vi,
+  beforeEach,
+  afterEach,
+} from 'vite-plus/test';
 import request from 'supertest';
 import { createTestMediaService } from '../utils/test-factory';
 import { MediaRoutes } from '../../src/core/media/routes';

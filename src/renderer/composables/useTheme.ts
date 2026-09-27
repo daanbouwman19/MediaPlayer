@@ -74,7 +74,8 @@ export function useTheme() {
       (t) => t.id === themeMode.value,
     );
     const nextIndex = (currentIndex + 1) % AVAILABLE_THEMES.length;
-    themeMode.value = AVAILABLE_THEMES[nextIndex].id;
+    const nextTheme = AVAILABLE_THEMES[nextIndex];
+    if (nextTheme) themeMode.value = nextTheme.id;
   };
 
   return {

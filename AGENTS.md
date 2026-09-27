@@ -8,6 +8,7 @@ Welcome to the Mediaplayer App project. This file provides critical context, gui
 - **Platform**: Cross-platform desktop (Electron) and Web UI.
 - **Frontend**: Vue 3, Vite, Tailwind CSS (v4), HTML5 Media APIs.
 - **Backend/Main Process**: Node.js, Express, better-sqlite3.
+- **Tooling**: Vite+ (`vp`): Vite, Vitest, Oxlint and Oxfmt; `vue-tsc` for type checking.
 - **Testing**: Vitest (Unit/Integration) and Playwright (E2E/Visual).
 
 ## 2. Core Development Commands (npm)
@@ -15,7 +16,8 @@ Welcome to the Mediaplayer App project. This file provides critical context, gui
 - **Install Dependencies**: `npm install`
 - **Verify (CRITICAL)**: `npm run verify`
   - _Must pass with 100% success and >= 80% coverage before creating a PR._
-  - Runs formatting (`npm run format`), linting (`npm run lint`), type checking (`npm run typecheck`), and unit tests with coverage (`npm run test:coverage`).
+  - Runs formatting and linting with auto-fix (`vp check --fix`), type checking (`npm run typecheck`), and unit tests with coverage (`npm run test:coverage`).
+  - `any` is not allowed in `src/` (see CLAUDE.md, TypeScript strictness).
 - **Development (Web)**: `npm run web:dev` (runs on `https://localhost:5173/`)
 - **Development (Electron)**: `npm run electron:dev`
 - **Testing (E2E)**: `npx playwright install` (if missing), then `npm run test:e2e`. Update snapshots with `npx playwright test --update-snapshots`.

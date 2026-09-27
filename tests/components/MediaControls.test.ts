@@ -1,5 +1,5 @@
 import { mount } from '@vue/test-utils';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vite-plus/test';
 import { setActivePinia } from 'pinia';
 import { createTestingPinia } from '@pinia/testing';
 import MediaControls from '../../src/renderer/features/player/MediaControls.vue';

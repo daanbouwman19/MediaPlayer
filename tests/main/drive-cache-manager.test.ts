@@ -1,4 +1,11 @@
-import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
+import {
+  describe,
+  it,
+  expect,
+  vi,
+  beforeEach,
+  type Mock,
+} from 'vite-plus/test';
 import fs from 'fs';
 import { EventEmitter } from 'events';
 import {

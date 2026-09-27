@@ -1,5 +1,5 @@
 import { EventEmitter } from 'events';
-import { vi, type Mock } from 'vitest';
+import { vi, type Mock } from 'vite-plus/test';
 
 // Define types for mock data
 export interface MockAlbum {

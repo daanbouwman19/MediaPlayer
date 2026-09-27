@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.node.json",
+  "compilerOptions": {
+    "noUncheckedIndexedAccess": false,
+    "tsBuildInfoFile": "./node_modules/.cache/tsconfig.node.test.tsbuildinfo"
+  },
+  "include": [
+    "tests/main/**/*",
+    "tests/core/**/*",
+    "tests/server/**/*",
+    "tests/fakes/**/*",
+    "tests/utils/**/*",
+    "tests/e2e/**/*"
+  ]
+}

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vite-plus/test';
 import { DatabaseSync } from 'node:sqlite';
 import { initializeDatabase } from '../../src/core/database/database-schema';
 

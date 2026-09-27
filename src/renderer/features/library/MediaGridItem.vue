@@ -300,7 +300,7 @@ const props = defineProps<{
   thumbnailUrlGenerator: ((path: string) => string) | null;
   failedImagePaths: Set<string>;
   isSelected?: boolean;
-  transcodeStatus?: TranscodeJob['status'];
+  transcodeStatus?: TranscodeJob['status'] | undefined;
 }>();
 
 defineEmits<{

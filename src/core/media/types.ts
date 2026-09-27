@@ -5,12 +5,12 @@
 export interface MediaFile {
   name: string;
   path: string;
-  viewCount?: number;
-  rating?: number;
-  lastViewed?: number;
-  duration?: number;
+  viewCount?: number | undefined;
+  rating?: number | undefined;
+  lastViewed?: number | undefined;
+  duration?: number | undefined;
   /** Last saved playback position in seconds, used to derive a watched indicator. */
-  playbackPosition?: number;
+  playbackPosition?: number | undefined;
 }
 
 export interface Album {
@@ -62,7 +62,8 @@ export interface MediaLibraryItem {
 }
 
 export type IpcResult<T = unknown> =
-  { success: true; data: T } | { success: false; error: string };
+  | { success: true; data: T }
+  | { success: false; error: string };
 
 export interface HeatmapData {
   audio: number[];

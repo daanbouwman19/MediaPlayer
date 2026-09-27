@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vite-plus/test';
 import { WorkerFactory } from '../../src/core/database/worker-factory';
 import path from 'path';
 

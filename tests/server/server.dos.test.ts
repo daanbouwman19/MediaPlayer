@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vite-plus/test';
 import request from 'supertest';
 import { createApp } from '../../src/server/server';
 import { authenticateWithCode } from '../../src/main/google-auth';
@@ -25,7 +25,10 @@ vi.mock('../../src/core/database/database', () => ({
 
 vi.mock('../../src/core/media/transcode-queue-manager', () => ({
   TranscodeQueueManager: {
-    getInstance: vi.fn(() => ({ start: vi.fn(), enqueue: vi.fn() })),
+    getInstance: vi.fn(() => ({
+      start: vi.fn().mockResolvedValue(undefined),
+      enqueue: vi.fn(),
+    })),
     resetInstance: vi.fn(),
   },
 }));

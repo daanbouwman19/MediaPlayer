@@ -1,11 +1,11 @@
-import { defineConfig } from 'vite';
-import type { UserConfig } from 'vite';
+import { defineConfig } from 'vite-plus';
+import type { UserConfig } from 'vite-plus';
 import vue from '@vitejs/plugin-vue';
 import tailwindcss from '@tailwindcss/vite';
 import { visualizer } from 'rollup-plugin-visualizer';
 import { resolve } from 'path';
 
-export default defineConfig(({ mode }) => {
+function targetConfig(mode: string): UserConfig {
   const target = process.env.VITE_TARGET || 'server'; // default to server if not specified
 
   if (target === 'main') {
@@ -208,6 +208,7 @@ export default defineConfig(({ mode }) => {
                 }
                 return 'vendor';
               }
+              return undefined;
             },
           },
         },
@@ -216,4 +217,93 @@ export default defineConfig(({ mode }) => {
   }
 
   return {} as UserConfig;
-});
+}
+
+// Oxlint config (`vp lint` / `vp check`): the `correctness` category (code that
+// is outright wrong or useless, including the type-aware rules such as
+// no-floating-promises), plus rules that keep `any` out of src/.
+const noAnyRules = {
+  'typescript/no-explicit-any': 'error',
+  'typescript/no-unsafe-argument': 'error',
+  'typescript/no-unsafe-assignment': 'error',
+  'typescript/no-unsafe-call': 'error',
+  'typescript/no-unsafe-member-access': 'error',
+  'typescript/no-unsafe-return': 'error',
+} as const;
+
+const lint: UserConfig['lint'] = {
+  plugins: ['oxc', 'typescript', 'unicorn', 'vue'],
+  categories: {
+    correctness: 'error',
+  },
+  options: {
+    typeAware: true,
+  },
+  env: {
+    builtin: true,
+    browser: true,
+    node: true,
+    es2024: true,
+  },
+  ignorePatterns: [
+    'dist',
+    'out',
+    'node_modules',
+    'coverage',
+    '.vite',
+    'release',
+    '.cache',
+    'cache',
+    'dist-server',
+    'dist-web',
+  ],
+  rules: {
+    ...noAnyRules,
+    'typescript/no-misused-promises': 'error',
+    'typescript/switch-exhaustiveness-check': 'error',
+    'typescript/only-throw-error': 'error',
+    'typescript/prefer-promise-reject-errors': 'error',
+    // `new Array(n)` preallocation is intentional in hot paths (see AGENTS.md).
+    'unicorn/no-new-array': 'off',
+  },
+  overrides: [
+    {
+      // Tests may use `any` for mocks, pass unbound mock methods to expect(),
+      // and `await` synchronous calls (e.g. `await vm.$emit()`) to flush
+      // pending microtasks before asserting.
+      files: ['tests/**', '__mocks__/**'],
+      rules: {
+        ...Object.fromEntries(Object.keys(noAnyRules).map((r) => [r, 'off'])),
+        'typescript/unbound-method': 'off',
+        'typescript/await-thenable': 'off',
+      },
+    },
+  ],
+};
+
+// Oxfmt config (run via `vp fmt` / `vp check`). Converted from the former
+// .prettierrc.json and .prettierignore.
+const fmt: UserConfig['fmt'] = {
+  semi: true,
+  trailingComma: 'all',
+  singleQuote: true,
+  printWidth: 80,
+  tabWidth: 2,
+  sortPackageJson: false,
+  ignorePatterns: [
+    'build',
+    'coverage',
+    'dist',
+    'node_modules',
+    'package-lock.json',
+    'yarn.lock',
+    '*.log',
+    '.cache/',
+  ],
+};
+
+export default defineConfig(({ mode }) => ({
+  ...targetConfig(mode),
+  lint,
+  fmt,
+}));

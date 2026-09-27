@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, Mock } from 'vitest';
+import { describe, it, expect, vi, beforeEach, Mock } from 'vite-plus/test';
 import { GoogleDriveProvider } from '../../../src/infrastructure/providers/drive-provider';
 import { getDriveStreamWithCache } from '../../../src/core/media/drive-stream';
 import {

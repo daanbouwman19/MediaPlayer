@@ -91,7 +91,7 @@ export async function loadSavedCredentialsIfExist(): Promise<boolean> {
       );
       return false;
     }
-    const credentials = JSON.parse(decrypted);
+    const credentials = JSON.parse(decrypted) as Credentials;
 
     const client = getOAuth2Client();
     client.setCredentials(credentials);

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi } from 'vite-plus/test';
 import { createRateLimiters } from '../../../src/server/middleware/rate-limiters';
 import * as rateLimiterModule from '../../../src/core/network/rate-limiter';
 import {

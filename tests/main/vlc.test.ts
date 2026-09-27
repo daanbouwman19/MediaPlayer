@@ -7,7 +7,7 @@ import {
   afterEach,
   beforeAll,
   Mock,
-} from 'vitest';
+} from 'vite-plus/test';
 import { ipcMain } from 'electron';
 
 // Hoist the mock function so it's accessible in the factory and the test

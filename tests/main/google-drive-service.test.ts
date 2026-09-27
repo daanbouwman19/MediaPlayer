@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vite-plus/test';
 import { google } from 'googleapis';
 import { EventEmitter } from 'events';
 import * as driveService from '../../src/main/google-drive-service';

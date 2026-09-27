@@ -1,4 +1,11 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import {
+  describe,
+  it,
+  expect,
+  vi,
+  beforeEach,
+  afterEach,
+} from 'vite-plus/test';
 import request from 'supertest';
 import { createApp } from '../../src/server/app';
 import { createTestMediaService } from '../utils/test-factory';
@@ -14,7 +21,10 @@ vi.mock('../../src/core/database/database', () => ({
 
 vi.mock('../../src/core/media/transcode-queue-manager', () => ({
   TranscodeQueueManager: {
-    getInstance: vi.fn(() => ({ start: vi.fn(), enqueue: vi.fn() })),
+    getInstance: vi.fn(() => ({
+      start: vi.fn().mockResolvedValue(undefined),
+      enqueue: vi.fn(),
+    })),
     resetInstance: vi.fn(),
   },
 }));

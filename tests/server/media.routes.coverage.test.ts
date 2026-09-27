@@ -1,6 +1,6 @@
 import express from 'express';
 import request from 'supertest';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vite-plus/test';
 import { createMediaRoutes } from '../../src/server/routes/media.routes';
 import { errorHandler } from '../../src/server/middleware/error-handler';
 import * as database from '../../src/core/database/database';

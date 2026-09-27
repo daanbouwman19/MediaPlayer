@@ -43,7 +43,7 @@ export function useSlideshow() {
     const imageSet = imageExtensionsSet.value;
 
     const len = mediaFiles.length;
-    const result: MediaFile[] = new Array(len);
+    const result = new Array<MediaFile>(len);
     let count = 0;
 
     for (let i = 0; i < len; i++) {
@@ -160,7 +160,9 @@ export function useSlideshow() {
 
     playerStore.slideshowTimerId = setTimeout(() => {
       clearSlideshowTimer();
-      navigateMedia(1);
+      navigateMedia(1).catch((error: unknown) => {
+        console.error('[Slideshow] Failed to advance to the next item:', error);
+      });
     }, duration);
   };
 

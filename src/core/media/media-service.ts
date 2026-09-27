@@ -40,7 +40,8 @@ function collectAllFilePaths(albums: Album[]): string[] {
     if (album.children && album.children.length > 0) {
       // Push children in reverse order to maintain pre-order traversal
       for (let i = album.children.length - 1; i >= 0; i--) {
-        stack.push(album.children[i]);
+        const child = album.children[i];
+        if (child) stack.push(child);
       }
     }
   }
@@ -85,7 +86,8 @@ function enrichAlbumsWithStats(
     if (album.children && album.children.length > 0) {
       // Push children in reverse order to maintain pre-order traversal
       for (let i = album.children.length - 1; i >= 0; i--) {
-        stack.push(album.children[i]);
+        const child = album.children[i];
+        if (child) stack.push(child);
       }
     } else if (!album.children) {
       // Ensure children is always an array (normalization behavior preservation)
@@ -178,7 +180,7 @@ export class MediaService implements IMediaService {
   ): void {
     const allFilePaths = collectAllFilePaths(albums);
 
-    (async () => {
+    void (async () => {
       try {
         // Filter paths that are already "success" in DB
         // to avoid fetching ALL metadata or processing known files.
@@ -310,7 +312,8 @@ export class MediaService implements IMediaService {
         continue;
       }
 
-      queue.add(async () => {
+      // Each task handles its own errors, so the returned promise never rejects.
+      void queue.add(async () => {
         try {
           if (isDrivePath(filePath)) {
             return;

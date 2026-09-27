@@ -22,7 +22,7 @@ export function useTranscoder() {
     stopTranscodingProgressPoll();
     transcodingProgress.value = 0;
 
-    transcodingPollInterval.value = setInterval(async () => {
+    const pollProgress = async () => {
       try {
         const status = await api.getHlsStatus(filePath);
         if (status) {
@@ -39,7 +39,11 @@ export function useTranscoder() {
       } catch (e) {
         console.warn('Failed to poll transcoding progress', e);
       }
-    }, 3000);
+    };
+    transcodingPollInterval.value = setInterval(
+      () => void pollProgress(),
+      3000,
+    );
   };
 
   const resetTranscoderState = () => {

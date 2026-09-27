@@ -1,4 +1,12 @@
-import { describe, it, expect, vi, beforeEach, afterEach, Mock } from 'vitest';
+import {
+  describe,
+  it,
+  expect,
+  vi,
+  beforeEach,
+  afterEach,
+  Mock,
+} from 'vite-plus/test';
 import { LocalFileSystemProvider } from '../../../src/infrastructure/providers/local-provider';
 import { listDirectory } from '../../../src/core/media/file-system';
 import { isDrivePath } from '../../../src/core/media/media-utils';

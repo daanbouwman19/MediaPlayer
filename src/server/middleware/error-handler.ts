@@ -4,7 +4,6 @@
 import type { ErrorRequestHandler } from 'express';
 import { AppError } from '../../core/media/errors.ts';
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
   const errorWithStatus = err as {
     status?: number;

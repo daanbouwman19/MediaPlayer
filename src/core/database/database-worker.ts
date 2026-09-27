@@ -25,11 +25,62 @@ type StatementSync = ReturnType<DatabaseSync['prepare']>;
  */
 let db: DatabaseSync | null = null;
 
+/** Names of the statements prepared by {@link initDatabase}. */
+type StatementName =
+  | 'addJob'
+  | 'addMediaDirectory'
+  | 'cacheAlbum'
+  | 'createSmartPlaylist'
+  | 'deleteJob'
+  | 'deleteSmartPlaylist'
+  | 'deleteWatchedSegments'
+  | 'ensureMetadataRow'
+  | 'executeSmartPlaylist'
+  | 'getAllMetadata'
+  | 'getAllMetadataVerification'
+  | 'getCachedAlbum'
+  | 'getFileIdByPath'
+  | 'getFileIdsByPathsBatch'
+  | 'getMediaDirectories'
+  | 'getMediaViewCountsBatch'
+  | 'getMetadataBatch'
+  | 'getPendingJobs'
+  | 'getPendingMetadata'
+  | 'getRecentlyPlayed'
+  | 'getSetting'
+  | 'getSmartPlaylists'
+  | 'getSuccessfulPathsBatch'
+  | 'insertWatchedSegment'
+  | 'listJobs'
+  | 'recordView'
+  | 'removeMediaDirectory'
+  | 'saveSetting'
+  | 'setDirectoryActiveState'
+  | 'updateJobStatus'
+  | 'updatePlaybackPosition'
+  | 'updateRating'
+  | 'updateSmartPlaylist'
+  | 'upsertMetadata';
+
 /**
  * Cache for prepared statements to improve performance of repeated queries.
  * Keys are the statement names (e.g., 'recordView'), and values are the prepared SQLite statements.
+ * Empty until {@link initDatabase} succeeds and after {@link closeDatabase}.
  */
-const statements: { [key: string]: StatementSync } = {};
+const statements: Partial<Record<StatementName, StatementSync>> = {};
+
+/**
+ * Returns a prepared statement, throwing if the database has not been initialized.
+ */
+function getStatement(name: StatementName): StatementSync {
+  const statement = statements[name];
+  if (!statement) {
+    throw new Error(
+      `Statement "${name}" is not prepared; database not initialized`,
+    );
+  }
+  return statement;
+}
 
 /**
  * Default batch size for SQL operations.
@@ -161,8 +212,9 @@ async function generateFileIdsBatched(
  */
 async function getExistingIdOrGenerate(filePath: string): Promise<string> {
   try {
-    const row = statements.getFileIdByPath.get(filePath) as
-      { file_path_hash: string } | undefined;
+    const row = getStatement('getFileIdByPath').get(filePath) as
+      | { file_path_hash: string }
+      | undefined;
     if (row) {
       return row.file_path_hash;
     }
@@ -442,11 +494,11 @@ function replaceWatchedSegments(fileId: string, segmentsJson: string): void {
   if (!Array.isArray(segments)) {
     throw new Error('Watched segments must be a JSON array');
   }
-  statements.deleteWatchedSegments.run(fileId);
+  getStatement('deleteWatchedSegments').run(fileId);
   for (const seg of segments) {
     const s = seg as { start?: unknown; end?: unknown };
     if (s && typeof s.start === 'number') {
-      statements.insertWatchedSegment.run(
+      getStatement('insertWatchedSegment').run(
         fileId,
         s.start,
         typeof s.end === 'number' ? s.end : null,
@@ -460,7 +512,7 @@ function replaceWatchedSegments(fileId: string, segmentsJson: string): void {
  * single payload. Does not manage transactions — callers do.
  */
 function runMetadataUpsert(fileId: string, payload: MetadataPayload): void {
-  statements.upsertMetadata.run(
+  getStatement('upsertMetadata').run(
     fileId,
     payload.filePath,
     payload.duration === undefined ? null : payload.duration,
@@ -526,7 +578,7 @@ export async function setRating(
   if (!db) return { success: false, error: 'Database not initialized' };
   try {
     const fileId = await getExistingIdOrGenerate(filePath);
-    statements.updateRating.run(fileId, rating);
+    getStatement('updateRating').run(fileId, rating);
     return { success: true };
   } catch (error: unknown) {
     return { success: false, error: (error as Error).message };
@@ -547,7 +599,7 @@ export async function updateWatchedSegments(
     try {
       // Keep a metadata row around so the file's ID stays stable even when
       // only segments are known for it.
-      statements.ensureMetadataRow.run(fileId);
+      getStatement('ensureMetadataRow').run(fileId);
       replaceWatchedSegments(fileId, segmentsJson);
       db.exec('COMMIT');
     } catch (e) {
@@ -575,7 +627,7 @@ export async function updatePlaybackPosition(
   if (!db) return { success: false, error: 'Database not initialized' };
   try {
     const fileId = await getExistingIdOrGenerate(filePath);
-    statements.updatePlaybackPosition.run(
+    getStatement('updatePlaybackPosition').run(
       fileId,
       Number.isFinite(position) ? Math.max(0, position) : 0,
     );
@@ -676,7 +728,7 @@ export async function bulkUpsertMetadata(
 export function getAllMetadata(): WorkerResult {
   if (!db) return { success: false, error: 'Database not initialized' };
   try {
-    const rows = statements.getAllMetadata.all() as {
+    const rows = getStatement('getAllMetadata').all() as {
       filePath: string;
       [key: string]: unknown;
     }[];
@@ -701,7 +753,7 @@ export function getAllMetadata(): WorkerResult {
 export function getAllMetadataVerification(): WorkerResult {
   if (!db) return { success: false, error: 'Database not initialized' };
   try {
-    const rows = statements.getAllMetadataVerification.all() as {
+    const rows = getStatement('getAllMetadataVerification').all() as {
       filePath: string;
       size: number;
       createdAt: string;
@@ -734,7 +786,7 @@ export async function filterProcessingNeeded(
     const successfulPathsSet = new Set<string>();
 
     forEachBatchedRow<{ file_path: string }>(
-      statements.getSuccessfulPathsBatch,
+      getStatement('getSuccessfulPathsBatch'),
       filePaths,
       (row) => successfulPathsSet.add(row.file_path),
     );
@@ -767,7 +819,7 @@ export async function getMetadata(filePaths: string[]): Promise<WorkerResult> {
     const metadataMap: { [key: string]: unknown } = {};
 
     forEachBatchedRow<{ filePath: string; [key: string]: unknown }>(
-      statements.getMetadataBatch,
+      getStatement('getMetadataBatch'),
       allFileIds,
       (row) => {
         if (row && row.filePath) {
@@ -793,7 +845,7 @@ export function createSmartPlaylist(
 ): WorkerResult {
   if (!db) return { success: false, error: 'Database not initialized' };
   try {
-    const result = statements.createSmartPlaylist.run(name, criteria);
+    const result = getStatement('createSmartPlaylist').run(name, criteria);
     return { success: true, data: { id: result.lastInsertRowid } };
   } catch (error: unknown) {
     return { success: false, error: (error as Error).message };
@@ -806,7 +858,7 @@ export function createSmartPlaylist(
 export function getSmartPlaylists(): WorkerResult {
   if (!db) return { success: false, error: 'Database not initialized' };
   try {
-    const playlists = statements.getSmartPlaylists.all();
+    const playlists = getStatement('getSmartPlaylists').all();
     return { success: true, data: playlists };
   } catch (error: unknown) {
     return { success: false, error: (error as Error).message };
@@ -819,7 +871,7 @@ export function getSmartPlaylists(): WorkerResult {
 export function deleteSmartPlaylist(id: number): WorkerResult {
   if (!db) return { success: false, error: 'Database not initialized' };
   try {
-    statements.deleteSmartPlaylist.run(id);
+    getStatement('deleteSmartPlaylist').run(id);
     return { success: true };
   } catch (error: unknown) {
     return { success: false, error: (error as Error).message };
@@ -836,7 +888,7 @@ export function updateSmartPlaylist(
 ): WorkerResult {
   if (!db) return { success: false, error: 'Database not initialized' };
   try {
-    statements.updateSmartPlaylist.run(name, criteria, id);
+    getStatement('updateSmartPlaylist').run(name, criteria, id);
     return { success: true };
   } catch (error: unknown) {
     return { success: false, error: (error as Error).message };
@@ -850,7 +902,7 @@ export function updateSmartPlaylist(
 export function getRecentlyPlayed(limit: number): WorkerResult {
   if (!db) return { success: false, error: 'Database not initialized' };
   try {
-    const rows = statements.getRecentlyPlayed.all(limit);
+    const rows = getStatement('getRecentlyPlayed').all(limit);
     return { success: true, data: rows };
   } catch (error: unknown) {
     return { success: false, error: (error as Error).message };
@@ -863,7 +915,7 @@ export function getRecentlyPlayed(limit: number): WorkerResult {
 export function saveSetting(key: string, value: string): WorkerResult {
   if (!db) return { success: false, error: 'Database not initialized' };
   try {
-    statements.saveSetting.run(key, value, new Date().toISOString());
+    getStatement('saveSetting').run(key, value, new Date().toISOString());
     return { success: true };
   } catch (error: unknown) {
     return { success: false, error: (error as Error).message };
@@ -876,11 +928,22 @@ export function saveSetting(key: string, value: string): WorkerResult {
 export function getSetting(key: string): WorkerResult {
   if (!db) return { success: false, error: 'Database not initialized' };
   try {
-    const row = statements.getSetting.get(key) as { value: string } | undefined;
+    const row = getStatement('getSetting').get(key) as
+      | { value: string }
+      | undefined;
     return { success: true, data: row ? row.value : null };
   } catch (error: unknown) {
     return { success: false, error: (error as Error).message };
   }
+}
+
+/** Parsed smart playlist criteria; each field is validated before use. */
+interface SmartPlaylistCriteria {
+  minRating?: unknown;
+  minDuration?: unknown;
+  minViews?: unknown;
+  maxViews?: unknown;
+  minDaysSinceView?: unknown;
 }
 
 /**
@@ -892,7 +955,7 @@ export function executeSmartPlaylist(criteriaJson?: string): WorkerResult {
     // Use cached prepared statement for empty criteria
     // This avoids recompiling the SQL statement for the default "view all" case
     if (!criteriaJson || criteriaJson === '{}') {
-      const rows = statements.executeSmartPlaylist.all();
+      const rows = getStatement('executeSmartPlaylist').all();
       return { success: true, data: rows };
     }
 
@@ -901,7 +964,7 @@ export function executeSmartPlaylist(criteriaJson?: string): WorkerResult {
 
     if (criteriaJson && criteriaJson !== '{}') {
       try {
-        const criteria = JSON.parse(criteriaJson);
+        const criteria = JSON.parse(criteriaJson) as SmartPlaylistCriteria;
 
         if (typeof criteria.minRating === 'number') {
           sql += ' AND rating >= ?';
@@ -954,7 +1017,7 @@ export async function recordMediaView(filePath: string): Promise<WorkerResult> {
   try {
     const fileId = await getExistingIdOrGenerate(filePath);
     const now = new Date().toISOString();
-    statements.recordView.run(fileId, filePath, now);
+    getStatement('recordView').run(fileId, filePath, now);
     return { success: true };
   } catch (error: unknown) {
     console.error(`[worker] Error recording view for ${filePath}:`, error);
@@ -981,7 +1044,7 @@ export async function getMediaViewCounts(
     // Optimization: Direct path lookup instead of fs.stat -> hash -> lookup.
     // This assumes paths in DB are kept up-to-date by recordMediaView.
     forEachBatchedRow<{ file_path: string; view_count: number }>(
-      statements.getMediaViewCountsBatch,
+      getStatement('getMediaViewCountsBatch'),
       filePaths,
       (row) => {
         viewCountsMap[row.file_path] = row.view_count;
@@ -1033,7 +1096,8 @@ export async function cacheAlbums(
           }
           if (album.children && Array.isArray(album.children)) {
             for (let i = album.children.length - 1; i >= 0; i--) {
-              stack.push(album.children[i]);
+              const child = album.children[i];
+              if (child) stack.push(child);
             }
           }
         }
@@ -1048,7 +1112,7 @@ export async function cacheAlbums(
       }
     }
 
-    statements.cacheAlbum.run(
+    getStatement('cacheAlbum').run(
       cacheKey,
       JSON.stringify(albums),
       new Date().toISOString(),
@@ -1068,9 +1132,11 @@ export async function cacheAlbums(
 export function getCachedAlbums(cacheKey: string): WorkerResult {
   if (!db) return { success: false, error: 'Database not initialized' };
   try {
-    const row = statements.getCachedAlbum.get(cacheKey) as
-      { cache_value: string } | undefined;
-    const data = row && row.cache_value ? JSON.parse(row.cache_value) : null;
+    const row = getStatement('getCachedAlbum').get(cacheKey) as
+      | { cache_value: string }
+      | undefined;
+    const data: unknown =
+      row && row.cache_value ? JSON.parse(row.cache_value) : null;
     return { success: true, data };
   } catch (error: unknown) {
     console.error('[worker] Error reading cached albums:', error);
@@ -1088,7 +1154,7 @@ export function closeDatabase(): WorkerResult {
     db.close();
     db = null;
     // Clear statements cache
-    for (const key in statements) {
+    for (const key of Object.keys(statements) as StatementName[]) {
       delete statements[key];
     }
     console.log('[worker] Database connection closed.');
@@ -1116,7 +1182,7 @@ export function addMediaDirectory(payload: {
     const type = payload.type || 'local';
     const name = payload.name || path.basename(payload.path) || payload.path;
 
-    statements.addMediaDirectory.run(id, payload.path, type, name);
+    getStatement('addMediaDirectory').run(id, payload.path, type, name);
     return { success: true };
   } catch (error: unknown) {
     console.error(
@@ -1134,7 +1200,7 @@ export function addMediaDirectory(payload: {
 export function getMediaDirectories(): WorkerResult {
   if (!db) return { success: false, error: 'Database not initialized' };
   try {
-    const rows = statements.getMediaDirectories.all() as {
+    const rows = getStatement('getMediaDirectories').all() as {
       id: string;
       path: string;
       type: string;
@@ -1163,7 +1229,7 @@ export function getMediaDirectories(): WorkerResult {
 export function removeMediaDirectory(directoryPath: string): WorkerResult {
   if (!db) return { success: false, error: 'Database not initialized' };
   try {
-    statements.removeMediaDirectory.run(directoryPath);
+    getStatement('removeMediaDirectory').run(directoryPath);
     return { success: true };
   } catch (error: unknown) {
     console.error(
@@ -1186,7 +1252,10 @@ export function setDirectoryActiveState(
 ): WorkerResult {
   if (!db) return { success: false, error: 'Database not initialized' };
   try {
-    statements.setDirectoryActiveState.run(isActive ? 1 : 0, directoryPath);
+    getStatement('setDirectoryActiveState').run(
+      isActive ? 1 : 0,
+      directoryPath,
+    );
     return { success: true };
   } catch (error: unknown) {
     console.error(
@@ -1208,7 +1277,7 @@ export async function addJob(
   if (!db) return { success: false, error: 'Database not initialized' };
   try {
     const fileId = await getExistingIdOrGenerate(filePath);
-    statements.addJob.run(jobType, filePath, fileId);
+    getStatement('addJob').run(jobType, filePath, fileId);
     return { success: true };
   } catch (error: unknown) {
     return { success: false, error: (error as Error).message };
@@ -1218,7 +1287,7 @@ export async function addJob(
 export function listJobs(jobType: string): WorkerResult {
   if (!db) return { success: false, error: 'Database not initialized' };
   try {
-    const rows = statements.listJobs.all(jobType);
+    const rows = getStatement('listJobs').all(jobType);
     return { success: true, data: rows };
   } catch (error: unknown) {
     return { success: false, error: (error as Error).message };
@@ -1233,7 +1302,7 @@ export function updateJobStatus(
 ): WorkerResult {
   if (!db) return { success: false, error: 'Database not initialized' };
   try {
-    statements.updateJobStatus.run(status, error, jobType, filePath);
+    getStatement('updateJobStatus').run(status, error, jobType, filePath);
     return { success: true };
   } catch (err: unknown) {
     return { success: false, error: (err as Error).message };
@@ -1243,7 +1312,7 @@ export function updateJobStatus(
 export function deleteJob(jobType: string, filePath: string): WorkerResult {
   if (!db) return { success: false, error: 'Database not initialized' };
   try {
-    statements.deleteJob.run(jobType, filePath);
+    getStatement('deleteJob').run(jobType, filePath);
     return { success: true };
   } catch (error: unknown) {
     return { success: false, error: (error as Error).message };
@@ -1253,7 +1322,7 @@ export function deleteJob(jobType: string, filePath: string): WorkerResult {
 export function getPendingJobs(jobType: string): WorkerResult {
   if (!db) return { success: false, error: 'Database not initialized' };
   try {
-    const rows = statements.getPendingJobs.all(jobType) as {
+    const rows = getStatement('getPendingJobs').all(jobType) as {
       file_path: string;
     }[];
     return { success: true, data: rows.map((r) => r.file_path) };
@@ -1262,69 +1331,143 @@ export function getPendingJobs(jobType: string): WorkerResult {
   }
 }
 
+type FilePathPayload = { filePath: string };
+type JobPayload = { jobType: string; filePath: string };
+type JobStatusPayload = {
+  filePath: string;
+  status: string;
+  error?: string | null;
+};
+
+/** A request sent by the main thread; `type` selects the handler below. */
+type WorkerRequest = { id: number } & (
+  | { type: 'init'; payload: { dbPath: string } }
+  | { type: 'recordMediaView'; payload: FilePathPayload }
+  | { type: 'getMediaViewCounts'; payload: { filePaths: string[] } }
+  | { type: 'cacheAlbums'; payload: { cacheKey: string; albums: unknown } }
+  | { type: 'getCachedAlbums'; payload: { cacheKey: string } }
+  | { type: 'close'; payload?: undefined }
+  | {
+      type: 'addMediaDirectory';
+      payload: { directoryObj: Parameters<typeof addMediaDirectory>[0] };
+    }
+  | { type: 'getMediaDirectories'; payload?: undefined }
+  | { type: 'removeMediaDirectory'; payload: { directoryPath: string } }
+  | {
+      type: 'setDirectoryActiveState';
+      payload: { directoryPath: string; isActive: boolean };
+    }
+  | { type: 'upsertMetadata'; payload: MetadataPayload }
+  | { type: 'bulkUpsertMetadata'; payload: MetadataPayload[] }
+  | { type: 'setRating'; payload: { filePath: string; rating: number } }
+  | {
+      type: 'updateWatchedSegments';
+      payload: { filePath: string; segmentsJson: string };
+    }
+  | {
+      type: 'updatePlaybackPosition';
+      payload: { filePath: string; position: number };
+    }
+  | { type: 'getAllMetadata'; payload?: undefined }
+  | { type: 'getAllMetadataVerification'; payload?: undefined }
+  | { type: 'getMetadata'; payload: { filePaths: string[] } }
+  | { type: 'createSmartPlaylist'; payload: { name: string; criteria: string } }
+  | { type: 'getSmartPlaylists'; payload?: undefined }
+  | { type: 'deleteSmartPlaylist'; payload: { id: number } }
+  | {
+      type: 'updateSmartPlaylist';
+      payload: { id: number; name: string; criteria: string };
+    }
+  | { type: 'saveSetting'; payload: { key: string; value: string } }
+  | { type: 'getSetting'; payload: { key: string } }
+  | { type: 'executeSmartPlaylist'; payload: { criteria?: string } }
+  | { type: 'getRecentlyPlayed'; payload: { limit: number } }
+  | { type: 'getPendingMetadata'; payload?: undefined }
+  | { type: 'filterProcessingNeeded'; payload: { filePaths: string[] } }
+  | { type: 'addTranscodeJob'; payload: FilePathPayload }
+  | { type: 'listTranscodeJobs'; payload?: undefined }
+  | { type: 'updateTranscodeJobStatus'; payload: JobStatusPayload }
+  | { type: 'deleteTranscodeJob'; payload: FilePathPayload }
+  | { type: 'getPendingTranscodeJobs'; payload?: undefined }
+  | { type: 'addJob'; payload: JobPayload }
+  | { type: 'listJobs'; payload: { jobType: string } }
+  | { type: 'updateJobStatus'; payload: JobPayload & JobStatusPayload }
+  | { type: 'deleteJob'; payload: JobPayload }
+  | { type: 'getPendingJobs'; payload: { jobType: string } }
+);
+
 if (parentPort) {
   /**
    * Listen for messages from the main thread.
    */
-  parentPort.on('message', async (message) => {
-    const { id, type, payload } = message;
+  const handleMessage = async (rawMessage: unknown): Promise<void> => {
+    // Messages cross a thread boundary untyped; WorkerRequest describes what
+    // the main thread sends (see worker-client.ts / database.ts).
+    const message = rawMessage as WorkerRequest;
+    const { id } = message;
     let result: WorkerResult;
 
     try {
-      switch (type) {
+      switch (message.type) {
         case 'init':
-          result = initDatabase(payload.dbPath);
+          result = initDatabase(message.payload.dbPath);
           break;
         case 'recordMediaView':
-          result = await recordMediaView(payload.filePath);
+          result = await recordMediaView(message.payload.filePath);
           break;
         case 'getMediaViewCounts':
-          result = await getMediaViewCounts(payload.filePaths);
+          result = await getMediaViewCounts(message.payload.filePaths);
           break;
         case 'cacheAlbums':
-          result = await cacheAlbums(payload.cacheKey, payload.albums);
+          result = await cacheAlbums(
+            message.payload.cacheKey,
+            message.payload.albums,
+          );
           break;
         case 'getCachedAlbums':
-          result = getCachedAlbums(payload.cacheKey);
+          result = getCachedAlbums(message.payload.cacheKey);
           break;
         case 'close':
           result = closeDatabase();
           break;
         case 'addMediaDirectory':
           // Accepts simple string or object now
-          result = addMediaDirectory(payload.directoryObj);
+          result = addMediaDirectory(message.payload.directoryObj);
           break;
         case 'getMediaDirectories':
           result = getMediaDirectories();
           break;
         case 'removeMediaDirectory':
-          result = removeMediaDirectory(payload.directoryPath);
+          result = removeMediaDirectory(message.payload.directoryPath);
           break;
         case 'setDirectoryActiveState':
           result = setDirectoryActiveState(
-            payload.directoryPath,
-            payload.isActive,
+            message.payload.directoryPath,
+            message.payload.isActive,
           );
           break;
         case 'upsertMetadata':
-          result = await upsertMetadata(payload);
+          result = await upsertMetadata(message.payload);
           break;
         case 'bulkUpsertMetadata':
-          result = await bulkUpsertMetadata(payload);
+          result = await bulkUpsertMetadata(message.payload);
           break;
         case 'setRating':
-          result = await setRating(payload.filePath, payload.rating);
+          result = await setRating(
+            message.payload.filePath,
+            message.payload.rating,
+          );
           break;
         case 'updateWatchedSegments':
           result = await updateWatchedSegments(
-            payload.filePath,
-            payload.segmentsJson,
+            message.payload.filePath,
+            message.payload.segmentsJson,
           );
           break;
         case 'updatePlaybackPosition':
           result = await updatePlaybackPosition(
-            payload.filePath,
-            payload.position,
+            message.payload.filePath,
+            message.payload.position,
           );
           break;
         case 'getAllMetadata':
@@ -1334,52 +1477,55 @@ if (parentPort) {
           result = getAllMetadataVerification();
           break;
         case 'getMetadata':
-          result = await getMetadata(payload.filePaths);
+          result = await getMetadata(message.payload.filePaths);
           break;
         case 'createSmartPlaylist':
-          result = createSmartPlaylist(payload.name, payload.criteria);
+          result = createSmartPlaylist(
+            message.payload.name,
+            message.payload.criteria,
+          );
           break;
         case 'getSmartPlaylists':
           result = getSmartPlaylists();
           break;
         case 'deleteSmartPlaylist':
-          result = deleteSmartPlaylist(payload.id);
+          result = deleteSmartPlaylist(message.payload.id);
           break;
         case 'updateSmartPlaylist':
           result = updateSmartPlaylist(
-            payload.id,
-            payload.name,
-            payload.criteria,
+            message.payload.id,
+            message.payload.name,
+            message.payload.criteria,
           );
           break;
         case 'saveSetting':
-          result = saveSetting(payload.key, payload.value);
+          result = saveSetting(message.payload.key, message.payload.value);
           break;
         case 'getSetting':
-          result = getSetting(payload.key);
+          result = getSetting(message.payload.key);
           break;
         case 'executeSmartPlaylist':
-          result = executeSmartPlaylist(payload.criteria);
+          result = executeSmartPlaylist(message.payload.criteria);
           break;
         case 'getRecentlyPlayed':
-          result = getRecentlyPlayed(payload.limit);
+          result = getRecentlyPlayed(message.payload.limit);
           break;
         case 'getPendingMetadata': {
           if (!db) {
             result = { success: false, error: 'DB not ready' };
             break;
           }
-          const pending = statements.getPendingMetadata.all() as {
+          const pending = getStatement('getPendingMetadata').all() as {
             file_path: string;
           }[];
           result = { success: true, data: pending.map((p) => p.file_path) };
           break;
         }
         case 'filterProcessingNeeded':
-          result = await filterProcessingNeeded(payload.filePaths);
+          result = await filterProcessingNeeded(message.payload.filePaths);
           break;
         case 'addTranscodeJob':
-          result = await addJob(JOB_TYPE_TRANSCODE, payload.filePath);
+          result = await addJob(JOB_TYPE_TRANSCODE, message.payload.filePath);
           break;
         case 'listTranscodeJobs':
           result = listJobs(JOB_TYPE_TRANSCODE);
@@ -1387,49 +1533,59 @@ if (parentPort) {
         case 'updateTranscodeJobStatus':
           result = updateJobStatus(
             JOB_TYPE_TRANSCODE,
-            payload.filePath,
-            payload.status,
-            payload.error ?? null,
+            message.payload.filePath,
+            message.payload.status,
+            message.payload.error ?? null,
           );
           break;
         case 'deleteTranscodeJob':
-          result = deleteJob(JOB_TYPE_TRANSCODE, payload.filePath);
+          result = deleteJob(JOB_TYPE_TRANSCODE, message.payload.filePath);
           break;
         case 'getPendingTranscodeJobs':
           result = getPendingJobs(JOB_TYPE_TRANSCODE);
           break;
         case 'addJob':
-          result = await addJob(payload.jobType, payload.filePath);
+          result = await addJob(
+            message.payload.jobType,
+            message.payload.filePath,
+          );
           break;
         case 'listJobs':
-          result = listJobs(payload.jobType);
+          result = listJobs(message.payload.jobType);
           break;
         case 'updateJobStatus':
           result = updateJobStatus(
-            payload.jobType,
-            payload.filePath,
-            payload.status,
-            payload.error ?? null,
+            message.payload.jobType,
+            message.payload.filePath,
+            message.payload.status,
+            message.payload.error ?? null,
           );
           break;
         case 'deleteJob':
-          result = deleteJob(payload.jobType, payload.filePath);
+          result = deleteJob(message.payload.jobType, message.payload.filePath);
           break;
         case 'getPendingJobs':
-          result = getPendingJobs(payload.jobType);
+          result = getPendingJobs(message.payload.jobType);
           break;
         default:
-          result = { success: false, error: `Unknown message type: ${type}` };
+          result = {
+            success: false,
+            error: `Unknown message type: ${String((message as { type: unknown }).type)}`,
+          };
       }
     } catch (error: unknown) {
       console.error(
-        `[worker] Error processing message id=${id}, type=${type}:`,
+        `[worker] Error processing message id=${id}, type=${message.type}:`,
         error,
       );
       result = { success: false, error: (error as Error).message };
     }
 
     parentPort!.postMessage({ id, result });
+  };
+
+  parentPort.on('message', (rawMessage: unknown) => {
+    void handleMessage(rawMessage);
   });
 
   console.log('[database-worker.js] Worker thread started and ready.');

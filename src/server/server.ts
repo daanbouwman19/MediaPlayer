@@ -17,5 +17,8 @@ const isEntryFile = entryArg
   : false;
 
 if (isEntryFile) {
-  bootstrap();
+  bootstrap().catch((error: unknown) => {
+    console.error('Failed to start server:', error);
+    process.exit(1);
+  });
 }

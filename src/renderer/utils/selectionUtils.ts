@@ -13,7 +13,8 @@ export const shuffleArray = <T>(array: T[]): T[] => {
   const shuffled = [...array];
   for (let i = shuffled.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
-    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    // Both indices are within bounds, so the swapped elements always exist.
+    [shuffled[i], shuffled[j]] = [shuffled[j]!, shuffled[i]!];
   }
   return shuffled;
 };
@@ -76,7 +77,7 @@ export const selectWeightedRandom = (
       }
     }
     // Should effectively not be reached if effectiveItemsCount > 0
-    return items[items.length - 1];
+    return items[items.length - 1] ?? null;
   }
 
   let random = Math.random() * totalWeight;
@@ -96,7 +97,7 @@ export const selectWeightedRandom = (
   // Search backwards to find the last eligible item
   for (let i = items.length - 1; i >= 0; i--) {
     const item = items[i];
-    if (usingFallback || !excludeSet.has(item.path)) {
+    if (item && (usingFallback || !excludeSet.has(item.path))) {
       return item;
     }
   }

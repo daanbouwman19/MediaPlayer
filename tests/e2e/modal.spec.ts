@@ -11,7 +11,7 @@ const testCases = [
 ] as const;
 
 for (const tc of testCases) {
-  const themeLabel = 'label' in tc ? tc.label : tc.theme;
+  const themeLabel = tc.theme;
 
   test(`Smart Playlist Modal visual regression - ${themeLabel} mode`, async ({
     page,

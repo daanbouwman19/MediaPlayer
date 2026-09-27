@@ -78,8 +78,16 @@ export function createSystemRoutes(limiters: RateLimiters) {
     '/api/smart-playlists',
     limiters.writeLimiter,
     asyncHandler(async (req, res) => {
-      const { name, criteria } = req.body;
-      if (!name || !criteria) {
+      const { name, criteria } = req.body as {
+        name?: unknown;
+        criteria?: unknown;
+      };
+      if (
+        !name ||
+        !criteria ||
+        typeof name !== 'string' ||
+        typeof criteria !== 'string'
+      ) {
         throw new AppError(400, 'Missing name or criteria');
       }
       const result = await createSmartPlaylist(name, criteria);
@@ -91,7 +99,7 @@ export function createSystemRoutes(limiters: RateLimiters) {
     '/api/smart-playlists/execute',
     limiters.readLimiter,
     asyncHandler(async (req, res) => {
-      const { criteria } = req.body;
+      const { criteria } = req.body as { criteria?: unknown };
       if (
         !criteria ||
         typeof criteria !== 'string' ||
@@ -109,8 +117,17 @@ export function createSystemRoutes(limiters: RateLimiters) {
     limiters.writeLimiter,
     asyncHandler(async (req, res) => {
       const id = parseInt((req.params.id as string) || '', 10);
-      const { name, criteria } = req.body;
-      if (isNaN(id) || !name || !criteria) {
+      const { name, criteria } = req.body as {
+        name?: unknown;
+        criteria?: unknown;
+      };
+      if (
+        isNaN(id) ||
+        !name ||
+        !criteria ||
+        typeof name !== 'string' ||
+        typeof criteria !== 'string'
+      ) {
         throw new AppError(400, 'Invalid arguments');
       }
       await updateSmartPlaylist(id, name, criteria);
@@ -135,7 +152,7 @@ export function createSystemRoutes(limiters: RateLimiters) {
     '/api/directories',
     limiters.writeLimiter,
     asyncHandler(async (req, res) => {
-      const { path: dirPath } = req.body;
+      const { path: dirPath } = req.body as { path?: unknown };
       if (!dirPath) {
         throw new AppError(400, 'Missing path');
       }
@@ -177,7 +194,7 @@ export function createSystemRoutes(limiters: RateLimiters) {
       }
 
       await addMediaDirectory(resolvedPath);
-      res.json(resolvedPath);
+      return res.json(resolvedPath);
     }),
   );
 
@@ -185,7 +202,7 @@ export function createSystemRoutes(limiters: RateLimiters) {
     '/api/directories',
     limiters.writeLimiter,
     asyncHandler(async (req, res) => {
-      const { path: dirPath } = req.body;
+      const { path: dirPath } = req.body as { path?: unknown };
       if (!dirPath) {
         throw new AppError(400, 'Missing path');
       }
@@ -205,12 +222,18 @@ export function createSystemRoutes(limiters: RateLimiters) {
     '/api/directories/active',
     limiters.writeLimiter,
     asyncHandler(async (req, res) => {
-      const { path: dirPath, isActive } = req.body;
+      const { path: dirPath, isActive } = req.body as {
+        path?: unknown;
+        isActive?: unknown;
+      };
       if (!dirPath) {
         throw new AppError(400, 'Missing path');
       }
       if (typeof dirPath !== 'string') {
         throw new AppError(400, 'Invalid path');
+      }
+      if (typeof isActive !== 'boolean') {
+        throw new AppError(400, 'Invalid isActive');
       }
       const inputResult = validateInput(dirPath);
       if (inputResult) {
@@ -272,7 +295,7 @@ export function createSystemRoutes(limiters: RateLimiters) {
       if (parent === dirPath) {
         return res.json({ parent: null });
       }
-      res.json({ parent });
+      return res.json({ parent });
     }),
   );
 
@@ -292,8 +315,8 @@ export function createSystemRoutes(limiters: RateLimiters) {
     '/api/sources/google-drive',
     limiters.writeLimiter,
     asyncHandler(async (req, res) => {
-      const { folderId } = req.body;
-      if (!folderId) {
+      const { folderId } = req.body as { folderId?: unknown };
+      if (!folderId || typeof folderId !== 'string') {
         throw new AppError(400, 'Missing folderId');
       }
 

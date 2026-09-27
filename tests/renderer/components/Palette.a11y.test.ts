@@ -1,4 +1,11 @@
-import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
+import {
+  describe,
+  it,
+  expect,
+  beforeEach,
+  vi,
+  type Mock,
+} from 'vite-plus/test';
 import { mount } from '@vue/test-utils';
 import { ref } from 'vue';
 import { setActivePinia } from 'pinia';

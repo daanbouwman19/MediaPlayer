@@ -80,7 +80,8 @@ export const useLibraryStore = defineStore('library', () => {
       newSelection[album.id] = true;
       if (album.children && album.children.length > 0) {
         for (let i = album.children.length - 1; i >= 0; i--) {
-          stack.push(album.children[i]);
+          const child = album.children[i];
+          if (child) stack.push(child);
         }
       }
     }
@@ -91,7 +92,7 @@ export const useLibraryStore = defineStore('library', () => {
     try {
       const items = await api.getRecentlyPlayed(limit);
       historyMedia.value = items.map((item) => {
-        const name = item.file_path.split(/[\/\\]/).pop() || item.file_path;
+        const name = item.file_path.split(/[/\\]/).pop() || item.file_path;
         return {
           name,
           path: item.file_path,
@@ -131,7 +132,9 @@ export const useLibraryStore = defineStore('library', () => {
       const savedSelection = localStorage.getItem('albumSelection');
       if (savedSelection) {
         try {
-          albumsSelectedForSlideshow.value = JSON.parse(savedSelection);
+          albumsSelectedForSlideshow.value = JSON.parse(savedSelection) as {
+            [albumName: string]: boolean;
+          };
         } catch (e) {
           console.error('Failed to parse saved album selection:', e);
           selectAllAlbumsRecursively(allAlbums.value);

@@ -51,13 +51,13 @@ export function basicAuthMiddleware(
 
   // Parse the Authorization header
   const authHeader = req.headers.authorization || '';
-  const match = authHeader.match(/^Basic (.+)$/);
+  const encoded = authHeader.match(/^Basic (.+)$/)?.[1];
 
-  if (!match) {
+  if (!encoded) {
     return sendUnauthorized(res);
   }
 
-  const credentials = Buffer.from(match[1], 'base64').toString();
+  const credentials = Buffer.from(encoded, 'base64').toString();
 
   // Prevent DoS by rejecting excessively long inputs before expensive scrypt operations and substring allocations
   if (credentials.length > MAX_PASSWORD_LENGTH * 2 + 1) {

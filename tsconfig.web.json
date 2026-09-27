@@ -17,11 +17,12 @@
     "incremental": true,
     "tsBuildInfoFile": "./node_modules/.cache/tsconfig.web.tsbuildinfo",
     "allowImportingTsExtensions": true,
-    "noEmit": true
+    "noEmit": true,
+    "noImplicitOverride": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "exactOptionalPropertyTypes": true,
+    "noUncheckedIndexedAccess": true
   },
-  "include": [
-    "src/renderer/**/*",
-    "src/renderer/**/*.vue",
-    "tests/renderer/**/*"
-  ]
+  "include": ["src/renderer/**/*", "src/renderer/**/*.vue"]
 }

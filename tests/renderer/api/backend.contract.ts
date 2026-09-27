@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vite-plus/test';
 import { IMediaBackend } from '../../../src/renderer/api/types';
 
 export interface ContractTestOptions {
@@ -8,11 +8,7 @@ export interface ContractTestOptions {
 export function runBackendContractTests(
   adapterName: string,
   createAdapter: () => IMediaBackend,
-  primeBackend: (
-    method: keyof IMediaBackend | string,
-    result?: any,
-    error?: any,
-  ) => void,
+  primeBackend: (method: string, result?: any, error?: any) => void,
   options: ContractTestOptions,
 ) {
   describe(`Shared Contract: ${adapterName}`, () => {

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi } from 'vite-plus/test';
 import { globalPasswordMiddleware } from '../../src/server/middleware/global-password';
 import { Request, Response } from 'express';
 

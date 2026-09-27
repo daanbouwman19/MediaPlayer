@@ -6,7 +6,7 @@ import {
   beforeAll,
   beforeEach,
   afterAll,
-} from 'vitest';
+} from 'vite-plus/test';
 import { mount } from '@vue/test-utils';
 import { setActivePinia } from 'pinia';
 import { createTestingPinia } from '@pinia/testing';

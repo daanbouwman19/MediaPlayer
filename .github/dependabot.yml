@@ -9,6 +9,17 @@ updates:
     directory: '/' # Location of package manifests
     schedule:
       interval: 'weekly'
+    ignore:
+      # TypeScript 7 ships no JS compiler API, so vue-tsc cannot type-check
+      # .vue files on it yet. Remove once vue-tsc supports TS 7.
+      - dependency-name: 'typescript'
+        update-types: ['version-update:semver-major']
+      # vite-plus, its `vite` core alias and the `vitest` pin must move together.
+      # Upgrade them with `npx --package=vite-plus@<version> vp migrate --no-interactive`.
+      - dependency-name: 'vite-plus'
+      - dependency-name: 'vite'
+      - dependency-name: 'vitest'
+      - dependency-name: '@vitest/*'
     groups:
       npm-dependencies:
         patterns:

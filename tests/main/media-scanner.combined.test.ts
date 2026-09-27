@@ -1,4 +1,11 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import {
+  describe,
+  it,
+  expect,
+  vi,
+  beforeEach,
+  afterEach,
+} from 'vite-plus/test';
 import { performFullMediaScan } from '../../src/core/media/media-scanner';
 import * as driveService from '../../src/main/google-drive-service';
 

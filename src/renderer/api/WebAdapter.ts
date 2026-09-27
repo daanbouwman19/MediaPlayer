@@ -63,8 +63,10 @@ export class WebAdapter implements IMediaBackend {
     if (!res.ok) {
       let errorMessage = res.statusText;
       try {
-        const err = await res.json();
-        if (err.error) errorMessage = err.error;
+        const err = (await res.json()) as { error?: unknown };
+        if (typeof err.error === 'string' && err.error) {
+          errorMessage = err.error;
+        }
       } catch {
         // Ignore JSON parse error for error response
       }
@@ -80,7 +82,8 @@ export class WebAdapter implements IMediaBackend {
     // Handle empty responses (e.g. 200 OK with no content)
     const contentType = res.headers.get('content-type');
     if (contentType && contentType.includes('application/json')) {
-      return res.json();
+      // The caller chooses T to match the endpoint's JSON response.
+      return (await res.json()) as T;
     }
     // For void returns or non-json
     return undefined as unknown as T;
@@ -144,7 +147,7 @@ export class WebAdapter implements IMediaBackend {
   ): Promise<void> {
     await this.request<void>('/api/directories/active', {
       method: 'PUT',
-      body: JSON.stringify({ directoryPath, isActive }),
+      body: JSON.stringify({ path: directoryPath, isActive }),
     });
   }
 

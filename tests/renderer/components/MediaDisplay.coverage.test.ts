@@ -6,7 +6,7 @@ import {
   beforeEach,
   afterEach,
   type Mock,
-} from 'vitest';
+} from 'vite-plus/test';
 import { mount as rawMount, flushPromises } from '@vue/test-utils';
 import { ref } from 'vue';
 

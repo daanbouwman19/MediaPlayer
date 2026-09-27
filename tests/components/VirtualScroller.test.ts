@@ -1,5 +1,12 @@
 import { mount } from '@vue/test-utils';
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import {
+  describe,
+  it,
+  expect,
+  vi,
+  beforeEach,
+  afterEach,
+} from 'vite-plus/test';
 import VirtualScroller from '../../src/renderer/components/atoms/VirtualScroller.vue';
 
 // Mock ResizeObserver

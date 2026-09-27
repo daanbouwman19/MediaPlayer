@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vite-plus/test';
 import { Express } from 'express';
 import request from 'supertest';
 import https from 'https';
@@ -42,7 +42,10 @@ vi.mock('../../src/core/database/database', () => ({
 
 vi.mock('../../src/core/media/transcode-queue-manager', () => ({
   TranscodeQueueManager: {
-    getInstance: vi.fn(() => ({ start: vi.fn(), enqueue: vi.fn() })),
+    getInstance: vi.fn(() => ({
+      start: vi.fn().mockResolvedValue(undefined),
+      enqueue: vi.fn(),
+    })),
     resetInstance: vi.fn(),
   },
 }));

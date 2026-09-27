@@ -142,7 +142,7 @@ export async function listDriveFiles(
           fields:
             'nextPageToken, files(id, name, mimeType, size, createdTime, shortcutDetails)',
           pageSize: 1000,
-          pageToken,
+          ...(pageToken ? { pageToken } : {}),
           supportsAllDrives: true,
           includeItemsFromAllDrives: true,
         }),
@@ -233,7 +233,7 @@ export async function listDriveDirectory(
             q,
             fields: 'nextPageToken, files(id, name, mimeType, shortcutDetails)',
             pageSize: 1000,
-            pageToken,
+            ...(pageToken ? { pageToken } : {}),
             orderBy: 'folder,name',
             supportsAllDrives: true,
             includeItemsFromAllDrives: true,
@@ -300,8 +300,9 @@ export async function getDriveParent(folderId: string): Promise<string | null> {
       DRIVE_RETRY_OPTIONS,
     );
 
-    if (res.data.parents && res.data.parents.length > 0) {
-      return res.data.parents[0];
+    const parent = res.data.parents?.[0];
+    if (parent) {
+      return parent;
     }
   } catch (e) {
     console.warn('Failed to get parent for drive folder %s:', folderId, e);
@@ -403,7 +404,7 @@ export async function getDriveFileThumbnail(fileId: string): Promise<Readable> {
     // We need to fetch this URL. The googleapis library doesn't have a helper for arbitrary URLs.
     // We can use the global fetch (Node 18+) or axios if available.
     // We need to attach the Auth header.
-    const auth = await getOAuth2Client();
+    const auth = getOAuth2Client();
     const token = await auth.getAccessToken(); // ensuring we have a token
 
     const res = await fetch(meta.data.thumbnailLink, {

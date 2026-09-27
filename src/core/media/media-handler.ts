@@ -189,7 +189,8 @@ export async function handleStreamRequest(
   const isTranscodeForced = req.query.transcode === 'true';
 
   if (!filePath) {
-    return res.status(400).send('Missing file parameter');
+    res.status(400).send('Missing file parameter');
+    return;
   }
 
   try {
@@ -536,7 +537,11 @@ export function createMediaApp(options: MediaHandlerOptions) {
   // Fix: HlsManager.setCacheDir is not called elsewhere in Electron mode
   const hlsCacheDir = path.join(path.dirname(cacheDir), 'hls');
   HlsManager.getInstance().setCacheDir(hlsCacheDir);
-  TranscodeQueueManager.getInstance().start();
+  TranscodeQueueManager.getInstance()
+    .start()
+    .catch((err: unknown) => {
+      console.error('[TranscodeQueue] Failed to resume pending jobs:', err);
+    });
 
   const app = express();
 
@@ -660,7 +665,8 @@ async function createDataUrl(
 ): Promise<GenerateUrlResult> {
   const result = await provider.getStream(filePath);
   const chunks: Buffer[] = [];
-  for await (const chunk of result.stream) {
+  // Provider streams are binary (no encoding set), so chunks are bytes.
+  for await (const chunk of result.stream as AsyncIterable<Uint8Array>) {
     chunks.push(Buffer.from(chunk));
   }
   const buffer = Buffer.concat(chunks);

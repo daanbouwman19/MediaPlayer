@@ -76,36 +76,26 @@
       >
         <template #default="{ item: row }">
           <div class="grid w-full h-full" :style="gridStyle">
-            <template v-for="i in columnCount" :key="i">
-              <!-- Check if item exists -->
-              <MediaGridItem
-                v-if="allMediaFiles[(row as GridRow).startIndex + i - 1]"
-                :item="allMediaFiles[(row as GridRow).startIndex + i - 1]"
-                :image-extensions-set="imageExtensionsSet"
-                :video-extensions-set="videoExtensionsSet"
-                :media-url-generator="mediaUrlGenerator"
-                :thumbnail-url-generator="thumbnailUrlGenerator"
-                :failed-image-paths="failedImagePaths"
-                :is-selected="
-                  selectedPaths.has(
-                    allMediaFiles[(row as GridRow).startIndex + i - 1].path,
+            <MediaGridItem
+              v-for="(mediaItem, offset) in rowItems(row as GridRow)"
+              :key="offset"
+              :item="mediaItem"
+              :image-extensions-set="imageExtensionsSet"
+              :video-extensions-set="videoExtensionsSet"
+              :media-url-generator="mediaUrlGenerator"
+              :thumbnail-url-generator="thumbnailUrlGenerator"
+              :failed-image-paths="failedImagePaths"
+              :is-selected="selectedPaths.has(mediaItem.path)"
+              :transcode-status="jobStatusMap.get(mediaItem.path)"
+              @click="
+                (item, event) =>
+                  handleItemClick(
+                    item,
+                    (row as GridRow).startIndex + offset,
+                    event,
                   )
-                "
-                :transcode-status="
-                  jobStatusMap.get(
-                    allMediaFiles[(row as GridRow).startIndex + i - 1].path,
-                  )
-                "
-                @click="
-                  (item, event) =>
-                    handleItemClick(
-                      item,
-                      (row as GridRow).startIndex + i - 1,
-                      event,
-                    )
-                "
-              />
-            </template>
+              "
+            />
           </div>
         </template>
       </VirtualScroller>
@@ -221,6 +211,10 @@ const selectedHaveTranscode = computed(() => {
   return false;
 });
 
+/** The media files shown in one grid row (the last row may be partial). */
+const rowItems = (row: GridRow) =>
+  allMediaFiles.value.slice(row.startIndex, row.startIndex + columnCount.value);
+
 // Chunk items into rows for the scroller
 const chunkedItems = computed<GridRow[]>(() => {
   const chunks: GridRow[] = [];
@@ -314,7 +308,8 @@ const handleItemClick = async (
     const next = new Set(selectedPaths.value);
     const items = allMediaFiles.value;
     for (let i = lo; i <= hi; i++) {
-      if (items[i]) next.add(items[i].path);
+      const item = items[i];
+      if (item) next.add(item.path);
     }
     selectedPaths.value = next;
     return;

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vite-plus/test';
 import { MediaService } from '../../src/core/media/media-service';
 import { InMemoryMediaRepository } from '../fakes/in-memory-media-repository';
 

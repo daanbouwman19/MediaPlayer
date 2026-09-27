@@ -1,5 +1,5 @@
 import { mount, flushPromises } from '@vue/test-utils';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vite-plus/test';
 import ProgressBar from '@/components/atoms/ProgressBar.vue';
 
 describe('ProgressBar Coverage Boost', () => {

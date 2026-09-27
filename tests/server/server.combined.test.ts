@@ -1,4 +1,11 @@
-import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
+import {
+  describe,
+  it,
+  expect,
+  vi,
+  beforeEach,
+  beforeAll,
+} from 'vite-plus/test';
 import request from 'supertest';
 import { createApp } from '../../src/server/server';
 import * as database from '../../src/core/database/database';

@@ -1,7 +1,7 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'vite-plus/test';
 import { mount } from '@vue/test-utils';
 import VRVideoPlayer from '@/features/player/VRVideoPlayer.vue';
-import { vi } from 'vitest';
+import { vi } from 'vite-plus/test';
 
 // Fix the mocks to be constructable classes (functions)
 vi.mock('three', () => {

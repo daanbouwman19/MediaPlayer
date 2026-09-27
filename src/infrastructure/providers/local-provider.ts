@@ -64,7 +64,6 @@ export class LocalFileSystemProvider implements FileSystemProvider {
     }
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async getThumbnailStream(_filePath: string): Promise<Readable | null> {
     return null;
   }

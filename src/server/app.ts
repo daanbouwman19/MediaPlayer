@@ -175,7 +175,11 @@ export async function createApp(mediaService: MediaService) {
     initializeDriveCacheManager(DRIVE_CACHE_DIR);
 
     HlsManager.getInstance().setCacheDir(HLS_CACHE_DIR);
-    TranscodeQueueManager.getInstance().start();
+    TranscodeQueueManager.getInstance()
+      .start()
+      .catch((err: unknown) => {
+        console.error('[TranscodeQueue] Failed to resume pending jobs:', err);
+      });
 
     MediaAnalyzer.getInstance().setCacheDir(HEATMAP_DIR);
   } catch (e) {

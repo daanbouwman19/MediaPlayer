@@ -98,7 +98,8 @@ export const DB_INDEXES = {
  */
 export function getUserVersion(db: DatabaseSync): number {
   const row = db.prepare('PRAGMA user_version').get() as
-    { user_version: number } | undefined;
+    | { user_version: number }
+    | undefined;
   return row?.user_version ?? 0;
 }
 
@@ -269,8 +270,9 @@ export function initializeDatabase(db: DatabaseSync): void {
     return;
   }
 
-  for (let version = currentVersion; version < LATEST_DB_VERSION; version++) {
-    const migrate = MIGRATIONS[version];
+  const pending = MIGRATIONS.slice(currentVersion);
+  for (const [offset, migrate] of pending.entries()) {
+    const version = currentVersion + offset;
     db.exec('BEGIN');
     try {
       migrate(db);

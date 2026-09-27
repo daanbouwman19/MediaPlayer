@@ -1,6 +1,6 @@
 export interface GenerateUrlOptions {
   serverPort: number;
-  preferHttp?: boolean;
+  preferHttp?: boolean | undefined;
 }
 
 export type GenerateUrlResult = {

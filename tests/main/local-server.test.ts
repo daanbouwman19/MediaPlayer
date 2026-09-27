@@ -1,4 +1,12 @@
-import { describe, it, expect, afterEach, vi, beforeEach, Mock } from 'vitest';
+import {
+  describe,
+  it,
+  expect,
+  afterEach,
+  vi,
+  beforeEach,
+  Mock,
+} from 'vite-plus/test';
 import http from 'http';
 import fs from 'fs';
 import path from 'path';
@@ -25,7 +33,7 @@ import { getMediaDirectories } from '../../src/core/database/database';
 const startServer = () => {
   const { service } = createTestMediaService();
   return new Promise<void>((resolve) => {
-    startLocalServer('/tmp', service, () => resolve());
+    void startLocalServer('/tmp', service, () => resolve());
   });
 };
 
@@ -94,13 +102,13 @@ describe('Local Server', () => {
     it('should ignore start request if server is already running (callback)', async () => {
       const { service } = createTestMediaService();
       await new Promise<void>((resolve) => {
-        startLocalServer('/tmp', service, () => {
+        void startLocalServer('/tmp', service, () => {
           const originalPort = getServerPort();
           const consoleSpy = vi
             .spyOn(console, 'warn')
             .mockImplementation(() => {});
 
-          startLocalServer('/tmp', service, () => {
+          void startLocalServer('/tmp', service, () => {
             expect(getServerPort()).toBe(originalPort);
             expect(consoleSpy).toHaveBeenCalledWith(
               expect.stringContaining('Server already started'),
@@ -116,7 +124,7 @@ describe('Local Server', () => {
       await startServer();
       const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const { service } = createTestMediaService();
-      startLocalServer('/tmp', service); // No callback
+      void startLocalServer('/tmp', service); // No callback
       expect(consoleSpy).toHaveBeenCalled();
       consoleSpy.mockRestore();
     });
@@ -500,7 +508,7 @@ describe('Local Server', () => {
 
       const { service } = createTestMediaService();
       await new Promise<void>((resolve) => {
-        startLocalServer('/tmp', service, () => resolve());
+        void startLocalServer('/tmp', service, () => resolve());
       });
       await stopServer();
 
