@@ -162,6 +162,18 @@ describe('FFmpeg Utils Combined Tests', () => {
       expect(args).toContain('-frames:v');
       expect(args).toContain('1');
     });
+
+    it('seeks before the input and downscales the frame', () => {
+      const args = getThumbnailArgs('/in.mp4', '/out.jpg', 0.5);
+      expect(args.indexOf('-ss')).toBeLessThan(args.indexOf('-i'));
+      expect(args[args.indexOf('-ss') + 1]).toBe('0.5');
+      expect(args[args.indexOf('-vf') + 1]).toBe("scale='min(640,iw)':-2");
+      expect(args[args.length - 1]).toBe('/out.jpg');
+    });
+
+    it('does not seek for images and very short clips', () => {
+      expect(getThumbnailArgs('/in.png', '/out.jpg', 0)).not.toContain('-ss');
+    });
   });
 
   describe('parseFFmpegDuration', () => {
@@ -255,6 +267,28 @@ describe('FFmpeg Utils Combined Tests', () => {
 
       const result = await promise;
       expect(result).toEqual({ code: 0, stdout: '', stderr: 'test output' });
+    });
+
+    it('kills the process when the signal aborts', async () => {
+      const mockProcess = createMockProcess();
+      mockSpawn.mockReturnValue(mockProcess);
+      const controller = new AbortController();
+
+      const promise = runFFmpeg('ffmpeg', [], 1000, controller.signal);
+      controller.abort();
+      expect(mockProcess.kill).toHaveBeenCalledWith('SIGKILL');
+
+      mockProcess.emit('close', null, 'SIGKILL');
+      await expect(promise).resolves.toMatchObject({ code: null });
+    });
+
+    it('does not spawn for an already aborted signal', async () => {
+      const controller = new AbortController();
+      controller.abort();
+      await expect(
+        runFFmpeg('ffmpeg', [], 1000, controller.signal),
+      ).rejects.toMatchObject({ name: 'AbortError' });
+      expect(mockSpawn).not.toHaveBeenCalled();
     });
   });
 

@@ -128,20 +128,30 @@ export function getTranscodeArgs(
   return args;
 }
 
+/** Thumbnails are downscaled (never upscaled) to at most this width. */
+const THUMBNAIL_MAX_WIDTH = 640;
+
+/**
+ * @param seekSeconds Input seek position. Use 0 for images and clips too
+ * short to have a frame at the default position: seeking past the end makes
+ * FFmpeg exit 0 without writing anything.
+ */
 export function getThumbnailArgs(
   filePath: string,
   cacheFile: string,
+  seekSeconds = 1,
 ): string[] {
   return [
     ...FFMPEG_COMMON_ARGS,
     '-y',
-    '-ss',
-    '1',
+    ...(seekSeconds > 0 ? ['-ss', String(seekSeconds)] : []),
     ...getInputSafetyArgs(filePath),
     '-i',
     filePath,
     '-frames:v',
     '1',
+    '-vf',
+    `scale='min(${THUMBNAIL_MAX_WIDTH},iw)':-2`,
     '-q:v',
     '5',
     '-update',
@@ -156,6 +166,7 @@ export function getThumbnailArgs(
  * @param command - The command to run (e.g. ffmpeg path).
  * @param args - Arguments for the command.
  * @param timeoutMs - Timeout in milliseconds (default: 30000).
+ * @param signal - Kills the process when aborted; it then resolves with code null.
  * @returns Promise resolving to { code, stdout, stderr }.
  * @throws Error if process fails or times out.
  */
@@ -163,7 +174,9 @@ export async function runFFmpeg(
   command: string,
   args: string[],
   timeoutMs = 30000,
+  signal?: AbortSignal,
 ): Promise<{ code: number | null; stdout: string; stderr: string }> {
+  signal?.throwIfAborted();
   return new Promise((resolve, reject) => {
     let proc;
     try {
@@ -192,7 +205,12 @@ export async function runFFmpeg(
       stderr += data.toString();
     });
 
+    const child = proc;
+    const onAbort = () => child.kill('SIGKILL');
+    signal?.addEventListener('abort', onAbort, { once: true });
+
     proc.on('error', (err) => {
+      signal?.removeEventListener('abort', onAbort);
       if (!timedOut) {
         clearTimeout(timeout);
         reject(err);
@@ -202,6 +220,7 @@ export async function runFFmpeg(
     // 'close' (not 'exit'): stdout/stderr may still hold unread output when
     // 'exit' fires, which would truncate the probe results parsed below.
     proc.on('close', (code) => {
+      signal?.removeEventListener('abort', onAbort);
       if (!timedOut) {
         clearTimeout(timeout);
         resolve({ code, stdout, stderr });

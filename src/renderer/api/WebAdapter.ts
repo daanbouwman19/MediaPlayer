@@ -222,9 +222,16 @@ export class WebAdapter implements IMediaBackend {
     throw new Error('Failed to get video metadata');
   }
 
-  async getHeatmap(filePath: string, points = 100): Promise<HeatmapData> {
+  async getHeatmap(
+    filePath: string,
+    points = 100,
+    options: { signal?: AbortSignal } = {},
+  ): Promise<HeatmapData> {
+    // Aborting the fetch closes the request, which the server treats as the
+    // viewer leaving the analysis.
     return this.request<HeatmapData>(
       `/api/video/heatmap?file=${encodeURIComponent(filePath)}&points=${points}`,
+      options.signal ? { signal: options.signal } : undefined,
     );
   }
 

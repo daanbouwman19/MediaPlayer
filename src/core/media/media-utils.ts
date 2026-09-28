@@ -28,8 +28,19 @@ export function createDrivePath(fileId: string): string {
   return `${GDRIVE_PROTOCOL}${fileId}`;
 }
 
-export function getThumbnailCachePath(filePath: string, cacheDir: string) {
-  const hash = crypto.createHash('md5').update(filePath).digest('hex');
+/**
+ * Returns the thumbnail cache file for a media file.
+ * @param identity The file's version tag (see getFileIdentity). Including it
+ * gives an edited or replaced file a fresh thumbnail; without one the legacy
+ * path-only key is used.
+ */
+export function getThumbnailCachePath(
+  filePath: string,
+  cacheDir: string,
+  identity?: string | null,
+) {
+  const key = identity ? `${filePath}\0${identity}` : filePath;
+  const hash = crypto.createHash('md5').update(key).digest('hex');
   return path.join(cacheDir, `${hash}.jpg`);
 }
 

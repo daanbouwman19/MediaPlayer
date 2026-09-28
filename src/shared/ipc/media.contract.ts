@@ -14,6 +14,7 @@ export const MEDIA_IPC_CHANNELS = {
   GET_ALBUMS_WITH_VIEW_COUNTS: 'get-albums-with-view-counts',
   GET_HEATMAP: 'get-heatmap',
   GET_HEATMAP_PROGRESS: 'get-heatmap-progress',
+  CANCEL_HEATMAP: 'cancel-heatmap',
   GET_HLS_STATUS: 'get-hls-status',
   DB_GET_RECENTLY_PLAYED: 'db:get-recently-played',
   MEDIA_EXTRACT_METADATA: 'media:extract-metadata',
@@ -60,6 +61,10 @@ export interface MediaIpcContract {
   [MEDIA_IPC_CHANNELS.GET_HEATMAP_PROGRESS]: {
     payload: [string];
     response: number | null;
+  };
+  [MEDIA_IPC_CHANNELS.CANCEL_HEATMAP]: {
+    payload: [string];
+    response: void;
   };
   [MEDIA_IPC_CHANNELS.GET_HLS_STATUS]: {
     payload: [string];

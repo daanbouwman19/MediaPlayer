@@ -55,7 +55,15 @@ export interface IMediaBackend {
     filePath: string,
   ): Promise<{ currentTime: number; duration: number; percent: number } | null>;
   getVideoMetadata(filePath: string): Promise<{ duration: number }>;
-  getHeatmap(filePath: string, points?: number): Promise<HeatmapData>;
+  /**
+   * Aborting `options.signal` rejects the call and tells the backend this
+   * viewer no longer needs the analysis.
+   */
+  getHeatmap(
+    filePath: string,
+    points?: number,
+    options?: { signal?: AbortSignal },
+  ): Promise<HeatmapData>;
   getHeatmapProgress(filePath: string): Promise<number | null>; // Returns 0-100 or null if no job
   openInVlc(filePath: string): Promise<{ success: boolean; message?: string }>;
 

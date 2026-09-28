@@ -1447,6 +1447,7 @@ describe('MediaHandler Combined Tests', () => {
         set: vi.fn().mockReturnThis(),
         end: vi.fn(),
         on: vi.fn(),
+        off: vi.fn(),
       };
       res.sendFile = vi.fn((_path: string, optOrCb: any, cb?: () => void) => {
         const callback = typeof optOrCb === 'function' ? optOrCb : cb;

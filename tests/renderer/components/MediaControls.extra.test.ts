@@ -56,7 +56,9 @@ describe('MediaControls Extra Coverage', () => {
     vi.advanceTimersByTime(1000);
 
     await vi.waitFor(() => {
-      expect(api.getHeatmap).toHaveBeenCalledWith('video.mp4', 100);
+      expect(api.getHeatmap).toHaveBeenCalledWith('video.mp4', 100, {
+        signal: expect.any(AbortSignal),
+      });
     });
   });
 

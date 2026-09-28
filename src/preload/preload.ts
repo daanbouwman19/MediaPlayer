@@ -61,6 +61,7 @@ export interface ElectronAPI {
     points?: number,
   ) => Promise<IpcResult<HeatmapData>>;
   getHeatmapProgress: (filePath: string) => Promise<IpcResult<number | null>>;
+  cancelHeatmap: (filePath: string) => Promise<IpcResult<void>>;
   getHlsStatus: (
     filePath: string,
   ) => Promise<
@@ -197,6 +198,9 @@ const api: ElectronAPI = {
 
   getHeatmapProgress: (filePath: string) =>
     ipcRenderer.invoke(IPC_CHANNELS.GET_HEATMAP_PROGRESS, filePath),
+
+  cancelHeatmap: (filePath: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.CANCEL_HEATMAP, filePath),
 
   getHlsStatus: (filePath: string) =>
     ipcRenderer.invoke(IPC_CHANNELS.GET_HLS_STATUS, filePath),

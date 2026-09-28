@@ -107,6 +107,12 @@ describe('MediaControls.vue', () => {
     countInfo: '1 / 10',
   };
 
+  const videoProps = {
+    ...defaultProps,
+    currentMediaItem: { name: 'clip.mp4', path: '/clip.mp4', rating: 3 },
+    isImage: false,
+  };
+
   it('should emit previous when back button clicked', async () => {
     const wrapper = mount(MediaControls, { props: defaultProps });
     await wrapper
@@ -228,7 +234,7 @@ describe('MediaControls.vue', () => {
 
     vi.mocked(api.getHeatmap).mockImplementation(() => new Promise(() => {}));
 
-    const wrapper = mount(MediaControls, { props: defaultProps });
+    const wrapper = mount(MediaControls, { props: videoProps });
 
     await vi.advanceTimersByTimeAsync(1100);
     await wrapper.vm.$nextTick();
@@ -250,18 +256,20 @@ describe('MediaControls.vue', () => {
       points: 1,
     } as any);
     vi.mocked(api.getMetadata).mockResolvedValue({
-      '/test.jpg': {
+      '/clip.mp4': {
         watchedSegments: JSON.stringify([{ start: 0, end: 10 }]),
       } as any,
     });
     vi.mocked(api.getHeatmapProgress).mockResolvedValue(50);
 
-    const wrapper = mount(MediaControls, { props: defaultProps });
+    const wrapper = mount(MediaControls, { props: videoProps });
 
     await vi.advanceTimersByTimeAsync(1100);
 
-    expect(api.getHeatmap).toHaveBeenCalledWith('/test.jpg', 100);
-    expect(api.getMetadata).toHaveBeenCalledWith(['/test.jpg']);
+    expect(api.getHeatmap).toHaveBeenCalledWith('/clip.mp4', 100, {
+      signal: expect.any(AbortSignal),
+    });
+    expect(api.getMetadata).toHaveBeenCalledWith(['/clip.mp4']);
 
     await vi.advanceTimersByTimeAsync(2100);
 
@@ -297,11 +305,11 @@ describe('MediaControls.vue', () => {
     const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     vi.mocked(api.getHeatmap).mockRejectedValue(new Error('Fetch failed'));
 
-    mount(MediaControls, { props: defaultProps });
+    mount(MediaControls, { props: videoProps });
     await vi.advanceTimersByTimeAsync(1100);
 
     expect(consoleSpy).toHaveBeenCalledWith(
-      'Failed to fetch heatmap/metadata',
+      '[MediaControls] Failed to fetch heatmap',
       expect.any(Error),
     );
     vi.useRealTimers();

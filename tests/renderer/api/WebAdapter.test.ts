@@ -405,6 +405,34 @@ describe('WebAdapter', () => {
       expect(fetchMock.mock.calls[0][0]).toContain('points=50');
     });
 
+    it('getHeatmap passes the abort signal to fetch', async () => {
+      fetchMock.mockResolvedValue({
+        ok: true,
+        headers: { get: () => 'application/json' },
+        json: () => Promise.resolve({ points: 1 }),
+      });
+      const controller = new AbortController();
+      const adapter = new WebAdapter();
+      await adapter.getHeatmap('/file', 100, { signal: controller.signal });
+      expect(fetchMock.mock.calls[0][1]).toMatchObject({
+        signal: controller.signal,
+      });
+    });
+
+    it('getHeatmap reports a busy server as a busy error', async () => {
+      const { isHeatmapBusyError, HEATMAP_BUSY_MESSAGE } =
+        await import('../../../src/core/media/analysis/heatmap-errors');
+      fetchMock.mockResolvedValue({
+        ok: false,
+        status: 503,
+        statusText: 'Service Unavailable',
+        json: () => Promise.resolve({ error: HEATMAP_BUSY_MESSAGE }),
+      });
+      const adapter = new WebAdapter();
+      const error = await adapter.getHeatmap('/file').catch((e) => e);
+      expect(isHeatmapBusyError(error)).toBe(true);
+    });
+
     it('reindexMediaLibrary performs POST request', async () => {
       fetchMock.mockResolvedValue({
         ok: true,

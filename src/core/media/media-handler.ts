@@ -32,6 +32,7 @@ import { validateFileAccess } from '../auth/access-validator.ts';
 import { getAuthorizedPath } from '../auth/access-utils.ts';
 import { serveThumbnail } from './thumbnail-handler.ts';
 import { MediaAnalyzer } from './analysis/media-analyzer.ts';
+import { HeatmapBusyError } from './analysis/heatmap-errors.ts';
 import {
   serveHlsMaster,
   serveHlsPlaylist,
@@ -481,19 +482,33 @@ export async function serveHeatmap(
   res: Response,
   filePath: string,
 ) {
-  const authorizedPath = await getAuthorizedPath(res, filePath);
-  if (!authorizedPath) return;
-
+  // Leave the analysis when the client disconnects, so an abandoned one stops.
+  const client = new AbortController();
+  const onClose = () => client.abort();
+  res.on('close', onClose);
   try {
+    const authorizedPath = await getAuthorizedPath(res, filePath);
+    if (!authorizedPath) return;
+
     const pointsStr = getQueryParam(req.query, 'points');
     const points = pointsStr ? parseInt(pointsStr, 10) : 100;
 
     const analyzer = MediaAnalyzer.getInstance();
-    const data = await analyzer.generateHeatmap(authorizedPath, points);
+    const data = await analyzer.generateHeatmap(authorizedPath, points, {
+      signal: client.signal,
+    });
     res.json(data);
   } catch (e) {
+    if (client.signal.aborted) return;
+    if (e instanceof HeatmapBusyError) {
+      res.set('Retry-After', String(e.retryAfterSeconds));
+      res.status(503).json({ error: e.message });
+      return;
+    }
     console.error('[Heatmap] Error generating heatmap:', e);
     res.status(500).send('Heatmap generation failed');
+  } finally {
+    res.off('close', onClose);
   }
 }
 

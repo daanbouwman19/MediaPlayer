@@ -279,6 +279,7 @@ import { computed, ref, onMounted, onUnmounted, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { formatTime } from '@/utils/timeUtils';
 import { api } from '@/api/index';
+import { isHeatmapBusyError } from '../../../core/media/analysis/heatmap-errors';
 
 defineOptions({
   inheritAttrs: false,
@@ -439,24 +440,99 @@ const heatmapData = ref<HeatmapData | null>(null);
 const watchedSegments = ref<{ start: number; end: number }[]>([]);
 const isHeatmapLoading = ref(false);
 const heatmapProgress = ref(0);
-let heatmapPollInterval: ReturnType<typeof setInterval> | null = null;
 let fetchTimeout: ReturnType<typeof setTimeout> | null = null;
 
-const fetchHeatmap = async () => {
-  if (!props.currentMediaItem) {
-    heatmapData.value = null;
-    watchedSegments.value = [];
-    isHeatmapLoading.value = false;
-    return;
-  }
+// Request fewer points for smoother look
+const HEATMAP_POINTS = 100;
+const HEATMAP_POLL_INTERVAL_MS = 2000;
+// Busy or dropped requests are retried while the item stays on screen
+// (the analysis keeps running on the backend in the meantime).
+const HEATMAP_MAX_RETRIES = 60;
+const HEATMAP_RECONNECT_DELAY_MS = 1000;
+const HEATMAP_BUSY_RETRY_DELAY_MS = 5000;
+const HEATMAP_MAX_RETRY_DELAY_MS = 30000;
 
-  const filePath = props.currentMediaItem.path;
+// Owned by the current item's fetch. Aborting it cancels the backend request
+// and turns that fetch's late results into no-ops.
+let heatmapController: AbortController | null = null;
 
-  // Clear previous polling
-  if (heatmapPollInterval) {
-    clearInterval(heatmapPollInterval);
-    heatmapPollInterval = null;
+const cancelHeatmapFetch = () => {
+  heatmapController?.abort();
+  heatmapController = null;
+  isHeatmapLoading.value = false;
+  heatmapProgress.value = 0;
+};
+
+const waitForHeatmapRetry = (ms: number, signal: AbortSignal) =>
+  new Promise<void>((resolve) => {
+    const done = () => {
+      clearTimeout(timer);
+      signal.removeEventListener('abort', done);
+      resolve();
+    };
+    const timer = setTimeout(done, ms);
+    signal.addEventListener('abort', done, { once: true });
+  });
+
+const loadHeatmap = async (filePath: string, signal: AbortSignal) => {
+  isHeatmapLoading.value = true;
+  heatmapProgress.value = 0;
+
+  const pollProgress = async () => {
+    try {
+      const progress = await api.getHeatmapProgress(filePath);
+      if (!signal.aborted && progress !== null) {
+        heatmapProgress.value = progress;
+      }
+    } catch (err) {
+      console.warn('[MediaControls] Progress poll failed', err);
+    }
+  };
+  // Local to this fetch, so another fetch can never stop it.
+  const pollInterval = setInterval(() => {
+    void pollProgress();
+  }, HEATMAP_POLL_INTERVAL_MS);
+
+  try {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        const result = await api.getHeatmap(filePath, HEATMAP_POINTS, {
+          signal,
+        });
+        if (!signal.aborted) heatmapData.value = result;
+        return;
+      } catch (err) {
+        if (signal.aborted) return;
+        const busy = isHeatmapBusyError(err);
+        // A TypeError is a dropped connection (fetch); the analysis may
+        // still be running, so rejoin it.
+        if (
+          (!busy && !(err instanceof TypeError)) ||
+          attempt >= HEATMAP_MAX_RETRIES
+        ) {
+          console.warn('[MediaControls] Failed to fetch heatmap', err);
+          return;
+        }
+        const delay = busy
+          ? Math.min(
+              HEATMAP_MAX_RETRY_DELAY_MS,
+              HEATMAP_BUSY_RETRY_DELAY_MS * 2 ** Math.min(attempt, 3),
+            )
+          : HEATMAP_RECONNECT_DELAY_MS;
+        await waitForHeatmapRetry(delay, signal);
+        if (signal.aborted) return;
+      }
+    }
+  } finally {
+    clearInterval(pollInterval);
+    if (!signal.aborted) isHeatmapLoading.value = false;
   }
+};
+
+const fetchHeatmap = () => {
+  // Never show (or keep loading) the previous item's heatmap.
+  cancelHeatmapFetch();
+  heatmapData.value = null;
 
   // Clear previous pending fetch
   if (fetchTimeout) {
@@ -464,35 +540,23 @@ const fetchHeatmap = async () => {
     fetchTimeout = null;
   }
 
+  if (!props.currentMediaItem) {
+    watchedSegments.value = [];
+    return;
+  }
+
+  const filePath = props.currentMediaItem.path;
+  // Images have no progress bar, so their heatmap would never be shown.
+  const wantsHeatmap = !props.isImage;
+  const controller = new AbortController();
+  heatmapController = controller;
+
   // Debounce: Wait 1 second before starting heavy analysis
   fetchTimeout = setTimeout(async () => {
+    fetchTimeout = null;
     try {
-      // Start Polling for Progress
-      heatmapPollInterval = setInterval(async () => {
-        if (!isHeatmapLoading.value || heatmapData.value) {
-          if (heatmapPollInterval) {
-            clearInterval(heatmapPollInterval);
-            heatmapPollInterval = null;
-          }
-          return;
-        }
-        try {
-          const progress = await api.getHeatmapProgress(filePath);
-          if (progress !== null) {
-            heatmapProgress.value = progress;
-          }
-        } catch (err) {
-          console.warn('[MediaControls] Progress poll failed', err);
-        }
-      }, 2000);
-
-      isHeatmapLoading.value = true;
-      heatmapProgress.value = 0;
-
-      // Load heatmap
-      // Request fewer points for smoother look (e.g. 100)
-      const result = await api.getHeatmap(filePath, 100);
-      heatmapData.value = result;
+      if (wantsHeatmap) await loadHeatmap(filePath, controller.signal);
+      if (controller.signal.aborted) return;
 
       // Load watched segments
       const metaMap = await api.getMetadata([filePath]);
@@ -505,20 +569,12 @@ const fetchHeatmap = async () => {
       }
     } catch (e) {
       console.warn('Failed to fetch heatmap/metadata', e);
-      // Even if it fails, we should stop loading
-      heatmapData.value = null;
-    } finally {
-      isHeatmapLoading.value = false;
-      if (heatmapPollInterval) {
-        clearInterval(heatmapPollInterval);
-        heatmapPollInterval = null;
-      }
     }
   }, 1000);
 };
 
 onUnmounted(() => {
-  if (heatmapPollInterval) clearInterval(heatmapPollInterval);
+  cancelHeatmapFetch();
   if (fetchTimeout) clearTimeout(fetchTimeout);
 });
 

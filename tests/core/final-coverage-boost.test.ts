@@ -600,6 +600,8 @@ describe('Final Coverage Boost', () => {
       const res = {
         status: vi.fn().mockReturnThis(),
         send: vi.fn(),
+        on: vi.fn(),
+        off: vi.fn(),
       } as any;
 
       const handler = new mediaHandler.MediaHandler({

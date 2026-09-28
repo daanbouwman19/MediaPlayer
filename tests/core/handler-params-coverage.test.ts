@@ -93,6 +93,7 @@ describe('Coverage Fix 2 - Branch Coverage Boost', () => {
       set: vi.fn().mockReturnThis(),
       sendFile: vi.fn(),
       on: vi.fn(),
+      off: vi.fn(),
       headersSent: false,
     };
   });
@@ -147,7 +148,9 @@ describe('Coverage Fix 2 - Branch Coverage Boost', () => {
 
       await serveHeatmap(req, res, '/test.mp4');
 
-      expect(mockGenerateHeatmap).toHaveBeenCalledWith('/test.mp4', 100);
+      expect(mockGenerateHeatmap).toHaveBeenCalledWith('/test.mp4', 100, {
+        signal: expect.any(AbortSignal),
+      });
     });
 
     it('handleStreamRequest: handles missing file param', async () => {

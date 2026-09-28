@@ -353,6 +353,96 @@ describe('Media Controller Combined', () => {
       });
     });
 
+    describe('GET_HEATMAP / CANCEL_HEATMAP', () => {
+      const windowA = { sender: { id: 1 } };
+      const windowB = { sender: { id: 2 } };
+
+      const mockAnalyzer = async () => {
+        const signals: AbortSignal[] = [];
+        const analyzer = {
+          generateHeatmap: vi.fn(
+            (
+              _path: string,
+              _points: number,
+              options: { signal: AbortSignal },
+            ) => {
+              signals.push(options.signal);
+              return new Promise((resolve, reject) => {
+                options.signal.addEventListener('abort', () =>
+                  reject(new Error('aborted')),
+                );
+                setTimeout(() => resolve({ points: 1 }), 50);
+              });
+            },
+          ),
+        };
+        const AnalyzerModule =
+          await import('../../../src/core/media/analysis/media-analyzer');
+        vi.spyOn(AnalyzerModule.MediaAnalyzer, 'getInstance').mockReturnValue(
+          analyzer as any,
+        );
+        return { analyzer, signals };
+      };
+
+      beforeEach(() => {
+        vi.spyOn(console, 'error').mockImplementation(() => {});
+      });
+
+      it('validates the path and passes a cancellation signal', async () => {
+        const { analyzer } = await mockAnalyzer();
+        (validatePathAccess as Mock).mockResolvedValue('/safe/video.mp4');
+
+        const result = await getHandler(IPC_CHANNELS.GET_HEATMAP)(
+          windowA,
+          '/safe/video.mp4',
+          100,
+        );
+
+        expect(result).toEqual({ points: 1 });
+        expect(validatePathAccess).toHaveBeenCalledWith('/safe/video.mp4');
+        expect(analyzer.generateHeatmap).toHaveBeenCalledWith(
+          '/safe/video.mp4',
+          100,
+          { signal: expect.any(AbortSignal) },
+        );
+      });
+
+      it("cancels only the calling window's requests for that file", async () => {
+        const { signals } = await mockAnalyzer();
+        (validatePathAccess as Mock).mockResolvedValue('/v.mp4');
+        const getHeatmap = getHandler(IPC_CHANNELS.GET_HEATMAP);
+        const cancel = getHandler(IPC_CHANNELS.CANCEL_HEATMAP);
+
+        const a1 = getHeatmap(windowA, '/v.mp4', 100);
+        const a2 = getHeatmap(windowA, '/v.mp4', 100);
+        const b = getHeatmap(windowB, '/v.mp4', 100);
+        const other = getHeatmap(windowA, '/other.mp4', 100);
+        await vi.waitFor(() => expect(signals).toHaveLength(4));
+
+        cancel(windowA, '/v.mp4');
+
+        await expect(a1).rejects.toThrow('aborted');
+        await expect(a2).rejects.toThrow('aborted');
+        await expect(b).resolves.toEqual({ points: 1 });
+        await expect(other).resolves.toEqual({ points: 1 });
+
+        // Finished requests are forgotten; cancelling again is a no-op.
+        expect(() => cancel(windowA, '/v.mp4')).not.toThrow();
+      });
+
+      it('rejects when access is denied', async () => {
+        const { analyzer } = await mockAnalyzer();
+        (validatePathAccess as Mock).mockRejectedValue(
+          new Error('Access denied'),
+        );
+
+        await expect(
+          getHandler(IPC_CHANNELS.GET_HEATMAP)(windowA, '/secret.mp4'),
+        ).rejects.toThrow('Access denied');
+        expect(analyzer.generateHeatmap).not.toHaveBeenCalled();
+      });
+    });
+
     // --- From media-controller.recently-played.test.ts ---
     describe('GET_RECENTLY_PLAYED', () => {
       it('should register GET_RECENTLY_PLAYED handler', () => {

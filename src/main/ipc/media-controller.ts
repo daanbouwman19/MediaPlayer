@@ -35,6 +35,13 @@ async function getFFmpegPath(): Promise<string | null> {
   return getFFmpegStaticPath();
 }
 
+/** In-flight heatmap requests per window and file, for CANCEL_HEATMAP. */
+const pendingHeatmapRequests = new Map<string, Set<AbortController>>();
+
+function heatmapRequestKey(event: IpcMainInvokeEvent, filePath: string) {
+  return `${event.sender.id}\0${filePath}`;
+}
+
 export function registerMediaHandlers(mediaService: MediaService) {
   handleIpc(
     IPC_CHANNELS.LOAD_FILE_AS_DATA_URL,
@@ -161,14 +168,45 @@ export function registerMediaHandlers(mediaService: MediaService) {
 
   handleIpc(
     IPC_CHANNELS.GET_HEATMAP,
-    async (_event, filePath: string, points?: number) => {
+    async (event, filePath: string, points?: number) => {
+      // Tracked so CANCEL_HEATMAP from the same window can leave the analysis.
+      const key = heatmapRequestKey(event, filePath);
+      const controller = new AbortController();
+      const requests =
+        pendingHeatmapRequests.get(key) ?? new Set<AbortController>();
+      requests.add(controller);
+      pendingHeatmapRequests.set(key, requests);
       try {
         await validatePathAccess(filePath);
-        return MediaAnalyzer.getInstance().generateHeatmap(filePath, points);
+        return await MediaAnalyzer.getInstance().generateHeatmap(
+          filePath,
+          points,
+          { signal: controller.signal },
+        );
       } catch (err) {
-        console.error('[MediaController] Error getting heatmap:', err);
+        if (!controller.signal.aborted) {
+          console.error('[MediaController] Error getting heatmap:', err);
+        }
         throw err;
+      } finally {
+        requests.delete(controller);
+        if (
+          requests.size === 0 &&
+          pendingHeatmapRequests.get(key) === requests
+        ) {
+          pendingHeatmapRequests.delete(key);
+        }
       }
+    },
+  );
+
+  handleIpc(
+    IPC_CHANNELS.CANCEL_HEATMAP,
+    (event: IpcMainInvokeEvent, filePath: string) => {
+      const requests = pendingHeatmapRequests.get(
+        heatmapRequestKey(event, filePath),
+      );
+      for (const controller of requests ?? []) controller.abort();
     },
   );
 

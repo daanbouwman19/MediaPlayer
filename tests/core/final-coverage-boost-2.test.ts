@@ -69,6 +69,8 @@ describe('Final Coverage Boost Part 2', () => {
       const res = {
         status: vi.fn().mockReturnThis(),
         send: vi.fn(),
+        on: vi.fn(),
+        off: vi.fn(),
         headersSent: false,
       } as any;
 

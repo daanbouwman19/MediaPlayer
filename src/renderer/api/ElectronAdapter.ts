@@ -190,8 +190,33 @@ export class ElectronAdapter implements IMediaBackend {
     return { duration: res.duration };
   }
 
-  async getHeatmap(filePath: string, points?: number): Promise<HeatmapData> {
-    return this.invoke(this.bridge.getHeatmap(filePath, points));
+  async getHeatmap(
+    filePath: string,
+    points?: number,
+    options: { signal?: AbortSignal } = {},
+  ): Promise<HeatmapData> {
+    const { signal } = options;
+    signal?.throwIfAborted();
+    const request = this.invoke(this.bridge.getHeatmap(filePath, points));
+    if (!signal) return request;
+
+    // An IPC call cannot be aborted, so tell the main process this window
+    // no longer needs the analysis and stop waiting for it.
+    let onAbort = () => {};
+    const aborted = new Promise<never>((_resolve, reject) => {
+      onAbort = () => {
+        this.bridge.cancelHeatmap(filePath).catch(() => {});
+        reject(new DOMException('The operation was aborted.', 'AbortError'));
+      };
+      signal.addEventListener('abort', onAbort, { once: true });
+    });
+    try {
+      return await Promise.race([request, aborted]);
+    } finally {
+      signal.removeEventListener('abort', onAbort);
+      // The abandoned request may still settle; nobody is waiting for it.
+      request.catch(() => {});
+    }
   }
 
   async getHeatmapProgress(filePath: string): Promise<number | null> {

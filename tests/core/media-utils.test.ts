@@ -56,6 +56,20 @@ describe('media-utils unit tests', () => {
       // Verify validation logic works with platform specific check
       expect(result.startsWith(path.join(cacheDir))).toBe(true);
     });
+
+    it('getThumbnailCachePath gives each file version its own entry', () => {
+      const legacy = getThumbnailCachePath('/v/Trip.mp4', '/cache');
+      const v1 = getThumbnailCachePath('/v/Trip.mp4', '/cache', '10-1000');
+      const v2 = getThumbnailCachePath('/v/Trip.mp4', '/cache', '12-2000');
+
+      expect(v1).not.toBe(v2);
+      expect(v1).not.toBe(legacy);
+      expect(getThumbnailCachePath('/v/Trip.mp4', '/cache', '10-1000')).toBe(
+        v1,
+      );
+      // Without an identity the legacy path-only key is kept.
+      expect(getThumbnailCachePath('/v/Trip.mp4', '/cache', null)).toBe(legacy);
+    });
   });
 
   describe('normalizeFilePath', () => {
