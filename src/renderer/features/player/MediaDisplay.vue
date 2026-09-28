@@ -19,7 +19,7 @@
         class="flex flex-col items-center justify-center p-6 text-center z-10"
       >
         <template v-if="mediaDirectories.length === 0">
-          <div class="mb-4 p-4 rounded-full bg-accent/10 text-accent">
+          <div class="mb-4 p-4 rounded-full bg-accent/10 text-accent-ink">
             <svg
               xmlns="http://www.w3.org/2000/svg"
               class="w-12 h-12"
@@ -71,7 +71,7 @@
             <p class="text-lg font-medium">Select an album to start playback</p>
             <button
               v-if="!isSidebarVisible"
-              class="glass-button px-4 py-2 mt-2 flex items-center gap-2 text-sm font-medium text-accent hover:text-accent-hover transition-colors"
+              class="glass-button px-4 py-2 mt-2 flex items-center gap-2 text-sm font-medium text-accent-ink hover:opacity-80 transition-opacity"
               @click="isSidebarVisible = true"
             >
               <MenuIcon class="w-4 h-4" aria-hidden="true" />

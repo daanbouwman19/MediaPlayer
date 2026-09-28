@@ -1,6 +1,9 @@
 <template>
   <Teleport to="body" :disabled="isDesktop">
+    <!-- On mobile the bar is teleported above everything, so hide it while the
+         full-screen sidebar overlay is open. -->
     <div
+      v-show="isDesktop || !isSidebarVisible"
       v-bind="$attrs"
       class="fixed md:absolute bottom-0 left-0 w-full flex flex-col items-center pointer-events-none z-100"
     >

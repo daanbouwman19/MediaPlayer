@@ -140,7 +140,7 @@
         <!-- Footer -->
         <div class="p-4 bg-white/5 border-t border-white/5 text-center">
           <button
-            class="px-6 py-2 rounded-lg bg-accent hover:bg-accent-hover text-button-text font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-accent text-sm"
+            class="px-6 py-2 rounded-lg bg-accent hover:bg-accent-hover text-button-text font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-accent-ink text-sm"
             @click="close"
           >
             Got it

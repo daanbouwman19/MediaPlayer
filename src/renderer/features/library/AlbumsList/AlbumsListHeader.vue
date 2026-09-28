@@ -4,7 +4,7 @@
   >
     <!-- Mobile Close Button (only visible on mobile) -->
     <button
-      class="md:hidden text-muted hover:text-accent mr-2"
+      class="md:hidden text-muted hover:text-accent-ink mr-2"
       aria-label="Close Sidebar"
       title="Close Sidebar"
       @click="$emit('close')"
@@ -18,7 +18,7 @@
 
     <div class="flex items-center gap-1">
       <button
-        class="p-2 text-muted hover:text-accent hover:bg-black/5 rounded-md transition-colors"
+        class="p-2 text-muted hover:text-accent-ink hover:bg-black/5 rounded-md transition-colors"
         title="Manage Sources"
         aria-label="Manage Sources"
         @click="openModal"
@@ -27,7 +27,7 @@
       </button>
 
       <button
-        class="p-2 text-muted hover:text-accent hover:bg-black/5 rounded-md transition-colors"
+        class="p-2 text-muted hover:text-accent-ink hover:bg-black/5 rounded-md transition-colors"
         title="Privacy"
         aria-label="Privacy settings"
         @click="openPrivacySettings"
@@ -36,7 +36,7 @@
       </button>
 
       <button
-        class="p-2 text-muted hover:text-accent hover:bg-black/5 rounded-md transition-colors"
+        class="p-2 text-muted hover:text-accent-ink hover:bg-black/5 rounded-md transition-colors"
         title="Add Playlist"
         aria-label="Add Playlist"
         @click="openSmartPlaylistModal"
@@ -47,7 +47,7 @@
       <!-- Theme Selector Dropdown -->
       <div class="relative">
         <button
-          class="p-2 text-muted hover:text-accent hover:bg-black/5 rounded-md transition-all duration-200"
+          class="p-2 text-muted hover:text-accent-ink hover:bg-black/5 rounded-md transition-all duration-200"
           aria-label="Select Theme"
           :title="`Current Theme: ${themeMode}`"
           @click.stop="isThemeDropdownOpen = !isThemeDropdownOpen"
@@ -69,7 +69,7 @@
               :class="
                 themeMode === theme.id
                   ? 'bg-accent/20 text-button-text font-bold'
-                  : 'text-muted hover:bg-black/10 hover:text-accent'
+                  : 'text-muted hover:bg-black/10 hover:text-accent-ink'
               "
               @click="selectTheme(theme.id)"
             >

@@ -7,6 +7,7 @@
   --color-accent: var(--accent-color);
   --color-accent-secondary: var(--accent-secondary);
   --color-accent-hover: var(--accent-hover);
+  --color-accent-ink: var(--accent-ink);
   --color-text-color: var(--text-color);
   --color-text-muted: var(--text-muted);
   --color-button-text: var(--button-text-color);
@@ -30,10 +31,11 @@
 
   --accent-color: #7c3aed;
   /* Vibrant Violet-600 */
-  --accent-secondary: #0ea5e9;
-  /* Sky-500 */
+  --accent-secondary: #0369a1;
+  /* Sky-700: readable as text on white */
   --accent-hover: #6d28d9;
   /* Deep Violet-700 */
+  --accent-ink: #6d28d9;
   --watched-color: rgba(14, 165, 233, 0.2);
 
   --text-color: #1b1b3a;
@@ -74,16 +76,17 @@
   --tertiary-bg: #1f1f1f;
   /* Soft Charcoal */
   /* User asked for a premium update: Cyberpunk-inspired Midnight theme */
-  --accent-color: #8b5cf6;
-  /* Violet-500 */
+  --accent-color: #7c3aed;
+  /* Violet-600: white button text needs the darker shade */
   --accent-secondary: #06b6d4;
   /* Cyan-500 */
-  --accent-hover: #7c3aed;
-  /* Violet-600 */
+  --accent-hover: #6d28d9;
+  /* Violet-700 */
+  --accent-ink: #a78bfa;
   --watched-color: rgba(6, 182, 212, 0.4);
   /* Subtle Cyan for watched parts */
   --text-color: #f8fafc;
-  --text-muted: #64748b;
+  --text-muted: #94a3b8; /* Slate-400 */
   --border-color: rgba(255, 255, 255, 0.1);
   --selection-color: #2e1065;
   /* Deep Violet */
@@ -120,6 +123,7 @@
   /* Pink-700 */
   --accent-hover: #9d174d;
   /* Pink-800 */
+  --accent-ink: #be185d;
   --watched-color: rgba(219, 39, 119, 0.2);
 
   --text-color: #831843;
@@ -155,8 +159,9 @@
   --tertiary-bg: #fef9c3; /* Yellow-100 */
 
   --accent-color: #fcea2b; /* Vibrant Neon Yellow */
-  --accent-secondary: #06b6d4; /* Cyan-500 */
+  --accent-secondary: #0e7490; /* Cyan-700: readable as text on white */
   --accent-hover: #facc15; /* Yellow-400 */
+  --accent-ink: #a16207; /* Yellow-700: neon yellow is unreadable as text on white */
   --watched-color: rgba(252, 234, 43, 0.4);
 
   --text-color: #0f172a; /* Slate-900 */
@@ -169,8 +174,8 @@
   --scrollbar-thumb-color: rgba(0, 0, 0, 0.2);
 
   --glass-bg: rgba(255, 255, 255, 0.85);
-  --glass-border: rgba(252, 234, 43, 0.4);
-  --glass-shadow: 0 8px 32px 0 rgba(252, 234, 43, 0.15);
+  --glass-border: rgba(161, 98, 7, 0.18);
+  --glass-shadow: 0 8px 32px 0 rgba(15, 23, 42, 0.08);
   --glass-blur: blur(16px);
 
   --vignette-color: 253, 250, 241;
@@ -187,6 +192,7 @@
   --accent-color: #fef08a; /* Yellow-200 / Neon Yellow */
   --accent-secondary: #22d3ee; /* Cyan-400 */
   --accent-hover: #fde047; /* Yellow-300 */
+  --accent-ink: #fde047;
   --watched-color: rgba(254, 240, 138, 0.3);
 
   --text-color: #fafafa;
@@ -216,8 +222,9 @@
   --secondary-bg: #ffffff;
   --tertiary-bg: #fef9c3;
   --accent-color: #fcea2b;
-  --accent-secondary: #06b6d4;
+  --accent-secondary: #0e7490;
   --accent-hover: #facc15;
+  --accent-ink: #a16207; /* Yellow-700: neon yellow is unreadable as text on white */
   --watched-color: rgba(252, 234, 43, 0.4);
   --text-color: #0f172a;
   --text-muted: #334155;
@@ -226,8 +233,8 @@
   --button-text-color: #000000;
   --danger-color: #b91c1c;
   --glass-bg: rgba(255, 255, 255, 0.85);
-  --glass-border: rgba(252, 234, 43, 0.4);
-  --glass-shadow: 0 8px 32px 0 rgba(252, 234, 43, 0.15);
+  --glass-border: rgba(161, 98, 7, 0.18);
+  --glass-shadow: 0 8px 32px 0 rgba(15, 23, 42, 0.08);
   --glass-blur: blur(16px);
   --vignette-color: 253, 250, 241;
   --vignette-mid: 0.1;
@@ -245,6 +252,7 @@
     --accent-color: #fef08a;
     --accent-secondary: #22d3ee;
     --accent-hover: #fde047;
+    --accent-ink: #fde047;
     --watched-color: rgba(254, 240, 138, 0.3);
     --text-color: #fafafa;
     --text-muted: #a1a1aa;
@@ -331,7 +339,7 @@
   h1,
   h2 {
     font-family: var(--header-font);
-    color: var(--accent-color);
+    color: var(--accent-ink);
     font-weight: 700;
     text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.3);
   }
@@ -383,7 +391,7 @@
 
   .glass-input:focus {
     background: rgba(255, 255, 255, 0.1);
-    border-color: var(--accent-color);
+    border-color: var(--accent-ink);
     outline: none;
     box-shadow: 0 0 10px rgba(99, 102, 241, 0.2);
   }
@@ -400,7 +408,7 @@
   }
 
   .glass-button:focus-visible {
-    outline: 2px solid var(--accent-color);
+    outline: 2px solid var(--accent-ink);
     outline-offset: 2px;
   }
 
@@ -425,7 +433,7 @@
   }
 
   .glass-button-primary:focus-visible {
-    outline: 2px solid var(--accent-color);
+    outline: 2px solid var(--accent-ink);
     outline-offset: 2px;
   }
 
@@ -439,7 +447,7 @@
 
   .model-title {
     font-family: var(--header-font);
-    color: var(--accent-color);
+    color: var(--accent-ink);
     font-weight: 700;
     text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.3);
     font-size: 2.2rem;
@@ -488,7 +496,7 @@
   .nav-button:focus-visible,
   .timer-button:focus-visible,
   .filter-button:focus-visible {
-    outline: 2px solid var(--accent-color);
+    outline: 2px solid var(--accent-ink);
     outline-offset: 2px;
   }
 

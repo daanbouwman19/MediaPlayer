@@ -1,5 +1,5 @@
 <template>
-  <div class="h-full flex flex-col relative gap-4">
+  <div class="h-full flex flex-col gap-4">
     <!-- 1. HEADER PANEL: Matched to Top Bar -->
     <AlbumsListHeader @close="$emit('close')" />
 

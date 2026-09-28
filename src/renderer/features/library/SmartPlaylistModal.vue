@@ -39,7 +39,7 @@
               </p>
             </div>
             <button
-              class="text-muted hover:text-accent transition-colors p-2 rounded-lg hover:bg-black/5 -mr-2 -mt-2"
+              class="text-muted hover:text-accent-ink transition-colors p-2 rounded-lg hover:bg-black/5 -mr-2 -mt-2"
               aria-label="Close"
               @click="close"
             >
@@ -75,7 +75,7 @@
                   >Minimum Rating</label
                 >
                 <div
-                  class="flex items-center gap-1 bg-black/10 px-2 py-1 rounded text-xs font-mono text-accent"
+                  class="flex items-center gap-1 bg-black/10 px-2 py-1 rounded text-xs font-mono text-accent-ink"
                 >
                   <span class="font-bold">{{
                     minRating === 0 ? 'Any' : minRating

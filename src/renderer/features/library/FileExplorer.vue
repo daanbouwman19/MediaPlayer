@@ -7,7 +7,7 @@
       class="header p-3 bg-secondary-bg border-b border-border-color flex items-center gap-2"
     >
       <button
-        class="p-2 rounded-lg hover:bg-black/10 transition-colors flex items-center gap-2 text-muted hover:text-accent focus:outline-none focus:ring-2 focus:ring-accent ml-2 md:ml-0"
+        class="p-2 rounded-lg hover:bg-black/10 transition-colors flex items-center gap-2 text-muted hover:text-accent-ink focus:outline-none focus:ring-2 focus:ring-accent-ink ml-2 md:ml-0"
         :disabled="!parentPath"
         title="Go Up"
         aria-label="Go to parent directory"
@@ -21,7 +21,7 @@
         {{ displayPath }}
       </div>
       <button
-        class="p-2 rounded hover:bg-black/10 focus:outline-none focus:ring-2 focus:ring-accent text-muted hover:text-accent transition-colors"
+        class="p-2 rounded hover:bg-black/10 focus:outline-none focus:ring-2 focus:ring-accent-ink text-muted hover:text-accent-ink transition-colors"
         :title="
           viewMode === 'list' ? 'Switch to Grid View' : 'Switch to List View'
         "
@@ -34,7 +34,7 @@
         <ListIcon v-else class="w-5 h-5" />
       </button>
       <button
-        class="p-2 rounded hover:bg-black/10 focus:outline-none focus:ring-2 focus:ring-accent text-muted hover:text-accent transition-colors"
+        class="p-2 rounded hover:bg-black/10 focus:outline-none focus:ring-2 focus:ring-accent-ink text-muted hover:text-accent-ink transition-colors"
         title="Refresh"
         aria-label="Refresh directory"
         @click="refresh"
@@ -85,9 +85,9 @@
           v-for="entry in sortedEntries"
           :key="entry.path"
           type="button"
-          class="flex flex-col items-center p-2 rounded-lg transition-all duration-200 aspect-square justify-center border border-transparent hover:border-accent/30 cursor-pointer hover:bg-black/10 focus:outline-none focus:ring-2 focus:ring-accent w-full h-full"
+          class="flex flex-col items-center p-2 rounded-lg transition-all duration-200 aspect-square justify-center border border-transparent hover:border-accent/30 cursor-pointer hover:bg-black/10 focus:outline-none focus:ring-2 focus:ring-accent-ink w-full h-full"
           :class="{
-            'bg-accent/20 border-accent/50 text-accent':
+            'bg-accent/20 border-accent/50 text-accent-ink':
               entry.path === selectedPath,
           }"
           :aria-current="entry.path === selectedPath ? 'true' : undefined"
@@ -113,7 +113,7 @@
             class="folder-item group flex items-center p-3 rounded-lg border transition-all duration-200 w-full text-left gap-3"
             :class="
               selectedPath === entry.path
-                ? 'bg-accent/20 border-accent/50 text-accent font-medium'
+                ? 'bg-accent/20 border-accent/50 text-accent-ink font-medium'
                 : 'bg-black/5 border-transparent hover:bg-black/10 text-color hover:border-accent/30'
             "
             :aria-current="selectedPath === entry.path ? 'true' : undefined"
@@ -146,13 +146,13 @@
       class="footer p-3 bg-secondary-bg border-t border-border-color flex justify-end gap-3"
     >
       <button
-        class="px-4 py-2 rounded text-muted hover:text-color focus:outline-none focus:ring-2 focus:ring-accent"
+        class="px-4 py-2 rounded text-muted hover:text-color focus:outline-none focus:ring-2 focus:ring-accent-ink"
         @click="$emit('cancel')"
       >
         Cancel
       </button>
       <button
-        class="px-4 py-2 rounded bg-accent hover:bg-accent-hover text-button-text disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-accent"
+        class="px-4 py-2 rounded bg-accent hover:bg-accent-hover text-button-text disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-accent-ink"
         :disabled="!selectedPath"
         @click="confirmSelection"
       >

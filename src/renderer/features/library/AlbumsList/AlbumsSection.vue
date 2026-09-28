@@ -6,7 +6,7 @@
     <ul class="space-y-0.5">
       <li v-if="mediaDirectories.length === 0" class="px-1">
         <button
-          class="w-full text-left text-sm text-accent hover:text-accent-secondary hover:bg-white/5 p-2 rounded-md transition-colors flex items-center gap-2 group focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
+          class="w-full text-left text-sm text-accent-ink hover:text-accent-secondary hover:bg-white/5 p-2 rounded-md transition-colors flex items-center gap-2 group focus-visible:ring-2 focus-visible:ring-accent-ink focus-visible:outline-none"
           @click="openModal"
         >
           <div
@@ -20,7 +20,7 @@
       <li v-else-if="allAlbums.length === 0" class="px-3 py-4 text-center">
         <p class="text-xs text-muted mb-2">No albums found in your sources.</p>
         <button
-          class="text-xs text-accent hover:text-accent-secondary underline"
+          class="text-xs text-accent-ink hover:text-accent-secondary underline"
           @click="openModal"
         >
           Manage Sources

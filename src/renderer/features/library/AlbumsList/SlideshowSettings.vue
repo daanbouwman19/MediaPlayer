@@ -1,15 +1,15 @@
 <template>
   <div class="shrink-0 p-3 flex flex-col gap-2 glass-panel rounded-xl">
     <!-- Media Type Filters -->
-    <div class="flex justify-center bg-black/20 rounded-lg p-1 gap-1">
+    <div class="flex bg-text-color/5 rounded-lg p-1 gap-1">
       <button
         v-for="filter in MEDIA_FILTERS"
         :key="filter"
-        class="flex-1 px-2 py-1.5 text-xs font-medium rounded-md transition-all duration-200"
+        class="flex-1 min-w-0 px-2 py-1.5 text-xs font-semibold rounded-md transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-ink"
         :class="
           mediaFilter === filter
             ? 'bg-accent text-button-text shadow-sm'
-            : 'text-muted hover:text-accent hover:bg-black/5'
+            : 'text-muted hover:text-color hover:bg-text-color/5'
         "
         :aria-pressed="mediaFilter === filter"
         @click="setFilter(filter)"
@@ -19,11 +19,11 @@
     </div>
 
     <!-- Toggles -->
-    <div class="flex gap-2">
+    <div class="grid grid-cols-3 gap-1.5">
       <label
         v-for="toggle in toggles"
         :key="toggle.label"
-        class="flex-1 glass-toggle-btn cursor-pointer group"
+        class="min-w-0 cursor-pointer"
         :title="toggle.title"
       >
         <input
@@ -31,28 +31,15 @@
           type="checkbox"
           class="peer sr-only"
         />
-        <div
-          class="h-full px-2 py-2 rounded-md bg-black/20 border border-white/5 peer-checked:bg-accent/20 peer-checked:border-accent/50 peer-focus-visible:ring-2 peer-focus-visible:ring-accent transition-all flex items-center justify-center gap-1.5"
+        <span
+          class="h-full px-1 py-1.5 rounded-md border flex items-center justify-center text-center text-[11px] font-medium leading-tight whitespace-nowrap transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-accent-ink"
+          :class="
+            toggle.model.value
+              ? 'bg-accent/15 border-accent text-color'
+              : 'bg-text-color/5 border-transparent text-muted hover:bg-text-color/10 hover:text-color'
+          "
+          >{{ toggle.label }}</span
         >
-          <div
-            class="w-3 h-3 shrink-0 rounded-sm border border-muted peer-checked:bg-accent peer-checked:border-accent flex items-center justify-center"
-          >
-            <svg
-              v-if="toggle.model.value"
-              class="w-2.5 h-2.5 text-white"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="4"
-            >
-              <polyline points="20 6 9 17 4 12"></polyline>
-            </svg>
-          </div>
-          <span
-            class="text-[10px] font-medium text-muted group-hover:text-color peer-checked:text-accent-secondary whitespace-nowrap"
-            >{{ toggle.label }}</span
-          >
-        </div>
       </label>
     </div>
   </div>

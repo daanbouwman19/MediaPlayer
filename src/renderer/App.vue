@@ -17,7 +17,7 @@
       <transition name="slide-fade">
         <AlbumsList
           v-if="isSidebarVisible"
-          class="fixed inset-0 z-50 md:static md:shrink-0 w-full md:w-80 h-full bg-transparent p-0"
+          class="fixed inset-0 z-50 md:static md:shrink-0 w-full md:w-80 h-full bg-(--primary-bg) md:bg-transparent p-3 md:p-0"
           @close="isSidebarVisible = false"
         />
       </transition>
@@ -57,7 +57,7 @@
           </button>
 
           <!-- Title / Filename -->
-          <h1 class="text-lg font-bold text-accent truncate mx-4">
+          <h1 class="text-lg font-bold text-accent-ink truncate mx-4">
             {{
               viewMode === 'player' && currentMediaItem
                 ? currentMediaItem.name

@@ -11,7 +11,7 @@
         >
           <!-- Name (Main Action - Slideshow) -->
           <button
-            class="grow flex items-center gap-2 truncate text-sm text-color group-hover:text-accent text-left rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-accent cursor-pointer min-w-0"
+            class="grow flex items-center gap-2 truncate text-sm text-color group-hover:text-accent-ink text-left rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-ink cursor-pointer min-w-0"
             aria-label="Recently Played Slideshow"
             :disabled="!!loadingAction"
             @click="handleHistorySlideshow"
@@ -49,7 +49,7 @@
           >
             <!-- Grid Button for History -->
             <button
-              class="text-xs text-muted hover:text-accent p-1"
+              class="text-xs text-muted hover:text-accent-ink p-1"
               title="Open in Grid"
               aria-label="Open History in Grid"
               :disabled="!!loadingAction"
@@ -89,12 +89,12 @@
         >
           <!-- Name (Main Action) -->
           <button
-            class="grow flex items-center gap-2 truncate text-sm text-color group-hover:text-accent text-left rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-accent cursor-pointer min-w-0"
+            class="grow flex items-center gap-2 truncate text-sm text-color group-hover:text-accent-ink text-left rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-ink cursor-pointer min-w-0"
             :aria-label="'Play ' + playlist.name"
             :disabled="!!loadingAction"
             @click="handleSmartPlaylistSlideshow(playlist)"
           >
-            <span class="text-accent shrink-0">
+            <span class="text-accent-ink shrink-0">
               <svg
                 v-if="loadingAction === `playlist-${playlist.id}`"
                 class="animate-spin w-4 h-4"
@@ -127,7 +127,7 @@
           >
             <!-- Grid Button for Playlist -->
             <button
-              class="text-xs text-muted hover:text-accent p-1"
+              class="text-xs text-muted hover:text-accent-ink p-1"
               title="Open in Grid"
               :aria-label="'Open ' + playlist.name + ' in Grid'"
               :disabled="!!loadingAction"

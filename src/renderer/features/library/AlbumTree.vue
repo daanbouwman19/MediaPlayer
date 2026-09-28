@@ -1,18 +1,12 @@
 <template>
-  <li
-    class="flex flex-col items-start p-1.5 rounded-md transition-colors duration-200 mb-0.5"
-    :class="{
-      'bg-accent/15 border-l-2 border-accent': selectionState !== 'none',
-      'hover:bg-accent/5': selectionState === 'none',
-    }"
-  >
+  <li class="flex flex-col items-start mb-0.5">
     <div
-      class="group flex items-center gap-2 w-full text-color hover:text-accent"
+      class="group flex items-center gap-2 w-full text-color rounded-md p-1.5 hover:bg-text-color/5 transition-colors duration-200"
     >
       <!-- Toggle Button (Triangle) -->
       <button
         v-if="isFolder"
-        class="toggle-button flex items-center justify-center w-6 h-6 rounded hover:bg-accent/10 text-muted hover:text-accent transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        class="toggle-button flex items-center justify-center w-6 h-6 rounded hover:bg-text-color/10 text-muted hover:text-color transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-ink"
         :aria-expanded="isOpen"
         :aria-label="isOpen ? `Collapse ${album.name}` : `Expand ${album.name}`"
         @click.stop="toggle"
@@ -26,7 +20,7 @@
 
       <!-- Selection Checkbox -->
       <button
-        class="flex items-center justify-center w-5 h-5 rounded hover:bg-accent/10 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent shrink-0"
+        class="flex items-center justify-center w-5 h-5 rounded transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-ink shrink-0"
         data-testid="album-checkbox"
         role="checkbox"
         :aria-checked="
@@ -46,7 +40,7 @@
               ? 'bg-accent border-accent'
               : selectionState === 'some'
                 ? 'bg-accent border-accent'
-                : 'border-muted hover:border-accent',
+                : 'border-text-muted hover:border-accent-ink',
           ]"
         >
           <!-- Checkmark -->
@@ -73,7 +67,7 @@
 
       <!-- Main Action Button (Name + Badge) -->
       <button
-        class="grow flex items-center gap-2 text-left min-w-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded px-1 -ml-1 transition-colors hover:bg-accent/10 cursor-pointer"
+        class="grow flex items-center gap-2 text-left min-w-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-ink rounded px-1 -ml-1 transition-colors hover:text-accent-ink cursor-pointer"
         :aria-label="'Play ' + album.name"
         @click="handleClickAlbum(album)"
       >
@@ -84,7 +78,7 @@
         <!-- Badge for count -->
         <span
           v-if="totalTextureCount > 0"
-          class="shrink-0 bg-accent/20 text-color text-[10px] font-bold px-1.5 py-0.5 rounded-md"
+          class="shrink-0 bg-text-color/5 text-muted text-[10px] font-semibold tabular-nums px-1.5 py-0.5 rounded-md"
         >
           {{ totalTextureCount }}
         </span>
@@ -97,7 +91,7 @@
       >
         <!-- Play Button for Folder/Album -->
         <button
-          class="shrink-0 text-muted hover:text-accent p-1 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          class="shrink-0 text-muted hover:text-accent-ink p-1 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-ink"
           title="Play Album"
           :aria-label="'Play ' + album.name"
           @click.stop="handleClickAlbum(album)"
@@ -107,7 +101,7 @@
 
         <!-- Grid Button -->
         <button
-          class="shrink-0 text-muted hover:text-accent p-1 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          class="shrink-0 text-muted hover:text-accent-ink p-1 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-ink"
           title="Open in Grid"
           :aria-label="'Open ' + album.name + ' in Grid'"
           @click.stop="handleOpenGrid(album)"
@@ -118,9 +112,9 @@
     </div>
 
     <!-- Recursive Children. Each level renders inside its parent's <li>, so a
-         constant padding indents it relative to the parent (the li's own p-1.5
-         plus pl-3.5 makes 20px per level) without compounding with depth. -->
-    <ul v-if="isFolder && isOpen" class="w-full mt-1 pl-3.5">
+         constant padding indents it 20px relative to the parent without
+         compounding with depth. -->
+    <ul v-if="isFolder && isOpen" class="w-full mt-0.5 pl-5">
       <AlbumTree
         v-for="child in album.children"
         :key="child.id"
