@@ -7,6 +7,20 @@ import { FileSystemEntry, listDirectory } from '../../core/media/file-system';
 import { isDrivePath } from '../../core/media/media-utils';
 import { getMimeType } from '../../core/media/utils/mime-types';
 
+/**
+ * Rejects paths with a NUL byte or a `..` segment. Only whole segments
+ * count, so names such as 'Holiday...2023.jpg' stay valid.
+ */
+function assertSafePath(filePath: unknown): asserts filePath is string {
+  if (
+    typeof filePath !== 'string' ||
+    filePath.includes('\0') ||
+    filePath.split(/[\\/]/).includes('..')
+  ) {
+    throw new Error('Invalid file path');
+  }
+}
+
 export class LocalFileSystemProvider implements FileSystemProvider {
   canHandle(filePath: string): boolean {
     return !isDrivePath(filePath);
@@ -17,13 +31,7 @@ export class LocalFileSystemProvider implements FileSystemProvider {
   }
 
   async getMetadata(filePath: string): Promise<FileMetadata> {
-    if (
-      typeof filePath !== 'string' ||
-      filePath.includes('\0') ||
-      filePath.includes('..')
-    ) {
-      throw new Error('Invalid file path');
-    }
+    assertSafePath(filePath);
     const absolutePath = path.resolve(filePath);
     const stats = await fsPromises.stat(absolutePath);
     const mimeType = getMimeType(absolutePath);
@@ -38,13 +46,7 @@ export class LocalFileSystemProvider implements FileSystemProvider {
     filePath: string,
     options?: { start?: number; end?: number },
   ): Promise<{ stream: Readable; length?: number }> {
-    if (
-      typeof filePath !== 'string' ||
-      filePath.includes('\0') ||
-      filePath.includes('..')
-    ) {
-      throw new Error('Invalid file path');
-    }
+    assertSafePath(filePath);
     const absolutePath = path.resolve(filePath);
     return { stream: fs.createReadStream(absolutePath, options) };
   }

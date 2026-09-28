@@ -8,6 +8,8 @@ import {
 } from 'vite-plus/test';
 import { performFullMediaScan } from '../../src/core/media/media-scanner';
 import * as driveService from '../../src/main/google-drive-service';
+import { registerDriveBackend } from '../../src/core/media/drive-backend';
+import { googleDriveBackend } from '../../src/infrastructure/google-drive-backend';
 
 // --- Mocks ---
 
@@ -39,6 +41,8 @@ vi.mock('../../src/main/google-drive-service', () => ({
 describe('Media Scanner Combined', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // The scan worker registers this at startup; it wraps the mocked service.
+    registerDriveBackend(googleDriveBackend);
   });
 
   afterEach(() => {

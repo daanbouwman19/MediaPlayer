@@ -44,6 +44,11 @@ import { MediaRepository } from '../core/database/repositories/media-repository'
 import { NodeFileSystem } from '../infrastructure/node-file-system';
 import { WorkerScannerService } from '../infrastructure/worker-scanner-service';
 import { MediaDurationHandler } from '../infrastructure/media-duration-handler';
+import { registerDriveBackend } from '../core/media/drive-backend';
+import { googleDriveBackend } from '../infrastructure/google-drive-backend';
+
+// Give src/core its Google Drive implementation (see core/media/drive-backend).
+registerDriveBackend(googleDriveBackend);
 
 // Initialize Media Service and Dependencies
 const mediaRepo = new MediaRepository();

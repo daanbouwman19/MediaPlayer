@@ -1,7 +1,11 @@
 import { parentPort, type MessagePort } from 'worker_threads';
 import type { Credentials } from 'google-auth-library';
 import { performFullMediaScan } from './media-scanner.ts';
-import { initializeManualCredentials } from '../../main/google-auth.ts';
+import { getDriveBackend, registerDriveBackend } from './drive-backend.ts';
+import { googleDriveBackend } from '../../infrastructure/google-drive-backend.ts';
+
+// This worker thread is its own composition root.
+registerDriveBackend(googleDriveBackend);
 
 if (!parentPort) {
   throw new Error('This module must be run as a worker thread');
@@ -33,7 +37,7 @@ export async function handleScanMessage(message: unknown): Promise<void> {
     const { directories = [], tokens, previousPaths } = payload ?? {};
 
     if (tokens) {
-      initializeManualCredentials(tokens);
+      getDriveBackend().setCredentials(tokens);
     }
 
     const knownPaths = new Set(previousPaths ?? []);

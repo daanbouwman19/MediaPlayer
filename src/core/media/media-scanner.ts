@@ -16,7 +16,7 @@ import {
 import { isIgnoredDirectory } from '../auth/security.ts';
 import { isDrivePath, getDriveId } from './media-utils.ts';
 import type { Album, MediaFile } from './types.ts';
-import { listDriveFiles } from '../../main/google-drive-service.ts';
+import { getDriveBackend } from './drive-backend.ts';
 import { ConcurrencyLimiter } from './utils/concurrency-limiter.ts';
 import { safeLog, safeError } from './utils/logger.ts';
 
@@ -135,7 +135,7 @@ async function scanDirectoryRecursive(
 async function scanGoogleDrive(folderId: string): Promise<Album | null> {
   try {
     // Our service already does recursive or flat listing and returns an Album
-    const album = await listDriveFiles(folderId);
+    const album = await getDriveBackend().listFolder(folderId);
     // If it's empty, we might want to return null, but for now let's return it
     if (album.textures.length > 0 || album.children.length > 0) {
       return album;

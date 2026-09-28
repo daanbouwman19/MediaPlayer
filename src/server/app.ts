@@ -20,6 +20,8 @@ import {
 } from '../core/media/constants.ts';
 import { registerSensitiveFile } from '../core/auth/security.ts';
 import { initializeDriveCacheManager } from '../main/drive-cache-manager.ts';
+import { registerDriveBackend } from '../core/media/drive-backend.ts';
+import { googleDriveBackend } from '../infrastructure/google-drive-backend.ts';
 import { HlsManager } from '../core/media/hls-manager.ts';
 import { TranscodeQueueManager } from '../core/media/transcode-queue-manager.ts';
 import { MediaAnalyzer } from '../core/media/analysis/media-analyzer.ts';
@@ -54,6 +56,9 @@ if (!process.env.MASTER_KEY_DIR) {
 registerSensitiveFile(path.basename(DB_PATH));
 registerSensitiveFile(path.basename(DB_PATH) + '-wal');
 registerSensitiveFile(path.basename(DB_PATH) + '-shm');
+
+// Give src/core its Google Drive implementation (see core/media/drive-backend).
+registerDriveBackend(googleDriveBackend);
 
 const CACHE_ROOT = path.join(process.cwd(), 'cache');
 const CACHE_DIR = path.join(CACHE_ROOT, 'thumbnails');
@@ -230,7 +235,11 @@ export async function createApp(mediaService: MediaService) {
     app.use(express.static(clientDistPath));
 
     app.get(/.*/, limiters.readLimiter, (_req, res) => {
-      res.sendFile(path.join(clientDistPath, 'index.html'));
+      // The install path may contain a dot-directory (e.g. ~/.local), which
+      // send's default dotfiles:'ignore' would turn into a 404.
+      res.sendFile(path.join(clientDistPath, 'index.html'), {
+        dotfiles: 'allow',
+      });
     });
   }
 

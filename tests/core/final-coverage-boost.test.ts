@@ -37,7 +37,13 @@ const {
 
   const listeners: Record<string, Array<(...args: any[]) => void>> = {};
   const mockSpawnProcess: any = {
-    stdout: { pipe: vi.fn(), on: vi.fn() },
+    stdout: {
+      pipe: vi.fn(),
+      unpipe: vi.fn(),
+      on: vi.fn(),
+      once: vi.fn(),
+      destroy: vi.fn(),
+    },
     stderr: { pipe: vi.fn(), on: vi.fn() },
     kill: vi.fn(),
     on: vi.fn((event, listener) => {
@@ -525,6 +531,11 @@ describe('Final Coverage Boost', () => {
         set: vi.fn(),
         status: vi.fn().mockReturnThis(),
         send: vi.fn(),
+        on: vi.fn(),
+        once: vi.fn(),
+        emit: vi.fn(),
+        write: vi.fn(),
+        end: vi.fn(),
       } as any;
 
       const handler = new mediaHandler.MediaHandler({

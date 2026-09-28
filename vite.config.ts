@@ -268,6 +268,26 @@ const lint: UserConfig['lint'] = {
   },
   overrides: [
     {
+      // src/core is shared by the Electron main process, the web server and
+      // the worker threads, so it must not import either entry layer
+      // (CLAUDE.md). Drive access goes through core/media/drive-backend.ts.
+      files: ['src/core/**'],
+      rules: {
+        'no-restricted-imports': [
+          'error',
+          {
+            patterns: [
+              {
+                regex: '^(\\.\\./)+(main|server)(/|$)',
+                message:
+                  'src/core must not import from src/main or src/server; inject the dependency instead.',
+              },
+            ],
+          },
+        ],
+      },
+    },
+    {
       // Tests may use `any` for mocks, pass unbound mock methods to expect(),
       // and `await` synchronous calls (e.g. `await vm.$emit()`) to flush
       // pending microtasks before asserting.

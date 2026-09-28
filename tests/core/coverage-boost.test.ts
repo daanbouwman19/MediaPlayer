@@ -112,6 +112,11 @@ describe('Coverage Boost - MediaHandler', () => {
       sendFile: vi.fn(),
       headersSent: false,
       end: vi.fn(),
+      on: vi.fn(),
+      once: vi.fn(),
+      emit: vi.fn(),
+      write: vi.fn(),
+      removeHeader: vi.fn(),
     };
   });
 
@@ -178,7 +183,8 @@ describe('Coverage Boost - MediaHandler', () => {
     (mockSource.getStream as any).mockResolvedValue({
       stream: {
         pipe: vi.fn(),
-        on: function (event: string, cb: any) {
+        unpipe: vi.fn(),
+        once: function (event: string, cb: any) {
           if (event === 'error') cb(new Error('Stream failed'));
         },
         destroy: vi.fn(),
@@ -193,7 +199,8 @@ describe('Coverage Boost - MediaHandler', () => {
 
     await serveRawStream(req, res, mockSource as any);
 
-    expect(res.status).toHaveBeenCalledWith(500);
+    expect(res.statusCode).toBe(500);
+    expect(res.removeHeader).toHaveBeenCalledWith('Content-Length');
     expect(res.end).toHaveBeenCalled();
   });
 
