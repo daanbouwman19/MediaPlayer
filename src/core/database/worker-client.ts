@@ -56,6 +56,11 @@ interface WorkerClientOptions {
    * that crashes shortly after starting restart forever.
    */
   stableAfter?: number;
+  /**
+   * Called once when auto-restart gives up (maxRestarts attempts failed), so
+   * the host can tell the user instead of carrying on without the worker.
+   */
+  onUnavailable?: ((error: Error) => void) | undefined;
 }
 
 /** Upper bound for the exponential restart backoff. */
@@ -83,6 +88,9 @@ export class WorkerClient {
   /** Bumped by an explicit terminate() so pending restarts are abandoned. */
   private lifecycle = 0;
   private initialPayload?: { type: string; payload?: unknown };
+  private onUnavailable: ((error: Error) => void) | undefined;
+  /** Why auto-restart gave up; requests then fail with this reason. */
+  private unavailableError: Error | null = null;
 
   constructor(workerPath: string | URL, options: WorkerClientOptions = {}) {
     this.workerPath = workerPath;
@@ -94,6 +102,7 @@ export class WorkerClient {
     this.maxRestarts = options.maxRestarts ?? 5;
     this.restartDelay = options.restartDelay ?? 1000;
     this.stableAfter = options.stableAfter ?? 60_000;
+    this.onUnavailable = options.onUnavailable;
   }
 
   /**
@@ -117,6 +126,7 @@ export class WorkerClient {
     }
 
     this.isTerminating = false;
+    this.unavailableError = null;
 
     try {
       const worker = new Worker(this.workerPath, this.workerOptions);
@@ -190,7 +200,9 @@ export class WorkerClient {
     this.worker = null;
 
     if (this.autoRestart) {
-      this.scheduleRestart();
+      this.scheduleRestart(
+        new Error(`Worker exited unexpectedly with code ${code}`),
+      );
     }
   }
 
@@ -199,9 +211,10 @@ export class WorkerClient {
    * counts as an attempt too and schedules the next one, until maxRestarts
    * attempts have been made without the worker staying up for stableAfter.
    */
-  private scheduleRestart(): void {
+  private scheduleRestart(reason: Error): void {
     if (this.restartCount >= this.maxRestarts) {
       safeError(`[${this.name}] Max restarts reached. Giving up.`);
+      this.giveUp(reason);
       return;
     }
     this.restartCount++;
@@ -224,10 +237,22 @@ export class WorkerClient {
           !this.restartTimer &&
           !this.worker
         ) {
-          this.scheduleRestart();
+          this.scheduleRestart(e instanceof Error ? e : new Error(String(e)));
         }
       });
     }, delay);
+  }
+
+  private giveUp(reason: Error): void {
+    this.unavailableError = new Error(
+      `${this.name} is unavailable after ${this.maxRestarts} failed restarts: ${reason.message}`,
+    );
+    if (!this.onUnavailable) return;
+    try {
+      this.onUnavailable(this.unavailableError);
+    } catch (error) {
+      safeError(`[${this.name}] onUnavailable handler failed:`, error);
+    }
   }
 
   /** Refills the restart budget once a restarted worker has stayed up. */
@@ -266,7 +291,9 @@ export class WorkerClient {
       // Or if we just crashed, the consumer might want to retry.
 
       if (!this.worker) {
-        return reject(new Error('Worker not initialized'));
+        return reject(
+          this.unavailableError ?? new Error('Worker not initialized'),
+        );
       }
 
       const id = this.messageIdCounter++;

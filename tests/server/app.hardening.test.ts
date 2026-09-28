@@ -68,11 +68,11 @@ vi.mock('../../src/core/media/analysis/media-analyzer', () => ({
   },
 }));
 
-vi.mock('../../src/main/drive-cache-manager', () => ({
+vi.mock('../../src/infrastructure/drive-cache-manager', () => ({
   initializeDriveCacheManager: vi.fn(),
 }));
 
-vi.mock('../../src/main/google-auth', () => ({
+vi.mock('../../src/infrastructure/google-auth', () => ({
   generateAuthUrl: vi.fn().mockReturnValue('https://accounts.example/auth'),
   authenticateWithCode: vi.fn(),
   checkGoogleDriveAuth: vi.fn().mockResolvedValue(false),

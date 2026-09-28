@@ -7,11 +7,11 @@ import {
   afterEach,
 } from 'vite-plus/test';
 import { google } from 'googleapis';
-import * as driveService from '../../src/main/google-drive-service';
-import * as googleAuth from '../../src/main/google-auth';
-import type { Album } from '../../src/core/media/types';
+import * as driveService from '../../../src/infrastructure/google-drive-service';
+import * as googleAuth from '../../../src/infrastructure/google-auth';
+import type { Album } from '../../../src/core/media/types';
 
-vi.mock('../../src/main/google-auth');
+vi.mock('../../../src/infrastructure/google-auth');
 vi.mock('googleapis');
 
 const FOLDER = 'application/vnd.google-apps.folder';

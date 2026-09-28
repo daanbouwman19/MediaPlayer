@@ -58,7 +58,7 @@ vi.mock('../../src/main/local-server', () => ({
   authorizeSessionRequests: vi.fn(),
 }));
 vi.mock('../../src/main/auth-server', () => ({ stopAuthServer: vi.fn() }));
-vi.mock('../../src/main/drive-cache-manager', () => ({
+vi.mock('../../src/infrastructure/drive-cache-manager', () => ({
   cleanupDriveCacheManager: vi.fn(),
   initializeDriveCacheManager: vi.fn(),
 }));

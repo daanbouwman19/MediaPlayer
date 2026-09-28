@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vite-plus/test';
 import request from 'supertest';
 import { createApp } from '../../src/server/server';
-import { authenticateWithCode } from '../../src/main/google-auth';
+import { authenticateWithCode } from '../../src/infrastructure/google-auth';
 import { createTestMediaService } from '../utils/test-factory';
 
 vi.mock('../../src/core/database/database', () => ({
@@ -33,11 +33,11 @@ vi.mock('../../src/core/media/transcode-queue-manager', () => ({
   },
 }));
 
-vi.mock('../../src/main/google-auth', () => ({
+vi.mock('../../src/infrastructure/google-auth', () => ({
   generateAuthUrl: vi.fn(),
   authenticateWithCode: vi.fn(),
 }));
-vi.mock('../../src/main/drive-cache-manager', () => ({
+vi.mock('../../src/infrastructure/drive-cache-manager', () => ({
   initializeDriveCacheManager: vi.fn(),
 }));
 vi.mock('fs/promises', () => ({

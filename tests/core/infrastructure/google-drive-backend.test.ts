@@ -15,17 +15,17 @@ const {
   mockGetCachedFilePath: vi.fn(),
 }));
 
-vi.mock('../../../src/main/google-drive-service', () => ({
+vi.mock('../../../src/infrastructure/google-drive-service', () => ({
   getDriveFileMetadata: mockGetDriveFileMetadata,
   getDriveFileStream: mockGetDriveFileStream,
   listDriveFiles: mockListDriveFiles,
 }));
 
-vi.mock('../../../src/main/google-auth', () => ({
+vi.mock('../../../src/infrastructure/google-auth', () => ({
   initializeManualCredentials: mockInitializeManualCredentials,
 }));
 
-vi.mock('../../../src/main/drive-cache-manager', () => ({
+vi.mock('../../../src/infrastructure/drive-cache-manager', () => ({
   getDriveCacheManager: () => ({ getCachedFilePath: mockGetCachedFilePath }),
 }));
 

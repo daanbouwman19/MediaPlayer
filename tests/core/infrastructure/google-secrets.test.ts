@@ -10,7 +10,7 @@ import {
   getGoogleClientId,
   getGoogleClientSecret,
   getGoogleRedirectUri,
-} from '../../src/main/google-secrets';
+} from '../../../src/infrastructure/google-secrets';
 
 describe('Google Secrets', () => {
   const originalEnv = process.env;

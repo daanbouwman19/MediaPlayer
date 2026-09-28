@@ -37,7 +37,7 @@ import {
   getDriveFolderInfo,
   getDriveParent,
   listDriveDirectory,
-} from '../../main/google-drive-service.ts';
+} from '../../infrastructure/google-drive-service.ts';
 import type { RateLimiters } from '../middleware/rate-limiters.ts';
 import { asyncHandler } from '../middleware/async-handler.ts';
 import { createRateLimiter } from '../../core/network/rate-limiter.ts';

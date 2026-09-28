@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vite-plus/test';
 import { google } from 'googleapis';
 
 // Mock imports
-vi.mock('../../src/main/google-auth');
+vi.mock('../../../src/infrastructure/google-auth');
 vi.mock('googleapis');
 
 const mockDrive = {
@@ -21,8 +21,9 @@ describe('Google Drive Service Input Validation', () => {
   });
 
   it('should prevent query injection in listDriveDirectory', async () => {
-    const driveService = await import('../../src/main/google-drive-service');
-    const googleAuth = await import('../../src/main/google-auth');
+    const driveService =
+      await import('../../../src/infrastructure/google-drive-service');
+    const googleAuth = await import('../../../src/infrastructure/google-auth');
 
     (googleAuth.getOAuth2Client as any).mockReturnValue({
       credentials: { refresh_token: 'valid' },
@@ -57,8 +58,9 @@ describe('Google Drive Service Input Validation', () => {
   });
 
   it('should allow valid folder IDs', async () => {
-    const driveService = await import('../../src/main/google-drive-service');
-    const googleAuth = await import('../../src/main/google-auth');
+    const driveService =
+      await import('../../../src/infrastructure/google-drive-service');
+    const googleAuth = await import('../../../src/infrastructure/google-auth');
 
     (googleAuth.getOAuth2Client as any).mockReturnValue({
       credentials: { refresh_token: 'valid' },

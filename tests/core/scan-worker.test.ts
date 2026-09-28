@@ -24,10 +24,10 @@ vi.mock('worker_threads', () => ({
 }));
 
 // Mock google-auth
-vi.mock('../../src/main/google-auth', () => ({
+vi.mock('../../src/infrastructure/google-auth', () => ({
   initializeManualCredentials: vi.fn(),
 }));
-import * as googleAuth from '../../src/main/google-auth';
+import * as googleAuth from '../../src/infrastructure/google-auth';
 
 describe('scan-worker', () => {
   beforeEach(() => {

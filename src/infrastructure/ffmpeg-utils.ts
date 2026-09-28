@@ -67,17 +67,40 @@ const FFMPEG_ALLOWED_DEMUXERS = [
  * [SECURITY] Input options that confine what FFmpeg may open while reading
  * `input`. Local files may only use the file protocol; Drive media is read
  * through the internal HTTP proxy (http://127.0.0.1), which needs http + tcp.
- * Must be placed directly before the matching `-i`.
+ * URL inputs also get {@link FFMPEG_URL_INPUT_ARGS}. Must be placed directly
+ * before the matching `-i`.
  */
 export function getInputSafetyArgs(input: string): string[] {
-  const protocols = /^http:\/\//i.test(input) ? 'http,tcp' : 'file';
+  const isUrl = /^http:\/\//i.test(input);
   return [
     '-protocol_whitelist',
-    protocols,
+    isUrl ? 'http,tcp' : 'file',
     '-format_whitelist',
     FFMPEG_ALLOWED_DEMUXERS,
+    ...(isUrl ? FFMPEG_URL_INPUT_ARGS : []),
   ];
 }
+
+/**
+ * Network options for URL inputs (the internal Drive proxy). The proxy ends
+ * or resets the response when Drive fails and has its own 60 s stall
+ * watchdog; these are defence in depth on the ffmpeg side:
+ * - `-rw_timeout` (in microseconds, set above the proxy watchdog so that one
+ *   reports the stall first) fails a read that gets no data at all, instead
+ *   of blocking forever.
+ * - `-reconnect` resumes with a Range request after the connection drops
+ *   before EOF (a transient reset), giving up after `-reconnect_delay_max`
+ *   seconds of backoff. Connect errors and HTTP errors are not retried, so a
+ *   request the proxy refuses still fails at once.
+ */
+export const FFMPEG_URL_INPUT_ARGS: readonly string[] = [
+  '-rw_timeout',
+  String(90 * 1_000_000),
+  '-reconnect',
+  '1',
+  '-reconnect_delay_max',
+  '5',
+];
 
 /**
  * Standard base codec arguments for H.264/AAC transcoding.

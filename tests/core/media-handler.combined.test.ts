@@ -16,6 +16,10 @@ import { createMediaSource } from '../../src/core/media/media-source';
 import fs from 'fs';
 import { createTestMediaService } from '../utils/test-factory';
 import { MediaService } from '../../src/core/media/media-service';
+import {
+  registerDriveBackend,
+  resetDriveBackend,
+} from '../../src/core/media/drive-backend';
 
 // --- Mocks ---
 
@@ -62,7 +66,7 @@ import {
   resetTranscodeConcurrency,
 } from '../../src/core/media/media-handler';
 
-vi.mock('../../src/main/google-drive-service', () => ({
+vi.mock('../../src/infrastructure/google-drive-service', () => ({
   getDriveFileMetadata: mockGetDriveFileMetadata,
   getDriveFileThumbnail: mockGetDriveFileThumbnail,
   getDriveFileStream: vi.fn(),
@@ -230,6 +234,11 @@ describe('MediaHandler Combined Tests', () => {
     // Reset all persistent mocks prevents cross-test state pollution
     mockSpawn.mockReset();
     mockGetDriveFileMetadata.mockReset();
+    // The Drive provider reads metadata through the shared (cached) backend.
+    resetDriveBackend();
+    registerDriveBackend({
+      getFileMetadata: (id: string) => mockGetDriveFileMetadata(id),
+    } as any);
     mockGetDriveFileThumbnail.mockReset();
     mockAuthorizeFilePath.mockReset();
     mockGetThumbnailCachePath.mockReset();

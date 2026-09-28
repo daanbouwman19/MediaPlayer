@@ -5,16 +5,16 @@ import { handleIpc } from '../../../src/main/utils/ipc-helper';
 import {
   generateAuthUrl,
   authenticateWithCode,
-} from '../../../src/main/google-auth';
+} from '../../../src/infrastructure/google-auth';
 import { startAuthServer } from '../../../src/main/auth-server';
-import { getDriveFolderInfo } from '../../../src/main/google-drive-service';
+import { getDriveFolderInfo } from '../../../src/infrastructure/google-drive-service';
 import { addMediaDirectory } from '../../../src/core/database/database';
 
 vi.mock('../../../src/main/utils/ipc-helper', () => ({
   handleIpc: vi.fn(),
 }));
 
-vi.mock('../../../src/main/google-auth', () => ({
+vi.mock('../../../src/infrastructure/google-auth', () => ({
   generateAuthUrl: vi.fn(),
   authenticateWithCode: vi.fn(),
   getPendingAuthState: vi.fn(() => 'test-state'),
@@ -24,7 +24,7 @@ vi.mock('../../../src/main/auth-server', () => ({
   startAuthServer: vi.fn(),
 }));
 
-vi.mock('../../../src/main/google-drive-service', () => ({
+vi.mock('../../../src/infrastructure/google-drive-service', () => ({
   getDriveFolderInfo: vi.fn(),
 }));
 

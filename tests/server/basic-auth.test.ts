@@ -51,7 +51,7 @@ vi.mock('../../src/core/media/analysis/media-analyzer', () => ({
   },
 }));
 
-vi.mock('../../src/main/drive-cache-manager', () => ({
+vi.mock('../../src/infrastructure/drive-cache-manager', () => ({
   initializeDriveCacheManager: vi.fn(),
 }));
 

@@ -4,10 +4,24 @@
  */
 
 import path from 'path';
-import { app } from 'electron';
+import { app, dialog } from 'electron';
 import { fileURLToPath } from 'url';
 import { initDatabase as initCoreDatabase } from '../core/database/database';
 import { WorkerFactory } from '../core/database/worker-factory.ts';
+
+/**
+ * Tells the user that the database worker crashed and could not be
+ * restarted: library data (sources, ratings, playlists) can no longer be read
+ * or saved until the app is restarted.
+ */
+export function reportDatabaseUnavailable(error: Error): void {
+  dialog.showErrorBox(
+    'Media library unavailable',
+    `The media library database stopped working and could not be restarted. Changes are not saved until you restart MediaPlayer.
+
+${error.message}`,
+  );
+}
 
 /**
  * Initializes the database by creating and managing a worker thread.
@@ -39,5 +53,7 @@ export async function initDatabase(): Promise<void> {
     },
   );
 
-  return initCoreDatabase(dbPath, workerPath);
+  return initCoreDatabase(dbPath, workerPath, undefined, {
+    onUnavailable: reportDatabaseUnavailable,
+  });
 }

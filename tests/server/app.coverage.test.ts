@@ -38,7 +38,7 @@ vi.mock('../../src/core/database/database', () => ({
   initDatabase: vi.fn(),
 }));
 
-vi.mock('../../src/main/drive-cache-manager.ts', () => ({
+vi.mock('../../src/infrastructure/drive-cache-manager.ts', () => ({
   initializeDriveCacheManager: vi.fn(),
 }));
 
@@ -185,6 +185,7 @@ describe('Server app additional coverage', () => {
   });
 
   describe('in production mode', () => {
+    let dotDir: string;
     let clientDir: string;
 
     beforeEach(async () => {
@@ -192,11 +193,12 @@ describe('Server app additional coverage', () => {
       process.env.VITEST = 'true';
       process.env.SESSION_SECRET = 'test-secret';
 
-      // A stand-in client build outside the source tree.
-      clientDir = await fs.mkdtemp(
-        path.join(os.tmpdir(), 'mediaplayer-client-'),
-      );
-      await fs.mkdir(path.join(clientDir, 'assets'));
+      // A stand-in client build outside the source tree, below a
+      // dot-directory as in an install under ~/.local (F05): send refuses
+      // absolute paths with dot segments unless they are allowed or rooted.
+      dotDir = await fs.mkdtemp(path.join(os.tmpdir(), '.mediaplayer-'));
+      clientDir = path.join(dotDir, 'client');
+      await fs.mkdir(path.join(clientDir, 'assets'), { recursive: true });
       await fs.writeFile(
         path.join(clientDir, 'index.html'),
         '<!doctype html><html><body id="spa-shell"></body></html>',
@@ -208,7 +210,7 @@ describe('Server app additional coverage', () => {
     });
 
     afterEach(async () => {
-      await fs.rm(clientDir, { recursive: true, force: true });
+      await fs.rm(dotDir, { recursive: true, force: true });
     });
 
     async function createProductionApp() {
@@ -223,6 +225,14 @@ describe('Server app additional coverage', () => {
     it('serves index.html for client-side routes', async () => {
       const app = await createProductionApp();
       const res = await request(app).get('/somewhere');
+
+      expect(res.status).toBe(200);
+      expect(res.text).toContain('id="spa-shell"');
+    });
+
+    it('serves the app root from below a dot-directory', async () => {
+      const app = await createProductionApp();
+      const res = await request(app).get('/');
 
       expect(res.status).toBe(200);
       expect(res.text).toContain('id="spa-shell"');

@@ -2,11 +2,11 @@ import { describe, it, expect, vi, beforeEach } from 'vite-plus/test';
 import { google } from 'googleapis';
 import { EventEmitter } from 'events';
 import { gaxios } from 'google-auth-library';
-import * as driveService from '../../src/main/google-drive-service';
-import * as googleAuth from '../../src/main/google-auth';
+import * as driveService from '../../../src/infrastructure/google-drive-service';
+import * as googleAuth from '../../../src/infrastructure/google-auth';
 
 // We need to mock imports BEFORE importing the module under test
-vi.mock('../../src/main/google-auth');
+vi.mock('../../../src/infrastructure/google-auth');
 vi.mock('googleapis');
 
 const mockDrive = {

@@ -5,10 +5,10 @@ import {
   authenticateWithCode,
   checkGoogleDriveAuth,
   getPendingAuthState,
-} from '../google-auth';
+} from '../../infrastructure/google-auth';
 import { startAuthServer } from '../auth-server';
-import { getDriveFolderInfo } from '../google-drive-service';
-import { getGoogleRedirectUri } from '../google-secrets';
+import { getDriveFolderInfo } from '../../infrastructure/google-drive-service';
+import { getGoogleRedirectUri } from '../../infrastructure/google-secrets';
 import { addMediaDirectory } from '../../core/database/database';
 import { handleIpc } from '../utils/ipc-helper';
 

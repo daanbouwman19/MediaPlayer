@@ -23,7 +23,7 @@ vi.mock('fs/promises', () => ({
 }));
 
 // Mock google-drive-service
-vi.mock('../../src/main/google-drive-service', () => ({
+vi.mock('../../src/infrastructure/google-drive-service', () => ({
   listDriveFiles: vi.fn(),
 }));
 

@@ -24,7 +24,7 @@ import {
   getDriveFolderInfo,
   listDriveDirectory,
   getDriveParent,
-} from '../../src/main/google-drive-service';
+} from '../../src/infrastructure/google-drive-service';
 
 // --- Global Mocks ---
 
@@ -106,7 +106,7 @@ vi.mock('fs', () => {
 // Mock core modules
 vi.mock('../../src/core/database/database');
 vi.mock('../../src/core/media/file-system');
-vi.mock('../../src/main/drive-cache-manager');
+vi.mock('../../src/infrastructure/drive-cache-manager');
 vi.mock('../../src/core/media/utils/mime-types');
 
 // Mock security
@@ -175,13 +175,13 @@ vi.mock('../../src/core/media/media-handler', () => ({
 }));
 
 // Mock google-auth
-vi.mock('../../src/main/google-auth', () => ({
+vi.mock('../../src/infrastructure/google-auth', () => ({
   generateAuthUrl: vi.fn(),
   authenticateWithCode: vi.fn(),
 }));
 
 // Mock google-drive-service
-vi.mock('../../src/main/google-drive-service', () => ({
+vi.mock('../../src/infrastructure/google-drive-service', () => ({
   getDriveFolderInfo: vi.fn(),
   listDriveDirectory: vi.fn(),
   getDriveParent: vi.fn(),

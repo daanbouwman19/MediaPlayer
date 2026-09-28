@@ -61,6 +61,38 @@ describe('FFmpeg Utils Coverage Boost', () => {
       expect(args.slice(0, 2)).toEqual(['-protocol_whitelist', 'http,tcp']);
     });
 
+    it('adds a read timeout and reconnects for the proxy URL only (F29)', () => {
+      const url = getInputSafetyArgs('http://127.0.0.1:1234/stream/abc.mp4');
+      const option = (args: string[], name: string) => {
+        const i = args.indexOf(name);
+        return i === -1 ? undefined : args[i + 1];
+      };
+      // Above the proxy's 60 s stall watchdog, in microseconds.
+      expect(Number(option(url, '-rw_timeout'))).toBeGreaterThan(60_000_000);
+      expect(option(url, '-reconnect')).toBe('1');
+      expect(option(url, '-reconnect_delay_max')).toBe('5');
+      // Refused connections and HTTP errors still fail at once.
+      expect(url).not.toContain('-reconnect_on_network_error');
+      expect(url).not.toContain('-reconnect_on_http_error');
+
+      const local = getInputSafetyArgs('/media/movie.mkv');
+      expect(local).not.toContain('-rw_timeout');
+      expect(local).not.toContain('-reconnect');
+    });
+
+    it('puts the URL options right before -i of every command for URL inputs', () => {
+      const input = 'http://127.0.0.1:1234/stream/abc.mp4?token=x';
+      const inputArgs = getInputSafetyArgs(input);
+      for (const args of [
+        getTranscodeArgs(input, null),
+        getHlsTranscodeArgs(input, 'seg-%03d.ts', 'list.m3u8', 6),
+      ]) {
+        const before = optionsBeforeInput(args, input);
+        expect(before.slice(-inputArgs.length)).toEqual(inputArgs);
+        expect(before).toContain('-rw_timeout');
+      }
+    });
+
     it('treats any other scheme as a local path (file protocol only)', () => {
       const args = getInputSafetyArgs('https://example.com/a.mp4');
       expect(args[1]).toBe('file');

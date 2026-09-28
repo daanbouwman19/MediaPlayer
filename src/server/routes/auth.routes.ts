@@ -12,7 +12,7 @@ import {
   authenticateWithCode,
   checkGoogleDriveAuth,
   getPendingAuthState,
-} from '../../main/google-auth.ts';
+} from '../../infrastructure/google-auth.ts';
 import { getGoogleAuthSuccessPage } from '../auth-views.ts';
 import type { RateLimiters } from '../middleware/rate-limiters.ts';
 import { asyncHandler } from '../middleware/async-handler.ts';

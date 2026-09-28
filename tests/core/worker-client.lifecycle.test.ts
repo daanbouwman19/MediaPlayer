@@ -145,6 +145,72 @@ describe('WorkerClient lifecycle', () => {
     });
   });
 
+  describe('giving up (F88)', () => {
+    it('reports once, with the last failure, when every restart failed', async () => {
+      const onUnavailable = vi.fn();
+      client = new WorkerClient('/worker.js', {
+        name: 'database.js',
+        autoRestart: true,
+        restartDelay: 10,
+        maxRestarts: 2,
+        onUnavailable,
+      });
+      await client.init(INIT);
+
+      control.reply = () => ({ success: false, error: 'corrupt' });
+      latestWorker().emit('exit', 1);
+      await vi.advanceTimersByTimeAsync(60_000);
+
+      expect(onUnavailable).toHaveBeenCalledTimes(1);
+      const error = onUnavailable.mock.calls[0]?.[0] as Error;
+      expect(error.message).toBe(
+        'database.js is unavailable after 2 failed restarts: corrupt',
+      );
+      // Requests fail with the reason instead of a bare "not initialized".
+      await expect(client.sendMessage('getMetadata')).rejects.toBe(error);
+    });
+
+    it('names the exit code when the restarted workers keep crashing', async () => {
+      const onUnavailable = vi.fn(() => {
+        throw new Error('handler bug');
+      });
+      client = new WorkerClient('/worker.js', {
+        autoRestart: true,
+        restartDelay: 10,
+        maxRestarts: 1,
+        onUnavailable,
+      });
+      await client.init(INIT);
+
+      latestWorker().emit('exit', 1);
+      await vi.advanceTimersByTimeAsync(10);
+      latestWorker().emit('exit', 134);
+      await vi.advanceTimersByTimeAsync(10_000);
+
+      // A throwing handler does not break the client.
+      expect(onUnavailable).toHaveBeenCalledTimes(1);
+      await expect(client.sendMessage('getMetadata')).rejects.toThrow(
+        'Worker is unavailable after 1 failed restarts: Worker exited unexpectedly with code 134',
+      );
+    });
+
+    it('clears the failure after a successful manual re-init', async () => {
+      client = new WorkerClient('/worker.js', {
+        autoRestart: true,
+        restartDelay: 10,
+        maxRestarts: 0,
+      });
+      await client.init(INIT);
+      latestWorker().emit('exit', 1);
+      await expect(client.sendMessage('getMetadata')).rejects.toThrow(
+        'unavailable',
+      );
+
+      await client.init(INIT);
+      await expect(client.sendMessage('getMetadata')).resolves.toBeUndefined();
+    });
+  });
+
   describe('restart budget (F89)', () => {
     it('does not treat the unsolicited ready message as a sign of health', async () => {
       client = new WorkerClient('/worker.js', {

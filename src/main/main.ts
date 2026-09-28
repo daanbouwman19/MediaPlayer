@@ -33,7 +33,7 @@ import { stopAuthServer } from './auth-server';
 import {
   cleanupDriveCacheManager,
   initializeDriveCacheManager,
-} from './drive-cache-manager';
+} from '../infrastructure/drive-cache-manager';
 import { loadProtectedMasterKey } from './master-key-store';
 import {
   getRendererOrigins,

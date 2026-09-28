@@ -2,6 +2,7 @@ import { Readable } from 'stream';
 import { FileSystemProvider, FileMetadata } from '../../core/media/fs-provider';
 import { FileSystemEntry } from '../../core/media/file-system';
 import { getDriveStreamWithCache } from '../../core/media/drive-stream';
+import { getDriveFileMetadataCached } from '../../core/media/drive-backend';
 import {
   isDrivePath,
   getDriveId,
@@ -9,10 +10,9 @@ import {
 } from '../../core/media/media-utils';
 import {
   listDriveDirectory,
-  getDriveFileMetadata,
   getDriveParent,
   getDriveFileThumbnail,
-} from '../../main/google-drive-service';
+} from '../google-drive-service';
 
 export class GoogleDriveProvider implements FileSystemProvider {
   canHandle(filePath: string): boolean {
@@ -26,7 +26,9 @@ export class GoogleDriveProvider implements FileSystemProvider {
 
   async getMetadata(filePath: string): Promise<FileMetadata> {
     const fileId = getDriveId(filePath);
-    const meta = await getDriveFileMetadata(fileId);
+    // Shared with the streaming path, so duration and URL lookups for the
+    // same file do not each pay for a files.get round trip.
+    const meta = await getDriveFileMetadataCached(fileId);
 
     let duration: number | undefined;
     if (meta.videoMediaMetadata?.durationMillis) {

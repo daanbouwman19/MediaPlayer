@@ -39,7 +39,7 @@ vi.mock('../../../src/core/database/database', async (importOriginal) => {
   };
 });
 
-vi.mock('../../../src/main/google-drive-service', () => ({
+vi.mock('../../../src/infrastructure/google-drive-service', () => ({
   getDriveClient: vi.fn(),
   getDriveParent: vi.fn(),
   listDriveDirectory: vi.fn(),

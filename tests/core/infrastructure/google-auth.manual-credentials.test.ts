@@ -26,12 +26,12 @@ vi.mock('googleapis', () => ({
   google: { auth: { OAuth2: MockOAuth2 }, drive: vi.fn() },
 }));
 
-vi.mock('../../src/core/database/database', () => ({
+vi.mock('../../../src/core/database/database', () => ({
   getSetting: vi.fn(),
   saveSetting: vi.fn(),
 }));
 
-vi.mock('../../src/core/auth/encryption', () => ({
+vi.mock('../../../src/core/auth/encryption', () => ({
   encrypt: vi.fn((text: string) => `ENCRYPTED[${text}]`),
   decrypt: vi.fn((text: string) => text),
 }));
@@ -42,13 +42,13 @@ async function loadGoogleAuth({
   mainThread = true,
 }: { configured?: boolean; mainThread?: boolean } = {}) {
   vi.resetModules();
-  vi.doMock('../../src/main/google-secrets', () => ({
+  vi.doMock('../../../src/infrastructure/google-secrets', () => ({
     getGoogleClientId: () => (configured ? 'client-id' : ''),
     getGoogleClientSecret: () => (configured ? 'client-secret' : ''),
     getGoogleRedirectUri: () => 'http://localhost:12345/auth/google/callback',
   }));
   vi.doMock('worker_threads', () => ({ isMainThread: mainThread }));
-  return import('../../src/main/google-auth');
+  return import('../../../src/infrastructure/google-auth');
 }
 
 const tokens = { access_token: 'stale', refresh_token: 'refresh' };
@@ -61,7 +61,7 @@ describe('google-auth manual credentials', () => {
 
   afterEach(() => {
     vi.doUnmock('worker_threads');
-    vi.doUnmock('../../src/main/google-secrets');
+    vi.doUnmock('../../../src/infrastructure/google-secrets');
     vi.restoreAllMocks();
   });
 
@@ -96,7 +96,7 @@ describe('google-auth manual credentials', () => {
 
   it('saves refreshed tokens on the main thread', async () => {
     const auth = await loadGoogleAuth({ mainThread: true });
-    const database = await import('../../src/core/database/database');
+    const database = await import('../../../src/core/database/database');
     const client = auth.getOAuth2Client() as unknown as EventEmitter;
     auth.initializeManualCredentials(tokens);
 
@@ -113,7 +113,7 @@ describe('google-auth manual credentials', () => {
   it('does not try to save refreshed tokens from a worker thread, which has no database', async () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     const auth = await loadGoogleAuth({ mainThread: false });
-    const database = await import('../../src/core/database/database');
+    const database = await import('../../../src/core/database/database');
     auth.initializeManualCredentials(tokens);
     const client = auth.getOAuth2Client() as unknown as EventEmitter;
 

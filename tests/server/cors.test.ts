@@ -18,7 +18,7 @@ vi.mock('../../src/core/media/file-system');
 vi.mock('../../src/core/auth/security');
 
 // Mock Google Drive Service to prevent importing googleapis
-vi.mock('../../src/main/google-drive-service', () => ({
+vi.mock('../../src/infrastructure/google-drive-service', () => ({
   getDriveFileMetadata: vi.fn(),
   getDriveFileStream: vi.fn(),
 }));

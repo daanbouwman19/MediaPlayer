@@ -7,7 +7,7 @@ import {
   afterEach,
 } from 'vite-plus/test';
 import { performFullMediaScan } from '../../src/core/media/media-scanner';
-import * as driveService from '../../src/main/google-drive-service';
+import * as driveService from '../../src/infrastructure/google-drive-service';
 import { registerDriveBackend } from '../../src/core/media/drive-backend';
 import { googleDriveBackend } from '../../src/infrastructure/google-drive-backend';
 
@@ -34,7 +34,7 @@ vi.mock('fs/promises', () => {
   };
 });
 
-vi.mock('../../src/main/google-drive-service', () => ({
+vi.mock('../../src/infrastructure/google-drive-service', () => ({
   listDriveFiles: vi.fn(),
 }));
 

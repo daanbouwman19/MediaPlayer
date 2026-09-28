@@ -11,9 +11,9 @@ import {
   getDriveFileMetadata,
   getDriveFileStream,
   listDriveFiles,
-} from '../main/google-drive-service.ts';
-import { initializeManualCredentials } from '../main/google-auth.ts';
-import { getDriveCacheManager } from '../main/drive-cache-manager.ts';
+} from './google-drive-service.ts';
+import { initializeManualCredentials } from './google-auth.ts';
+import { getDriveCacheManager } from './drive-cache-manager.ts';
 
 export const googleDriveBackend: DriveBackend = {
   getFileMetadata: (fileId) => getDriveFileMetadata(fileId),

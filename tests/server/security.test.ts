@@ -58,11 +58,11 @@ vi.mock('../../src/core/media/transcode-queue-manager', () => ({
   },
 }));
 
-vi.mock('../../src/main/drive-cache-manager', () => ({
+vi.mock('../../src/infrastructure/drive-cache-manager', () => ({
   initializeDriveCacheManager: vi.fn(),
 }));
 
-vi.mock('../../src/main/google-auth', () => ({
+vi.mock('../../src/infrastructure/google-auth', () => ({
   authenticateWithCode: vi.fn(),
   generateAuthUrl: vi.fn(),
 }));

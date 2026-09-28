@@ -20,9 +20,9 @@ import {
   SESSION_MAX_AGE_MS,
   setSessionFingerprintKey,
 } from '../../src/server/middleware/global-password';
-import { generateAuthUrl } from '../../src/main/google-auth';
+import { generateAuthUrl } from '../../src/infrastructure/google-auth';
 
-vi.mock('../../src/main/google-auth', () => ({
+vi.mock('../../src/infrastructure/google-auth', () => ({
   generateAuthUrl: vi.fn().mockReturnValue('https://accounts.example/auth'),
   authenticateWithCode: vi.fn(),
   checkGoogleDriveAuth: vi.fn(),

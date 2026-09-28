@@ -342,10 +342,11 @@ const lint: UserConfig['lint'] = {
   },
   overrides: [
     {
-      // src/core is shared by the Electron main process, the web server and
-      // the worker threads, so it must not import either entry layer
-      // (CLAUDE.md). Drive access goes through core/media/drive-backend.ts.
-      files: ['src/core/**'],
+      // src/core and src/infrastructure are shared by the Electron main
+      // process, the web server and the worker threads, so they must not
+      // import either entry layer (CLAUDE.md). Drive access from
+      // core goes through core/media/drive-backend.ts.
+      files: ['src/core/**', 'src/infrastructure/**'],
       rules: {
         'no-restricted-imports': [
           'error',
@@ -354,7 +355,7 @@ const lint: UserConfig['lint'] = {
               {
                 regex: '^(\\.\\./)+(main|server)(/|$)',
                 message:
-                  'src/core must not import from src/main or src/server; inject the dependency instead.',
+                  'src/core and src/infrastructure must not import from src/main or src/server; inject the dependency instead.',
               },
             ],
           },

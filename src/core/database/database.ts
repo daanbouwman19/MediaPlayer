@@ -63,6 +63,8 @@ function invalidateDirectoryCaches(): void {
  * @param userDbPath - Absolute path to the SQLite database file.
  * @param workerScriptPath - Absolute path or URL to the worker script.
  * @param workerOptions - Optional WorkerOptions to pass to the Worker constructor.
+ * @param options.onUnavailable - Called if the worker crashes and cannot be
+ *   restarted, so the host can tell the user that the library is unavailable.
  * @returns A promise that resolves when the database is successfully initialized.
  * @throws {Error} If the worker initialization fails.
  */
@@ -70,6 +72,7 @@ async function initDatabase(
   userDbPath: string,
   workerScriptPath: string | URL,
   workerOptions?: WorkerOptions,
+  options: { onUnavailable?: (error: Error) => void } = {},
 ): Promise<void> {
   if (dbWorkerClient) {
     await dbWorkerClient.terminate();
@@ -84,6 +87,7 @@ async function initDatabase(
     name: 'database.js',
     autoRestart: true,
     restartDelay: 2000,
+    onUnavailable: options.onUnavailable,
   });
   dbWorkerClient = client;
   await client.init({ type: 'init', payload: { dbPath: userDbPath } });

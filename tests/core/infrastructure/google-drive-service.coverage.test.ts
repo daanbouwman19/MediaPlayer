@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vite-plus/test';
 import { google } from 'googleapis';
 import { Readable } from 'stream';
 
-vi.mock('../../src/main/google-auth');
+vi.mock('../../../src/infrastructure/google-auth');
 vi.mock('googleapis');
 
 // Mock global fetch
@@ -26,7 +26,7 @@ describe('Google Drive Service Coverage', () => {
     mockDrive.files.get.mockReset();
 
     // Setup default mock behavior for authentication
-    const googleAuth = await import('../../src/main/google-auth');
+    const googleAuth = await import('../../../src/infrastructure/google-auth');
     (googleAuth.getOAuth2Client as any).mockReturnValue({
       credentials: { refresh_token: 'valid_token' },
       getAccessToken: vi.fn().mockResolvedValue({ token: 'access_token' }),
@@ -37,7 +37,8 @@ describe('Google Drive Service Coverage', () => {
   // ... (previous tests are fine) ...
 
   it('getDriveClient returns existing client (memoization)', async () => {
-    const driveService = await import('../../src/main/google-drive-service');
+    const driveService =
+      await import('../../../src/infrastructure/google-drive-service');
     const client1 = await driveService.getDriveClient();
     const client2 = await driveService.getDriveClient();
 
@@ -57,7 +58,8 @@ describe('Google Drive Service Coverage', () => {
     });
 
   it('listDriveFiles handles undefined files in response', async () => {
-    const driveService = await import('../../src/main/google-drive-service');
+    const driveService =
+      await import('../../../src/infrastructure/google-drive-service');
     mockRootFolder();
     (mockDrive.files.list as any).mockResolvedValueOnce({ data: {} });
 
@@ -67,7 +69,8 @@ describe('Google Drive Service Coverage', () => {
   });
 
   it('listDriveFiles defaults names', async () => {
-    const driveService = await import('../../src/main/google-drive-service');
+    const driveService =
+      await import('../../../src/infrastructure/google-drive-service');
     mockRootFolder();
     const listMock = mockDrive.files.list as any;
     listMock.mockResolvedValueOnce({
@@ -88,7 +91,8 @@ describe('Google Drive Service Coverage', () => {
   });
 
   it('listDriveFiles handles pagination', async () => {
-    const driveService = await import('../../src/main/google-drive-service');
+    const driveService =
+      await import('../../../src/infrastructure/google-drive-service');
     mockRootFolder();
     const listMock = mockDrive.files.list as any;
     listMock.mockResolvedValueOnce({
@@ -111,7 +115,8 @@ describe('Google Drive Service Coverage', () => {
   });
 
   it('listDriveFiles handles shortcuts correctly', async () => {
-    const driveService = await import('../../src/main/google-drive-service');
+    const driveService =
+      await import('../../../src/infrastructure/google-drive-service');
     mockRootFolder();
     const listMock = mockDrive.files.list as any;
     listMock.mockResolvedValueOnce({
@@ -158,7 +163,8 @@ describe('Google Drive Service Coverage', () => {
   });
 
   it('listDriveDirectory handles generic files and shortcuts', async () => {
-    const driveService = await import('../../src/main/google-drive-service');
+    const driveService =
+      await import('../../../src/infrastructure/google-drive-service');
     const listMock = mockDrive.files.list as any;
     listMock.mockResolvedValueOnce({
       data: {
@@ -187,7 +193,8 @@ describe('Google Drive Service Coverage', () => {
   });
 
   it('listDriveDirectory handles error', async () => {
-    const driveService = await import('../../src/main/google-drive-service');
+    const driveService =
+      await import('../../../src/infrastructure/google-drive-service');
     const listMock = mockDrive.files.list as any;
     listMock.mockRejectedValueOnce(new Error('List failed'));
 
@@ -197,7 +204,8 @@ describe('Google Drive Service Coverage', () => {
   });
 
   it('getDriveParent returns parent', async () => {
-    const driveService = await import('../../src/main/google-drive-service');
+    const driveService =
+      await import('../../../src/infrastructure/google-drive-service');
     const getMock = mockDrive.files.get as any;
     getMock.mockResolvedValueOnce({ data: { parents: ['p1'] } });
     const p1 = await driveService.getDriveParent('child');
@@ -216,7 +224,8 @@ describe('Google Drive Service Coverage', () => {
   });
 
   it('getDriveFileThumbnail handles fetch success', async () => {
-    const driveService = await import('../../src/main/google-drive-service');
+    const driveService =
+      await import('../../../src/infrastructure/google-drive-service');
     const getMock = mockDrive.files.get as any;
     getMock.mockResolvedValueOnce({
       data: { thumbnailLink: 'https://lh3.googleusercontent.com/thumb' },
@@ -245,7 +254,8 @@ describe('Google Drive Service Coverage', () => {
   });
 
   it('getDriveFileThumbnail throws if fetch fails', async () => {
-    const driveService = await import('../../src/main/google-drive-service');
+    const driveService =
+      await import('../../../src/infrastructure/google-drive-service');
     const getMock = mockDrive.files.get as any;
     getMock.mockResolvedValueOnce({
       data: { thumbnailLink: 'https://lh3.googleusercontent.com/thumb' },
@@ -262,7 +272,8 @@ describe('Google Drive Service Coverage', () => {
   });
 
   it('getDriveFileThumbnail throws if no link', async () => {
-    const driveService = await import('../../src/main/google-drive-service');
+    const driveService =
+      await import('../../../src/infrastructure/google-drive-service');
     const getMock = mockDrive.files.get as any;
     getMock.mockResolvedValueOnce({ data: {} });
 
@@ -272,7 +283,8 @@ describe('Google Drive Service Coverage', () => {
   });
 
   it('getDriveFileStream returns stream', async () => {
-    const driveService = await import('../../src/main/google-drive-service');
+    const driveService =
+      await import('../../../src/infrastructure/google-drive-service');
     const getMock = mockDrive.files.get as any;
     const stream = new Readable();
     getMock.mockResolvedValueOnce({ data: stream });
@@ -282,7 +294,8 @@ describe('Google Drive Service Coverage', () => {
   });
 
   it('getDriveFileMetadata returns metadata', async () => {
-    const driveService = await import('../../src/main/google-drive-service');
+    const driveService =
+      await import('../../../src/infrastructure/google-drive-service');
     const getMock = mockDrive.files.get as any;
     const meta = { id: '1', name: 'f' };
     getMock.mockResolvedValueOnce({ data: meta });

@@ -48,12 +48,12 @@ vi.mock('../../src/core/media/media-handler', () => ({
 }));
 
 // Mock main modules used by server routes
-vi.mock('../../src/main/google-auth', () => ({
+vi.mock('../../src/infrastructure/google-auth', () => ({
   generateAuthUrl: vi.fn().mockReturnValue('http://mock.auth.url'),
   authenticateWithCode: vi.fn(),
 }));
 
-vi.mock('../../src/main/google-drive-service', () => ({
+vi.mock('../../src/infrastructure/google-drive-service', () => ({
   getDriveFolderInfo: vi
     .fn()
     .mockResolvedValue({ id: 'gdrive_id', name: 'Drive Folder' }),

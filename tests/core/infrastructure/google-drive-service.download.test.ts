@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vite-plus/test';
 import { google } from 'googleapis';
 import { PassThrough } from 'stream';
-import * as driveService from '../../src/main/google-drive-service';
-import * as googleAuth from '../../src/main/google-auth';
+import * as driveService from '../../../src/infrastructure/google-drive-service';
+import * as googleAuth from '../../../src/infrastructure/google-auth';
 
-vi.mock('../../src/main/google-auth');
+vi.mock('../../../src/infrastructure/google-auth');
 vi.mock('googleapis');
 
 const mockDrive = {

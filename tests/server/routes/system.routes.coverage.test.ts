@@ -13,7 +13,7 @@ import { ALL_SUPPORTED_EXTENSIONS } from '../../../src/core/media/constants';
 vi.mock('../../../src/core/database/database');
 vi.mock('../../../src/core/media/file-system');
 vi.mock('../../../src/core/auth/security');
-vi.mock('../../../src/main/google-drive-service');
+vi.mock('../../../src/infrastructure/google-drive-service');
 
 // Mock Limiters
 const mockLimiters = {

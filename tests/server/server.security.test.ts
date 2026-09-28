@@ -55,7 +55,7 @@ vi.mock('../../src/core/media/media-handler', () => ({
   serveThumbnail: vi.fn(),
   serveStaticFile: vi.fn(),
 }));
-vi.mock('../../src/main/google-auth');
+vi.mock('../../src/infrastructure/google-auth');
 
 describe('Server Security', () => {
   let app: any;

@@ -9,7 +9,7 @@ vi.mock('../../src/core/media/file-system');
 vi.mock('../../src/core/media/media-handler', () => ({
   MediaHandler: class {},
 }));
-vi.mock('../../src/main/google-auth');
+vi.mock('../../src/infrastructure/google-auth');
 vi.mock('fs/promises', () => ({
   default: {
     stat: vi.fn(),

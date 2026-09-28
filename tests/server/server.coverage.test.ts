@@ -9,9 +9,9 @@ import {
 import request from 'supertest';
 import * as database from '../../src/core/database/database';
 import * as security from '../../src/core/auth/security';
-import * as googleDriveService from '../../src/main/google-drive-service';
+import * as googleDriveService from '../../src/infrastructure/google-drive-service';
 import * as mediaHandler from '../../src/core/media/media-handler';
-import * as googleAuth from '../../src/main/google-auth';
+import * as googleAuth from '../../src/infrastructure/google-auth';
 
 import * as mediaSource from '../../src/core/media/media-source';
 import * as fileSystem from '../../src/core/media/file-system';
@@ -23,8 +23,8 @@ vi.mock('../../src/core/network/rate-limiter', () => ({
   createRateLimiter: vi.fn(() => (_req: any, _res: any, next: any) => next()),
 }));
 vi.mock('../../src/core/media/file-system');
-vi.mock('../../src/main/google-drive-service');
-vi.mock('../../src/main/drive-cache-manager');
+vi.mock('../../src/infrastructure/google-drive-service');
+vi.mock('../../src/infrastructure/drive-cache-manager');
 vi.mock('../../src/core/media/media-source');
 const { MockMediaHandler, getLastMediaHandler } = vi.hoisted(() => {
   class MockMediaHandler {
@@ -65,7 +65,7 @@ vi.mock('../../src/core/media/media-handler', () => ({
   serveHlsSegment: vi.fn(),
   validateFileAccess: vi.fn(),
 }));
-vi.mock('../../src/main/google-auth');
+vi.mock('../../src/infrastructure/google-auth');
 
 // Partially mock security to keep escapeHtml but mock others
 vi.mock('../../src/core/auth/security', async (importOriginal) => {

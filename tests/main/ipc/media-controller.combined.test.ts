@@ -18,7 +18,7 @@ import {
   getDriveFileMetadata,
   listDriveDirectory,
   getDriveParent,
-} from '../../../src/main/google-drive-service';
+} from '../../../src/infrastructure/google-drive-service';
 import { MediaService } from '../../../src/core/media/media-service';
 import { filterAuthorizedLibraryPaths } from '../../../src/core/media/utils/authorized-paths';
 import { createTestMediaService } from '../../utils/test-factory';
@@ -68,7 +68,7 @@ vi.mock('../../../src/core/media/transcode-queue-manager', () => ({
   },
 }));
 
-vi.mock('../../../src/main/google-drive-service', () => ({
+vi.mock('../../../src/infrastructure/google-drive-service', () => ({
   getDriveFileMetadata: vi.fn(),
   listDriveDirectory: vi.fn(),
   getDriveParent: vi.fn(),
@@ -81,7 +81,7 @@ const mockDriveCacheManager = {
   triggerDownload: vi.fn(),
 };
 
-vi.mock('../../../src/main/drive-cache-manager', () => ({
+vi.mock('../../../src/infrastructure/drive-cache-manager', () => ({
   getDriveCacheManager: vi.fn(() => mockDriveCacheManager),
 }));
 

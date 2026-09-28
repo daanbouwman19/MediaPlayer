@@ -19,7 +19,7 @@ import {
   HEATMAP_CACHE_DIR_NAME,
 } from '../core/media/constants.ts';
 import { registerSensitiveFile } from '../core/auth/security.ts';
-import { initializeDriveCacheManager } from '../main/drive-cache-manager.ts';
+import { initializeDriveCacheManager } from '../infrastructure/drive-cache-manager.ts';
 import { registerDriveBackend } from '../core/media/drive-backend.ts';
 import { googleDriveBackend } from '../infrastructure/google-drive-backend.ts';
 import { HlsManager } from '../core/media/hls-manager.ts';

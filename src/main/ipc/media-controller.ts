@@ -9,8 +9,8 @@ import {
   getDriveFileMetadata,
   listDriveDirectory,
   getDriveParent,
-} from '../google-drive-service';
-import { getDriveCacheManager } from '../drive-cache-manager';
+} from '../../infrastructure/google-drive-service';
+import { getDriveCacheManager } from '../../infrastructure/drive-cache-manager';
 import {
   recordMediaView,
   getMediaViewCounts,

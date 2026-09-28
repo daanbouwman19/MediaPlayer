@@ -14,15 +14,15 @@ import {
   cleanupDriveCacheManager,
   getDriveCacheManager,
   initializeDriveCacheManager,
-} from '../../src/main/drive-cache-manager';
+} from '../../../src/infrastructure/drive-cache-manager';
 import {
   getDriveFileMetadata,
   openDriveFileDownload,
-} from '../../src/main/google-drive-service';
-import type { DriveCacheProgressEvent } from '../../src/shared/ipc/media.contract';
+} from '../../../src/infrastructure/google-drive-service';
+import type { DriveCacheProgressEvent } from '../../../src/shared/ipc/media.contract';
 
 // Only the Drive API is faked; the cache works against a real temp directory.
-vi.mock('../../src/main/google-drive-service', () => ({
+vi.mock('../../../src/infrastructure/google-drive-service', () => ({
   getDriveFileMetadata: vi.fn(),
   openDriveFileDownload: vi.fn(),
 }));
