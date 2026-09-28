@@ -65,7 +65,21 @@ const CACHE_DIR = path.join(CACHE_ROOT, 'thumbnails');
 const HLS_CACHE_DIR = path.join(CACHE_ROOT, HLS_CACHE_DIR_NAME);
 const DRIVE_CACHE_DIR = path.join(CACHE_ROOT, 'drive');
 
-export async function createApp(mediaService: MediaService) {
+export interface CreateAppOptions {
+  /**
+   * CSRF protection (lusca). Defaults to on, except under NODE_ENV=test so
+   * unit tests can call the API without tokens; tests of the real middleware
+   * stack pass `true`.
+   */
+  csrf?: boolean;
+  /** Built web client served in production. Defaults to dist/client. */
+  clientDistPath?: string;
+}
+
+export async function createApp(
+  mediaService: MediaService,
+  options: CreateAppOptions = {},
+) {
   const isDev = process.env.NODE_ENV !== 'production';
   const app = express();
 
@@ -144,8 +158,20 @@ export async function createApp(mediaService: MediaService) {
     }),
   );
 
-  if (process.env.NODE_ENV !== 'test') {
-    app.use(lusca.csrf({ angular: true })); // Sets XSRF-TOKEN cookie and expects X-XSRF-TOKEN header
+  if (options.csrf ?? process.env.NODE_ENV !== 'test') {
+    // Sets the XSRF-TOKEN cookie and expects it back in the X-XSRF-TOKEN header.
+    const csrfMiddleware = lusca.csrf({ angular: true });
+    app.use((req, res, next) => {
+      csrfMiddleware(req, res, (err?: unknown) => {
+        // lusca reports a missing or wrong token as an error, which the
+        // error handler would turn into a 500.
+        if (err) {
+          res.status(403).json({ error: 'Invalid or missing CSRF token' });
+          return;
+        }
+        next();
+      });
+    });
   }
 
   const limiters = createRateLimiters();
@@ -224,7 +250,8 @@ export async function createApp(mediaService: MediaService) {
   });
 
   if (!isDev) {
-    const clientDistPath = path.join(__dirname, '../client');
+    const clientDistPath =
+      options.clientDistPath ?? path.join(__dirname, '../client');
 
     app.use(
       '/assets',

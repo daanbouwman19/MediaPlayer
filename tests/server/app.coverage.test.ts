@@ -9,6 +9,7 @@ import {
 import { Router } from 'express';
 import request from 'supertest';
 import fs from 'fs/promises';
+import os from 'os';
 import path from 'path';
 import * as database from '../../src/core/database/database';
 
@@ -183,27 +184,57 @@ describe('Server app additional coverage', () => {
     );
   });
 
-  it('serves index.html in production mode', async () => {
-    process.env.NODE_ENV = 'production';
-    process.env.VITEST = 'true';
-    process.env.SESSION_SECRET = 'test-secret';
+  describe('in production mode', () => {
+    let clientDir: string;
 
-    const clientDir = path.join(process.cwd(), 'src', 'client');
-    const indexPath = path.join(clientDir, 'index.html');
+    beforeEach(async () => {
+      process.env.NODE_ENV = 'production';
+      process.env.VITEST = 'true';
+      process.env.SESSION_SECRET = 'test-secret';
 
-    await fs.mkdir(clientDir, { recursive: true });
-    await fs.writeFile(indexPath, '<!doctype html><html></html>');
+      // A stand-in client build outside the source tree.
+      clientDir = await fs.mkdtemp(
+        path.join(os.tmpdir(), 'mediaplayer-client-'),
+      );
+      await fs.mkdir(path.join(clientDir, 'assets'));
+      await fs.writeFile(
+        path.join(clientDir, 'index.html'),
+        '<!doctype html><html><body id="spa-shell"></body></html>',
+      );
+      await fs.writeFile(
+        path.join(clientDir, 'assets', 'index-abc123.js'),
+        'console.log("app");',
+      );
+    });
 
-    vi.resetModules();
-    const { createApp } = await import('../../src/server/app.ts');
-    const { createTestMediaService } = await import('../utils/test-factory.ts');
-    const { service } = createTestMediaService();
+    afterEach(async () => {
+      await fs.rm(clientDir, { recursive: true, force: true });
+    });
 
-    const app = await createApp(service);
-    const res = await request(app).get('/somewhere');
+    async function createProductionApp() {
+      vi.resetModules();
+      const { createApp } = await import('../../src/server/app.ts');
+      const { createTestMediaService } =
+        await import('../utils/test-factory.ts');
+      const { service } = createTestMediaService();
+      return createApp(service, { clientDistPath: clientDir });
+    }
 
-    expect(res.status).toBe(200);
+    it('serves index.html for client-side routes', async () => {
+      const app = await createProductionApp();
+      const res = await request(app).get('/somewhere');
 
-    await fs.rm(indexPath, { force: true });
+      expect(res.status).toBe(200);
+      expect(res.text).toContain('id="spa-shell"');
+    });
+
+    it('serves hashed assets with long-lived caching', async () => {
+      const app = await createProductionApp();
+      const res = await request(app).get('/assets/index-abc123.js');
+
+      expect(res.status).toBe(200);
+      expect(res.text).toBe('console.log("app");');
+      expect(res.headers['cache-control']).toContain('immutable');
+    });
   });
 });

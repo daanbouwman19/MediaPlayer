@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vite-plus/test';
+import os from 'os';
 import path from 'path';
 import fs from 'fs/promises';
 import { HlsManager, HlsBusyError } from '../../src/core/media/hls-manager.ts';
@@ -26,17 +27,18 @@ vi.mock('../../src/core/database/database.ts', () => ({
 
 describe('Transcoding Diversity Integration', () => {
   const fixturesDir = path.join(process.cwd(), 'tests/fixtures/diversity');
-  const cacheDir = path.join(process.cwd(), 'tests/fixtures/hls-cache');
+  // HLS output goes to a temp dir, never next to the tracked fixtures.
+  let cacheDir: string;
   let hlsManager: HlsManager;
 
   beforeAll(async () => {
-    await fs.mkdir(cacheDir, { recursive: true });
+    cacheDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mediaplayer-hls-'));
     hlsManager = HlsManager.getInstance();
     await hlsManager.init(cacheDir);
   });
 
   afterAll(async () => {
-    await fs.rm(cacheDir, { recursive: true, force: true });
+    if (cacheDir) await fs.rm(cacheDir, { recursive: true, force: true });
   });
 
   const testFiles = [

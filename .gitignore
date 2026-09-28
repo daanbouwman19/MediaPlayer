@@ -14,6 +14,12 @@ media-library.db-shm
 media-library.db-wal
 cache/
 tests/temp/
+# Backstop for test output that must stay out of the source tree
+tests/forbidden/
+tests/fixtures/hls-cache/
+/src/client/
+# PR-bot reply payloads
+reply_payload.json
 config/
 certs/
 verification/

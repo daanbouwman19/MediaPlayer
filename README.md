@@ -93,6 +93,8 @@ Install dependencies:
 npm install
 ```
 
+Dependency install scripts are approved in the `allowScripts` field of `package.json`, which npm 12 and later enforce (CI uses npm 12 and fails on unapproved scripts). `ffmpeg-static` needs its script to download the ffmpeg binary. Approvals are name-only, so version bumps keep them. When a new dependency brings an install script, review it and approve it with `npm approve-scripts --no-allow-scripts-pin <package>`, or deny it with `npm deny-scripts <package>`.
+
 ### Running
 
 **Desktop Dev Mode**:

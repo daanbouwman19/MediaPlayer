@@ -17,6 +17,10 @@ concurrency:
 env:
   ELECTRON_CACHE: ${{ github.workspace }}/.cache/electron
   ELECTRON_BUILDER_CACHE: ${{ github.workspace }}/.cache/electron-builder
+  # Each job switches to npm 12, because Node 24's npm 11 ignores the
+  # package.json allowScripts policy. Strict mode then fails the install on
+  # any dependency install script that the policy does not approve.
+  npm_config_strict_allow_scripts: true
 
 jobs:
   quality:
@@ -32,6 +36,9 @@ jobs:
         with:
           node-version: '24'
           cache: 'npm'
+
+      - name: Use npm 12
+        run: npm install --global npm@12
 
       - name: Install dependencies
         run: npm ci
@@ -55,6 +62,9 @@ jobs:
         with:
           node-version: '24'
           cache: 'npm'
+
+      - name: Use npm 12
+        run: npm install --global npm@12
 
       # Cache Electron binaries to prevent re-downloading on every run
       - name: Cache Electron
@@ -86,6 +96,9 @@ jobs:
         with:
           node-version: '24'
           cache: 'npm'
+
+      - name: Use npm 12
+        run: npm install --global npm@12
 
       - name: Install dependencies
         run: npm ci
@@ -125,6 +138,9 @@ jobs:
         with:
           node-version: '24'
           cache: 'npm'
+
+      - name: Use npm 12
+        run: npm install --global npm@12
 
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
@@ -189,11 +205,23 @@ jobs:
           node-version: '24'
           cache: 'npm'
 
+      - name: Use npm 12
+        run: npm install --global npm@12
+
       - name: Install dependencies
         run: npm ci
 
       - name: Build Web
         run: npm run web:build
+
+      # dist/client is served publicly: no source maps or bundle report.
+      - name: Check web client ships no source maps
+        run: |
+          leaked=$(find dist/client -name '*.map' -o -name 'stats.html')
+          if [ -n "$leaked" ]; then
+            echo "::error::dist/client contains files it must not serve: $leaked"
+            exit 1
+          fi
 
       - name: Verify Web Artifacts
         run: |

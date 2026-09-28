@@ -2,7 +2,7 @@ import { defineConfig, loadEnv } from 'vite-plus';
 import type { Plugin, UserConfig } from 'vite-plus';
 import vue from '@vitejs/plugin-vue';
 import tailwindcss from '@tailwindcss/vite';
-import { visualizer } from 'rollup-plugin-visualizer';
+import { visualizer as bundleVisualizer } from 'rollup-plugin-visualizer';
 import { resolve } from 'path';
 
 /**
@@ -254,7 +254,8 @@ function targetConfig(mode: string): UserConfig {
       },
       build: {
         target: 'es2020',
-        sourcemap: mode === 'production' ? 'hidden' : true,
+        // dist/client is served publicly: no source maps in production.
+        sourcemap: mode !== 'production',
         outDir: 'dist/client',
         chunkSizeWarningLimit: 1000,
         rollupOptions: {
@@ -281,6 +282,15 @@ function targetConfig(mode: string): UserConfig {
   }
 
   return {} as UserConfig;
+}
+
+/**
+ * The bundle report (stats.html) is only written for analysis builds, e.g.
+ * `cross-env ANALYZE=1 npm run _build:renderer`, so it never ends up in the
+ * packaged app or the web build.
+ */
+function visualizer(options: Parameters<typeof bundleVisualizer>[0]) {
+  return process.env.ANALYZE === '1' ? bundleVisualizer(options) : false;
 }
 
 // Oxlint config (`vp lint` / `vp check`): the `correctness` category (code that

@@ -7,6 +7,7 @@ import {
   vi,
 } from 'vite-plus/test';
 import { DatabaseSync } from 'node:sqlite';
+import os from 'os';
 import path from 'path';
 import fs from 'fs';
 import {
@@ -54,9 +55,7 @@ describe('Database Schema', () => {
   let dbPath: string;
 
   beforeEach(() => {
-    tempDir = fs.mkdtempSync(
-      path.join(process.cwd(), 'tests', 'temp', 'schema-'),
-    );
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mediaplayer-schema-'));
     dbPath = path.join(tempDir, 'test.db');
     db = new DatabaseSync(dbPath);
   });
