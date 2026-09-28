@@ -163,9 +163,10 @@ describe('MediaService library cache and scans', () => {
         new Error('Operation timed out'),
       );
 
-      // The scan result is still served...
-      const albums = await service.getAlbumsWithViewCounts();
-      expect(albums[0]!.textures[0]!.path).toBe('/media/b.jpg');
+      // The scan fails: the tree that could not be stored is not served...
+      await expect(service.getAlbumsWithViewCounts()).rejects.toThrow(
+        'Operation timed out',
+      );
       expect(error).toHaveBeenCalledWith(
         '[media-service] Failed to cache albums; the next read rescans:',
         expect.any(Error),
@@ -182,6 +183,27 @@ describe('MediaService library cache and scans', () => {
       // Once the tree is stored, it is served from cache again.
       await service.getAlbumsWithViewCounts();
       expect(runScan).toHaveBeenCalledTimes(2);
+    });
+
+    it('F92: fails the scan and skips extraction when the membership write rolls back', async () => {
+      runScan.mockResolvedValue([album('/media', ['/media/new.mp4'])]);
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      vi.spyOn(repo, 'cacheAlbums').mockRejectedValue(
+        new Error('SQLITE_BUSY: database is locked'),
+      );
+      const extract = vi.spyOn(service, 'queueMetadataExtraction');
+
+      await expect(
+        service.scanDiskForAlbumsAndCache('/ffmpeg'),
+      ).rejects.toThrow('SQLITE_BUSY');
+      await expect(
+        service.getAlbumsWithViewCountsAfterScan('/ffmpeg'),
+      ).rejects.toThrow();
+      expect(extract).not.toHaveBeenCalled();
+      // The previously stored tree is untouched.
+      expect((await repo.getCachedAlbums())![0]!.textures[0]!.path).toBe(
+        '/media/a.jpg',
+      );
     });
 
     it('clears the stamp before writing the tree', async () => {

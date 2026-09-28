@@ -288,9 +288,12 @@ export class MediaService implements IMediaService {
         [];
     }
 
-    if (await this.writeAlbumCache(albums)) {
-      await this.stampAlbumCache(signature);
-    }
+    // Throws when the tree could not be stored: the library membership (the
+    // stream whitelist) is written in the same transaction, so every new
+    // file would be refused. The scan fails, and the caller keeps its
+    // previous library, rather than listing files that cannot play.
+    await this.writeAlbumCache(albums);
+    await this.stampAlbumCache(signature);
 
     // Trigger metadata extraction in background if ffmpegPath is provided
     if (ffmpegPath && albums.length > 0) {
@@ -306,9 +309,10 @@ export class MediaService implements IMediaService {
    * a write that fails, times out or never finishes (the app quits) must
    * not leave the old tree behind under a stamp that matches the current
    * sources, or that tree would be served on every launch.
-   * @returns Whether the tree was stored.
+   * @throws If the tree (and with it the library membership) was not
+   * stored. The stamp stays cleared, so the next read rescans.
    */
-  private async writeAlbumCache(albums: Album[]): Promise<boolean> {
+  private async writeAlbumCache(albums: Album[]): Promise<void> {
     try {
       await this.mediaRepo.saveSetting(ALBUM_CACHE_STAMP_KEY, '');
     } catch (e) {
@@ -317,13 +321,12 @@ export class MediaService implements IMediaService {
     }
     try {
       await this.mediaRepo.cacheAlbums(albums);
-      return true;
     } catch (e) {
       console.error(
         '[media-service] Failed to cache albums; the next read rescans:',
         e,
       );
-      return false;
+      throw e;
     }
   }
 
