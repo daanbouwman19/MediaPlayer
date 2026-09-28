@@ -81,6 +81,23 @@ export const usePlayerStore = defineStore('player', () => {
     isSlideshowActive.value = false;
   };
 
+  /**
+   * Pauses the current video and stops the countdown (panic key, auto-lock).
+   * The order matters: stopping after the pause clears the "suspended for
+   * video" flag, so the video's pause event can't resume the countdown.
+   */
+  const haltPlayback = ({ mute = false } = {}) => {
+    const video = mainVideoElement.value;
+    if (video) {
+      video.pause();
+      if (mute) {
+        isMuted.value = true;
+        video.muted = true;
+      }
+    }
+    stopSlideshowTimer();
+  };
+
   const resetPlayerState = () => {
     stopSlideshow();
   };
@@ -97,6 +114,7 @@ export const usePlayerStore = defineStore('player', () => {
     pauseTimerOnPlay,
     mainVideoElement,
     isMuted,
+    haltPlayback,
     resetPlayerState,
     startSlideshowTimer,
     stopSlideshowTimer,

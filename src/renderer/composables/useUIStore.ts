@@ -18,6 +18,7 @@ export const useUIStore = defineStore('ui', () => {
   const gridMediaFiles = ref<MediaFile[]>([]);
   const isSourcesModalVisible = ref(false);
   const isSmartPlaylistModalVisible = ref(false);
+  const isPrivacyModalVisible = ref(false);
   const playlistToEdit = ref<SmartPlaylist | null>(null);
   const isControlsVisible = ref(true);
   const isSidebarVisible = ref(true);
@@ -34,6 +35,7 @@ export const useUIStore = defineStore('ui', () => {
     gridMediaFiles,
     isSourcesModalVisible,
     isSmartPlaylistModalVisible,
+    isPrivacyModalVisible,
     playlistToEdit,
     isControlsVisible,
     isSidebarVisible,

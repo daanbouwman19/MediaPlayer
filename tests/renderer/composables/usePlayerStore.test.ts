@@ -37,4 +37,46 @@ describe('usePlayerStore', () => {
 
     vi.useRealTimers();
   });
+
+  describe('haltPlayback', () => {
+    it('pauses the video before stopping a timer suspended for it', () => {
+      const store = usePlayerStore();
+      const order: string[] = [];
+      const video = {
+        muted: false,
+        pause: vi.fn(() => {
+          // A pause event handler would see the timer still suspended here.
+          order.push(`pause:${String(store.isTimerPausedForVideo)}`);
+        }),
+      };
+      store.mainVideoElement = video as unknown as HTMLVideoElement;
+      store.startSlideshowTimer(5000, () => {});
+      store.suspendSlideshowTimerForVideo();
+
+      store.haltPlayback();
+
+      expect(order).toEqual(['pause:true']);
+      expect(store.isTimerPausedForVideo).toBe(false);
+      expect(store.isTimerRunning).toBe(false);
+      expect(video.muted).toBe(false);
+      expect(store.isMuted).toBe(false);
+    });
+
+    it('mutes when asked', () => {
+      const store = usePlayerStore();
+      const video = { muted: false, pause: vi.fn() };
+      store.mainVideoElement = video as unknown as HTMLVideoElement;
+      store.haltPlayback({ mute: true });
+      expect(video.muted).toBe(true);
+      expect(store.isMuted).toBe(true);
+    });
+
+    it('stops the timer without a video', () => {
+      const store = usePlayerStore();
+      store.startSlideshowTimer(5000, () => {});
+      store.haltPlayback({ mute: true });
+      expect(store.isTimerRunning).toBe(false);
+      expect(store.isMuted).toBe(false);
+    });
+  });
 });

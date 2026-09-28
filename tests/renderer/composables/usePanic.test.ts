@@ -46,23 +46,15 @@ describe('usePanic', () => {
   });
 
   const fakeVideo = () => {
-    const calls: string[] = [];
-    const video = {
-      muted: false,
-      pause: vi.fn(() => calls.push('pause')),
-    };
+    const video = { muted: false, pause: vi.fn() };
     const player = usePlayerStore();
-    const stop = player.stopSlideshowTimer;
-    player.stopSlideshowTimer = vi.fn(() => {
-      calls.push('stopTimer');
-      stop();
-    });
     player.mainVideoElement = video as unknown as HTMLVideoElement;
-    return { video, calls, player };
+    return { video, player };
   };
 
-  it('pauses and mutes, then stops the timer and locks', () => {
-    const { video, calls, player } = fakeVideo();
+  it('pauses and mutes, stops the timer and locks', () => {
+    const { video, player } = fakeVideo();
+    player.startSlideshowTimer(5000, () => {});
     const wrapper = mount(Host, { attachTo: document.body });
 
     const event = press(document.body, 'Backquote');
@@ -70,7 +62,7 @@ describe('usePanic', () => {
     expect(video.pause).toHaveBeenCalled();
     expect(video.muted).toBe(true);
     expect(player.isMuted).toBe(true);
-    expect(calls).toEqual(['pause', 'stopTimer']);
+    expect(player.isTimerRunning).toBe(false);
     expect(mockLock).toHaveBeenCalled();
     expect(event.defaultPrevented).toBe(true);
     expect(mockMinimize).not.toHaveBeenCalled();

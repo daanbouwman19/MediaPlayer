@@ -15,15 +15,7 @@ export function usePanic() {
   const privacyStore = usePrivacyStore();
 
   const panic = () => {
-    const video = playerStore.mainVideoElement;
-    if (video) {
-      video.pause();
-      playerStore.isMuted = true;
-      video.muted = true;
-    }
-    // After the pause: stopping clears the "suspended for video" flag, so the
-    // video's pause event can't resume the countdown.
-    playerStore.stopSlideshowTimer();
+    playerStore.haltPlayback({ mute: true });
     void authStore.lock();
     if (privacyStore.panicMinimize) api.minimizeWindow();
   };
