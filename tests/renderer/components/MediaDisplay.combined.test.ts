@@ -129,8 +129,8 @@ describe('MediaDisplay Combined Tests', () => {
 
     mockSlideshow = {
       navigateMedia: vi.fn(),
-      resumeSlideshowTimer: vi.fn(),
-      pauseSlideshowTimer: vi.fn(),
+      resumeSlideshowTimerAfterVideo: vi.fn(),
+      pauseSlideshowTimerForVideo: vi.fn(),
     };
     (useSlideshow as Mock).mockReturnValue(mockSlideshow);
   });
@@ -243,7 +243,7 @@ describe('MediaDisplay Combined Tests', () => {
       // In the mock, duration is 100, which is > 5
       videoPlayer.vm.$emit('loadedmetadata');
 
-      expect(mockSlideshow.pauseSlideshowTimer).toHaveBeenCalled();
+      expect(mockSlideshow.pauseSlideshowTimerForVideo).toHaveBeenCalled();
     });
   });
 });

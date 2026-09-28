@@ -43,6 +43,7 @@ import { storeToRefs } from 'pinia';
 import { useLibraryStore } from '@/composables/useLibraryStore';
 import { useUIStore } from '@/composables/useUIStore';
 import { useSlideshow } from '@/composables/useSlideshow';
+import { useToast } from '@/composables/useToast';
 import {
   getAlbumAndChildrenIds,
   collectTexturesRecursive,
@@ -54,10 +55,11 @@ import PlaylistAddIcon from '@/components/atoms/icons/PlaylistAddIcon.vue';
 const libraryStore = useLibraryStore();
 const uiStore = useUIStore();
 const slideshow = useSlideshow();
+const toast = useToast();
 
 const { allAlbums, albumsSelectedForSlideshow, mediaDirectories } =
   storeToRefs(libraryStore);
-const { isSourcesModalVisible, isHistoryMode } = storeToRefs(uiStore);
+const { isSourcesModalVisible } = storeToRefs(uiStore);
 
 const openModal = () => {
   isSourcesModalVisible.value = true;
@@ -85,10 +87,17 @@ const handleToggleSelection = ({
   }
 };
 
-const handleClickAlbum = (album: Album) => {
-  isHistoryMode.value = false;
+const handleClickAlbum = async (album: Album) => {
   const textures = collectTexturesRecursive(album);
   const albumWithAllTextures = { ...album, textures };
-  slideshow.startIndividualAlbumSlideshow(albumWithAllTextures);
+  // A start that finds nothing to play leaves the current session (and its
+  // history mode) untouched; starting one resets history mode itself.
+  if (!(await slideshow.startIndividualAlbumSlideshow(albumWithAllTextures))) {
+    toast.info(
+      textures.length === 0
+        ? 'This album has no media.'
+        : 'No items in this album match the current media filter.',
+    );
+  }
 };
 </script>

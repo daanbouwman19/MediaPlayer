@@ -278,8 +278,8 @@ const { isControlsVisible, isSourcesModalVisible, isSidebarVisible } =
   storeToRefs(uiStore);
 const {
   navigateMedia,
-  pauseSlideshowTimer,
-  resumeSlideshowTimer,
+  pauseSlideshowTimerForVideo,
+  resumeSlideshowTimerAfterVideo,
   toggleSlideshowTimer,
 } = useSlideshow();
 const transcoder = useTranscoder();
@@ -554,9 +554,7 @@ watch(
     // is already covered by persistItemState.
     if (isPlaying.value) {
       isPlaying.value = false;
-      if (pauseTimerOnPlay.value && !isTimerRunning.value) {
-        resumeSlideshowTimer();
-      }
+      if (pauseTimerOnPlay.value) resumeSlideshowTimerAfterVideo();
     }
 
     lastTrackedTime.value = -1;
@@ -617,10 +615,6 @@ watch(
 
       if (cancelled) return;
       await loadMedia(newItem, (_, reqId) => tryTranscoding(reqId));
-      if (cancelled) return;
-      if (isImage.value && !isTimerRunning.value) {
-        resumeSlideshowTimer();
-      }
     } else {
       mediaUrl.value = null;
     }
@@ -676,13 +670,13 @@ const checkAndPauseTimerIfLongVideo = () => {
   if (isTimerRunning.value) {
     if (pauseTimerOnPlay.value) {
       // Always pause if user explicitly wants timer paused on play
-      pauseSlideshowTimer();
+      pauseSlideshowTimerForVideo();
     } else {
       const nativeDuration = videoElement.value?.duration || 0;
       const videoDuration = transcodedDuration.value || nativeDuration;
 
       if (videoDuration > playerStore.timerDuration) {
-        pauseSlideshowTimer();
+        pauseSlideshowTimerForVideo();
       }
     }
   }
@@ -702,7 +696,7 @@ watch(transcodedDuration, (duration) => {
 
 const handleVideoPause = () => {
   if (!isTimerRunning.value && pauseTimerOnPlay.value && !isLoading.value) {
-    resumeSlideshowTimer();
+    resumeSlideshowTimerAfterVideo();
   }
   isPlaying.value = false;
   const item = currentMediaItem.value;

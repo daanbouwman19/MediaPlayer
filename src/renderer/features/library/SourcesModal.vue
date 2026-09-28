@@ -605,7 +605,8 @@ const addDriveSource = async () => {
  * to the media library to prevent a broken state.
  */
 const resetSlideshowState = () => {
-  playerStore.isSlideshowActive = false;
+  // Also clears the pending countdown, so no timer outlives the slideshow.
+  playerStore.stopSlideshow();
   playlistStore.clearPlaylist();
   libraryStore.globalMediaPoolForSelection = [];
 };

@@ -160,6 +160,7 @@ describe('MediaDisplay playback (integration)', () => {
 
     const player = usePlayerStore();
     player.isTimerRunning = false;
+    player.isTimerPausedForVideo = false;
     player.pauseTimerOnPlay = false;
     player.timerDuration = 30;
     player.mainVideoElement = null;
@@ -169,11 +170,17 @@ describe('MediaDisplay playback (integration)', () => {
 
     slideshow = {
       navigateMedia: vi.fn(),
-      pauseSlideshowTimer: vi.fn(() => {
-        usePlayerStore().isTimerRunning = false;
+      pauseSlideshowTimerForVideo: vi.fn(() => {
+        const player = usePlayerStore();
+        if (!player.isTimerRunning) return;
+        player.isTimerPausedForVideo = true;
+        player.isTimerRunning = false;
       }),
-      resumeSlideshowTimer: vi.fn(() => {
-        usePlayerStore().isTimerRunning = true;
+      resumeSlideshowTimerAfterVideo: vi.fn(() => {
+        const player = usePlayerStore();
+        if (!player.isTimerPausedForVideo) return;
+        player.isTimerPausedForVideo = false;
+        player.isTimerRunning = true;
       }),
       toggleSlideshowTimer: vi.fn(),
     };
@@ -255,7 +262,7 @@ describe('MediaDisplay playback (integration)', () => {
       expect(controls().props('duration')).toBe(5400);
       expect(api.getVideoMetadata).not.toHaveBeenCalled();
       video().dispatchEvent(new Event('play'));
-      expect(slideshow.pauseSlideshowTimer).toHaveBeenCalled();
+      expect(slideshow.pauseSlideshowTimerForVideo).toHaveBeenCalled();
     });
 
     it('pauses the timer once a late duration shows the video is long', async () => {
@@ -267,11 +274,11 @@ describe('MediaDisplay playback (integration)', () => {
 
       // Only the growing live playlist is known when playback starts.
       video().dispatchEvent(new Event('play'));
-      expect(slideshow.pauseSlideshowTimer).not.toHaveBeenCalled();
+      expect(slideshow.pauseSlideshowTimerForVideo).not.toHaveBeenCalled();
 
       probe.resolve({ duration: 7200 });
       await settle();
-      expect(slideshow.pauseSlideshowTimer).toHaveBeenCalled();
+      expect(slideshow.pauseSlideshowTimerForVideo).toHaveBeenCalled();
       expect(controls().props('duration')).toBe(7200);
     });
 
@@ -461,7 +468,7 @@ describe('MediaDisplay playback (integration)', () => {
 
       const el = video();
       el.dispatchEvent(new Event('play'));
-      expect(slideshow.pauseSlideshowTimer).toHaveBeenCalled();
+      expect(slideshow.pauseSlideshowTimerForVideo).toHaveBeenCalled();
       (HTMLMediaElement.prototype.play as Mock).mockClear();
 
       // End of playback: 'pause' then 'ended' in the same task. The pause
@@ -488,7 +495,7 @@ describe('MediaDisplay playback (integration)', () => {
       const el = video();
       el.dispatchEvent(new Event('play'));
       el.dispatchEvent(new Event('pause'));
-      expect(slideshow.resumeSlideshowTimer).toHaveBeenCalled();
+      expect(slideshow.resumeSlideshowTimerAfterVideo).toHaveBeenCalled();
     });
 
     it("finishes the playing video's state when switching items", async () => {
@@ -500,7 +507,7 @@ describe('MediaDisplay playback (integration)', () => {
 
       video().dispatchEvent(new Event('play'));
       await settle();
-      expect(slideshow.pauseSlideshowTimer).toHaveBeenCalled();
+      expect(slideshow.pauseSlideshowTimerForVideo).toHaveBeenCalled();
       expect(controls().props('isPlaying')).toBe(true);
 
       // The old player unmounts in the same flush, so its 'pause' never
@@ -508,8 +515,25 @@ describe('MediaDisplay playback (integration)', () => {
       usePlaylistStore().currentItem = item('b.mp4');
       await settle();
       expect(controls().props('isPlaying')).toBe(false);
-      expect(slideshow.resumeSlideshowTimer).toHaveBeenCalled();
+      expect(slideshow.resumeSlideshowTimerAfterVideo).toHaveBeenCalled();
       expect(player.isTimerRunning).toBe(true);
+    });
+
+    it('does not restart a user-paused countdown when switching items mid-video', async () => {
+      const player = usePlayerStore();
+      player.pauseTimerOnPlay = true;
+      player.isTimerRunning = false;
+      usePlaylistStore().currentItem = item('a.mp4');
+      await mountDisplay();
+
+      video().dispatchEvent(new Event('play'));
+      await settle();
+      expect(controls().props('isPlaying')).toBe(true);
+
+      usePlaylistStore().currentItem = item('b.mp4');
+      await settle();
+      expect(controls().props('isPlaying')).toBe(false);
+      expect(player.isTimerRunning).toBe(false);
     });
   });
 

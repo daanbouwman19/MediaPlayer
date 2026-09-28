@@ -51,7 +51,7 @@ describe('useLibraryStore - Recently Played', () => {
 
     (api.getRecentlyPlayed as any).mockResolvedValue(mockItems);
 
-    await store.fetchHistory(10);
+    await expect(store.fetchHistory(10)).resolves.toBe(true);
 
     expect(api.getRecentlyPlayed).toHaveBeenCalledWith(10);
     expect(store.historyMedia).toHaveLength(2);
@@ -160,7 +160,8 @@ describe('useLibraryStore - Recently Played', () => {
     );
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    await store.fetchHistory();
+    // Callers are told, so they don't reuse stale history.
+    await expect(store.fetchHistory()).resolves.toBe(false);
 
     expect(store.historyMedia).toHaveLength(0);
     expect(consoleSpy).toHaveBeenCalled();

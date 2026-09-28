@@ -142,8 +142,8 @@ describe('MediaDisplay Coverage Boost', () => {
 
     mockSlideshow = {
       navigateMedia: vi.fn(),
-      pauseSlideshowTimer: vi.fn(),
-      resumeSlideshowTimer: vi.fn(),
+      pauseSlideshowTimerForVideo: vi.fn(),
+      resumeSlideshowTimerAfterVideo: vi.fn(),
       toggleSlideshowTimer: vi.fn(),
     };
     (useSlideshow as Mock).mockReturnValue(mockSlideshow);
@@ -285,7 +285,7 @@ describe('MediaDisplay Coverage Boost', () => {
     mockMediaLoader.mediaUrl.value = 'video-url';
     const wrapper = mount(MediaDisplay);
     await flushPromises();
-    mockSlideshow.pauseSlideshowTimer.mockClear();
+    mockSlideshow.pauseSlideshowTimerForVideo.mockClear();
 
     // startTranscoding publishes the known (DB) duration synchronously, then fails.
     mockTranscoder.startTranscoding.mockImplementation(async () => {
@@ -294,7 +294,7 @@ describe('MediaDisplay Coverage Boost', () => {
     });
     await (wrapper.vm as any).tryTranscoding();
     await flushPromises();
-    expect(mockSlideshow.pauseSlideshowTimer).not.toHaveBeenCalled();
+    expect(mockSlideshow.pauseSlideshowTimerForVideo).not.toHaveBeenCalled();
 
     // Once it really plays, a later duration update re-runs the check.
     usePlayerStore().pauseTimerOnPlay = false;
@@ -302,10 +302,10 @@ describe('MediaDisplay Coverage Boost', () => {
     await flushPromises();
     const videoPlayer = wrapper.findComponent(VideoPlayer);
     await videoPlayer.vm.$emit('play');
-    mockSlideshow.pauseSlideshowTimer.mockClear();
+    mockSlideshow.pauseSlideshowTimerForVideo.mockClear();
     mockTranscoder.transcodedDuration.value = 7300;
     await flushPromises();
-    expect(mockSlideshow.pauseSlideshowTimer).toHaveBeenCalled();
+    expect(mockSlideshow.pauseSlideshowTimerForVideo).toHaveBeenCalled();
   });
 
   it('handles global keyboard shortcuts', async () => {
@@ -348,7 +348,9 @@ describe('MediaDisplay Coverage Boost', () => {
 
     mount(MediaDisplay);
     await flushPromises();
-    expect(mockSlideshow.resumeSlideshowTimer).toHaveBeenCalled();
+    // Showing an image never restarts a stopped timer on its own (useSlideshow
+    // re-arms a running one when the item is selected).
+    expect(mockSlideshow.resumeSlideshowTimerAfterVideo).not.toHaveBeenCalled();
 
     // Space toggles slideshow timer for images
     window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Space' }));

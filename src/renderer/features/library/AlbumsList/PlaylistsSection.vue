@@ -189,6 +189,7 @@
 import { ref, nextTick } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useLibraryStore } from '@/composables/useLibraryStore';
+import { usePlayerStore } from '@/composables/usePlayerStore';
 import { useUIStore } from '@/composables/useUIStore';
 import { useSlideshow } from '@/composables/useSlideshow';
 import { useToast } from '@/composables/useToast';
@@ -206,6 +207,7 @@ import EditIcon from '@/components/atoms/icons/EditIcon.vue';
 import DeleteIcon from '@/components/atoms/icons/DeleteIcon.vue';
 
 const libraryStore = useLibraryStore();
+const playerStore = usePlayerStore();
 const uiStore = useUIStore();
 const slideshow = useSlideshow();
 const toast = useToast();
@@ -256,6 +258,18 @@ const getMediaForPlaylist = async (
   return result;
 };
 
+/**
+ * Shows `files` in the grid view. Leaving the player ends the slideshow, so
+ * the hidden player cannot keep advancing and recording views.
+ */
+const showInGrid = async (files: MediaFile[], historyMode: boolean) => {
+  playerStore.stopSlideshow();
+  gridMediaFiles.value = files;
+  await nextTick();
+  isHistoryMode.value = historyMode;
+  viewMode.value = 'grid';
+};
+
 const handleSmartPlaylistSlideshow = async (playlist: SmartPlaylist) => {
   if (loadingAction.value) return;
   loadingAction.value = `playlist-${playlist.id}`;
@@ -274,8 +288,9 @@ const handleSmartPlaylistSlideshow = async (playlist: SmartPlaylist) => {
       textures: mediaFiles,
       children: [],
     };
-    isHistoryMode.value = false;
-    slideshow.startIndividualAlbumSlideshow(fakeAlbum);
+    if (!(await slideshow.startIndividualAlbumSlideshow(fakeAlbum))) {
+      toast.info('No items in this playlist match the current media filter.');
+    }
   } catch (error) {
     console.error('Error starting playlist slideshow', error);
     toast.error('Failed to start playlist slideshow.');
@@ -289,10 +304,7 @@ const handleSmartPlaylistGrid = async (playlist: SmartPlaylist) => {
   loadingAction.value = `playlist-grid-${playlist.id}`;
   try {
     const mediaFiles = await getMediaForPlaylist(playlist);
-    gridMediaFiles.value = mediaFiles;
-    await nextTick();
-    isHistoryMode.value = false;
-    viewMode.value = 'grid';
+    await showInGrid(mediaFiles, false);
   } catch (error) {
     console.error('Error opening playlist grid', error);
     toast.error('Failed to open playlist in grid.');
@@ -320,24 +332,32 @@ const editPlaylist = (playlist: SmartPlaylist) => {
   isSmartPlaylistModalVisible.value = true;
 };
 
-const loadHistory = async () => {
-  await libraryStore.fetchHistory(RECENTLY_PLAYED_FETCH_LIMIT);
-  if (libraryStore.historyMedia.length === 0) {
-    throw new Error('No history items found');
+/**
+ * Loads Recently Played for the history actions.
+ * @returns The items, or null (after telling the user why) when there is
+ *   nothing current to show.
+ */
+const loadHistory = async (): Promise<MediaFile[] | null> => {
+  if (!(await libraryStore.fetchHistory(RECENTLY_PLAYED_FETCH_LIMIT))) {
+    toast.error('Failed to load Recently Played.');
+    return null;
   }
+  if (libraryStore.historyMedia.length === 0) {
+    toast.info('Nothing played yet. Items you view will show up here.');
+    return null;
+  }
+  return libraryStore.historyMedia;
 };
 
 const handleHistoryGrid = async () => {
   if (loadingAction.value) return;
   loadingAction.value = 'history-grid';
   try {
-    await loadHistory();
-    gridMediaFiles.value = libraryStore.historyMedia;
-    await nextTick();
-    isHistoryMode.value = true;
-    viewMode.value = 'grid';
+    const historyMedia = await loadHistory();
+    if (historyMedia) await showInGrid(historyMedia, true);
   } catch (e) {
     console.error('Error opening history grid', e);
+    toast.error('Failed to open Recently Played in grid.');
   } finally {
     loadingAction.value = null;
   }
@@ -347,11 +367,11 @@ const handleHistorySlideshow = async () => {
   if (loadingAction.value) return;
   loadingAction.value = 'history-slideshow';
   try {
-    await loadHistory();
-    const historyMedia = libraryStore.historyMedia;
-    slideshow.startHistorySlideshow(historyMedia);
+    const historyMedia = await loadHistory();
+    if (historyMedia) slideshow.startHistorySlideshow(historyMedia);
   } catch (e) {
     console.error('Error starting history slideshow', e);
+    toast.error('Failed to start Recently Played.');
   } finally {
     loadingAction.value = null;
   }

@@ -12,6 +12,7 @@ import { createTestingPinia } from '@pinia/testing';
 import SourcesModal from '@/features/library/SourcesModal.vue';
 
 import { useLibraryStore } from '@/composables/useLibraryStore';
+import { usePlayerStore } from '@/composables/usePlayerStore';
 import { useUIStore } from '@/composables/useUIStore';
 import { useToast } from '@/composables/useToast';
 import { api } from '@/api';
@@ -259,6 +260,35 @@ describe('SourcesModal.vue', () => {
       'subAlbum-id': true,
     });
   });
+
+  it.each([
+    ['running', false],
+    ['suspended for a long video', true],
+  ])(
+    'ends the slideshow and its %s countdown when re-indexing',
+    async (_label, suspendForVideo) => {
+      const playerStore = usePlayerStore();
+      const onElapsed = vi.fn();
+      playerStore.isSlideshowActive = true;
+      playerStore.startSlideshowTimer(60_000, onElapsed);
+      if (suspendForVideo) playerStore.suspendSlideshowTimerForVideo();
+
+      const wrapper = mount(SourcesModal);
+      const reindexButton = wrapper
+        .findAll('button')
+        .find((b) => b.text().includes('APPLY CHANGES & RE-INDEX'));
+      await reindexButton?.trigger('click');
+      await flushPromises();
+
+      expect(playerStore.stopSlideshow).toHaveBeenCalled();
+      expect(playerStore.isSlideshowActive).toBe(false);
+      expect(playerStore.isTimerRunning).toBe(false);
+      expect(playerStore.isTimerPausedForVideo).toBe(false);
+      expect(playerStore.slideshowTimerId).toBeNull();
+      expect(playerStore.timerEndTime).toBeNull();
+      expect(onElapsed).not.toHaveBeenCalled();
+    },
+  );
 
   it('should handle error when reindexing fails', async () => {
     const error = new Error('Reindex failed');

@@ -17,7 +17,7 @@ vi.mock('@/components/atoms/icons/PlaylistAddIcon.vue', () => ({
 vi.mock('../../../../src/renderer/composables/useSlideshow', () => ({
   useSlideshow: vi.fn(() => ({
     toggleAlbumSelection: vi.fn(),
-    startIndividualAlbumSlideshow: vi.fn(),
+    startIndividualAlbumSlideshow: vi.fn().mockResolvedValue(true),
   })),
 }));
 

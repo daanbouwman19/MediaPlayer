@@ -32,6 +32,11 @@ export const usePlaylistStore = defineStore('playlist', () => {
     currentItem.value = null;
   };
 
+  /** Drops the upcoming items but keeps the current item and history. */
+  const clearQueue = () => {
+    queue.value = [];
+  };
+
   const playNext = (nextItem?: MediaFile) => {
     if (currentItem.value) {
       if (history.value.length >= 100) {
@@ -69,6 +74,7 @@ export const usePlaylistStore = defineStore('playlist', () => {
     setQueue,
     reorderQueue,
     clearPlaylist,
+    clearQueue,
     playNext,
     playPrevious,
     hasPrevious,

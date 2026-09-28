@@ -73,6 +73,7 @@ describe('useSlideshow', () => {
     it('should resume slideshow timer for any media when timer is running', async () => {
       const playerStore = usePlayerStore();
       const libraryStore = useLibraryStore();
+      playerStore.isSlideshowActive = true;
       playerStore.isTimerRunning = true;
       playerStore.timerDuration = 5;
 

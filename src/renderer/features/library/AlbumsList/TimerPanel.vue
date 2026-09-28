@@ -32,7 +32,7 @@
       class="h-10 w-10 shrink-0 flex items-center justify-center rounded-lg text-muted hover:text-accent hover:bg-black/5 transition-colors"
       title="Shuffle All Sources"
       aria-label="Shuffle All Sources"
-      @click="slideshow.startSlideshow()"
+      @click="startShuffle"
     >
       <ShuffleIcon class="w-5 h-5" />
     </button>
@@ -70,12 +70,14 @@ import { ref, watch, onUnmounted } from 'vue';
 import { storeToRefs } from 'pinia';
 import { usePlayerStore } from '@/composables/usePlayerStore';
 import { useSlideshow } from '@/composables/useSlideshow';
+import { useToast } from '@/composables/useToast';
 import ShuffleIcon from '@/components/atoms/icons/ShuffleIcon.vue';
 import PauseIcon from '@/components/atoms/icons/PauseIcon.vue';
 import PlayIcon from '@/components/atoms/icons/PlayIcon.vue';
 
 const playerStore = usePlayerStore();
 const slideshow = useSlideshow();
+const toast = useToast();
 
 const {
   timerDuration,
@@ -114,19 +116,25 @@ const updateProgress = () => {
   }
 };
 
-watch([isTimerRunning, timerStartTime], ([isRunning, startTime]) => {
-  if (animationFrameId !== null) {
-    cancelAnimationFrame(animationFrameId);
-    animationFrameId = null;
-  }
-
-  if (isRunning) {
-    displayProgress.value = 100; // Reset visual progress when new timer starts or during loading phase
-    if (startTime !== null) {
-      animationFrameId = requestAnimationFrame(updateProgress);
+// Immediate: the sidebar (and this panel) is remounted while a countdown may
+// already be running, and the bar must pick it up rather than sit at 100%.
+watch(
+  [isTimerRunning, timerStartTime],
+  ([isRunning, startTime]) => {
+    if (animationFrameId !== null) {
+      cancelAnimationFrame(animationFrameId);
+      animationFrameId = null;
     }
-  }
-});
+
+    if (isRunning) {
+      displayProgress.value = 100; // Reset visual progress when new timer starts or during loading phase
+      if (startTime !== null) {
+        animationFrameId = requestAnimationFrame(updateProgress);
+      }
+    }
+  },
+  { immediate: true },
+);
 
 onUnmounted(() => {
   if (animationFrameId !== null) {
@@ -134,10 +142,21 @@ onUnmounted(() => {
   }
 });
 
-const handleToggleTimer = () => {
-  if (!isSlideshowActive.value) {
-    slideshow.startSlideshow();
+/** Shuffles the selected albums. @returns Whether the slideshow started. */
+const startShuffle = async () => {
+  const started = await slideshow.startSlideshow();
+  if (!started) {
+    toast.info(
+      'Nothing to play. Select albums with media that matches the current filter.',
+    );
   }
+  return started;
+};
+
+const handleToggleTimer = async () => {
+  // Only run the countdown for a slideshow that actually has something to
+  // show; otherwise the button would read "Pause" while nothing plays.
+  if (!isSlideshowActive.value && !(await startShuffle())) return;
   slideshow.toggleSlideshowTimer();
 };
 </script>

@@ -88,6 +88,7 @@ describe('useSlideshow Coverage Boost', () => {
       const playerStore = usePlayerStore();
 
       const { pickAndDisplayNextMediaItem } = useSlideshow();
+      playerStore.isSlideshowActive = true;
       playerStore.isTimerRunning = true;
 
       libraryStore.globalMediaPoolForSelection = [
@@ -223,9 +224,10 @@ describe('useSlideshow Coverage Boost', () => {
   });
 
   describe('reapplyFilter', () => {
-    it('rebuilds pool if slideshow is active', async () => {
+    it("keeps the session's pool and re-picks from it", async () => {
       const playerStore = usePlayerStore();
       const libraryStore = useLibraryStore();
+      const playlistStore = usePlaylistStore();
 
       const { reapplyFilter } = useSlideshow();
       playerStore.isSlideshowActive = true;
@@ -237,9 +239,15 @@ describe('useSlideshow Coverage Boost', () => {
         },
       ] as any;
       libraryStore.albumsSelectedForSlideshow = { a1: true };
+      libraryStore.globalMediaPoolForSelection = [
+        { path: 'album.jpg', name: 'album.jpg' },
+      ] as any;
 
       await reapplyFilter();
-      expect(libraryStore.globalMediaPoolForSelection.length).toBe(1);
+      expect(
+        libraryStore.globalMediaPoolForSelection.map((f) => f.path),
+      ).toEqual(['album.jpg']);
+      expect(playlistStore.currentItem?.path).toBe('album.jpg');
     });
   });
 });
