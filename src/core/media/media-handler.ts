@@ -27,6 +27,7 @@ import {
 } from '../network/http-utils.ts';
 import { FileSystemProvider } from './fs-provider.ts';
 import { getProvider } from '../../infrastructure/fs-provider-factory.ts';
+import { getFFmpegEnv } from '../../infrastructure/ffmpeg-env.ts';
 import { authorizeFilePath } from '../auth/security.ts';
 import { validateFileAccess } from '../auth/access-validator.ts';
 import { getAuthorizedPath } from '../auth/access-utils.ts';
@@ -425,7 +426,10 @@ export async function serveTranscodedStream(
       'Content-Type': 'video/mp4',
     });
 
-    const proc = spawn(ffmpegPath, ffmpegArgs, { windowsHide: true });
+    const proc = spawn(ffmpegPath, ffmpegArgs, {
+      windowsHide: true,
+      env: getFFmpegEnv(),
+    });
     ffmpegProcess = proc;
 
     proc.on('error', (err) => {

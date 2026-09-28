@@ -30,7 +30,8 @@ import {
  */
 
 const FILE_ID = 'file-123';
-const TOTAL = 64 * 1024;
+// Larger than any default stream highWaterMark, so backpressure can build.
+const TOTAL = 256 * 1024;
 const REMOTE = Buffer.alloc(TOTAL);
 for (let i = 0; i < TOTAL; i++) REMOTE[i] = (i * 7 + 3) % 256;
 
@@ -344,15 +345,21 @@ describe('getDriveStreamWithCache', () => {
     // Start reading, then apply backpressure by not reading any further.
     stream.once('readable', () => {});
     await vi.waitFor(() => expect(backend.getFileStream).toHaveBeenCalled());
-    drive.write(REMOTE.subarray(0, 40_000));
+    // Fill the stream's buffer exactly. Its size is Node's default
+    // highWaterMark, which differs between Node releases (16 KiB or 64 KiB),
+    // and a partly filled buffer still asks Drive for more data.
+    const buffered = stream.readableHighWaterMark;
+    expect(buffered).toBeLessThan(TOTAL);
+    drive.write(REMOTE.subarray(0, buffered));
     await vi.advanceTimersByTimeAsync(0);
+    expect(stream.readableLength).toBe(buffered);
 
     await vi.advanceTimersByTimeAsync(DRIVE_STREAM_STALL_TIMEOUT_MS * 3);
     expect(errors).toEqual([]);
 
     // Once the consumer reads again the rest arrives normally.
     vi.useRealTimers();
-    drive.end(REMOTE.subarray(40_000));
+    drive.end(REMOTE.subarray(buffered));
     expect((await collect(stream)).equals(REMOTE)).toBe(true);
   });
 

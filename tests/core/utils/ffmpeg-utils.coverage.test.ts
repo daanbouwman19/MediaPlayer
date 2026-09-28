@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vite-plus/test';
 import EventEmitter from 'events';
+import { getFFmpegEnv } from '../../../src/infrastructure/ffmpeg-env';
 
 // Mock spawn
 const { mockSpawn } = vi.hoisted(() => ({
@@ -133,7 +134,7 @@ describe('FFmpeg Utils Coverage Boost', () => {
       expect(mockSpawn).toHaveBeenCalledWith(
         'ffmpeg',
         [...getInputSafetyArgs('/media/movie.mkv'), '-i', '/media/movie.mkv'],
-        { windowsHide: true },
+        { windowsHide: true, env: getFFmpegEnv() },
       );
     });
   });
@@ -227,6 +228,7 @@ describe('FFmpeg Utils Coverage Boost', () => {
       await promise;
       expect(mockSpawn).toHaveBeenCalledWith('ffmpeg', ['-i', 'x'], {
         windowsHide: true,
+        env: getFFmpegEnv(),
       });
     });
 

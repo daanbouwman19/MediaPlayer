@@ -1,4 +1,5 @@
 import { spawn } from 'child_process';
+import { getFFmpegEnv } from './ffmpeg-env.ts';
 const FFMPEG_TRANSCODE_PRESET = 'ultrafast';
 const FFMPEG_TRANSCODE_CRF = '23';
 
@@ -205,7 +206,7 @@ export async function runFFmpeg(
     try {
       // windowsHide: a console-subsystem ffmpeg.exe started from the GUI app
       // would otherwise flash its own console window.
-      proc = spawn(command, args, { windowsHide: true });
+      proc = spawn(command, args, { windowsHide: true, env: getFFmpegEnv() });
     } catch (err) {
       return reject(err instanceof Error ? err : new Error(String(err)));
     }

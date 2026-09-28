@@ -15,6 +15,7 @@ import {
   MAX_CONCURRENT_TRANSCODES,
 } from './constants.ts';
 import { getFFmpegStaticPath } from '../../infrastructure/ffmpeg-static-path';
+import { getFFmpegEnv } from '../../infrastructure/ffmpeg-env.ts';
 
 export interface HlsProgress {
   currentTime: number; // in seconds
@@ -523,6 +524,7 @@ export class HlsManager extends EventEmitter {
         spawn(ffmpegPath, args, {
           stdio: ['ignore', 'ignore', 'pipe'],
           windowsHide: true,
+          env: getFFmpegEnv(),
         }),
       );
 

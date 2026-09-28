@@ -1,5 +1,6 @@
 import { spawn } from 'child_process';
 import { getFFmpegStaticPath } from '../../../infrastructure/ffmpeg-static-path';
+import { getFFmpegEnv } from '../../../infrastructure/ffmpeg-env.ts';
 import {
   getFFmpegStreams,
   getInputSafetyArgs,
@@ -461,6 +462,7 @@ export class MediaAnalyzer {
       };
       const proc = spawn(ffmpegPath, args, {
         windowsHide: true,
+        env: getFFmpegEnv(),
         stdio: ['ignore', 'pipe', 'pipe'],
       });
       const startedAt = Date.now();
