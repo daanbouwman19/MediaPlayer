@@ -950,6 +950,18 @@ defineExpose({
   opacity: 0;
 }
 
+/* out-in only waits when the outgoing child is a real element. An item change
+ * first clears the URL (an empty placeholder), so the next player can mount
+ * while the previous one is still fading out. Taking the leaving element out
+ * of the flex row keeps it from squeezing the new one, which would otherwise
+ * snap to full size once the fade ends. inset + auto margins keep an image
+ * centred at its intrinsic size. */
+.media-fade-leave-active {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+}
+
 .glass-toggle {
   display: flex;
   align-items: center;
