@@ -13,10 +13,19 @@ import {
   afterEach,
 } from 'vite-plus/test';
 import request from 'supertest';
+import type { Request } from 'express';
 import crypto from 'crypto';
 import { createApp } from '../../src/server/app';
 import { resetBasicAuthState } from '../../src/server/middleware/basic-auth';
+import {
+  markSessionUnlocked,
+  setSessionFingerprintKey,
+} from '../../src/server/middleware/global-password';
 import { createTestMediaService } from '../utils/test-factory';
+import {
+  RATE_LIMIT_API_MAX_REQUESTS,
+  RATE_LIMIT_API_WINDOW_MS,
+} from '../../src/core/media/constants';
 
 vi.mock('../../src/core/database/database', () => ({
   initDatabase: vi.fn(),
@@ -202,21 +211,14 @@ describe('createApp hardening', () => {
     /**
      * An unlocked session for GLOBAL_PASSWORD 'secret' that passes every
      * payload check, signed with and fingerprinted under the former
-     * hard-coded development key.
+     * hard-coded development key. Forged before createApp(), which sets the
+     * fingerprint key of the app under test.
      */
     function forgeUnlockedSession(): string {
-      const fingerprintKey = crypto
-        .createHmac('sha256', formerDevKey)
-        .update('media-player:global-password-session')
-        .digest();
-      const passwordFingerprint = crypto
-        .createHmac('sha256', fingerprintKey)
-        .update('secret', 'utf8')
-        .digest('base64url');
-      return forgeSession(
-        { isAuthenticated: true, authAt: Date.now(), passwordFingerprint },
-        formerDevKey,
-      );
+      setSessionFingerprintKey(formerDevKey);
+      const req = { session: {} } as unknown as Request;
+      markSessionUnlocked(req, 'secret');
+      return forgeSession(req.session as object, formerDevKey);
     }
 
     beforeEach(() => {
@@ -225,21 +227,19 @@ describe('createApp hardening', () => {
 
     it('accepts the forged session when the app signs with that key (control)', async () => {
       vi.stubEnv('SESSION_SECRET', formerDevKey);
+      const forged = forgeUnlockedSession();
       const app = await buildApp();
 
-      const res = await request(app)
-        .get('/api/albums')
-        .set('Cookie', forgeUnlockedSession());
+      const res = await request(app).get('/api/albums').set('Cookie', forged);
 
       expect(res.status).toBe(200);
     });
 
     it('rejects a session forged with the former built-in development key', async () => {
+      const forged = forgeUnlockedSession();
       const app = await buildApp();
 
-      const res = await request(app)
-        .get('/api/albums')
-        .set('Cookie', forgeUnlockedSession());
+      const res = await request(app).get('/api/albums').set('Cookie', forged);
 
       expect(res.status).toBe(401);
       expect(console.warn).toHaveBeenCalledWith(
@@ -296,6 +296,30 @@ describe('createApp hardening', () => {
       expect(res.status).toBe(404);
       expect(res.headers['content-type']).toMatch(/application\/json/);
       expect(res.body).toEqual({ error: 'Not found' });
+    });
+  });
+
+  describe('API-wide rate limit', () => {
+    it('puts every /api request behind the per-client API budget', async () => {
+      const app = await buildApp();
+
+      // The 404 fallback has no per-route limiter, so its headers are the
+      // API-wide limiter's.
+      const res = await request(app).get('/api/removed-endpoint');
+
+      expect(res.status).toBe(404);
+      expect(res.headers['ratelimit-policy']).toBe(
+        `${RATE_LIMIT_API_MAX_REQUESTS};w=${RATE_LIMIT_API_WINDOW_MS / 1000}`,
+      );
+    });
+
+    it('leaves routes outside /api to their own limits', async () => {
+      const app = await buildApp();
+
+      const res = await request(app).get('/favicon.ico');
+
+      expect(res.status).toBe(204);
+      expect(res.headers['ratelimit-policy']).toBeUndefined();
     });
   });
 

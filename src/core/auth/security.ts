@@ -230,9 +230,14 @@ async function resolveAuthorization(
 
 /**
  * Basic sanity checks for file paths.
+ *
+ * Takes `unknown` and checks the type itself: paths often come straight from
+ * a request, where a repeated query parameter or a JSON body can carry an
+ * array or an object instead of a string.
  */
-export function validateInput(filePath: string): AuthorizationResult | null {
+export function validateInput(filePath: unknown): AuthorizationResult | null {
   if (
+    typeof filePath !== 'string' ||
     !filePath ||
     filePath.includes('\0') ||
     filePath.includes('\r') ||

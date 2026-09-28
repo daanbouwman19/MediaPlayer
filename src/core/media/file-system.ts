@@ -133,35 +133,38 @@ function isSamePath(a: string, b: string): boolean {
     : a === b;
 }
 
+/**
+ * Confines a requested directory to the allowed roots and returns its
+ * canonical path.
+ *
+ * The request is checked lexically before anything touches the filesystem,
+ * so a path outside the roots is rejected without being resolved (its
+ * existence stays hidden). Symlinks are then resolved and the canonical path
+ * is checked again, catching a link inside a root that points outside it.
+ * @param missingError - Thrown when the (confined) path does not exist or
+ * cannot be resolved. Defaults to the outside-roots 403.
+ */
 async function resolveAndValidateDirectoryPath(
   directoryPath: string,
   allowedRoots: string[],
+  missingError: AppError = new AppError(403, ACCESS_DENIED_OUTSIDE_ROOTS),
 ): Promise<string> {
-  const requestedPath = path.resolve(directoryPath);
-
   if (allowedRoots.length === 0) {
     throw new AppError(403, 'Access denied: no valid allowed roots configured');
   }
 
-  // 1. Pre-symlink check: inline startsWith so CodeQL js/path-injection
-  //    sees the guard directly on requestedPath (a custom helper function
-  //    is not modelled as a sanitiser barrier by static-analysis tools).
-  let matchingRoot: string | undefined;
-  for (const root of allowedRoots) {
-    const prefix = root.endsWith(path.sep) ? root : root + path.sep;
-    if (requestedPath === root || requestedPath.startsWith(prefix)) {
-      matchingRoot = root;
-      break;
-    }
-  }
+  // 1. Lexical containment of the normalised absolute path.
+  const requestedPath = path.resolve(directoryPath);
+  const matchingRoot = allowedRoots.find(
+    (root) =>
+      requestedPath === root || requestedPath.startsWith(withTrailingSep(root)),
+  );
   if (!matchingRoot) {
     throw new AppError(403, ACCESS_DENIED_OUTSIDE_ROOTS);
   }
 
-  // 2. Resolve symlinks so that a symlink pointing outside the root is caught.
-  //    Compute the relative segment and guard it against traversal before
-  //    anchoring to the trusted root — path.resolve(trustedRoot, relPath) is
-  //    the pattern CodeQL js/path-injection recognises as a sanitiser barrier.
+  // 2. Anchor the path to the trusted root. The relative segment is guarded
+  //    against traversal, so path.resolve(root, relPath) cannot leave the root.
   const relPath = path.relative(matchingRoot, requestedPath);
   if (
     relPath === '..' ||
@@ -170,23 +173,28 @@ async function resolveAndValidateDirectoryPath(
   ) {
     throw new AppError(403, ACCESS_DENIED_OUTSIDE_ROOTS);
   }
+  const anchoredPath = path.resolve(matchingRoot, relPath);
+
+  // 3. Resolve symlinks, then check containment of the normalised canonical
+  //    path directly, right before it is returned: a link inside the root that
+  //    points outside it is rejected here.
   let canonicalPath: string;
   try {
-    canonicalPath = await canonicalizePath(path.resolve(matchingRoot, relPath));
+    canonicalPath = path.resolve(await canonicalizePath(anchoredPath));
   } catch {
+    throw missingError;
+  }
+  if (canonicalPath === matchingRoot) {
+    return matchingRoot;
+  }
+  if (!canonicalPath.startsWith(withTrailingSep(matchingRoot))) {
     throw new AppError(403, ACCESS_DENIED_OUTSIDE_ROOTS);
   }
-
-  // 3. Post-symlink containment check using startsWith — catches symlinks
-  //    that point outside the allowed root.
-  const rootPrefix = matchingRoot.endsWith(path.sep)
-    ? matchingRoot
-    : matchingRoot + path.sep;
-  if (canonicalPath !== matchingRoot && !canonicalPath.startsWith(rootPrefix)) {
-    throw new AppError(403, ACCESS_DENIED_OUTSIDE_ROOTS);
-  }
-
   return canonicalPath;
+}
+
+function withTrailingSep(root: string): string {
+  return root.endsWith(path.sep) ? root : root + path.sep;
 }
 
 /**
@@ -346,25 +354,22 @@ export async function resolveMediaSourceDirectory(
     throw new AppError(403, SENSITIVE_DIRECTORY_MESSAGE);
   }
 
-  let resolvedPath: string;
-  try {
-    // Resolve symlinks to prevent bypass of the sensitive directory check.
-    resolvedPath = await canonicalizePath(directoryPath);
-  } catch {
-    throw new AppError(400, 'Directory does not exist');
-  }
+  // Confined before anything is resolved: a folder outside the allowed roots
+  // is denied whether or not it exists. Only a folder inside them can be
+  // reported as missing.
+  const confinedPath = await resolveAndValidateDirectoryPath(
+    directoryPath,
+    await getCanonicalAllowedRoots(),
+    new AppError(400, 'Directory does not exist'),
+  );
 
-  if (isSensitiveDirectory(resolvedPath)) {
+  // Checked again on the canonical path, so a symlink cannot bypass it.
+  if (isSensitiveDirectory(confinedPath)) {
     console.warn(
-      `[Security] Blocked attempt to add sensitive directory: ${directoryPath} (resolved to ${resolvedPath})`,
+      `[Security] Blocked attempt to add sensitive directory: ${directoryPath} (resolved to ${confinedPath})`,
     );
     throw new AppError(403, SENSITIVE_DIRECTORY_MESSAGE);
   }
-
-  const confinedPath = await resolveAndValidateDirectoryPath(
-    resolvedPath,
-    await getCanonicalAllowedRoots(),
-  );
 
   if (!(await fs.stat(confinedPath)).isDirectory()) {
     throw new AppError(400, 'Not a directory');

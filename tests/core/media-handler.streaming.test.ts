@@ -19,6 +19,7 @@ import path from 'path';
 import { EventEmitter } from 'events';
 import { PassThrough } from 'stream';
 import type { IMediaSource } from '../../src/core/media/media-source-types';
+import { createRateLimiter } from '../../src/core/network/rate-limiter';
 
 const { mockSpawn } = vi.hoisted(() => ({ mockSpawn: vi.fn() }));
 
@@ -152,14 +153,16 @@ beforeAll(async () => {
   );
 
   const app = express();
+  // Like the real server: every route is behind a rate limiter.
+  app.use(createRateLimiter(60_000, 100_000, 'Too many requests'));
   app.get('/stream', (req, res) => {
     void handleStreamRequest(req, res, '/usr/bin/ffmpeg');
   });
   app.get('/raw', (req, res) => {
     const source =
       currentSource ?? new LocalMediaSource(req.query.file as string);
-    serveRawStream(req, res, source).catch((err: unknown) => {
-      if (!res.headersSent) res.status(500).send(String(err));
+    serveRawStream(req, res, source).catch(() => {
+      if (!res.headersSent) res.status(500).send('Stream error');
     });
   });
   app.get('/transcode', (req, res) => {
@@ -169,8 +172,8 @@ beforeAll(async () => {
       currentSource!,
       '/usr/bin/ffmpeg',
       undefined,
-    ).catch((err: unknown) => {
-      if (!res.headersSent) res.status(500).send(String(err));
+    ).catch(() => {
+      if (!res.headersSent) res.status(500).send('Stream error');
     });
   });
   app.use((req, res) => {

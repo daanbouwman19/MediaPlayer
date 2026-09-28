@@ -14,6 +14,7 @@ import {
 import request from 'supertest';
 import express from 'express';
 import cookieSession from 'cookie-session';
+import crypto from 'crypto';
 import { createAuthRoutes } from '../../src/server/routes/auth.routes';
 import {
   globalPasswordMiddleware,
@@ -21,6 +22,12 @@ import {
   setSessionFingerprintKey,
 } from '../../src/server/middleware/global-password';
 import { generateAuthUrl } from '../../src/infrastructure/google-auth';
+import {
+  type CsrfSession,
+  postWithCsrf,
+  startCsrfSession,
+  useSessionWithCsrf,
+} from '../utils/csrf-session';
 
 vi.mock('../../src/infrastructure/google-auth', () => ({
   generateAuthUrl: vi.fn().mockReturnValue('https://accounts.example/auth'),
@@ -34,9 +41,14 @@ const passThrough = (_req: any, _res: any, next: any) => next();
 function buildApp() {
   const app = express();
   app.use(express.json());
-  app.use(cookieSession({ name: 'session', keys: ['test-secret'] }));
+  useSessionWithCsrf(app, ['test-secret']);
   app.use(globalPasswordMiddleware);
-  app.use(createAuthRoutes({ authLimiter: passThrough } as any));
+  app.use(
+    createAuthRoutes({
+      authLimiter: passThrough,
+      readLimiter: passThrough,
+    } as any),
+  );
   app.get('/api/protected', (_req, res) => res.json({ ok: true }));
   return app;
 }
@@ -75,10 +87,20 @@ function applySetCookies(jar: string, res: request.Response): string {
   return [...cookies].map(([name, value]) => `${name}=${value}`).join('; ');
 }
 
-async function unlock(app: express.Express, password: string) {
-  const res = await request(app).post('/api/auth/unlock').send({ password });
+/**
+ * Loads the app and unlocks it. Returns the CSRF session and the cookies
+ * after unlocking.
+ */
+async function unlock(
+  app: express.Express,
+  password: string,
+): Promise<{ session: CsrfSession; cookies: string }> {
+  const session = await startCsrfSession(app);
+  const res = await postWithCsrf(app, '/api/auth/unlock', session).send({
+    password,
+  });
   expect(res.status).toBe(200);
-  return cookiesOf(res);
+  return { session, cookies: applySetCookies(session.cookies, res) };
 }
 
 describe('global password sessions', () => {
@@ -95,7 +117,7 @@ describe('global password sessions', () => {
 
   it('unlocks the API for the current password', async () => {
     const app = buildApp();
-    const cookies = await unlock(app, 'first-password');
+    const { cookies } = await unlock(app, 'first-password');
 
     const res = await request(app).get('/api/protected').set('Cookie', cookies);
     expect(res.status).toBe(200);
@@ -103,7 +125,7 @@ describe('global password sessions', () => {
 
   it('ends existing sessions when GLOBAL_PASSWORD changes', async () => {
     const app = buildApp();
-    const cookies = await unlock(app, 'first-password');
+    const { cookies } = await unlock(app, 'first-password');
 
     vi.stubEnv('GLOBAL_PASSWORD', 'rotated-password');
 
@@ -117,7 +139,7 @@ describe('global password sessions', () => {
 
   it('expires sessions server-side after the maximum age', async () => {
     const app = buildApp();
-    const cookies = await unlock(app, 'first-password');
+    const { cookies } = await unlock(app, 'first-password');
 
     const now = Date.now();
     vi.spyOn(Date, 'now').mockReturnValue(now + SESSION_MAX_AGE_MS + 1000);
@@ -146,11 +168,9 @@ describe('global password sessions', () => {
 
   it('locks again via POST /api/auth/lock', async () => {
     const app = buildApp();
-    const cookies = await unlock(app, 'first-password');
+    const { session, cookies } = await unlock(app, 'first-password');
 
-    const lock = await request(app)
-      .post('/api/auth/lock')
-      .set('Cookie', cookies);
+    const lock = await postWithCsrf(app, '/api/auth/lock', session, cookies);
     expect(lock.status).toBe(200);
     expect(lock.headers['set-cookie']).toEqual(
       expect.arrayContaining([
@@ -172,7 +192,7 @@ describe('global password sessions', () => {
     expect(locked.status).toBe(401);
     expect(generateAuthUrl).not.toHaveBeenCalled();
 
-    const cookies = await unlock(app, 'first-password');
+    const { cookies } = await unlock(app, 'first-password');
     const unlocked = await request(app)
       .get('/api/auth/google-drive/start')
       .set('Cookie', cookies);
@@ -180,9 +200,28 @@ describe('global password sessions', () => {
     expect(generateAuthUrl).toHaveBeenCalledTimes(1);
   });
 
+  it('derives the session fingerprint with scrypt once, not per request', async () => {
+    const scrypt = vi.spyOn(crypto, 'scryptSync');
+    const app = buildApp();
+    const { cookies } = await unlock(app, 'first-password');
+    for (let i = 0; i < 3; i++) {
+      const res = await request(app)
+        .get('/api/protected')
+        .set('Cookie', cookies);
+      expect(res.status).toBe(200);
+    }
+
+    expect(scrypt).toHaveBeenCalledTimes(1);
+    expect(scrypt).toHaveBeenCalledWith(
+      'first-password',
+      expect.any(Buffer),
+      32,
+    );
+  });
+
   it('does not store the password itself in the readable session cookie', async () => {
     const app = buildApp();
-    const cookies = await unlock(app, 'first-password');
+    const { cookies } = await unlock(app, 'first-password');
     const value = /session=([^;]+)/.exec(cookies)?.[1] ?? '';
     const payload = Buffer.from(value, 'base64').toString('utf8');
 

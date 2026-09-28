@@ -7,15 +7,15 @@ import crypto from 'crypto';
  */
 export const SESSION_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
 
-// Keys the GLOBAL_PASSWORD fingerprint stored in unlocked sessions. The
+// Salts the GLOBAL_PASSWORD fingerprint stored in unlocked sessions. The
 // session payload is readable by the client, so a plain hash would allow an
-// offline guess of the password. createApp() derives this key from the
+// offline guess of the password. createApp() derives this salt from the
 // cookie-session secret, so unlocked sessions survive a restart whenever
 // SESSION_SECRET is configured.
 let fingerprintKey = crypto.randomBytes(32);
 
 /**
- * Sets the key used to fingerprint GLOBAL_PASSWORD in unlocked sessions.
+ * Sets the salt used to fingerprint GLOBAL_PASSWORD in unlocked sessions.
  * @param sessionSecret - The secret that signs the session cookie.
  */
 export function setSessionFingerprintKey(sessionSecret: string): void {
@@ -37,11 +37,33 @@ export function createEphemeralSessionSecret(): string {
   return crypto.randomBytes(32).toString('hex');
 }
 
-function passwordFingerprint(password: string): string {
-  return crypto
-    .createHmac('sha256', fingerprintKey)
-    .update(password, 'utf8')
-    .digest('base64url');
+// The fingerprint of the current GLOBAL_PASSWORD, derived once: scrypt is
+// deliberately slow, and every request of an unlocked session is checked.
+let cachedFingerprint: {
+  key: Buffer;
+  password: string;
+  fingerprint: string;
+} | null = null;
+
+/**
+ * Derives the fingerprint stored in unlocked sessions with scrypt, salted by
+ * the session key, so the client-readable value does not allow a fast offline
+ * guess of the password. Only called with the configured GLOBAL_PASSWORD,
+ * never with client input, so the cache lookup compares server values only.
+ */
+function deriveUnlockFingerprint(password: string): string {
+  if (
+    cachedFingerprint &&
+    cachedFingerprint.key === fingerprintKey &&
+    cachedFingerprint.password === password
+  ) {
+    return cachedFingerprint.fingerprint;
+  }
+  const fingerprint = crypto
+    .scryptSync(password, fingerprintKey, 32)
+    .toString('base64url');
+  cachedFingerprint = { key: fingerprintKey, password, fingerprint };
+  return fingerprint;
 }
 
 /**
@@ -51,7 +73,7 @@ export function markSessionUnlocked(req: Request, password: string): void {
   if (!req.session) return;
   req.session.isAuthenticated = true;
   req.session.authAt = Date.now();
-  req.session.passwordFingerprint = passwordFingerprint(password);
+  req.session.passwordFingerprint = deriveUnlockFingerprint(password);
 }
 
 /**
@@ -71,7 +93,7 @@ export function isSessionUnlocked(req: Request, password: string): boolean {
   const stored: unknown = session.passwordFingerprint;
   if (typeof stored !== 'string') return false;
   const actual = Buffer.from(stored);
-  const wanted = Buffer.from(passwordFingerprint(password));
+  const wanted = Buffer.from(deriveUnlockFingerprint(password));
   return (
     actual.length === wanted.length && crypto.timingSafeEqual(actual, wanted)
   );

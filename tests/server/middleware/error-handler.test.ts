@@ -3,7 +3,10 @@ import request from 'supertest';
 import express from 'express';
 import cookieSession from 'cookie-session';
 import lusca from 'lusca';
-import { errorHandler } from '../../../src/server/middleware/error-handler';
+import {
+  csrfErrorHandler,
+  errorHandler,
+} from '../../../src/server/middleware/error-handler';
 import { AppError } from '../../../src/core/media/errors';
 
 function appThrowing(err: unknown) {
@@ -163,5 +166,56 @@ describe('errorHandler', () => {
 
     expect(next).toHaveBeenCalledWith(err);
     expect(res.status).not.toHaveBeenCalled();
+  });
+});
+
+describe('csrfErrorHandler', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function csrfApp() {
+    const app = express();
+    app.use(express.json());
+    app.use(cookieSession({ name: 'session', keys: ['test-secret'] }));
+    app.use(lusca.csrf({ angular: true }));
+    app.use(csrfErrorHandler);
+    app.post('/api/thing', (_req, res) => res.json({ ok: true }));
+    app.get('/api/fail', () => {
+      throw new AppError(404, 'Gone');
+    });
+    app.use(errorHandler);
+    return app;
+  }
+
+  it('answers a missing or wrong token with a JSON 403', async () => {
+    const app = csrfApp();
+    const missing = await request(app).post('/api/thing').send({});
+    expect(missing.status).toBe(403);
+    expect(missing.body).toEqual({ error: 'Invalid or missing CSRF token' });
+
+    const wrong = await request(app)
+      .post('/api/thing')
+      .set('X-XSRF-TOKEN', 'forged')
+      .send({});
+    expect(wrong.status).toBe(403);
+    expect(wrong.body).toEqual({ error: 'Invalid or missing CSRF token' });
+  });
+
+  it('passes other errors on to the error handler', async () => {
+    const next = vi.fn();
+    const err = new Error('CSRF token missing');
+    // Not a CSRF rejection without lusca's 403.
+    csrfErrorHandler(
+      err,
+      {} as any,
+      { headersSent: false, statusCode: 200 } as any,
+      next,
+    );
+    expect(next).toHaveBeenCalledWith(err);
+
+    const res = await request(csrfApp()).get('/api/fail');
+    expect(res.status).toBe(404);
+    expect(res.body).toEqual({ error: 'Gone' });
   });
 });

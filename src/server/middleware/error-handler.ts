@@ -49,6 +49,27 @@ function resolveStatus(err: HttpLikeError, res: Response): number {
   return status === 401 ? 500 : status;
 }
 
+const LUSCA_CSRF_ERROR = /^CSRF token (?:missing|mismatch)$/;
+
+/**
+ * Answers a CSRF rejection with a JSON 403 the client can show. lusca's check
+ * sets 403 and passes a plain Error ('CSRF token missing' / 'CSRF token
+ * mismatch'). Mounted right after lusca, so any other error goes on to
+ * {@link errorHandler}.
+ */
+export const csrfErrorHandler: ErrorRequestHandler = (err, _req, res, next) => {
+  if (
+    !res.headersSent &&
+    res.statusCode === 403 &&
+    err instanceof Error &&
+    LUSCA_CSRF_ERROR.test(err.message)
+  ) {
+    res.status(403).json({ error: 'Invalid or missing CSRF token' });
+    return;
+  }
+  next(err);
+};
+
 export const errorHandler: ErrorRequestHandler = (err, _req, res, next) => {
   // Headers already went out (e.g. a stream failed midway): let Express
   // close the connection instead of trying to write a second response.

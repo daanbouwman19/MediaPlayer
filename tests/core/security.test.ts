@@ -13,6 +13,7 @@ import {
   isRestrictedPath,
   isSensitiveDirectory,
   clearAuthCache,
+  validateInput,
 } from '../../src/core/auth/security';
 import path from 'path';
 import fs from 'fs/promises';
@@ -341,6 +342,24 @@ describe('authorizeFilePath Security', () => {
     clearAuthCache();
     await authorizeFilePath('/allowed/video.mp4');
     expect(database.getMediaDirectories).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('validateInput', () => {
+  it.each([
+    ['an array (repeated query parameter)', ['/allowed/a.mp4', '/etc/passwd']],
+    ['an object', { length: 1 }],
+    ['a number', 42],
+    ['undefined', undefined],
+  ])('rejects %s instead of a path string', (_label, value) => {
+    expect(validateInput(value)).toEqual({
+      isAllowed: false,
+      message: 'Invalid file path',
+    });
+  });
+
+  it('accepts a plain path string', () => {
+    expect(validateInput('/allowed/a.mp4')).toBeNull();
   });
 });
 

@@ -10,33 +10,36 @@ import request from 'supertest';
 import express from 'express';
 import { createAuthRoutes } from '../../src/server/routes/auth.routes';
 import { globalPasswordMiddleware } from '../../src/server/middleware/global-password';
-
-import cookieSession from 'cookie-session';
+import {
+  type CsrfSession,
+  postWithCsrf,
+  setCookiePairs,
+  startCsrfSession,
+  useSessionWithCsrf,
+} from '../utils/csrf-session';
 
 const mockLimiters = {
   authLimiter: (_req: any, _res: any, next: any) => next(),
-  apiLimiter: (_req: any, _res: any, next: any) => next(),
+  readLimiter: (_req: any, _res: any, next: any) => next(),
 } as any;
 
 describe('Global Password Auth Routes & Middleware', () => {
   let app: express.Express;
+  let session: CsrfSession;
   const originalEnv = process.env.GLOBAL_PASSWORD;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     app = express();
     app.use(express.json());
-    app.use(
-      cookieSession({
-        name: 'session',
-        keys: ['test-secret'],
-        httpOnly: true,
-      }),
-    );
+    useSessionWithCsrf(app, ['test-secret']);
     app.use(globalPasswordMiddleware);
     app.use(createAuthRoutes(mockLimiters));
 
     // Add a protected test route
     app.get('/api/protected', (_req, res) => res.json({ success: true }));
+
+    // What the browser holds after loading the page.
+    session = await startCsrfSession(app);
   });
 
   afterEach(() => {
@@ -84,9 +87,9 @@ describe('Global Password Auth Routes & Middleware', () => {
     process.env.GLOBAL_PASSWORD = 'test';
 
     // First, login to get a valid session
-    const loginRes = await request(app)
-      .post('/api/auth/unlock')
-      .send({ password: 'test' });
+    const loginRes = await postWithCsrf(app, '/api/auth/unlock', session).send({
+      password: 'test',
+    });
     expect(loginRes.status).toBe(200);
     const cookies = loginRes.headers['set-cookie'];
 
@@ -122,9 +125,9 @@ describe('Global Password Auth Routes & Middleware', () => {
   it('lock-status returns authenticated when correct cookie is present', async () => {
     process.env.GLOBAL_PASSWORD = 'test';
     // First, login to get a valid session
-    const loginRes = await request(app)
-      .post('/api/auth/unlock')
-      .send({ password: 'test' });
+    const loginRes = await postWithCsrf(app, '/api/auth/unlock', session).send({
+      password: 'test',
+    });
     const cookies = loginRes.headers['set-cookie'];
 
     const res = await request(app)
@@ -137,53 +140,67 @@ describe('Global Password Auth Routes & Middleware', () => {
   // Test /api/auth/unlock
   it('unlock succeeds automatically if global password is not set', async () => {
     delete process.env.GLOBAL_PASSWORD;
-    const res = await request(app)
-      .post('/api/auth/unlock')
-      .send({ password: 'any' });
+    const res = await postWithCsrf(app, '/api/auth/unlock', session).send({
+      password: 'any',
+    });
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
   });
 
   it('unlock succeeds with correct password and sets cookie', async () => {
     process.env.GLOBAL_PASSWORD = 'test';
-    const res = await request(app)
-      .post('/api/auth/unlock')
-      .send({ password: 'test' });
+    const res = await postWithCsrf(app, '/api/auth/unlock', session).send({
+      password: 'test',
+    });
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
 
     // check cookie is set
-    const cookies = res.headers['set-cookie'];
-    expect(cookies).toBeDefined();
-    expect(cookies[0]).toContain('session=');
-    expect(cookies[0].toLowerCase()).toContain('httponly');
+    const cookies = res.headers['set-cookie'] as unknown as string[];
+    const sessionCookie = cookies.find((c) => c.startsWith('session='));
+    expect(sessionCookie).toBeDefined();
+    expect(sessionCookie!.toLowerCase()).toContain('httponly');
   });
 
   it('unlock fails with incorrect password', async () => {
     process.env.GLOBAL_PASSWORD = 'test';
-    const res = await request(app)
-      .post('/api/auth/unlock')
-      .send({ password: 'wrong' });
+    const res = await postWithCsrf(app, '/api/auth/unlock', session).send({
+      password: 'wrong',
+    });
     expect(res.status).toBe(401);
     expect(res.body.error).toBe('Invalid password');
-    const cookies = res.headers['set-cookie'];
-    expect(cookies).toBeUndefined(); // shouldn't set secure session
+    // The session is left as it was: not unlocked.
+    expect(setCookiePairs(res).some((c) => c.startsWith('session='))).toBe(
+      false,
+    );
   });
 
   it('unlock fails with non-string password', async () => {
     process.env.GLOBAL_PASSWORD = 'test';
-    const res = await request(app)
-      .post('/api/auth/unlock')
-      .send({ password: {} });
+    const res = await postWithCsrf(app, '/api/auth/unlock', session).send({
+      password: {},
+    });
     expect(res.status).toBe(401);
     expect(res.body.error).toBe('Invalid password');
   });
 
+  it('unlock is rejected without the CSRF token', async () => {
+    process.env.GLOBAL_PASSWORD = 'test';
+    const res = await request(app)
+      .post('/api/auth/unlock')
+      .set('Cookie', session.cookies)
+      .send({ password: 'test' });
+    expect(res.status).toBe(403);
+    expect(setCookiePairs(res).some((c) => c.startsWith('session='))).toBe(
+      false,
+    );
+  });
+
   it('cookie-session handles multiple cookies correctly', async () => {
     process.env.GLOBAL_PASSWORD = 'test';
-    const loginRes = await request(app)
-      .post('/api/auth/unlock')
-      .send({ password: 'test' });
+    const loginRes = await postWithCsrf(app, '/api/auth/unlock', session).send({
+      password: 'test',
+    });
 
     // Pass both session and session.sig cookies
     const setCookies = loginRes.headers['set-cookie'] as any;

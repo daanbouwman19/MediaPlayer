@@ -300,6 +300,13 @@ const RATE_LIMIT_FILE_MAX_REQUESTS = 3_000;
 const RATE_LIMIT_FS_READ_WINDOW_MS = 60 * 1000;
 const RATE_LIMIT_FS_READ_MAX_REQUESTS = 60;
 
+// Whole API: a per-client ceiling (5000 req / 1 min) in front of every /api
+// route, on top of the per-route budgets above. It is above their sum, so it
+// never limits traffic those budgets allow; it caps what a client can send
+// in total, including routes a per-route limiter was forgotten on.
+const RATE_LIMIT_API_WINDOW_MS = 60 * 1000;
+const RATE_LIMIT_API_MAX_REQUESTS = 5_000;
+
 /**
  * Maximum number of concurrent transcoding streams allowed.
  * Used to prevent CPU exhaustion (DoS).
@@ -391,6 +398,8 @@ export {
   RATE_LIMIT_FILE_MAX_REQUESTS,
   RATE_LIMIT_FS_READ_WINDOW_MS,
   RATE_LIMIT_FS_READ_MAX_REQUESTS,
+  RATE_LIMIT_API_WINDOW_MS,
+  RATE_LIMIT_API_MAX_REQUESTS,
   MAX_CONCURRENT_TRANSCODES,
   MAX_API_BATCH_SIZE,
   MAX_PASSWORD_LENGTH,

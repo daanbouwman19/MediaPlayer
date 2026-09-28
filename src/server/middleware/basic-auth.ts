@@ -6,39 +6,32 @@ import {
   RATE_LIMIT_AUTH_WINDOW_MS,
 } from '../../core/media/constants.ts';
 
-// Per-process key for comparing credentials as HMAC-SHA256 digests. The
-// expected credentials live in memory, so a slow KDF on every request adds
-// nothing but blocked event-loop time; fixed-length digests compared with
-// timingSafeEqual keep the comparison constant-time for any input length.
-const DIGEST_KEY = crypto.randomBytes(32);
+// Longest UTF-8 encoding of one credential part: the decoded header is capped
+// at MAX_PASSWORD_LENGTH * 2 + 1 UTF-16 code units, each at most 3 bytes.
+const MAX_CREDENTIAL_BYTES = (MAX_PASSWORD_LENGTH * 2 + 1) * 3;
 
-function digest(value: string): Buffer {
-  return crypto.createHmac('sha256', DIGEST_KEY).update(value, 'utf8').digest();
-}
-
-interface ExpectedCredentials {
-  user: string;
-  secret: string;
-  userDigest: Buffer;
-  secretDigest: Buffer;
-}
-
-// Derived once per configuration, not per request.
-let expected: ExpectedCredentials | null = null;
-
-function getExpectedCredentials(
-  user: string,
-  secret: string,
-): ExpectedCredentials {
-  if (!expected || expected.user !== user || expected.secret !== secret) {
-    expected = {
-      user,
-      secret,
-      userDigest: digest(user),
-      secretDigest: digest(secret),
-    };
-  }
-  return expected;
+/**
+ * Compares a submitted credential with the configured one in constant time,
+ * without hashing either: both are zero-padded to the same fixed size (no
+ * smaller than any accepted submission) and compared with timingSafeEqual,
+ * so the time taken does not depend on the submitted value or its length.
+ * The byte lengths are compared separately, since padding hides a trailing
+ * NUL. Nothing derived from the credentials is kept.
+ */
+function credentialMatches(expected: string, actual: string): boolean {
+  const expectedBytes = Buffer.from(expected, 'utf8');
+  const actualBytes = Buffer.from(actual, 'utf8');
+  const size = Math.max(
+    MAX_CREDENTIAL_BYTES,
+    expectedBytes.length,
+    actualBytes.length,
+  );
+  const expectedPadded = Buffer.alloc(size);
+  const actualPadded = Buffer.alloc(size);
+  expectedBytes.copy(expectedPadded);
+  actualBytes.copy(actualPadded);
+  const sameBytes = crypto.timingSafeEqual(expectedPadded, actualPadded);
+  return sameBytes && expectedBytes.length === actualBytes.length;
 }
 
 /**
@@ -93,10 +86,9 @@ const failedAttempts = new FailedAttemptTracker(
 
 let misconfigurationLogged = false;
 
-/** Resets the failed-attempt counters and cached credentials (tests). */
+/** Resets the failed-attempt counters (tests). */
 export function resetBasicAuthState(): void {
   failedAttempts.clear();
-  expected = null;
   misconfigurationLogged = false;
 }
 
@@ -116,8 +108,6 @@ export function basicAuthMiddleware(
   const sysSecret = process.env.SYSTEM_PASSWORD || '';
 
   if (!sysUser && !sysSecret) {
-    // Reset cache if credentials are removed
-    expected = null;
     return next();
   }
 
@@ -166,14 +156,10 @@ export function basicAuthMiddleware(
   const loginUser = credentials.substring(0, idx);
   const loginSecret = credentials.substring(idx + 1);
 
-  const { userDigest, secretDigest } = getExpectedCredentials(
-    sysUser,
-    sysSecret,
-  );
   // Compare both parts unconditionally so timing does not reveal which one
   // matched.
-  const userMatch = crypto.timingSafeEqual(userDigest, digest(loginUser));
-  const secretMatch = crypto.timingSafeEqual(secretDigest, digest(loginSecret));
+  const userMatch = credentialMatches(sysUser, loginUser);
+  const secretMatch = credentialMatches(sysSecret, loginSecret);
 
   if (userMatch && secretMatch) {
     return next();

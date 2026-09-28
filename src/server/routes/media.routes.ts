@@ -455,6 +455,7 @@ export function createMediaRoutes({
 
   router.post(
     '/api/transcode/jobs',
+    writeLimiter,
     asyncHandler(async (req, res) => {
       const { paths } = req.body as { paths?: unknown };
       if (!Array.isArray(paths) || paths.length === 0) {
@@ -475,8 +476,10 @@ export function createMediaRoutes({
     }),
   );
 
+  // Polled every few seconds while jobs run.
   router.get(
     '/api/transcode/jobs',
+    readLimiter,
     asyncHandler(async (_req, res) => {
       const jobs = await listTranscodeJobs();
       res.json(jobs);
@@ -485,6 +488,7 @@ export function createMediaRoutes({
 
   router.delete(
     '/api/transcode/jobs',
+    writeLimiter,
     asyncHandler(async (req, res) => {
       const { path: filePath } = req.body as { path?: unknown };
       if (typeof filePath !== 'string' || !filePath) {

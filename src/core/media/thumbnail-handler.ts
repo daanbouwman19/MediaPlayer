@@ -42,8 +42,11 @@ const LOCAL_FAILURE_TTL_MS = 60 * 60 * 1000;
 const DRIVE_FAILURE_TTL_MS = 10 * 60 * 1000;
 const MAX_REMEMBERED_FAILURES = 5000;
 
-const THUMBNAIL_FILE = /^[0-9a-f]{32}\.jpg$/;
-const THUMBNAIL_TEMP_FILE = /^[0-9a-f]{32}\.jpg\.[0-9a-f-]+\.tmp\.jpg$/;
+// 64 hex digits: SHA-256 names. 32: names from the former MD5 key, still
+// matched so the sweeper removes those files.
+const THUMBNAIL_FILE = /^(?:[0-9a-f]{64}|[0-9a-f]{32})\.jpg$/;
+const THUMBNAIL_TEMP_FILE =
+  /^(?:[0-9a-f]{64}|[0-9a-f]{32})\.jpg\.[0-9a-f-]+\.tmp\.jpg$/;
 const thumbnailSweeper = new CacheSweeper({
   isEntry: (name) => THUMBNAIL_FILE.test(name),
   isTempFile: (name) => THUMBNAIL_TEMP_FILE.test(name),

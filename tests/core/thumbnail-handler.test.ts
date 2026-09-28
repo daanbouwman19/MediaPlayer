@@ -285,15 +285,18 @@ describe('thumbnail-handler', () => {
       };
       const hex = 'a'.repeat(32);
       const old = path.join(cacheDir, `${hex}.jpg`);
+      // A SHA-256 named entry and one left over from the former MD5 names.
+      const oldSha = path.join(cacheDir, `${'d'.repeat(64)}.jpg`);
       const fresh = path.join(cacheDir, `${'b'.repeat(32)}.jpg`);
       const temp = path.join(
         cacheDir,
         `${hex}.jpg.0f0e0d0c-0b0a-4908-8706-050403020100.tmp.jpg`,
       );
       const heatmap = path.join(cacheDir, `heatmap_v2_${'c'.repeat(64)}.json`);
-      for (const file of [old, fresh, temp, heatmap])
+      for (const file of [old, oldSha, fresh, temp, heatmap])
         fs.writeFileSync(file, 'x');
       age(old, 100 * 24 * 60 * 60 * 1000);
+      age(oldSha, 100 * 24 * 60 * 60 * 1000);
       age(temp, 2 * 60 * 60 * 1000);
       age(heatmap, 100 * 24 * 60 * 60 * 1000);
 
@@ -312,6 +315,7 @@ describe('thumbnail-handler', () => {
       }
 
       await vi.waitFor(() => expect(fs.existsSync(old)).toBe(false));
+      await vi.waitFor(() => expect(fs.existsSync(oldSha)).toBe(false));
       await vi.waitFor(() => expect(fs.existsSync(temp)).toBe(false));
       expect(fs.existsSync(fresh)).toBe(true);
       // Heatmaps in a shared cache dir belong to the analyzer's own sweep.

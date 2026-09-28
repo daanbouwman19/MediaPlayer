@@ -15,6 +15,7 @@ import {
   normalizeFilePath,
 } from '../../src/core/media/media-utils';
 import path from 'path';
+import crypto from 'crypto';
 
 describe('media-utils unit tests', () => {
   beforeEach(() => {
@@ -51,7 +52,10 @@ describe('media-utils unit tests', () => {
       const result = getThumbnailCachePath(filePath, cacheDir);
 
       // Match path ending with /cache/<hash>.jpg, allowing either / or \ separator
-      expect(result).toMatch(/[\\/]cache[\\/][a-f0-9]+\.jpg$/);
+      expect(result).toMatch(/[\\/]cache[\\/][a-f0-9]{64}\.jpg$/);
+      expect(path.basename(result, '.jpg')).toBe(
+        crypto.createHash('sha256').update(filePath).digest('hex'),
+      );
 
       // Verify validation logic works with platform specific check
       expect(result.startsWith(path.join(cacheDir))).toBe(true);

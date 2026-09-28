@@ -17,7 +17,10 @@ import { initDatabase } from '../core/database/database.ts';
 import {
   HLS_CACHE_DIR_NAME,
   HEATMAP_CACHE_DIR_NAME,
+  RATE_LIMIT_API_MAX_REQUESTS,
+  RATE_LIMIT_API_WINDOW_MS,
 } from '../core/media/constants.ts';
+import { createRateLimiter } from '../core/network/rate-limiter.ts';
 import { registerSensitiveFile } from '../core/auth/security.ts';
 import { initializeDriveCacheManager } from '../infrastructure/drive-cache-manager.ts';
 import { registerDriveBackend } from '../core/media/drive-backend.ts';
@@ -36,7 +39,7 @@ import {
   setSessionFingerprintKey,
 } from './middleware/global-password.ts';
 import { noCacheMiddleware } from './middleware/no-cache.ts';
-import { errorHandler } from './middleware/error-handler.ts';
+import { csrfErrorHandler, errorHandler } from './middleware/error-handler.ts';
 import { createAlbumRoutes } from './routes/album.routes.ts';
 import { createMediaRoutes } from './routes/media.routes.ts';
 import { createAuthRoutes } from './routes/auth.routes.ts';
@@ -160,19 +163,20 @@ export async function createApp(
 
   if (options.csrf ?? process.env.NODE_ENV !== 'test') {
     // Sets the XSRF-TOKEN cookie and expects it back in the X-XSRF-TOKEN header.
-    const csrfMiddleware = lusca.csrf({ angular: true });
-    app.use((req, res, next) => {
-      csrfMiddleware(req, res, (err?: unknown) => {
-        // lusca reports a missing or wrong token as an error, which the
-        // error handler would turn into a 500.
-        if (err) {
-          res.status(403).json({ error: 'Invalid or missing CSRF token' });
-          return;
-        }
-        next();
-      });
-    });
+    app.use(lusca.csrf({ angular: true }));
+    // Answers lusca's rejection (an error after setting 403) as JSON.
+    app.use(csrfErrorHandler);
   }
+
+  // Per-client ceiling for the whole API, in front of the per-route budgets.
+  app.use(
+    '/api',
+    createRateLimiter(
+      RATE_LIMIT_API_WINDOW_MS,
+      RATE_LIMIT_API_MAX_REQUESTS,
+      'Too many requests. Please slow down.',
+    ),
+  );
 
   const limiters = createRateLimiters();
 

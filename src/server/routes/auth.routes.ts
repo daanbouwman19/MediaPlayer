@@ -29,6 +29,7 @@ export function createAuthRoutes(limiters: RateLimiters) {
    */
   router.get(
     '/api/auth/lock-status',
+    limiters.readLimiter,
     asyncHandler(async (req, res) => {
       const globalPassword = process.env.GLOBAL_PASSWORD;
 
@@ -43,7 +44,7 @@ export function createAuthRoutes(limiters: RateLimiters) {
   /**
    * Lock the app again by clearing the session.
    */
-  router.post('/api/auth/lock', (req, res) => {
+  router.post('/api/auth/lock', limiters.readLimiter, (req, res) => {
     req.session = null;
     res.json({ success: true });
   });
@@ -111,6 +112,7 @@ export function createAuthRoutes(limiters: RateLimiters) {
 
   router.get(
     '/api/auth/google-drive/status',
+    limiters.readLimiter,
     asyncHandler(async (_req, res) => {
       const isAuthenticated = await checkGoogleDriveAuth();
       res.json({ isAuthenticated });
