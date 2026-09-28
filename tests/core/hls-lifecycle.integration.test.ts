@@ -44,6 +44,7 @@ import {
 } from '../../src/core/media/hls-manager.ts';
 import { TranscodeQueueManager } from '../../src/core/media/transcode-queue-manager.ts';
 import { generateSessionId } from '../../src/core/media/hls-handler.ts';
+import { getFFmpegEnv } from '../../src/infrastructure/ffmpeg-env.ts';
 
 /**
  * Real ffmpeg, real HlsManager and real TranscodeQueueManager on short
@@ -147,16 +148,18 @@ describe('HLS session lifecycle with real ffmpeg', () => {
     // The decrypted stream decodes without errors.
     const joined = path.join(cacheDir, 'decrypted.ts');
     await fs.writeFile(joined, Buffer.concat(plain));
-    const decode = spawnSync(ffmpegPath!, [
-      '-v',
-      'error',
-      '-i',
-      joined,
-      '-f',
-      'null',
-      '-',
-    ]);
-    expect(decode.status).toBe(0);
+    // Same environment the app launches ffmpeg with: without it the static
+    // Linux build can crash in glibc's iconv setup.
+    const decode = spawnSync(
+      ffmpegPath!,
+      ['-v', 'error', '-i', joined, '-f', 'null', '-'],
+      { env: getFFmpegEnv() },
+    );
+    expect({
+      status: decode.status,
+      signal: decode.signal,
+      error: decode.error?.message,
+    }).toEqual({ status: 0, signal: null, error: undefined });
     expect(decode.stderr.toString()).toBe('');
   }, 20000);
 
