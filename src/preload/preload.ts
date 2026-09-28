@@ -19,6 +19,10 @@ import type {
 } from '../core/media/types';
 
 import type { FileSystemEntry } from '../core/media/file-system';
+import type {
+  DriveCacheProgressEvent,
+  DriveCacheStatus,
+} from '../shared/ipc/media.contract';
 
 export interface LoadResult {
   type: 'data-url' | 'http-url' | 'error';
@@ -120,22 +124,10 @@ export interface ElectronAPI {
     folderId: string,
   ) => Promise<IpcResult<FileSystemEntry[]>>;
   getGoogleDriveParent: (folderId: string) => Promise<IpcResult<string | null>>;
-  getDriveCacheStatus: (
-    fileId: string,
-  ) => Promise<
-    IpcResult<{ status: 'ready' | 'syncing' | 'cloud'; progress: number }>
-  >;
+  getDriveCacheStatus: (fileId: string) => Promise<IpcResult<DriveCacheStatus>>;
   triggerDriveCache: (fileId: string) => Promise<IpcResult<void>>;
   onDriveCacheProgress: (
-    callback: (
-      event: IpcRendererEvent,
-      data: {
-        fileId: string;
-        progress: number;
-        downloadedBytes: number;
-        totalSize: number;
-      },
-    ) => void,
+    callback: (event: IpcRendererEvent, data: DriveCacheProgressEvent) => void,
   ) => () => void;
 
   // Theme
@@ -281,15 +273,8 @@ const api: ElectronAPI = {
   triggerDriveCache: (fileId: string) =>
     ipcRenderer.invoke(IPC_CHANNELS.DRIVE_CACHE_TRIGGER, fileId),
   onDriveCacheProgress: (callback) => {
-    const listener = (
-      event: IpcRendererEvent,
-      data: {
-        fileId: string;
-        progress: number;
-        downloadedBytes: number;
-        totalSize: number;
-      },
-    ) => callback(event, data);
+    const listener = (event: IpcRendererEvent, data: DriveCacheProgressEvent) =>
+      callback(event, data);
     ipcRenderer.on(IPC_CHANNELS.DRIVE_CACHE_PROGRESS, listener);
     return () => {
       ipcRenderer.removeListener(IPC_CHANNELS.DRIVE_CACHE_PROGRESS, listener);

@@ -616,12 +616,74 @@ export async function getDriveFileMetadata(
     () =>
       drive.files.get({
         fileId,
-        fields: 'id, name, mimeType, size, createdTime, videoMediaMetadata',
+        // md5Checksum / headRevisionId / modifiedTime identify the content
+        // revision, so the offline cache can tell when a file was replaced.
+        fields:
+          'id, name, mimeType, size, createdTime, modifiedTime, md5Checksum, headRevisionId, videoMediaMetadata',
         supportsAllDrives: true,
       }),
     DRIVE_RETRY_OPTIONS,
   );
   return res.data;
+}
+
+/** A Drive content download plus the response facts a resumer needs. */
+export interface DriveFileDownload {
+  stream: Readable;
+  status: number;
+  /** The Content-Range response header, or null when Drive sent none. */
+  contentRange: string | null;
+}
+
+/**
+ * Opens a download of a Drive file's content from byte `start` onwards.
+ * Unlike getDriveFileStream it also returns the HTTP status and the
+ * Content-Range header, so a caller appending to a partial local copy can
+ * check that Drive really resumed at the requested offset.
+ */
+export async function openDriveFileDownload(
+  fileId: string,
+  start = 0,
+): Promise<DriveFileDownload> {
+  const drive = await getDriveClient();
+  const headers: { [key: string]: string } = {};
+  if (start > 0) {
+    headers['Range'] = `bytes=${start}-`;
+  }
+
+  const res = await callWithRetry(
+    () =>
+      drive.files.get(
+        {
+          fileId,
+          alt: 'media',
+          acknowledgeAbuse: true,
+          supportsAllDrives: true,
+        },
+        { responseType: 'stream', headers },
+      ),
+    DRIVE_RETRY_OPTIONS,
+  );
+
+  return {
+    stream: res.data,
+    status: res.status,
+    contentRange: readResponseHeader(res.headers, 'content-range'),
+  };
+}
+
+// gaxios 7 hands back a fetch Headers object, while the googleapis typings
+// still describe a plain header record, so accept either shape.
+function readResponseHeader(headers: unknown, name: string): string | null {
+  if (headers instanceof Headers) {
+    return headers.get(name);
+  }
+  if (typeof headers === 'object' && headers !== null) {
+    const value: unknown = (headers as Record<string, unknown>)[name];
+    if (typeof value === 'string') return value;
+    if (Array.isArray(value) && typeof value[0] === 'string') return value[0];
+  }
+  return null;
 }
 
 export async function getDriveFileThumbnail(fileId: string): Promise<Readable> {

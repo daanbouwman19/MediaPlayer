@@ -9,8 +9,13 @@ import type {
   TranscodeJob,
 } from '../../core/media/types';
 import type { FileSystemEntry } from '../../core/media/file-system';
+import type { DriveCacheStatus } from '../../shared/ipc/media.contract';
 
 export class WebAdapter implements IMediaBackend {
+  // The server streams Drive files through its own cache, but there is no
+  // per-user offline copy to manage from the browser.
+  readonly supportsDriveOfflineCache = false;
+
   async getLockStatus(): Promise<AuthStatus> {
     return this.request<AuthStatus>('/api/auth/lock-status');
   }
@@ -425,6 +430,18 @@ export class WebAdapter implements IMediaBackend {
     } catch {
       return null;
     }
+  }
+
+  async getDriveCacheStatus(): Promise<DriveCacheStatus> {
+    return { status: 'cloud', progress: 0 };
+  }
+
+  async triggerDriveCache(): Promise<void> {
+    throw new Error('Offline caching is not supported in the web version.');
+  }
+
+  onDriveCacheProgress(): () => void {
+    return () => {};
   }
 
   async addTranscodeJobs(paths: string[]): Promise<void> {

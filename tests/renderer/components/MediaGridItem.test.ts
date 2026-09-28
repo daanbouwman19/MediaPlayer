@@ -8,6 +8,9 @@ import {
 } from 'vite-plus/test';
 import { mount } from '@vue/test-utils';
 import MediaGridItem from '@/features/library/MediaGridItem.vue';
+import { ElectronAdapter } from '@/api/ElectronAdapter';
+import { WebAdapter } from '@/api/WebAdapter';
+import type { DriveCacheProgressEvent } from '../../../src/shared/ipc/media.contract';
 
 // Mock formatDurationForA11y to return predictable strings
 vi.mock('../../../src/renderer/utils/timeUtils', async () => {
@@ -17,6 +20,15 @@ vi.mock('../../../src/renderer/utils/timeUtils', async () => {
     formatDurationForA11y: (s: number) => `${s} sec`,
   };
 });
+
+// Each Drive test installs a real adapter (Electron over a fake bridge, or
+// Web), so the component is exercised through the same API it uses in the app.
+const backend = vi.hoisted(() => ({ current: null as unknown }));
+vi.mock('@/api/index', () => ({
+  get api() {
+    return backend.current;
+  },
+}));
 
 describe('MediaGridItem.vue', () => {
   const defaultProps = {
@@ -152,7 +164,7 @@ describe('MediaGridItem.vue', () => {
     expect(wrapper.find('video').exists()).toBe(false);
 
     // Trigger mouseenter
-    await wrapper.find('button').trigger('mouseenter');
+    await wrapper.trigger('mouseenter');
 
     // Should not switch immediately (debounce)
     expect(wrapper.find('video').exists()).toBe(false);
@@ -180,12 +192,12 @@ describe('MediaGridItem.vue', () => {
     });
 
     // Enter and wait
-    await wrapper.find('button').trigger('mouseenter');
+    await wrapper.trigger('mouseenter');
     await vi.advanceTimersByTimeAsync(500);
     expect(wrapper.find('video').exists()).toBe(true);
 
     // Leave
-    await wrapper.find('button').trigger('mouseleave');
+    await wrapper.trigger('mouseleave');
     // Should switch back immediately
     expect(wrapper.find('video').exists()).toBe(false);
     expect(wrapper.find('img').exists()).toBe(true);
@@ -258,11 +270,11 @@ describe('MediaGridItem.vue', () => {
     });
 
     // Enter
-    await wrapper.find('button').trigger('mouseenter');
+    await wrapper.trigger('mouseenter');
 
     // Leave before 500ms
     await vi.advanceTimersByTimeAsync(200);
-    await wrapper.find('button').trigger('mouseleave');
+    await wrapper.trigger('mouseleave');
 
     // Wait remaining time
     await vi.advanceTimersByTimeAsync(400);
@@ -287,7 +299,7 @@ describe('MediaGridItem.vue', () => {
     });
 
     // Enter and wait
-    await wrapper.find('button').trigger('mouseenter');
+    await wrapper.trigger('mouseenter');
     await vi.advanceTimersByTimeAsync(500);
     expect(wrapper.find('video').exists()).toBe(true);
 
@@ -380,122 +392,345 @@ describe('MediaGridItem.vue', () => {
   });
 
   describe('Google Drive & Offline Cache', () => {
-    let mockDriveCacheProgressCallback: any = null;
-    const mockGetDriveCacheStatus = vi.fn();
-    const mockTriggerDriveCache = vi.fn();
-    const mockOnDriveCacheProgress = vi.fn((cb) => {
-      mockDriveCacheProgressCallback = cb;
-      return () => {
-        mockDriveCacheProgressCallback = null;
+    const driveItem = {
+      path: 'gdrive://file123',
+      name: 'Drive Video.mp4',
+      rating: 0,
+      duration: 120,
+    };
+
+    /** The preload bridge the ElectronAdapter talks to, faked. */
+    function useElectronBackend() {
+      const listeners = new Set<(event: unknown, data: any) => void>();
+      const bridge = {
+        getDriveCacheStatus: vi.fn().mockResolvedValue({
+          success: true,
+          data: { status: 'cloud', progress: 0 },
+        }),
+        triggerDriveCache: vi
+          .fn()
+          .mockResolvedValue({ success: true, data: undefined }),
+        onDriveCacheProgress: vi.fn((callback) => {
+          listeners.add(callback);
+          return () => listeners.delete(callback);
+        }),
       };
+      backend.current = new ElectronAdapter(bridge as any);
+      const emit = (event: Partial<DriveCacheProgressEvent>) => {
+        for (const listener of listeners) {
+          listener(
+            {},
+            {
+              fileId: 'file123',
+              status: 'syncing',
+              progress: 0,
+              downloadedBytes: 0,
+              totalSize: 100,
+              ...event,
+            },
+          );
+        }
+      };
+      return { bridge, emit, listeners };
+    }
+
+    const mountDrive = (item = driveItem) =>
+      mount(MediaGridItem, { props: { ...defaultProps, item } });
+
+    const downloadButton = (wrapper: ReturnType<typeof mountDrive>) =>
+      wrapper.find('button[aria-label*="offline cache"]');
+
+    afterEach(() => {
+      backend.current = null;
     });
 
-    beforeEach(() => {
-      mockDriveCacheProgressCallback = null;
-      mockGetDriveCacheStatus.mockReset();
-      mockTriggerDriveCache.mockReset();
-      mockOnDriveCacheProgress.mockClear();
+    it('walks through cloud, syncing and ready', async () => {
+      const { bridge, emit, listeners } = useElectronBackend();
+      const wrapper = mountDrive();
 
-      (global as any).window = global;
-      (global as any).window.electronAPI = {
-        getDriveCacheStatus: mockGetDriveCacheStatus,
-        triggerDriveCache: mockTriggerDriveCache,
-        onDriveCacheProgress: mockOnDriveCacheProgress,
-      };
+      await vi.waitFor(() =>
+        expect(bridge.getDriveCacheStatus).toHaveBeenCalledWith('file123'),
+      );
+      const button = wrapper.find('button[title="Download to offline cache"]');
+      expect(button.exists()).toBe(true);
+      bridge.getDriveCacheStatus.mockResolvedValue({
+        success: true,
+        data: { status: 'syncing', progress: 0 },
+      });
+
+      await button.trigger('click');
+      expect(bridge.triggerDriveCache).toHaveBeenCalledWith('file123');
+      expect(wrapper.emitted('click')).toBeUndefined();
+      await vi.waitFor(() =>
+        expect(wrapper.find('[title="Syncing: 0%"]').exists()).toBe(true),
+      );
+
+      emit({ status: 'syncing', progress: 0.5 });
+      await wrapper.vm.$nextTick();
+      const syncing = wrapper.find('[title="Syncing: 50%"]');
+      expect(syncing.exists()).toBe(true);
+      expect(syncing.attributes('role')).toBe('img');
+      expect(syncing.attributes('aria-label')).toBe(
+        'Downloading to offline cache: 50%',
+      );
+
+      emit({ status: 'ready', progress: 1 });
+      await wrapper.vm.$nextTick();
+      const ready = wrapper.find('[title="Ready Offline"]');
+      expect(ready.attributes('aria-label')).toBe('Available offline');
+
+      wrapper.unmount();
+      expect(listeners.size).toBe(0);
     });
 
-    it('handles Google Drive cloud/syncing/ready status', async () => {
-      const item = {
-        path: 'gdrive://file123',
-        name: 'Drive Video.mp4',
-        rating: 0,
-        duration: 120,
-      };
-      mockGetDriveCacheStatus.mockResolvedValue({
+    it('keeps the download control out of the tile button (F159)', async () => {
+      useElectronBackend();
+      const wrapper = mountDrive();
+      await vi.waitFor(() =>
+        expect(downloadButton(wrapper).exists()).toBe(true),
+      );
+
+      const tile = wrapper.find('button.grid-item');
+      expect(tile.attributes('aria-label')).toBe(
+        'View Drive Video.mp4, Video, 120 sec',
+      );
+      expect(tile.findAll('button, a, input, [tabindex]')).toHaveLength(0);
+      expect(
+        downloadButton(wrapper).element.parentElement?.closest('button'),
+      ).toBeNull();
+    });
+
+    it('lets clicks on the cache badges fall through to the tile button', async () => {
+      const { emit } = useElectronBackend();
+      const wrapper = mountDrive();
+      await vi.waitFor(() =>
+        expect(downloadButton(wrapper).exists()).toBe(true),
+      );
+
+      // The overlay sits above the tile button, so only the download button
+      // may take pointer events; the badge area must stay part of the tile.
+      const container = downloadButton(wrapper).element.parentElement;
+      expect(container?.classList.contains('pointer-events-none')).toBe(true);
+      expect(downloadButton(wrapper).classes()).toContain(
+        'pointer-events-auto',
+      );
+
+      emit({ status: 'syncing', progress: 0.5 });
+      await wrapper.vm.$nextTick();
+      expect(wrapper.find('[title="Syncing: 50%"]').classes()).toContain(
+        'pointer-events-none',
+      );
+
+      emit({ status: 'ready', progress: 1 });
+      await wrapper.vm.$nextTick();
+      expect(wrapper.find('[title="Ready Offline"]').classes()).toContain(
+        'pointer-events-none',
+      );
+    });
+
+    it('shows why a download could not start and lets the user retry (F129)', async () => {
+      const { bridge } = useElectronBackend();
+      bridge.triggerDriveCache.mockResolvedValueOnce({
+        success: false,
+        error:
+          'File is too large for the offline cache (6.0 GB; the limit is 5.0 GB)',
+      });
+      const consoleSpy = vi
+        .spyOn(console, 'error')
+        .mockImplementation(() => {});
+      const wrapper = mountDrive();
+      await vi.waitFor(() =>
+        expect(downloadButton(wrapper).exists()).toBe(true),
+      );
+
+      await downloadButton(wrapper).trigger('click');
+
+      await vi.waitFor(() =>
+        expect(downloadButton(wrapper).attributes('title')).toBe(
+          'Offline download failed: File is too large for the offline cache (6.0 GB; the limit is 5.0 GB). Retry download to offline cache',
+        ),
+      );
+      expect(downloadButton(wrapper).classes()).toContain('bg-red-600/90');
+      expect(consoleSpy).toHaveBeenCalledWith(
+        'Failed to trigger cache download:',
+        expect.any(Error),
+      );
+
+      await downloadButton(wrapper).trigger('click');
+      expect(bridge.triggerDriveCache).toHaveBeenCalledTimes(2);
+      consoleSpy.mockRestore();
+    });
+
+    it('shows a download that failed in the background', async () => {
+      const { emit } = useElectronBackend();
+      const wrapper = mountDrive();
+      await vi.waitFor(() =>
+        expect(downloadButton(wrapper).exists()).toBe(true),
+      );
+
+      emit({ status: 'syncing', progress: 0.2 });
+      await wrapper.vm.$nextTick();
+      expect(downloadButton(wrapper).exists()).toBe(false);
+
+      emit({ status: 'error', progress: 0.2, error: 'ECONNRESET' });
+      await wrapper.vm.$nextTick();
+      expect(downloadButton(wrapper).attributes('aria-label')).toContain(
+        'Offline download failed: ECONNRESET',
+      );
+
+      emit({ status: 'error', progress: 0.2 });
+      await wrapper.vm.$nextTick();
+      expect(downloadButton(wrapper).attributes('aria-label')).toContain(
+        'Offline download failed: Download failed',
+      );
+    });
+
+    it('re-reads the status after a trigger, e.g. for a file that finished at once', async () => {
+      const { bridge } = useElectronBackend();
+      const wrapper = mountDrive();
+      await vi.waitFor(() =>
+        expect(downloadButton(wrapper).exists()).toBe(true),
+      );
+      bridge.getDriveCacheStatus.mockResolvedValue({
+        success: true,
+        data: { status: 'ready', progress: 1 },
+      });
+
+      await downloadButton(wrapper).trigger('click');
+
+      await vi.waitFor(() =>
+        expect(wrapper.find('[title="Ready Offline"]').exists()).toBe(true),
+      );
+      expect(bridge.getDriveCacheStatus).toHaveBeenCalledTimes(2);
+    });
+
+    it('hides the control in the web version without calling any Drive cache API (F130)', async () => {
+      backend.current = new WebAdapter();
+      const consoleSpy = vi
+        .spyOn(console, 'error')
+        .mockImplementation(() => {});
+      const statusSpy = vi.spyOn(WebAdapter.prototype, 'getDriveCacheStatus');
+
+      const wrapper = mountDrive();
+      await wrapper.vm.$nextTick();
+
+      expect(downloadButton(wrapper).exists()).toBe(false);
+      expect(wrapper.find('[title="Ready Offline"]').exists()).toBe(false);
+      expect(statusSpy).not.toHaveBeenCalled();
+      expect(consoleSpy).not.toHaveBeenCalled();
+      consoleSpy.mockRestore();
+      statusSpy.mockRestore();
+    });
+
+    it('does not touch the backend for local files', async () => {
+      const wrapper = mount(MediaGridItem, {
+        props: {
+          ...defaultProps,
+          item: { path: 'local/video.mp4', name: 'video.mp4' },
+        },
+      });
+      await wrapper.vm.$nextTick();
+      // backend.current is null here: any access would throw.
+      expect(downloadButton(wrapper).exists()).toBe(false);
+    });
+
+    it('logs a failed status request', async () => {
+      const { bridge } = useElectronBackend();
+      bridge.getDriveCacheStatus.mockRejectedValue(new Error('IPC closed'));
+      const consoleSpy = vi
+        .spyOn(console, 'error')
+        .mockImplementation(() => {});
+
+      mountDrive();
+
+      await vi.waitFor(() =>
+        expect(consoleSpy).toHaveBeenCalledWith(
+          'Failed to get cache status:',
+          expect.any(Error),
+        ),
+      );
+      consoleSpy.mockRestore();
+    });
+
+    it('follows the tile to another file and drops late replies about the old one', async () => {
+      const { bridge, listeners } = useElectronBackend();
+      let answerOld!: (value: unknown) => void;
+      bridge.getDriveCacheStatus.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            answerOld = resolve;
+          }),
+      );
+      bridge.getDriveCacheStatus.mockResolvedValue({
         success: true,
         data: { status: 'cloud', progress: 0 },
       });
+      const wrapper = mountDrive();
 
-      const wrapper = mount(MediaGridItem, {
-        props: {
-          ...defaultProps,
-          item,
-        },
+      await wrapper.setProps({
+        item: { ...driveItem, path: 'gdrive://file456' },
       });
+      expect(bridge.getDriveCacheStatus).toHaveBeenLastCalledWith('file456');
+      answerOld({ success: true, data: { status: 'ready', progress: 1 } });
 
-      // Let onMounted async call run
-      await new Promise(process.nextTick);
-      expect(mockGetDriveCacheStatus).toHaveBeenCalledWith('file123');
-      expect(mockOnDriveCacheProgress).toHaveBeenCalled();
-
-      // Click triggerOfflineDownload
-      const downloadBtn = wrapper.find(
-        'button[title="Download to offline cache"]',
+      await vi.waitFor(() =>
+        expect(downloadButton(wrapper).exists()).toBe(true),
       );
-      expect(downloadBtn.exists()).toBe(true);
-      await downloadBtn.trigger('click');
+      expect(wrapper.find('[title="Ready Offline"]').exists()).toBe(false);
+      expect(listeners.size).toBe(1);
 
-      expect(mockTriggerDriveCache).toHaveBeenCalledWith('file123');
-
-      // Trigger cache progress via callback
-      if (mockDriveCacheProgressCallback) {
-        mockDriveCacheProgressCallback(
-          {},
-          { fileId: 'file123', progress: 0.5 },
-        );
-      }
-      await wrapper.vm.$nextTick();
-      expect(wrapper.find('[title^="Syncing: 50%"]').exists()).toBe(true);
-
-      // Trigger progress complete
-      if (mockDriveCacheProgressCallback) {
-        mockDriveCacheProgressCallback(
-          {},
-          { fileId: 'file123', progress: 1.0 },
-        );
-      }
-      await wrapper.vm.$nextTick();
-      expect(wrapper.find('[title="Ready Offline"]').exists()).toBe(true);
-
-      // Unmount unsubscribes
-      wrapper.unmount();
-      expect(mockDriveCacheProgressCallback).toBeNull();
+      await wrapper.setProps({
+        item: { path: 'local/video.mp4', name: 'video.mp4' },
+      });
+      expect(downloadButton(wrapper).exists()).toBe(false);
+      expect(listeners.size).toBe(0);
     });
 
-    it('resets and updates on path change', async () => {
-      const item1 = {
-        path: 'gdrive://file123',
-        name: 'Drive Video.mp4',
-        rating: 0,
-        duration: 120,
-      };
-      mockGetDriveCacheStatus.mockResolvedValue({
-        success: true,
-        data: { status: 'ready', progress: 1.0 },
+    it('ignores the outcome of a trigger for a file the tile no longer shows', async () => {
+      const { bridge } = useElectronBackend();
+      let finishTrigger!: (value: unknown) => void;
+      bridge.triggerDriveCache.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finishTrigger = resolve;
+          }),
+      );
+      const consoleSpy = vi
+        .spyOn(console, 'error')
+        .mockImplementation(() => {});
+      const wrapper = mountDrive();
+      await vi.waitFor(() =>
+        expect(downloadButton(wrapper).exists()).toBe(true),
+      );
+
+      await downloadButton(wrapper).trigger('click');
+      await wrapper.setProps({
+        item: { ...driveItem, path: 'gdrive://file456' },
       });
+      finishTrigger({ success: false, error: 'Network down' });
 
-      const wrapper = mount(MediaGridItem, {
-        props: {
-          ...defaultProps,
-          item: item1,
-        },
-      });
+      await vi.waitFor(() => expect(consoleSpy).toHaveBeenCalled());
+      await wrapper.vm.$nextTick();
+      expect(downloadButton(wrapper).attributes('title')).toBe(
+        'Download to offline cache',
+      );
+      consoleSpy.mockRestore();
+    });
 
-      await new Promise(process.nextTick);
-      expect(mockGetDriveCacheStatus).toHaveBeenCalledTimes(1);
-
-      // Change path to non-drive item
-      const item2 = {
-        path: 'local/video.mp4',
-        name: 'Local Video.mp4',
-        rating: 0,
-        duration: 120,
+    it('ignores clicks while a download is already running', async () => {
+      const { bridge, emit } = useElectronBackend();
+      const wrapper = mountDrive();
+      await vi.waitFor(() =>
+        expect(downloadButton(wrapper).exists()).toBe(true),
+      );
+      const vm = wrapper.vm as unknown as {
+        triggerOfflineDownload: () => Promise<void>;
       };
-      await wrapper.setProps({ item: item2 });
 
-      expect(
-        wrapper.find('button[title="Download to offline cache"]').exists(),
-      ).toBe(false);
+      emit({ status: 'syncing', progress: 0.1 });
+      await vm.triggerOfflineDownload();
+
+      expect(bridge.triggerDriveCache).not.toHaveBeenCalled();
     });
   });
 
@@ -665,136 +900,6 @@ describe('MediaGridItem.vue', () => {
         },
       });
       expect((wrapper.vm as any).showSkeleton).toBe(false);
-    });
-
-    it('logs error when getDriveCacheStatus fails', async () => {
-      const item = {
-        path: 'gdrive://file123',
-        name: 'Drive Video.mp4',
-        rating: 0,
-        duration: 120,
-      };
-      const mockGetDriveCacheStatus = vi
-        .fn()
-        .mockRejectedValue(new Error('Cache API error'));
-      const consoleSpy = vi
-        .spyOn(console, 'error')
-        .mockImplementation(() => {});
-
-      (global as any).window = global;
-      (global as any).window.electronAPI = {
-        getDriveCacheStatus: mockGetDriveCacheStatus,
-        triggerDriveCache: vi.fn(),
-        onDriveCacheProgress: vi.fn(() => () => {}),
-      };
-
-      const wrapper = mount(MediaGridItem, {
-        props: {
-          ...defaultProps,
-          item,
-        },
-      });
-
-      await new Promise(process.nextTick);
-
-      expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Failed to get cache status'),
-        expect.any(Error),
-      );
-      consoleSpy.mockRestore();
-      wrapper.unmount();
-    });
-
-    it('handles error when triggerDriveCache fails', async () => {
-      const item = {
-        path: 'gdrive://file123',
-        name: 'Drive Video.mp4',
-        rating: 0,
-        duration: 120,
-      };
-      const mockGetDriveCacheStatus = vi.fn().mockResolvedValue({
-        success: true,
-        data: { status: 'cloud', progress: 0 },
-      });
-      const mockTriggerDriveCache = vi
-        .fn()
-        .mockRejectedValue(new Error('Trigger fail'));
-      const consoleSpy = vi
-        .spyOn(console, 'error')
-        .mockImplementation(() => {});
-
-      (global as any).window = global;
-      (global as any).window.electronAPI = {
-        getDriveCacheStatus: mockGetDriveCacheStatus,
-        triggerDriveCache: mockTriggerDriveCache,
-        onDriveCacheProgress: vi.fn(() => () => {}),
-      };
-
-      const wrapper = mount(MediaGridItem, {
-        props: {
-          ...defaultProps,
-          item,
-        },
-      });
-
-      await new Promise(process.nextTick);
-
-      const downloadBtn = wrapper.find(
-        'button[title="Download to offline cache"]',
-      );
-      await downloadBtn.trigger('click');
-
-      expect(mockTriggerDriveCache).toHaveBeenCalledWith('file123');
-      await wrapper.vm.$nextTick();
-
-      expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Failed to trigger cache download'),
-        expect.any(Error),
-      );
-      expect((wrapper.vm as any).cacheStatus).toBe('cloud');
-      consoleSpy.mockRestore();
-      wrapper.unmount();
-    });
-
-    it('cleans up duplicate progress subscription', async () => {
-      const item = {
-        path: 'gdrive://file123',
-        name: 'Drive Video.mp4',
-        rating: 0,
-        duration: 120,
-      };
-      const unsubscribeSpy = vi.fn();
-      const mockOnDriveCacheProgress = vi.fn(() => unsubscribeSpy);
-
-      (global as any).window = global;
-      (global as any).window.electronAPI = {
-        getDriveCacheStatus: vi
-          .fn()
-          .mockResolvedValue({ success: true, data: { status: 'cloud' } }),
-        triggerDriveCache: vi.fn(),
-        onDriveCacheProgress: mockOnDriveCacheProgress,
-      };
-
-      const wrapper = mount(MediaGridItem, {
-        props: {
-          ...defaultProps,
-          item,
-        },
-      });
-
-      await new Promise(process.nextTick);
-
-      const newItem = {
-        path: 'gdrive://file456',
-        name: 'Drive Video 2.mp4',
-        rating: 0,
-        duration: 120,
-      };
-      await wrapper.setProps({ item: newItem });
-      await new Promise(process.nextTick);
-
-      expect(unsubscribeSpy).toHaveBeenCalled();
-      wrapper.unmount();
     });
   });
 });

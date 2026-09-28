@@ -29,6 +29,28 @@ export const MEDIA_IPC_CHANNELS = {
   TRANSCODE_JOB_CANCEL: 'transcode-job:cancel',
 } as const;
 
+/** Where a Drive file stands in the local offline cache. */
+export type DriveCacheState = 'ready' | 'syncing' | 'cloud';
+
+export interface DriveCacheStatus {
+  status: DriveCacheState;
+  progress: number;
+}
+
+/**
+ * Pushed on DRIVE_CACHE_PROGRESS while a Drive file downloads into the
+ * offline cache (throttled per file), followed by one terminal event:
+ * 'ready' once the file is complete, or 'error' when the download failed.
+ */
+export interface DriveCacheProgressEvent {
+  fileId: string;
+  status: 'syncing' | 'ready' | 'error';
+  progress: number;
+  downloadedBytes: number;
+  totalSize: number;
+  error?: string;
+}
+
 export interface MediaIpcContract {
   [MEDIA_IPC_CHANNELS.LOAD_FILE_AS_DATA_URL]: {
     payload: [string, { preferHttp?: boolean }?];
@@ -92,7 +114,7 @@ export interface MediaIpcContract {
   };
   [MEDIA_IPC_CHANNELS.DRIVE_CACHE_STATUS]: {
     payload: [string];
-    response: { status: 'ready' | 'syncing' | 'cloud'; progress: number };
+    response: DriveCacheStatus;
   };
   [MEDIA_IPC_CHANNELS.DRIVE_CACHE_TRIGGER]: {
     payload: [string];
