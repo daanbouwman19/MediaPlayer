@@ -9,6 +9,7 @@ import {
 } from '../../infrastructure/ffmpeg-utils.ts';
 import { createMediaSource } from './media-source.ts';
 import { isDrivePath } from './media-utils.ts';
+import { redactProxyTokens } from './media-proxy.ts';
 import {
   HLS_SEGMENT_DURATION,
   MAX_CONCURRENT_TRANSCODES,
@@ -637,7 +638,9 @@ export class HlsManager extends EventEmitter {
     // With -loglevel error, every line that is not a -stats progress report
     // is an error message; keep the last few for the failure reason.
     if (!/\btime=/.test(line)) {
-      const text = line.trim();
+      // Drive inputs are proxy URLs carrying a live lease token; ffmpeg echoes
+      // the URL in open/read errors, so mask it before it can be logged.
+      const text = redactProxyTokens(line.trim());
       if (text) {
         session.stderrTail.push(text);
         if (session.stderrTail.length > STDERR_TAIL_LINES) {

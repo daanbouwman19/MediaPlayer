@@ -225,6 +225,39 @@ describe('HlsManager lifecycle', () => {
     );
   });
 
+  it('redacts proxy lease tokens from logged and reported ffmpeg errors (F78)', async () => {
+    mockFsStat.mockRejectedValue(new Error('ENOENT'));
+    const mockProcess = createMockProcess();
+    mockSpawn.mockReturnValue(mockProcess);
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    try {
+      const promise = hlsManager.ensureSession('token-leak', '/test.mp4');
+      promise.catch(() => {});
+      await vi.advanceTimersByTimeAsync(1);
+
+      mockProcess.stderr.emit(
+        'data',
+        'Error opening input file http://127.0.0.1:1234/stream/abc.mp4?token=abc123\n',
+      );
+      mockProcess.emit('close', 1, null);
+      await vi.advanceTimersByTimeAsync(600);
+
+      const error = await promise.then(
+        () => null,
+        (err: unknown) => err as Error,
+      );
+      expect(error?.message).toContain('?token=[redacted]');
+      expect(error?.message).not.toContain('abc123');
+
+      const logged = errorSpy.mock.calls.flat().map(String).join('\n');
+      expect(logged).toContain('Error opening input file');
+      expect(logged).not.toContain('abc123');
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
+
   it('times out if playlist is never created', async () => {
     mockFsStat.mockRejectedValue(new Error('ENOENT'));
     const mockProcess = createMockProcess();
