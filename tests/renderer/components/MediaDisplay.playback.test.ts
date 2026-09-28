@@ -370,6 +370,34 @@ describe('MediaDisplay playback (integration)', () => {
       expect(api.getMetadata).toHaveBeenCalledWith(['/lib/a.mp4']);
     });
 
+    it('still loads a file when its pending write never settles', async () => {
+      usePlaylistStore().currentItem = item('a.mp4');
+      await mountDisplay();
+      const el = video();
+      el.dispatchEvent(new Event('play'));
+      setVideoTime(el, 42);
+
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      try {
+        // A stalled request: the write never resolves.
+        (api.updatePlaybackPosition as Mock).mockReturnValue(
+          new Promise<void>(() => {}),
+        );
+        (api.getMetadata as Mock).mockClear();
+        usePlaylistStore().currentItem = item('a.mp4');
+        await settle();
+        expect(api.getMetadata).not.toHaveBeenCalled();
+        expect(wrapper!.find('video').exists()).toBe(false);
+
+        await vi.advanceTimersByTimeAsync(2000);
+        await settle();
+      } finally {
+        vi.useRealTimers();
+      }
+      expect(api.getMetadata).toHaveBeenCalledWith(['/lib/a.mp4']);
+      expect(video().getAttribute('src')).toBe('media:///lib/a.mp4');
+    });
+
     it('keeps watched segments per file and saves them under the right path', async () => {
       const now = vi.spyOn(Date, 'now').mockReturnValue(1_000_000);
       metadata['/lib/a.mp4'] = {

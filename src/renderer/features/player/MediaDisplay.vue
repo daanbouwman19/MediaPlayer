@@ -419,6 +419,24 @@ const POSITION_PERSIST_INTERVAL_MS = 5000;
 // just saved (e.g. when going back to the previous item).
 const pendingWrites = new Map<string, Promise<unknown>>();
 
+// Longest time opening a file waits for its own pending writes.
+const PENDING_WRITE_WAIT_MS = 2000;
+
+/** Resolves when `promise` settles or after `ms`, whichever comes first. */
+const waitAtMost = async (promise: Promise<unknown>, ms: number) => {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      promise.catch(() => undefined),
+      new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, ms);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+};
+
 const trackWrite = (filePath: string, write: Promise<void>) => {
   const all = Promise.all([pendingWrites.get(filePath), write]);
   pendingWrites.set(filePath, all);
@@ -582,8 +600,9 @@ watch(
       if (isVideo) {
         try {
           // Read back what was just saved for this file (e.g. going back).
+          // The wait is bounded, so a stalled write cannot block playback.
           const pending = pendingWrites.get(newItem.path);
-          if (pending) await pending;
+          if (pending) await waitAtMost(pending, PENDING_WRITE_WAIT_MS);
           if (cancelled) return;
           const meta = await api.getMetadata([newItem.path]);
           if (cancelled) return;
