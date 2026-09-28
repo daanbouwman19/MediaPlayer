@@ -11,10 +11,15 @@ import {
   recordMediaView,
   setRating,
   updatePlaybackPosition,
+  updateWatchedSegments,
   upsertMetadata,
   listTranscodeJobs,
   deleteTranscodeJob,
 } from '../../core/database/database.ts';
+import {
+  normalizeWatchedSegments,
+  parseMetadataUpdate,
+} from '../../core/database/metadata-validation.ts';
 import { TranscodeQueueManager } from '../../core/media/transcode-queue-manager.ts';
 import {
   authorizeFilePath,
@@ -168,6 +173,31 @@ export function createMediaRoutes({
     }),
   );
 
+  // Watched-progress telemetry (saved every few seconds while playing), so it
+  // uses the lenient read limiter rather than the strict write limiter.
+  router.post(
+    '/api/media/watched-segments',
+    readLimiter,
+    asyncHandler(async (req, res) => {
+      const { filePath, segmentsJson } = req.body as {
+        filePath?: unknown;
+        segmentsJson?: unknown;
+      };
+      if (!filePath || typeof filePath !== 'string') {
+        throw new AppError(400, 'Missing or invalid filePath');
+      }
+      const segments = normalizeWatchedSegments(segmentsJson);
+
+      const auth = await authorizeFilePath(filePath);
+      if (!auth.isAllowed) {
+        return res.status(403).send(auth.message || 'Access denied');
+      }
+
+      await updateWatchedSegments(filePath, segments);
+      return res.sendStatus(200);
+    }),
+  );
+
   router.get(
     '/api/media/all',
     readLimiter,
@@ -208,13 +238,15 @@ export function createMediaRoutes({
       ) {
         return res.status(400).send('Missing or invalid arguments');
       }
+      // Only known fields are kept; the authorized filePath always wins.
+      const fields = parseMetadataUpdate(metadata);
 
       const auth = await authorizeFilePath(filePath);
       if (!auth.isAllowed) {
         return res.status(403).send(auth.message || 'Access denied');
       }
 
-      await upsertMetadata(filePath, metadata);
+      await upsertMetadata(filePath, fields);
       return res.sendStatus(200);
     }),
   );

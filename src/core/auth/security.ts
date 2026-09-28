@@ -40,8 +40,18 @@ function cacheAuthResult(filePath: string, result: AuthorizationResult) {
   }
 }
 
+// Deduplicates concurrent cache misses for the same path (e.g. an HLS
+// segment storm) so realpath/DB work runs once instead of per request.
+const pendingAuth = new Map<string, Promise<AuthorizationResult>>();
+
+// Bumped by clearAuthCache. A decision resolved against a directory set or
+// library that changed while it was in flight is returned but not cached.
+let authGeneration = 0;
+
 export function clearAuthCache() {
+  authGeneration++;
   authCache.clear();
+  pendingAuth.clear();
 }
 
 interface ErrnoException extends Error {
@@ -135,10 +145,6 @@ export async function filterAuthorizedPaths(
   return results.filter((p): p is string => p !== null);
 }
 
-// Deduplicates concurrent cache misses for the same path (e.g. an HLS
-// segment storm) so realpath/DB work runs once instead of per request.
-const pendingAuth = new Map<string, Promise<AuthorizationResult>>();
-
 export async function authorizeFilePath(
   filePath: string,
   mediaDirectories?: MediaDirectory[],
@@ -162,9 +168,22 @@ export async function authorizeFilePath(
     const pending = pendingAuth.get(filePath);
     if (pending) return pending;
 
-    const promise = resolveAuthorization(filePath, undefined).finally(() =>
-      pendingAuth.delete(filePath),
-    );
+    const generation = authGeneration;
+    const promise: Promise<AuthorizationResult> = resolveAuthorization(
+      filePath,
+      undefined,
+    )
+      .then((result) => {
+        if (generation === authGeneration) {
+          cacheAuthResult(filePath, result);
+        }
+        return result;
+      })
+      .finally(() => {
+        if (pendingAuth.get(filePath) === promise) {
+          pendingAuth.delete(filePath);
+        }
+      });
     pendingAuth.set(filePath, promise);
     return promise;
   }
@@ -177,7 +196,10 @@ async function resolveAuthorization(
   mediaDirectories?: MediaDirectory[],
 ): Promise<AuthorizationResult> {
   const dirs = mediaDirectories || (await getMediaDirectories());
-  const allowedPaths = dirs.map((d) => d.path);
+  // Deactivated sources no longer grant access.
+  const allowedPaths = dirs
+    .filter((d) => d.isActive !== false)
+    .map((d) => d.path);
 
   let result: AuthorizationResult;
 
@@ -200,11 +222,6 @@ async function resolveAuthorization(
         message: 'Access denied',
       };
     }
-  }
-
-  // Cache result
-  if (!mediaDirectories) {
-    cacheAuthResult(filePath, result);
   }
 
   return result;

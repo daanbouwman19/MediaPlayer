@@ -9,6 +9,8 @@ const __dirname = path.dirname(__filename);
 import {
   initDatabase,
   closeDatabase,
+  cacheAlbums,
+  addMediaDirectory,
   upsertMetadata,
   recordMediaView,
   executeSmartPlaylist,
@@ -24,6 +26,20 @@ describe('Smart Playlist SQL Generation', () => {
     }
 
     initDatabase(TEST_DB_PATH);
+
+    // Arrange: Index the files as library members (as a scan does); smart
+    // playlists only list library files.
+    addMediaDirectory({ path: '/' });
+    await cacheAlbums('file_index_json', [
+      {
+        id: '/',
+        name: 'root',
+        textures: ['/high-rating.mp4', '/low-rating.mp4', '/viewed.mp4'].map(
+          (p) => ({ name: p.slice(1), path: p }),
+        ),
+        children: [],
+      },
+    ]);
 
     // Arrange: Seed Data
     // Item 1: High rating, long duration

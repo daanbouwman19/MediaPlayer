@@ -407,6 +407,7 @@ describe('Database Worker Coverage', () => {
       null, // rating
       null, // status
       null, // playbackPosition
+      0, // in_library: client upserts never make a file a library member
     );
   });
 
@@ -438,6 +439,7 @@ describe('Database Worker Coverage', () => {
       null, // rating
       null, // status
       null, // playbackPosition
+      0, // in_library: extraction upserts leave membership to scans
     );
   });
 

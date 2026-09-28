@@ -10,12 +10,15 @@ import { DatabaseSync } from 'node:sqlite';
 import crypto from 'crypto';
 import path from 'path';
 import type { Album } from '../media/types.ts';
+import { FILE_INDEX_CACHE_KEY } from '../media/constants.ts';
+import { getDriveId, isDrivePath } from '../media/media-utils.ts';
 import { generateFileId } from '../media/utils/file-id.ts';
 import {
   initializeDatabase,
   JOB_TYPE_TRANSCODE,
   SEGMENT_TYPE_WATCHED,
 } from './database-schema.ts';
+import { MAX_WATCHED_SEGMENTS } from './metadata-validation.ts';
 
 // Extract the Statement type from return value of DatabaseSync.prepare or mock it
 type StatementSync = ReturnType<DatabaseSync['prepare']>;
@@ -31,17 +34,24 @@ type StatementName =
   | 'addMediaDirectory'
   | 'cacheAlbum'
   | 'createSmartPlaylist'
+  | 'deleteCachedAlbum'
   | 'deleteJob'
   | 'deleteSmartPlaylist'
   | 'deleteWatchedSegments'
+  | 'demoteLibraryPathsBatch'
   | 'ensureMetadataRow'
   | 'executeSmartPlaylist'
+  | 'getActiveDirectoryPaths'
   | 'getAllMetadata'
   | 'getAllMetadataVerification'
   | 'getCachedAlbum'
   | 'getFileIdByPath'
   | 'getFileIdsByPathsBatch'
+  | 'getLibraryMemberPaths'
+  | 'getLibraryMemberPathsWithPrefix'
+  | 'getLibraryPathsBatch'
   | 'getMediaDirectories'
+  | 'getMediaDirectoryByPath'
   | 'getMediaViewCountsBatch'
   | 'getMetadataBatch'
   | 'getPendingJobs'
@@ -52,8 +62,12 @@ type StatementName =
   | 'getSuccessfulPathsBatch'
   | 'insertWatchedSegment'
   | 'listJobs'
+  | 'promoteLibraryPathsBatch'
   | 'recordView'
   | 'removeMediaDirectory'
+  | 'renameMediaDirectory'
+  | 'rewriteJobPathPrefix'
+  | 'rewriteMetadataPathPrefix'
   | 'saveSetting'
   | 'setDirectoryActiveState'
   | 'updateJobStatus'
@@ -87,6 +101,13 @@ function getStatement(name: StatementName): StatementSync {
  * 900 is chosen to be safely within SQLite's default limit of 999 parameters.
  */
 const SQL_BATCH_SIZE = 900;
+
+/**
+ * How long a statement waits for a lock held by another connection (e.g. a
+ * second app instance) before failing with SQLITE_BUSY. SQLite's default of
+ * 0 makes every concurrent write fail immediately.
+ */
+const BUSY_TIMEOUT_MS = 5000;
 
 /**
  * Correlated subquery that reassembles watched segments for the current
@@ -136,12 +157,49 @@ function forEachBatchedRow<T>(
   for (let i = 0; i < keys.length; i += SQL_BATCH_SIZE) {
     const batch = keys.slice(i, i + SQL_BATCH_SIZE);
     if (batch.length === 0) continue;
-    const args: (string | null)[] =
-      batch.length === SQL_BATCH_SIZE
-        ? batch
-        : Object.assign(new Array(SQL_BATCH_SIZE).fill(null), batch);
-    const rows = stmt.all(...args) as T[];
+    const rows = stmt.all(...padBatch(batch)) as T[];
     for (const row of rows) onRow(row);
+  }
+}
+
+/**
+ * Write counterpart of {@link forEachBatchedRow}: runs a statement with
+ * exactly SQL_BATCH_SIZE placeholders over `keys` in NULL-padded chunks.
+ */
+function runBatchedStatement(stmt: StatementSync, keys: string[]): void {
+  for (let i = 0; i < keys.length; i += SQL_BATCH_SIZE) {
+    const batch = keys.slice(i, i + SQL_BATCH_SIZE);
+    if (batch.length === 0) continue;
+    stmt.run(...padBatch(batch));
+  }
+}
+
+/** Pads a short final batch with NULLs up to SQL_BATCH_SIZE parameters. */
+function padBatch(batch: string[]): (string | null)[] {
+  return batch.length === SQL_BATCH_SIZE
+    ? batch
+    : Object.assign(new Array(SQL_BATCH_SIZE).fill(null), batch);
+}
+
+/**
+ * Runs `fn` inside a transaction, rolling back and rethrowing if it throws.
+ * `fn` must be synchronous: other messages are handled whenever this thread
+ * awaits, and their statements would otherwise run inside the transaction.
+ */
+function runInTransaction(fn: () => void): void {
+  if (!db) throw new Error('Database not initialized');
+  const database = db;
+  database.exec('BEGIN');
+  try {
+    fn();
+    database.exec('COMMIT');
+  } catch (e) {
+    try {
+      database.exec('ROLLBACK');
+    } catch (rollbackErr) {
+      console.error('[worker] Failed to rollback transaction:', rollbackErr);
+    }
+    throw e;
   }
 }
 
@@ -231,26 +289,233 @@ async function getExistingIdOrGenerate(filePath: string): Promise<string> {
 /**
  * Helper to check which paths already exist in the database.
  * @param filePaths - List of file paths to check.
+ * @param libraryOnly - Only count rows that are library members
+ *   (in_library = 1), so rows that exist without membership (stats-only rows
+ *   from recordMediaView, v2-migration ghosts, client upserts) still get
+ *   promoted by a scan confirmation.
  * @returns Set of file paths that exist.
  */
-function getExistingPathsBatch(filePaths: string[]): Set<string> {
+function getExistingPathsBatch(
+  filePaths: string[],
+  libraryOnly = false,
+): Set<string> {
   const existingPaths = new Set<string>();
-  if (!db || !statements.getFileIdsByPathsBatch) return existingPaths;
+  const stmt = libraryOnly
+    ? statements.getLibraryPathsBatch
+    : statements.getFileIdsByPathsBatch;
+  if (!db || !stmt) return existingPaths;
 
   try {
-    forEachBatchedRow<{ file_path: string; file_path_hash: string }>(
-      statements.getFileIdsByPathsBatch,
-      filePaths,
-      (row) => {
-        if (row.file_path) {
-          existingPaths.add(row.file_path);
-        }
-      },
-    );
+    forEachBatchedRow<{ file_path: string }>(stmt, filePaths, (row) => {
+      if (row.file_path) {
+        existingPaths.add(row.file_path);
+      }
+    });
   } catch (err) {
     console.warn('[worker] Error checking existing paths:', err);
   }
   return existingPaths;
+}
+
+// Library membership (in_library). A row is a library member when the last
+// scan of an active source found its file. Only scans (cacheAlbums) promote
+// rows; removing or deactivating a source demotes the files it provided.
+// Drive files are authorized by membership alone (see security.ts).
+
+/**
+ * Hands every texture path in the given album trees to `onPath`, walking
+ * iteratively. Tolerates malformed nodes, since trees also come from the
+ * JSON cache.
+ */
+function forEachAlbumPath(
+  albums: readonly Album[],
+  onPath: (filePath: string) => void,
+): void {
+  const stack: Album[] = albums.slice();
+  while (stack.length > 0) {
+    const album = stack.pop();
+    if (!album) continue;
+    if (album.textures && Array.isArray(album.textures)) {
+      for (const t of album.textures) {
+        if (t && t.path) onPath(t.path);
+      }
+    }
+    if (album.children && Array.isArray(album.children)) {
+      for (let i = album.children.length - 1; i >= 0; i--) {
+        const child = album.children[i];
+        if (child) stack.push(child);
+      }
+    }
+  }
+}
+
+/**
+ * The id the scanner gives the root album of a media directory: the folder
+ * id for Drive sources and the directory path for local ones (see
+ * media-scanner.ts and google-drive-service.ts).
+ */
+function rootAlbumId(directoryPath: string): string {
+  return isDrivePath(directoryPath) ? getDriveId(directoryPath) : directoryPath;
+}
+
+/** The root albums in `albums` that belong to the given media directories. */
+function rootAlbumsOf(
+  albums: readonly Album[],
+  directoryPaths: readonly string[],
+): Album[] {
+  const ids = new Set(directoryPaths.map(rootAlbumId));
+  const roots: Album[] = [];
+  for (const album of albums) {
+    if (album && ids.has(album.id)) roots.push(album);
+  }
+  return roots;
+}
+
+/**
+ * Prefixes shared by the paths of files inside a local media directory. The
+ * scanner builds them with path.join, which normalises separators, so both
+ * the stored and the normalised spelling of the directory are included.
+ */
+function localPathPrefixes(directoryPath: string): string[] {
+  const prefixes = new Set<string>();
+  prefixes.add(withTrailingSeparator(directoryPath));
+  prefixes.add(withTrailingSeparator(path.normalize(directoryPath)));
+  return Array.from(prefixes);
+}
+
+function withTrailingSeparator(directoryPath: string): string {
+  return directoryPath.endsWith(path.sep)
+    ? directoryPath
+    : directoryPath + path.sep;
+}
+
+function getActiveDirectoryPaths(): string[] {
+  const rows = getStatement('getActiveDirectoryPaths').all() as {
+    path: string;
+  }[];
+  return rows.map((row) => row.path);
+}
+
+/** Reads the album tree cached under `cacheKey`; [] if absent or unreadable. */
+function readCachedAlbumTree(cacheKey: string): Album[] {
+  const row = getStatement('getCachedAlbum').get(cacheKey) as
+    | { cache_value: string }
+    | undefined;
+  if (!row || !row.cache_value) return [];
+  try {
+    const parsed: unknown = JSON.parse(row.cache_value);
+    return Array.isArray(parsed) ? (parsed as Album[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Makes library membership match a completed scan: every member whose file
+ * the scan did not return is demoted. The scanner returns no root album for
+ * a source it could not read (a Drive folder that failed transiently, an
+ * unplugged disk) as well as for an empty one, so the files the previous
+ * scan found under such an active source are kept for this scan; if the
+ * next scan misses the source again, they are demoted too (and promoted
+ * back once a scan finds them). Must run inside a transaction, before the
+ * new tree replaces the cached one.
+ */
+function reconcileLibraryMembership(
+  cacheKey: string,
+  albums: readonly Album[],
+  scannedPaths: readonly string[],
+): void {
+  const members = new Set(scannedPaths);
+
+  const scannedRootIds = new Set<string>();
+  for (const album of albums) {
+    if (album) scannedRootIds.add(album.id);
+  }
+  const unscannedRoots = getActiveDirectoryPaths().filter(
+    (dirPath) => !scannedRootIds.has(rootAlbumId(dirPath)),
+  );
+  if (unscannedRoots.length > 0) {
+    forEachAlbumPath(
+      rootAlbumsOf(readCachedAlbumTree(cacheKey), unscannedRoots),
+      (filePath) => members.add(filePath),
+    );
+  }
+
+  const rows = getStatement('getLibraryMemberPaths').all() as {
+    file_path: string;
+  }[];
+  const stale: string[] = [];
+  for (const row of rows) {
+    if (!members.has(row.file_path)) stale.push(row.file_path);
+  }
+  runBatchedStatement(getStatement('demoteLibraryPathsBatch'), stale);
+  if (stale.length > 0) {
+    console.log(
+      `[worker] ${stale.length} file(s) are no longer in the library.`,
+    );
+  }
+}
+
+/**
+ * Demotes the files a media directory provided, for when it is removed or
+ * deactivated; files another active source still provides stay members.
+ * Drive paths (gdrive://<id>) say nothing about their folder, so a source's
+ * files are taken from its root album in the cached library tree. Local
+ * files are also matched by path prefix, which covers members the cache no
+ * longer lists. Must run inside a transaction.
+ */
+function demoteSourceMembers(directoryPath: string): void {
+  const tree = readCachedAlbumTree(FILE_INDEX_CACHE_KEY);
+
+  const candidates = new Set<string>();
+  forEachAlbumPath(rootAlbumsOf(tree, [directoryPath]), (filePath) =>
+    candidates.add(filePath),
+  );
+  if (!isDrivePath(directoryPath)) {
+    for (const prefix of localPathPrefixes(directoryPath)) {
+      const rows = getStatement('getLibraryMemberPathsWithPrefix').all(
+        prefix,
+        prefix,
+      ) as { file_path: string }[];
+      for (const row of rows) candidates.add(row.file_path);
+    }
+  }
+  if (candidates.size === 0) return;
+
+  const otherRoots = getActiveDirectoryPaths().filter(
+    (dirPath) => dirPath !== directoryPath,
+  );
+  const stillProvided = new Set<string>();
+  forEachAlbumPath(rootAlbumsOf(tree, otherRoots), (filePath) =>
+    stillProvided.add(filePath),
+  );
+  const otherPrefixes: string[] = [];
+  for (const dirPath of otherRoots) {
+    if (!isDrivePath(dirPath))
+      otherPrefixes.push(...localPathPrefixes(dirPath));
+  }
+
+  const stale: string[] = [];
+  for (const filePath of candidates) {
+    if (stillProvided.has(filePath)) continue;
+    if (otherPrefixes.some((prefix) => filePath.startsWith(prefix))) continue;
+    stale.push(filePath);
+  }
+  runBatchedStatement(getStatement('demoteLibraryPathsBatch'), stale);
+}
+
+/**
+ * Restores membership for the files a re-activated media directory had in
+ * the cached library tree (the tree only lists them if the source was
+ * active at the last scan). Must run inside a transaction.
+ */
+function promoteSourceMembers(directoryPath: string): void {
+  const paths: string[] = [];
+  forEachAlbumPath(
+    rootAlbumsOf(readCachedAlbumTree(FILE_INDEX_CACHE_KEY), [directoryPath]),
+    (filePath) => paths.push(filePath),
+  );
+  runBatchedStatement(getStatement('promoteLibraryPathsBatch'), paths);
 }
 
 // Core Worker Functions
@@ -275,11 +540,13 @@ export interface WorkerResult {
 export function initDatabase(dbPath: string): WorkerResult {
   try {
     if (db) {
-      db.close();
+      resetConnection();
       console.log('[worker] Closed existing DB connection before re-init.');
     }
 
     db = new DatabaseSync(dbPath);
+    // Wait for locks held by other connections instead of failing at once.
+    db.exec(`PRAGMA busy_timeout = ${BUSY_TIMEOUT_MS}`);
     // Enable WAL mode for better concurrency
     // In node:sqlite, db.exec can run multiple sql statements, including PRAGMAs.
     // db.pragma does not exist in node:sqlite! Use db.exec instead.
@@ -316,15 +583,40 @@ export function initDatabase(dbPath: string): WorkerResult {
     statements.getMediaDirectories = db.prepare(
       'SELECT id, path, type, name, is_active FROM media_directories',
     );
+    statements.getActiveDirectoryPaths = db.prepare(
+      'SELECT path FROM media_directories WHERE is_active = 1',
+    );
+    statements.getMediaDirectoryByPath = db.prepare(
+      'SELECT id, is_active FROM media_directories WHERE path = ?',
+    );
     statements.removeMediaDirectory = db.prepare(
       'DELETE FROM media_directories WHERE path = ?',
     );
     statements.setDirectoryActiveState = db.prepare(
       'UPDATE media_directories SET is_active = ? WHERE path = ?',
     );
+    statements.renameMediaDirectory = db.prepare(
+      'UPDATE media_directories SET path = ? WHERE path = ?',
+    );
+    // Moves every path under one prefix to another (the prefix is bound
+    // three times). length()/substr() count characters on both sides, so
+    // non-ASCII directory names are handled correctly.
+    statements.rewriteMetadataPathPrefix = db.prepare(
+      `UPDATE media_metadata SET file_path = ? || substr(file_path, length(?) + 1)
+       WHERE substr(file_path, 1, length(?)) = ?`,
+    );
+    statements.rewriteJobPathPrefix = db.prepare(
+      `UPDATE OR IGNORE jobs SET file_path = ? || substr(file_path, length(?) + 1)
+       WHERE substr(file_path, 1, length(?)) = ?`,
+    );
+    statements.deleteCachedAlbum = db.prepare(
+      'DELETE FROM app_cache WHERE cache_key = ?',
+    );
+    // The last parameter is 1 only for library scans. On conflict membership
+    // is never revoked here; only scans and source removal demote rows.
     statements.upsertMetadata = db.prepare(
       `INSERT INTO media_metadata (file_path_hash, file_path, duration, size, created_at, rating, extraction_status, playback_position, in_library)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(file_path_hash) DO UPDATE SET
        file_path = excluded.file_path,
        duration = COALESCE(excluded.duration, media_metadata.duration),
@@ -333,7 +625,13 @@ export function initDatabase(dbPath: string): WorkerResult {
        rating = COALESCE(excluded.rating, media_metadata.rating),
        extraction_status = COALESCE(excluded.extraction_status, media_metadata.extraction_status),
        playback_position = COALESCE(excluded.playback_position, media_metadata.playback_position),
-       in_library = 1`,
+       in_library = CASE WHEN excluded.in_library = 1 THEN 1 ELSE media_metadata.in_library END`,
+    );
+    statements.getLibraryMemberPaths = db.prepare(
+      `SELECT DISTINCT file_path FROM media_metadata WHERE in_library = 1 AND file_path IS NOT NULL`,
+    );
+    statements.getLibraryMemberPathsWithPrefix = db.prepare(
+      `SELECT DISTINCT file_path FROM media_metadata WHERE in_library = 1 AND substr(file_path, 1, length(?)) = ?`,
     );
     statements.getPendingMetadata = db.prepare(
       `SELECT file_path FROM media_metadata WHERE (extraction_status = 'pending' OR extraction_status IS NULL) AND file_path IS NOT NULL AND in_library = 1 LIMIT 100`,
@@ -458,14 +756,47 @@ export function initDatabase(dbPath: string): WorkerResult {
     statements.getFileIdsByPathsBatch = db.prepare(
       `SELECT file_path, file_path_hash FROM media_metadata WHERE file_path IN (${placeholders})`,
     );
+    statements.getLibraryPathsBatch = db.prepare(
+      `SELECT file_path FROM media_metadata WHERE file_path IN (${placeholders}) AND in_library = 1`,
+    );
+    statements.demoteLibraryPathsBatch = db.prepare(
+      `UPDATE media_metadata SET in_library = 0 WHERE in_library = 1 AND file_path IN (${placeholders})`,
+    );
+    statements.promoteLibraryPathsBatch = db.prepare(
+      `UPDATE media_metadata SET in_library = 1 WHERE file_path IN (${placeholders})`,
+    );
 
     console.log('[worker] SQLite database initialized at:', dbPath);
     return { success: true };
   } catch (error: unknown) {
     console.error('[worker] Failed to initialize database:', error);
-    db = null; // Ensure db is null on failure
+    // Release the half-initialised connection: an open handle keeps the
+    // database, -wal and -shm files locked (on Windows they cannot even be
+    // replaced) and its statements must not outlive it.
+    try {
+      resetConnection();
+    } catch (closeError) {
+      console.error(
+        '[worker] Failed to close database after init failure:',
+        closeError,
+      );
+    }
     return { success: false, error: (error as Error).message };
   }
+}
+
+/**
+ * Forgets all prepared statements and closes the connection, if any. The
+ * connection is detached before closing, so it is gone even if close()
+ * throws.
+ */
+function resetConnection(): void {
+  for (const key of Object.keys(statements) as StatementName[]) {
+    delete statements[key];
+  }
+  const current = db;
+  db = null;
+  current?.close();
 }
 
 interface MetadataPayload {
@@ -494,6 +825,11 @@ function replaceWatchedSegments(fileId: string, segmentsJson: string): void {
   if (!Array.isArray(segments)) {
     throw new Error('Watched segments must be a JSON array');
   }
+  if (segments.length > MAX_WATCHED_SEGMENTS) {
+    throw new Error(
+      `Too many watched segments (at most ${MAX_WATCHED_SEGMENTS})`,
+    );
+  }
   getStatement('deleteWatchedSegments').run(fileId);
   for (const seg of segments) {
     const s = seg as { start?: unknown; end?: unknown };
@@ -510,8 +846,15 @@ function replaceWatchedSegments(fileId: string, segmentsJson: string): void {
 /**
  * Runs the metadata upsert (and segments replacement, when present) for a
  * single payload. Does not manage transactions — callers do.
+ * @param markInLibrary - True only for library scans: makes the row a
+ *   library member. Otherwise an existing row keeps its membership and a new
+ *   row is not a member.
  */
-function runMetadataUpsert(fileId: string, payload: MetadataPayload): void {
+function runMetadataUpsert(
+  fileId: string,
+  payload: MetadataPayload,
+  markInLibrary: boolean,
+): void {
   getStatement('upsertMetadata').run(
     fileId,
     payload.filePath,
@@ -521,6 +864,7 @@ function runMetadataUpsert(fileId: string, payload: MetadataPayload): void {
     payload.rating === undefined ? null : payload.rating,
     payload.status === undefined ? null : payload.status,
     payload.playbackPosition === undefined ? null : payload.playbackPosition,
+    markInLibrary ? 1 : 0,
   );
   if (
     payload.watchedSegments !== undefined &&
@@ -531,7 +875,9 @@ function runMetadataUpsert(fileId: string, payload: MetadataPayload): void {
 }
 
 /**
- * Upserts metadata for a file.
+ * Upserts metadata for a file on behalf of a client. This never makes the
+ * file a library member: membership (which alone authorizes Drive files) is
+ * decided by library scans, see {@link cacheAlbums}.
  */
 export async function upsertMetadata(
   payload: MetadataPayload,
@@ -543,12 +889,12 @@ export async function upsertMetadata(
       payload.watchedSegments === undefined ||
       payload.watchedSegments === null
     ) {
-      runMetadataUpsert(fileId, payload);
+      runMetadataUpsert(fileId, payload, false);
     } else {
       // Segment replacement spans multiple statements; keep it atomic.
       db.exec('BEGIN');
       try {
-        runMetadataUpsert(fileId, payload);
+        runMetadataUpsert(fileId, payload, false);
         db.exec('COMMIT');
       } catch (e) {
         try {
@@ -637,87 +983,107 @@ export async function updatePlaybackPosition(
   }
 }
 
+/** A bulk-upsert payload paired with the file ID its row is keyed on. */
+type PreparedUpsert = MetadataPayload & { fileId: string };
+
 /**
- * Bulk upserts metadata for multiple files.
+ * Resolves the rows a bulk upsert has to write, paired with their file IDs.
+ * ID generation may stat files, so this runs before (never inside) the
+ * write transaction. Throws if an ID cannot be generated.
+ * @param markInLibrary - Whether the upsert confirms library membership (a
+ *   scan). Path-only payloads are then skipped only for rows that already
+ *   are members, so existing non-member rows are promoted.
+ */
+async function prepareBulkUpsert(
+  payloads: MetadataPayload[],
+  markInLibrary: boolean,
+): Promise<PreparedUpsert[]> {
+  // Filter out payloads that are just "path confirmation" (no new data)
+  // and already exist in the database. This avoids thousands of redundant INSERT ... ON CONFLICT calls.
+  const pathOnlyPayloads: MetadataPayload[] = [];
+  const updatePayloads: MetadataPayload[] = [];
+
+  for (const p of payloads) {
+    // Check if any property in metadata is defined without rest destructuring or Object.values
+    let hasData = false;
+    for (const key in p) {
+      if (
+        Object.hasOwn(p, key) &&
+        key !== 'filePath' &&
+        (p as unknown as Record<string, unknown>)[key] !== undefined
+      ) {
+        hasData = true;
+        break;
+      }
+    }
+
+    if (hasData) {
+      updatePayloads.push(p);
+    } else {
+      pathOnlyPayloads.push(p);
+    }
+  }
+
+  const payloadsToProcess = updatePayloads.slice();
+
+  if (pathOnlyPayloads.length > 0) {
+    const paths = pathOnlyPayloads.map((p) => p.filePath);
+    const existingPaths = getExistingPathsBatch(paths, markInLibrary);
+
+    // Use manual loop instead of Array.prototype.filter and spread operator to avoid allocation overhead and call stack limits
+    for (const p of pathOnlyPayloads) {
+      if (!existingPaths.has(p.filePath)) {
+        payloadsToProcess.push(p);
+      }
+    }
+  }
+
+  if (payloadsToProcess.length === 0) {
+    return [];
+  }
+
+  const idMap = await generateFileIdsBatched(
+    payloadsToProcess.map((p) => p.filePath),
+  );
+
+  // Map payloads to include fileId, failing if any ID is missing
+  return payloadsToProcess.map((p) => {
+    const fileId = idMap.get(p.filePath);
+    if (!fileId) {
+      throw new Error(`Failed to generate ID for path: ${p.filePath}`);
+    }
+    return Object.assign({ fileId }, p);
+  });
+}
+
+/** Writes prepared upserts. Does not manage transactions — callers do. */
+function writePreparedUpserts(
+  items: PreparedUpsert[],
+  markInLibrary: boolean,
+): void {
+  for (const item of items) {
+    runMetadataUpsert(item.fileId, item, markInLibrary);
+  }
+}
+
+/**
+ * Bulk upserts metadata for multiple files (metadata extraction). Like
+ * {@link upsertMetadata} this leaves library membership to scans unless
+ * `markInLibrary` is set.
  */
 export async function bulkUpsertMetadata(
   payloads: MetadataPayload[],
+  { markInLibrary = false }: { markInLibrary?: boolean } = {},
 ): Promise<WorkerResult> {
   if (!db) return { success: false, error: 'Database not initialized' };
   try {
-    // Filter out payloads that are just "path confirmation" (no new data)
-    // and already exist in the database. This avoids thousands of redundant INSERT ... ON CONFLICT calls.
-    const pathOnlyPayloads: MetadataPayload[] = [];
-    const updatePayloads: MetadataPayload[] = [];
-
-    for (const p of payloads) {
-      // Check if any property in metadata is defined without rest destructuring or Object.values
-      let hasData = false;
-      for (const key in p) {
-        if (
-          Object.hasOwn(p, key) &&
-          key !== 'filePath' &&
-          (p as unknown as Record<string, unknown>)[key] !== undefined
-        ) {
-          hasData = true;
-          break;
-        }
-      }
-
-      if (hasData) {
-        updatePayloads.push(p);
-      } else {
-        pathOnlyPayloads.push(p);
-      }
-    }
-
-    const payloadsToProcess = updatePayloads.slice();
-
-    if (pathOnlyPayloads.length > 0) {
-      const paths = pathOnlyPayloads.map((p) => p.filePath);
-      const existingPaths = getExistingPathsBatch(paths);
-
-      // Use manual loop instead of Array.prototype.filter and spread operator to avoid allocation overhead and call stack limits
-      for (const p of pathOnlyPayloads) {
-        if (!existingPaths.has(p.filePath)) {
-          payloadsToProcess.push(p);
-        }
-      }
-    }
-
-    if (payloadsToProcess.length === 0) {
-      return { success: true };
-    }
-
-    const idMap = await generateFileIdsBatched(
-      payloadsToProcess.map((p) => p.filePath),
-    );
-
-    // Map payloads to include fileId, failing if any ID is missing
-    const itemsWithIds = payloadsToProcess.map((p) => {
-      const fileId = idMap.get(p.filePath);
-      if (!fileId) {
-        throw new Error(`Failed to generate ID for path: ${p.filePath}`);
-      }
-      return Object.assign({ fileId }, p);
-    });
-
-    db.exec('BEGIN');
-    try {
-      for (const item of itemsWithIds) {
-        runMetadataUpsert(item.fileId, item);
-      }
-      db.exec('COMMIT');
-    } catch (e) {
-      try {
-        db.exec('ROLLBACK');
-      } catch (rollbackErr) {
-        console.error('[worker] Failed to rollback transaction:', rollbackErr);
-      }
-      throw e;
+    const items = await prepareBulkUpsert(payloads, markInLibrary);
+    if (items.length > 0) {
+      runInTransaction(() => writePreparedUpserts(items, markInLibrary));
     }
     return { success: true };
   } catch (error: unknown) {
+    console.error('[worker] Bulk metadata upsert failed:', error);
     return { success: false, error: (error as Error).message };
   }
 }
@@ -1066,7 +1432,14 @@ export async function getMediaViewCounts(
 }
 
 /**
- * Caches album data in the database.
+ * Caches the album tree of a completed library scan and makes library
+ * membership (in_library, the whitelist for Drive & Local) match it: every
+ * scanned file becomes a member, and members the scan no longer found are
+ * demoted (see {@link reconcileLibraryMembership}). Both happen in one
+ * transaction with the cache write, so the cached tree never lists files
+ * that are not authorized, and a failed write reports failure. Only the
+ * root albums of sources that are active when the result is written are
+ * kept: a source removed or deactivated while the scan ran stays out.
  * @param cacheKey - The key to use for caching.
  * @param albums - The album data to cache.
  * @returns The result of the operation.
@@ -1077,46 +1450,42 @@ export async function cacheAlbums(
 ): Promise<WorkerResult> {
   if (!db) return { success: false, error: 'Database not initialized' };
   try {
-    // 1. Traverse and index all paths into media_metadata (whitelist for Drive & Local)
-    // This ensures every file in the library is strictly "authorized" via DB presence.
-    if (Array.isArray(albums)) {
-      const paths: string[] = [];
-      const stack: Album[] = [...(albums as Album[])];
-
-      while (stack.length > 0) {
-        const album = stack.pop();
-        if (album) {
-          if (album.textures && Array.isArray(album.textures)) {
-            // Use manual loop to avoid multiple intermediate arrays
-            for (const t of album.textures) {
-              if (t && t.path) {
-                paths.push(t.path);
-              }
-            }
-          }
-          if (album.children && Array.isArray(album.children)) {
-            for (let i = album.children.length - 1; i >= 0; i--) {
-              const child = album.children[i];
-              if (child) stack.push(child);
-            }
-          }
-        }
-      }
-
-      if (paths.length > 0) {
-        // Bulk upsert to ensure they are in the DB.
-        // We pass only filePath; existing metadata (duration, etc.) is preserved by upsert logic.
-        const payloads = paths.map((p) => ({ filePath: p }));
-        // We can reuse bulkUpsertMetadata logic.
-        await bulkUpsertMetadata(payloads);
-      }
+    const scannedAlbums = Array.isArray(albums) ? (albums as Album[]) : null;
+    const scannedPaths: string[] = [];
+    if (scannedAlbums) {
+      forEachAlbumPath(scannedAlbums, (filePath) =>
+        scannedPaths.push(filePath),
+      );
     }
 
-    getStatement('cacheAlbum').run(
-      cacheKey,
-      JSON.stringify(albums),
-      new Date().toISOString(),
+    // We pass only filePath; existing metadata (duration, etc.) is preserved by upsert logic.
+    const upserts = await prepareBulkUpsert(
+      scannedPaths.map((p) => ({ filePath: p })),
+      true,
     );
+
+    // The sources can change while the IDs are prepared (and while the scan
+    // ran), so the active ones are read in the write transaction.
+    runInTransaction(() => {
+      let cached: unknown = albums;
+      if (scannedAlbums) {
+        const roots = rootAlbumsOf(scannedAlbums, getActiveDirectoryPaths());
+        const paths: string[] = [];
+        forEachAlbumPath(roots, (filePath) => paths.push(filePath));
+        const kept = new Set(paths);
+        writePreparedUpserts(
+          upserts.filter((item) => kept.has(item.filePath)),
+          true,
+        );
+        reconcileLibraryMembership(cacheKey, roots, paths);
+        cached = roots;
+      }
+      getStatement('cacheAlbum').run(
+        cacheKey,
+        JSON.stringify(cached),
+        new Date().toISOString(),
+      );
+    });
     return { success: true };
   } catch (error: unknown) {
     console.error('[worker] Error caching albums:', error);
@@ -1151,12 +1520,7 @@ export function getCachedAlbums(cacheKey: string): WorkerResult {
 export function closeDatabase(): WorkerResult {
   if (!db) return { success: true };
   try {
-    db.close();
-    db = null;
-    // Clear statements cache
-    for (const key of Object.keys(statements) as StatementName[]) {
-      delete statements[key];
-    }
+    resetConnection();
     console.log('[worker] Database connection closed.');
     return { success: true };
   } catch (error: unknown) {
@@ -1222,14 +1586,18 @@ export function getMediaDirectories(): WorkerResult {
 }
 
 /**
- * Removes a media directory path from the database.
+ * Removes a media directory path from the database, together with the
+ * library membership of the files only it provided.
  * @param directoryPath - The path of the directory to remove.
  * @returns The result of the operation.
  */
 export function removeMediaDirectory(directoryPath: string): WorkerResult {
   if (!db) return { success: false, error: 'Database not initialized' };
   try {
-    getStatement('removeMediaDirectory').run(directoryPath);
+    runInTransaction(() => {
+      demoteSourceMembers(directoryPath);
+      getStatement('removeMediaDirectory').run(directoryPath);
+    });
     return { success: true };
   } catch (error: unknown) {
     console.error(
@@ -1241,7 +1609,9 @@ export function removeMediaDirectory(directoryPath: string): WorkerResult {
 }
 
 /**
- * Updates the active state of a media directory.
+ * Updates the active state of a media directory. Deactivating demotes the
+ * files only it provided; re-activating restores the members it had in the
+ * cached library tree.
  * @param directoryPath - The path of the directory to update.
  * @param isActive - The new active state.
  * @returns The result of the operation.
@@ -1252,14 +1622,71 @@ export function setDirectoryActiveState(
 ): WorkerResult {
   if (!db) return { success: false, error: 'Database not initialized' };
   try {
-    getStatement('setDirectoryActiveState').run(
-      isActive ? 1 : 0,
-      directoryPath,
-    );
+    runInTransaction(() => {
+      if (isActive) {
+        promoteSourceMembers(directoryPath);
+      } else {
+        demoteSourceMembers(directoryPath);
+      }
+      getStatement('setDirectoryActiveState').run(
+        isActive ? 1 : 0,
+        directoryPath,
+      );
+    });
     return { success: true };
   } catch (error: unknown) {
     console.error(
       `[worker] Error updating active state for ${directoryPath}:`,
+      error,
+    );
+    return { success: false, error: (error as Error).message };
+  }
+}
+
+/**
+ * Rewrites a legacy media directory row to its canonical (symlink-free)
+ * path, moving the stored paths of its files along with it, so that
+ * authorization no longer follows a link that could be retargeted. When the
+ * canonical path already is a source of its own, the legacy row is only
+ * deactivated (it is never deleted). The cached library tree is dropped in
+ * both cases so the next load rescans with canonical paths. Idempotent: a
+ * legacy row that is gone or already an inactive alias is left alone, and
+ * the cache is kept.
+ * @param directoryPath - The stored path of the directory.
+ * @param canonicalPath - Its resolved real path.
+ * @returns The result of the operation.
+ */
+export function canonicalizeMediaDirectory(
+  directoryPath: string,
+  canonicalPath: string,
+): WorkerResult {
+  if (!db) return { success: false, error: 'Database not initialized' };
+  try {
+    runInTransaction(() => {
+      const legacy = getStatement('getMediaDirectoryByPath').get(
+        directoryPath,
+      ) as { is_active: number } | undefined;
+      if (!legacy || directoryPath === canonicalPath) return;
+      if (getStatement('getMediaDirectoryByPath').get(canonicalPath)) {
+        if (!legacy.is_active) return;
+        demoteSourceMembers(directoryPath);
+        getStatement('setDirectoryActiveState').run(0, directoryPath);
+      } else {
+        getStatement('renameMediaDirectory').run(canonicalPath, directoryPath);
+        const newPrefix = withTrailingSeparator(canonicalPath);
+        for (const oldPrefix of localPathPrefixes(directoryPath)) {
+          if (oldPrefix === newPrefix) continue;
+          const args = [newPrefix, oldPrefix, oldPrefix, oldPrefix];
+          getStatement('rewriteMetadataPathPrefix').run(...args);
+          getStatement('rewriteJobPathPrefix').run(...args);
+        }
+      }
+      getStatement('deleteCachedAlbum').run(FILE_INDEX_CACHE_KEY);
+    });
+    return { success: true };
+  } catch (error: unknown) {
+    console.error(
+      `[worker] Error canonicalizing media directory ${directoryPath}:`,
       error,
     );
     return { success: false, error: (error as Error).message };
@@ -1357,6 +1784,10 @@ type WorkerRequest = { id: number } & (
       type: 'setDirectoryActiveState';
       payload: { directoryPath: string; isActive: boolean };
     }
+  | {
+      type: 'canonicalizeMediaDirectory';
+      payload: { directoryPath: string; canonicalPath: string };
+    }
   | { type: 'upsertMetadata'; payload: MetadataPayload }
   | { type: 'bulkUpsertMetadata'; payload: MetadataPayload[] }
   | { type: 'setRating'; payload: { filePath: string; rating: number } }
@@ -1444,6 +1875,12 @@ if (parentPort) {
           result = setDirectoryActiveState(
             message.payload.directoryPath,
             message.payload.isActive,
+          );
+          break;
+        case 'canonicalizeMediaDirectory':
+          result = canonicalizeMediaDirectory(
+            message.payload.directoryPath,
+            message.payload.canonicalPath,
           );
           break;
         case 'upsertMetadata':

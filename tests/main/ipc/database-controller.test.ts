@@ -71,6 +71,22 @@ describe('database-controller', () => {
       validator({ filePath: '/path' });
       expect(validatePathAccess).toHaveBeenCalledWith('/path');
     });
+
+    it('rejects metadata fields with the wrong type (F13)', () => {
+      const call = (handleIpc as Mock).mock.calls.find(
+        (c) => c[0] === IPC_CHANNELS.DB_UPSERT_METADATA,
+      )!;
+      const [, validateMetadata] = call[2].validators;
+      expect(() =>
+        validateMetadata({ filePath: '/p', metadata: { rating: 3 } }),
+      ).not.toThrow();
+      expect(() =>
+        validateMetadata({ filePath: '/p', metadata: { rating: 'x' } }),
+      ).toThrow('Invalid metadata field: rating');
+      expect(() =>
+        validateMetadata({ filePath: '/p', metadata: null }),
+      ).toThrow('Metadata must be an object');
+    });
   });
 
   describe('DB_GET_METADATA', () => {
@@ -178,6 +194,37 @@ describe('database-controller', () => {
       const validator = call[2].validators[0];
       validator({ filePath: '/path/to/video.mp4' });
       expect(validatePathAccess).toHaveBeenCalledWith('/path/to/video.mp4');
+    });
+
+    it('applies the same segment limits as the web route', () => {
+      const call = (handleIpc as Mock).mock.calls.find(
+        (c) => c[0] === IPC_CHANNELS.DB_UPDATE_WATCHED_SEGMENTS,
+      )!;
+      const [, validateSegments] = call[2].validators;
+      expect(() =>
+        validateSegments({ filePath: '/v.mp4', segmentsJson: '[]' }),
+      ).not.toThrow();
+      expect(() =>
+        validateSegments({ filePath: '/v.mp4', segmentsJson: '{bad' }),
+      ).toThrow('valid JSON');
+      expect(() =>
+        validateSegments({
+          filePath: '/v.mp4',
+          segmentsJson: JSON.stringify(
+            Array.from({ length: 5001 }, (_, i) => ({ start: i, end: i })),
+          ),
+        }),
+      ).toThrow('Too many watched segments');
+    });
+
+    it('rejects a non-string path before checking access', async () => {
+      const call = (handleIpc as Mock).mock.calls.find(
+        (c) => c[0] === IPC_CHANNELS.DB_UPDATE_WATCHED_SEGMENTS,
+      )!;
+      await expect(call[2].validators[0]({ filePath: 42 })).rejects.toThrow(
+        'Invalid file path',
+      );
+      expect(validatePathAccess).not.toHaveBeenCalled();
     });
   });
 

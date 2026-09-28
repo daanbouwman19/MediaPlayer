@@ -17,18 +17,34 @@ import {
   executeSmartPlaylist,
   getAllMetadataAndStats,
 } from '../../core/database/database';
+import {
+  normalizeWatchedSegments,
+  parseMetadataUpdate,
+} from '../../core/database/metadata-validation';
 import { handleIpc } from '../utils/ipc-helper';
+
+/** IPC payloads are untyped at runtime; reject a non-string path early. */
+function assertFilePath(filePath: unknown): asserts filePath is string {
+  if (typeof filePath !== 'string' || !filePath) {
+    throw new Error('Invalid file path');
+  }
+}
 
 export function registerDatabaseHandlers() {
   handleIpc(
     IPC_CHANNELS.DB_UPSERT_METADATA,
     async (_event: IpcMainInvokeEvent, { filePath, metadata }) => {
+      // The facade keeps only known fields and applies filePath last.
       await upsertMetadata(filePath, metadata);
     },
     {
       validators: [
         async ({ filePath }) => {
+          assertFilePath(filePath);
           await validatePathAccess(filePath);
+        },
+        ({ metadata }) => {
+          parseMetadataUpdate(metadata);
         },
       ],
     },
@@ -88,7 +104,12 @@ export function registerDatabaseHandlers() {
     {
       validators: [
         async ({ filePath }) => {
+          assertFilePath(filePath);
           await validatePathAccess(filePath);
+        },
+        // Same limits as POST /api/media/watched-segments.
+        ({ segmentsJson }) => {
+          normalizeWatchedSegments(segmentsJson);
         },
       ],
     },

@@ -778,13 +778,16 @@ describe('Server Combined Tests', () => {
     });
 
     it('POST /api/media/metadata should upsert metadata', async () => {
-      const payload = { filePath: '/file.mp4', metadata: { title: 'T' } };
+      // Unknown fields (including a filePath override) are dropped.
+      const payload = {
+        filePath: '/file.mp4',
+        metadata: { title: 'T', rating: 4, filePath: 'gdrive://other' },
+      };
       const res = await request(app).post('/api/media/metadata').send(payload);
       expect(res.status).toBe(200);
-      expect(database.upsertMetadata).toHaveBeenCalledWith(
-        payload.filePath,
-        payload.metadata,
-      );
+      expect(database.upsertMetadata).toHaveBeenCalledWith(payload.filePath, {
+        rating: 4,
+      });
     });
 
     it('POST /api/media/metadata/batch should return metadata', async () => {

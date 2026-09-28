@@ -3,9 +3,11 @@
  * This module acts as a bridge between the main process (or server) and the database worker thread.
  */
 
+import fs from 'fs';
 import { type WorkerOptions } from 'worker_threads';
 import { FILE_INDEX_CACHE_KEY } from '../media/constants.ts';
-import { safeWarn, safeError } from '../media/utils/logger.ts';
+import { isDrivePath } from '../media/media-utils.ts';
+import { safeLog, safeWarn, safeError } from '../media/utils/logger.ts';
 import type {
   Album,
   MediaDirectory,
@@ -14,7 +16,12 @@ import type {
   MediaLibraryItem,
 } from '../media/types.ts';
 import { WorkerClient } from './worker-client.ts';
-import { clearAuthCache } from '../auth/security.ts';
+import {
+  normalizeWatchedSegments,
+  parseMetadataUpdate,
+} from './metadata-validation.ts';
+import { clearAuthCache, isSensitiveDirectory } from '../auth/security.ts';
+import { AppError } from '../media/errors.ts';
 
 /**
  * The database worker client instance.
@@ -25,6 +32,30 @@ let dbWorkerClient: WorkerClient | null = null;
  * Cache for media directories to avoid frequent IPC calls.
  */
 let cachedMediaDirectories: MediaDirectory[] | null = null;
+
+/**
+ * Bumped by every invalidation of the directory caches. A directory read
+ * only fills the cache if no invalidation happened while it was in flight;
+ * otherwise it may predate a mutation that has since been written.
+ */
+let mediaDirectoriesGeneration = 0;
+
+/** The directory read in flight, shared by callers of the same generation. */
+let pendingMediaDirectories: {
+  generation: number;
+  promise: Promise<MediaDirectory[]>;
+} | null = null;
+
+/**
+ * Drops every cache derived from the media-directory set: the directory
+ * list and the authorization decisions made against it.
+ */
+function invalidateDirectoryCaches(): void {
+  mediaDirectoriesGeneration++;
+  cachedMediaDirectories = null;
+  pendingMediaDirectories = null;
+  clearAuthCache();
+}
 
 /**
  * Initializes the database by creating and managing a worker thread.
@@ -43,16 +74,168 @@ async function initDatabase(
   if (dbWorkerClient) {
     await dbWorkerClient.terminate();
   }
-  cachedMediaDirectories = null;
+  invalidateDirectoryCaches();
 
-  dbWorkerClient = new WorkerClient(workerScriptPath, {
+  const client = new WorkerClient(workerScriptPath, {
     workerOptions,
     operationTimeout: 30000,
+    // Opening a large database can include schema migrations.
+    initTimeout: 120000,
     name: 'database.js',
     autoRestart: true,
     restartDelay: 2000,
   });
-  await dbWorkerClient.init({ type: 'init', payload: { dbPath: userDbPath } });
+  dbWorkerClient = client;
+  await client.init({ type: 'init', payload: { dbPath: userDbPath } });
+
+  try {
+    await revalidateMediaDirectories(client);
+  } catch (error) {
+    safeError('[database.js] Failed to re-check media directories:', error);
+  }
+}
+
+/** How long a stored directory may take to resolve (offline network shares). */
+const DIRECTORY_RESOLVE_TIMEOUT_MS = 3000;
+
+const RESOLVE_TIMED_OUT = Symbol('resolve timed out');
+
+/** What {@link resolveStoredDirectory} makes of a stored directory path. */
+type ResolvedPath = string | null | typeof RESOLVE_TIMED_OUT;
+
+/**
+ * Resolves a stored media directory to its real path with fs.realpath's
+ * callback form. That is the JS implementation: it resolves symlinks and
+ * junctions like the native one, but keeps mapped network drive letters
+ * instead of turning them into UNC paths. Returns null when the directory
+ * cannot be resolved (missing or unreadable), or {@link RESOLVE_TIMED_OUT}
+ * when resolution hangs, so startup is never blocked by it.
+ */
+async function resolveStoredDirectory(
+  directoryPath: string,
+): Promise<ResolvedPath> {
+  let timer: NodeJS.Timeout | undefined;
+  const timeout = new Promise<typeof RESOLVE_TIMED_OUT>((resolve) => {
+    timer = setTimeout(
+      () => resolve(RESOLVE_TIMED_OUT),
+      DIRECTORY_RESOLVE_TIMEOUT_MS,
+    );
+  });
+  const realPath = new Promise<string>((resolve, reject) => {
+    fs.realpath(directoryPath, (error, resolved) => {
+      if (error) reject(error);
+      else resolve(resolved);
+    });
+  });
+  try {
+    return await Promise.race([realPath, timeout]);
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Re-checks the stored media directories against the rules a new source
+ * has to pass. Rows added before those checks existed can point, directly
+ * or through a symlink or junction, at a sensitive system location, and
+ * authorization trusts them on every request. Sensitive local sources are
+ * deactivated and logged (never deleted); the others are rewritten to their
+ * canonical path, so a link cannot later be retargeted to widen access.
+ * Runs on every start and leaves rows that pass untouched (idempotent).
+ */
+async function revalidateMediaDirectories(client: WorkerClient): Promise<void> {
+  const directories = await client.sendMessage<MediaDirectory[] | null>(
+    'getMediaDirectories',
+  );
+  if (!Array.isArray(directories)) return;
+
+  const storedPaths = new Set<string>();
+  const localDirectories: MediaDirectory[] = [];
+  for (const dir of directories) {
+    if (!dir || typeof dir.path !== 'string') continue;
+    storedPaths.add(dir.path);
+    if (!isDrivePath(dir.path)) localDirectories.push(dir);
+  }
+
+  // Resolve all roots at once, so offline network shares cost one
+  // DIRECTORY_RESOLVE_TIMEOUT_MS in total rather than one each.
+  const resolved = await Promise.all(
+    localDirectories.map(
+      async (dir): Promise<[MediaDirectory, ResolvedPath]> => [
+        dir,
+        await resolveStoredDirectory(dir.path),
+      ],
+    ),
+  );
+
+  let changed = false;
+  for (const [dir, realPath] of resolved) {
+    try {
+      changed =
+        (await revalidateMediaDirectory(client, dir, realPath, storedPaths)) ||
+        changed;
+    } catch (error) {
+      safeError(
+        `[database.js] Failed to re-check media directory ${dir.path}:`,
+        error,
+      );
+    }
+  }
+
+  if (changed) {
+    invalidateDirectoryCaches();
+  }
+}
+
+/**
+ * Applies {@link revalidateMediaDirectories} to one local directory.
+ * @param realPath - The directory's resolved path (see
+ *   {@link resolveStoredDirectory}).
+ * @param storedPaths - The paths of all stored media directories.
+ * @returns Whether the directory row was changed.
+ */
+async function revalidateMediaDirectory(
+  client: WorkerClient,
+  dir: MediaDirectory,
+  realPath: ResolvedPath,
+  storedPaths: ReadonlySet<string>,
+): Promise<boolean> {
+  if (realPath === RESOLVE_TIMED_OUT) {
+    safeWarn(
+      `[database.js] Skipped re-checking media directory ${dir.path}: it did not resolve in time.`,
+    );
+    return false;
+  }
+
+  if (
+    isSensitiveDirectory(dir.path) ||
+    (realPath !== null && isSensitiveDirectory(realPath))
+  ) {
+    if (!dir.isActive) return false;
+    safeWarn(
+      `[Security] Deactivated media directory ${dir.path}: it is (or resolves to) a sensitive system location.`,
+    );
+    await client.sendMessage('setDirectoryActiveState', {
+      directoryPath: dir.path,
+      isActive: false,
+    });
+    return true;
+  }
+
+  if (realPath === null || realPath === dir.path) return false;
+  // An alias of a source stored at its real path is only deactivated (see
+  // canonicalizeMediaDirectory), so once inactive it needs nothing more.
+  if (!dir.isActive && storedPaths.has(realPath)) return false;
+  safeLog(
+    `[database.js] Canonicalized media directory ${dir.path} -> ${realPath}`,
+  );
+  await client.sendMessage('canonicalizeMediaDirectory', {
+    directoryPath: dir.path,
+    canonicalPath: realPath,
+  });
+  return true;
 }
 
 /**
@@ -103,9 +286,13 @@ async function getMediaViewCounts(
 }
 
 /**
- * Caches the list of albums (file index) into the database.
+ * Caches the list of albums (file index) into the database. This also
+ * records which files are library members, which is what authorizes Drive
+ * files, so a failure is rethrown: a scan whose result could not be stored
+ * must not be presented as the library.
  * @param albums - The array of album objects to cache.
- * @returns A promise that resolves when the albums are cached. Errors are logged but not re-thrown.
+ * @returns A promise that resolves when the albums are cached.
+ * @throws {Error} If the database operation fails.
  */
 async function cacheAlbums(albums: Album[]): Promise<void> {
   try {
@@ -115,6 +302,10 @@ async function cacheAlbums(albums: Album[]): Promise<void> {
     });
   } catch (error) {
     safeError('[database.js] Error caching albums:', error);
+    throw error;
+  } finally {
+    // Library membership may have changed, and with it Drive authorization.
+    clearAuthCache();
   }
 }
 
@@ -179,12 +370,12 @@ async function addMediaDirectory(
         name?: string;
       },
 ): Promise<void> {
+  // The authorization cache keys file paths to allow/deny decisions derived
+  // from the media-directory set. Changing that set can flip a decision, so
+  // invalidate it here to avoid serving stale allows/denies within the TTL,
+  // and again once the write is done to drop anything cached meanwhile.
+  invalidateDirectoryCaches();
   try {
-    cachedMediaDirectories = null;
-    // The authorization cache keys file paths to allow/deny decisions derived
-    // from the media-directory set. Changing that set can flip a decision, so
-    // invalidate it here to avoid serving stale allows/denies within the TTL.
-    clearAuthCache();
     const payload =
       typeof directory === 'string' ? { path: directory } : directory;
 
@@ -197,11 +388,15 @@ async function addMediaDirectory(
       error,
     );
     throw error;
+  } finally {
+    invalidateDirectoryCaches();
   }
 }
 
 /**
  * Retrieves all media directories from the database.
+ * Concurrent callers share one read, and a read that overlaps a directory
+ * mutation is returned to its callers but never cached.
  * @returns A promise that resolves to a list of all media directory objects. Returns an empty array on error.
  */
 async function getMediaDirectories(): Promise<MediaDirectory[]> {
@@ -209,11 +404,27 @@ async function getMediaDirectories(): Promise<MediaDirectory[]> {
     return [...cachedMediaDirectories];
   }
   try {
-    const directories = await getClient().sendMessage<MediaDirectory[]>(
-      'getMediaDirectories',
-    );
-    cachedMediaDirectories = directories || [];
-    return [...cachedMediaDirectories];
+    const generation = mediaDirectoriesGeneration;
+    let pending = pendingMediaDirectories;
+    if (!pending || pending.generation !== generation) {
+      const promise: Promise<MediaDirectory[]> = getClient()
+        .sendMessage<MediaDirectory[] | null>('getMediaDirectories')
+        .then((directories) => {
+          const list = directories || [];
+          if (generation === mediaDirectoriesGeneration) {
+            cachedMediaDirectories = list;
+          }
+          return list;
+        })
+        .finally(() => {
+          if (pendingMediaDirectories?.promise === promise) {
+            pendingMediaDirectories = null;
+          }
+        });
+      pending = { generation, promise };
+      pendingMediaDirectories = pending;
+    }
+    return [...(await pending.promise)];
   } catch (error) {
     safeError('[database.js] Error getting media directories:', error);
     return [];
@@ -227,9 +438,8 @@ async function getMediaDirectories(): Promise<MediaDirectory[]> {
  * @throws {Error} If the database operation fails.
  */
 async function removeMediaDirectory(directoryPath: string): Promise<void> {
+  invalidateDirectoryCaches();
   try {
-    cachedMediaDirectories = null;
-    clearAuthCache();
     await getClient().sendMessage<void>('removeMediaDirectory', {
       directoryPath,
     });
@@ -240,6 +450,8 @@ async function removeMediaDirectory(directoryPath: string): Promise<void> {
       error,
     );
     throw error;
+  } finally {
+    invalidateDirectoryCaches();
   }
 }
 
@@ -247,16 +459,34 @@ async function removeMediaDirectory(directoryPath: string): Promise<void> {
  * Updates the active state for a given media directory.
  * @param directoryPath - The path of the directory to update.
  * @param isActive - The new active state.
+ * Re-activating a local source that is, or resolves to, a sensitive system
+ * location is refused, so a source deactivated by the start-up re-check
+ * (see {@link revalidateMediaDirectories}) cannot simply be switched back on.
  * @returns A promise that resolves on success or rejects on failure.
+ * @throws {AppError} (403) If a sensitive local source would be re-activated.
  * @throws {Error} If the database operation fails.
  */
 async function setDirectoryActiveState(
   directoryPath: string,
   isActive: boolean,
 ): Promise<void> {
+  if (isActive && !isDrivePath(directoryPath)) {
+    const realPath = await resolveStoredDirectory(directoryPath);
+    if (
+      isSensitiveDirectory(directoryPath) ||
+      (typeof realPath === 'string' && isSensitiveDirectory(realPath))
+    ) {
+      safeWarn(
+        `[Security] Refused to re-activate media directory ${directoryPath}: it is (or resolves to) a sensitive system location.`,
+      );
+      throw new AppError(
+        403,
+        'This directory is a sensitive system location and cannot be activated',
+      );
+    }
+  }
+  invalidateDirectoryCaches();
   try {
-    cachedMediaDirectories = null;
-    clearAuthCache();
     await getClient().sendMessage<void>('setDirectoryActiveState', {
       directoryPath,
       isActive,
@@ -268,21 +498,25 @@ async function setDirectoryActiveState(
       error,
     );
     throw error;
+  } finally {
+    invalidateDirectoryCaches();
   }
 }
 
 /**
- * Upserts metadata for a file.
+ * Upserts client-supplied metadata for a file whose path the caller has
+ * authorized. Only the known metadata fields are accepted, and the
+ * authorized path is applied last so the payload cannot redirect the write
+ * to another row.
+ * @throws {AppError} (400) If the metadata is malformed.
  */
 async function upsertMetadata(
   filePath: string,
   metadata: MediaMetadata,
 ): Promise<void> {
+  const payload = { ...parseMetadataUpdate(metadata), filePath };
   try {
-    await getClient().sendMessage<void>('upsertMetadata', {
-      filePath,
-      ...metadata,
-    });
+    await getClient().sendMessage<void>('upsertMetadata', payload);
   } catch (error) {
     safeError('[database.js] Error upserting metadata:', filePath, error);
     throw error;
@@ -319,16 +553,19 @@ async function setRating(filePath: string, rating: number): Promise<void> {
 }
 
 /**
- * Updates watched segments for a file.
+ * Updates watched segments for a file. Storage errors are logged but not
+ * re-thrown — saving progress is best-effort.
+ * @throws {AppError} (400) If the segments are malformed or too many.
  */
 async function updateWatchedSegments(
   filePath: string,
   segmentsJson: string,
 ): Promise<void> {
+  const segments = normalizeWatchedSegments(segmentsJson);
   try {
     await getClient().sendMessage<void>('updateWatchedSegments', {
       filePath,
-      segmentsJson,
+      segmentsJson: segments,
     });
   } catch (error) {
     safeError(

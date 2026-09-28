@@ -78,6 +78,27 @@ const sendMessage = (
   });
 };
 
+/**
+ * Makes files library members the way the app does: by caching a scan
+ * result that contains them (client upserts never grant membership).
+ */
+const indexInLibrary = async (filePaths: string[]) => {
+  // Scans only keep the albums of active sources.
+  await sendMessage('addMediaDirectory', { directoryObj: { path: '/' } });
+  const result = await sendMessage('cacheAlbums', {
+    cacheKey: 'file_index_json',
+    albums: [
+      {
+        id: '/',
+        name: 'root',
+        textures: filePaths.map((p) => ({ name: path.basename(p), path: p })),
+        children: [],
+      },
+    ],
+  });
+  expect(result.success).toBe(true);
+};
+
 const safeCleanup = (dir: string) => {
   const maxRetries = 3;
   let attempts = 0;
@@ -292,6 +313,7 @@ describe('Database Worker Combined Tests', () => {
         const filePath = path.join(tempDir, 'meta.mp4');
         fs.writeFileSync(filePath, 'data');
 
+        await indexInLibrary([filePath]);
         await sendMessage('upsertMetadata', { filePath, duration: 120 });
         const getRes = await sendMessage('getMetadata', {
           filePaths: [filePath],
@@ -302,6 +324,7 @@ describe('Database Worker Combined Tests', () => {
       it('should handle bulk upsert', async () => {
         const filePath = path.join(tempDir, 'bulk.mp4');
         fs.writeFileSync(filePath, 'data');
+        await indexInLibrary([filePath]);
         await sendMessage('bulkUpsertMetadata', [{ filePath, duration: 300 }]);
         const getRes = await sendMessage('getMetadata', {
           filePaths: [filePath],
@@ -390,6 +413,7 @@ describe('Database Worker Combined Tests', () => {
     });
 
     it('getAllMetadata returns correct metadata', async () => {
+      await indexInLibrary(['/vid1.mp4']);
       await upsertMetadata({ filePath: '/vid1.mp4', duration: 100 });
       const result = getAllMetadata();
       expect(result.success).toBe(true);
@@ -442,6 +466,7 @@ describe('Database Worker Combined Tests', () => {
       const filePath = path.join(tempDir, 'heavy.mp4');
       fs.writeFileSync(filePath, 'data');
 
+      await indexInLibrary([filePath]);
       await sendMessage('upsertMetadata', {
         filePath,
         duration: 100,
@@ -465,6 +490,7 @@ describe('Database Worker Combined Tests', () => {
       const ghostPath = '/ghost.mp4';
 
       // Valid file
+      await indexInLibrary([validPath]);
       await sendMessage('upsertMetadata', {
         filePath: validPath,
         status: 'success',
@@ -490,7 +516,10 @@ describe('Database Worker Combined Tests', () => {
     });
 
     it('should handle cacheAlbums and getCachedAlbums messages', async () => {
-      const albums = [{ id: '1', name: 'Test' }];
+      await sendMessage('addMediaDirectory', {
+        directoryObj: { path: '/cached' },
+      });
+      const albums = [{ id: '/cached', name: 'Test' }];
       await sendMessage('cacheAlbums', { cacheKey: 'k', albums });
       const res = await sendMessage('getCachedAlbums', { cacheKey: 'k' });
       expect(res.success).toBe(true);
@@ -531,6 +560,7 @@ describe('Database Worker Combined Tests', () => {
     it('should round-trip watched segments through the segments table', async () => {
       const filePath = path.join(tempDir, 'roundtrip.mp4');
       fs.writeFileSync(filePath, 'data');
+      await indexInLibrary([filePath]);
       await sendMessage('upsertMetadata', { filePath, duration: 60 });
       const segments = [
         { start: 5, end: 10 },
@@ -562,6 +592,7 @@ describe('Database Worker Combined Tests', () => {
     });
 
     it('should handle getAllMetadata message', async () => {
+      await indexInLibrary(['/m.mp4']);
       await sendMessage('upsertMetadata', { filePath: '/m.mp4', duration: 1 });
       const res = await sendMessage('getAllMetadata', {});
       expect(res.success).toBe(true);

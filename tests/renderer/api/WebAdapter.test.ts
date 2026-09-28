@@ -344,10 +344,38 @@ describe('WebAdapter', () => {
       expect(JSON.parse(options.body)).toEqual({ criteria: '{"minRating":4}' });
     });
 
-    it('updateWatchedSegments acts as empty void', async () => {
+    it('updateWatchedSegments posts the segments to the server', async () => {
+      fetchMock.mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: { get: () => 'text/plain' },
+      });
       const adapter = new WebAdapter();
-      const res = await adapter.updateWatchedSegments('/path', '{}');
+      const segmentsJson = JSON.stringify([{ start: 0, end: 5 }]);
+
+      const res = await adapter.updateWatchedSegments('/path', segmentsJson);
+
       expect(res).toBeUndefined();
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/media/watched-segments',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ filePath: '/path', segmentsJson }),
+        }),
+      );
+    });
+
+    it('updateWatchedSegments surfaces server rejections', async () => {
+      fetchMock.mockResolvedValue({
+        ok: false,
+        status: 400,
+        statusText: 'Bad Request',
+        json: () => Promise.resolve({ error: 'Too many watched segments' }),
+      });
+      const adapter = new WebAdapter();
+      await expect(
+        adapter.updateWatchedSegments('/path', '[]'),
+      ).rejects.toThrow('Too many watched segments');
     });
 
     it('getLockStatus makes correct request', async () => {

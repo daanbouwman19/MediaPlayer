@@ -326,13 +326,13 @@ export class WebAdapter implements IMediaBackend {
     });
   }
   async updateWatchedSegments(
-    _filePath: string,
-    _segmentsJson: string,
+    filePath: string,
+    segmentsJson: string,
   ): Promise<void> {
-    void _filePath;
-    void _segmentsJson;
-    // Web version doesn't support persistent watch history yet
-    return;
+    await this.request<void>('/api/media/watched-segments', {
+      method: 'POST',
+      body: JSON.stringify({ filePath, segmentsJson }),
+    });
   }
 
   async updatePlaybackPosition(
