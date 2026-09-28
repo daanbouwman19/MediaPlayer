@@ -205,6 +205,32 @@ export function setMasterKey(key: Buffer): void {
   cachedKey = Buffer.from(key);
 }
 
+/** Subkeys derived from the current master key, by label. */
+const derivedKeys = new Map<string, { master: Buffer; key: Buffer }>();
+
+/**
+ * Derives a 256-bit key for a single purpose (e.g. a cache) from the master
+ * key with HKDF-SHA256, so no two uses share key material. Creates the master
+ * key when there is none yet, like encrypt(): callers derive a key to encrypt
+ * with it.
+ */
+export function deriveKey(label: string): Buffer {
+  const master = getOrCreateEncryptionKey();
+  const cached = derivedKeys.get(label);
+  if (cached && cached.master === master) return cached.key;
+  const key = Buffer.from(
+    crypto.hkdfSync(
+      'sha256',
+      master,
+      Buffer.alloc(0),
+      `mediaplayer:${label}`,
+      KEY_LENGTH,
+    ),
+  );
+  derivedKeys.set(label, { master, key });
+  return key;
+}
+
 /**
  * Encrypts a string using AES-256-GCM.
  * format: iv:authTag:ciphertext (hex encoded)

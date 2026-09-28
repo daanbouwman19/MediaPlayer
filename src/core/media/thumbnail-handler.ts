@@ -1,9 +1,8 @@
-import fs from 'fs';
 import fsPromises from 'fs/promises';
 import path from 'path';
 import crypto from 'crypto';
 import { pipeline } from 'stream/promises';
-import type { Readable } from 'stream';
+import { Writable, type Readable } from 'stream';
 import { Response } from 'express';
 import PQueue from 'p-queue';
 import { getThumbnailCachePath, isDrivePath } from './media-utils.ts';
@@ -20,17 +19,19 @@ import {
   validateFileAccess,
   handleAccessCheck,
 } from '../auth/access-validator.ts';
+import { openBuffer, sealBuffer } from '../auth/cache-crypto.ts';
 
 const thumbnailQueue = new PQueue({ concurrency: 2 });
 
 /** Seek position for video thumbnails, past typical black lead-in frames. */
 const THUMBNAIL_SEEK_SECONDS = 1;
 /**
- * Browsers revalidate daily (a 304 when unchanged), so an edited file's new
- * thumbnail shows up; the server-side key already includes the file identity.
+ * Thumbnails are encrypted on disk, so the browser (or Electron's HTTP
+ * cache) must not keep its own plaintext copy either.
  */
-const THUMBNAIL_CACHE_CONTROL =
-  'public, max-age=86400, stale-while-revalidate=604800';
+const THUMBNAIL_CACHE_CONTROL = 'private, no-store';
+/** Larger provider thumbnails are refused rather than buffered. */
+const MAX_PROVIDER_THUMBNAIL_BYTES = 8 * 1024 * 1024;
 /**
  * Drive thumbnails are keyed by file ID only, because checking the revision
  * would cost an API call per request. They are re-fetched after this long.
@@ -42,14 +43,19 @@ const LOCAL_FAILURE_TTL_MS = 60 * 60 * 1000;
 const DRIVE_FAILURE_TTL_MS = 10 * 60 * 1000;
 const MAX_REMEMBERED_FAILURES = 5000;
 
-// 64 hex digits: SHA-256 names. 32: names from the former MD5 key, still
-// matched so the sweeper removes those files.
-const THUMBNAIL_FILE = /^(?:[0-9a-f]{64}|[0-9a-f]{32})\.jpg$/;
+// Encrypted thumbnails, named by SHA-256.
+const THUMBNAIL_FILE = /^[0-9a-f]{64}\.jpg\.enc$/;
+// Temp files: FFmpeg's plaintext output (.tmp.jpg) and the encrypted copy
+// (.tmp.enc) before it is moved into place; also former unencrypted ones.
 const THUMBNAIL_TEMP_FILE =
-  /^(?:[0-9a-f]{64}|[0-9a-f]{32})\.jpg\.[0-9a-f-]+\.tmp\.jpg$/;
+  /^(?:[0-9a-f]{64}|[0-9a-f]{32})\.jpg(?:\.enc)?\.[0-9a-f-]+\.tmp\.(?:jpg|enc)$/;
+// Unencrypted thumbnails from before encryption (32 hex digits: the former
+// MD5 names). They would expose the library, so they go at the first sweep.
+const LEGACY_THUMBNAIL_FILE = /^(?:[0-9a-f]{64}|[0-9a-f]{32})\.jpg$/;
 const thumbnailSweeper = new CacheSweeper({
   isEntry: (name) => THUMBNAIL_FILE.test(name),
   isTempFile: (name) => THUMBNAIL_TEMP_FILE.test(name),
+  isObsolete: (name) => LEGACY_THUMBNAIL_FILE.test(name),
   maxAgeMs: 90 * 24 * 60 * 60 * 1000,
   tempMaxAgeMs: 60 * 60 * 1000,
 });
@@ -125,8 +131,8 @@ function watchClientDisconnect(res: Response) {
   };
 }
 
-function tempPathFor(cacheFile: string): string {
-  return `${cacheFile}.${crypto.randomUUID()}.tmp.jpg`;
+function tempPathFor(cacheFile: string, ext: 'jpg' | 'enc'): string {
+  return `${cacheFile}.${crypto.randomUUID()}.tmp.${ext}`;
 }
 
 async function hasContent(file: string): Promise<boolean> {
@@ -148,6 +154,28 @@ async function publish(tempFile: string, cacheFile: string): Promise<void> {
   }
 }
 
+/** Encrypts a thumbnail and moves it into place as the cache entry. */
+async function storeThumbnail(image: Buffer, cacheFile: string): Promise<void> {
+  const tempFile = tempPathFor(cacheFile, 'enc');
+  try {
+    await fsPromises.writeFile(tempFile, sealBuffer('thumb', image));
+    await publish(tempFile, cacheFile);
+  } finally {
+    await fsPromises.rm(tempFile, { force: true }).catch(() => {});
+  }
+}
+
+/** Reads and decrypts a cache entry; null when missing or unreadable. */
+async function loadThumbnail(cacheFile: string): Promise<Buffer | null> {
+  let sealed: Buffer;
+  try {
+    sealed = await fsPromises.readFile(cacheFile);
+  } catch {
+    return null;
+  }
+  return openBuffer('thumb', sealed);
+}
+
 function isImagePath(filePath: string): boolean {
   return SUPPORTED_IMAGE_EXTENSIONS_SET.has(
     path.extname(filePath).toLowerCase(),
@@ -160,7 +188,9 @@ async function renderThumbnail(
   ffmpegPath: string,
   signal: AbortSignal,
 ): Promise<void> {
-  const tempFile = tempPathFor(cacheFile);
+  // FFmpeg writes the plaintext JPEG here; it lives only until it has been
+  // encrypted into the cache entry.
+  const tempFile = tempPathFor(cacheFile, 'jpg');
   // Images have a single frame. For videos, a clip shorter than the seek
   // position yields nothing, so fall back to the first frame.
   const seeks = isImagePath(filePath) ? [0] : [THUMBNAIL_SEEK_SECONDS, 0];
@@ -178,7 +208,7 @@ async function renderThumbnail(
         throw new Error(`FFmpeg failed with code ${code}: ${stderr}`);
       }
       if (await hasContent(tempFile)) {
-        await publish(tempFile, cacheFile);
+        await storeThumbnail(await fsPromises.readFile(tempFile), cacheFile);
         return;
       }
     }
@@ -242,75 +272,53 @@ async function downloadProviderThumbnail(
   );
   if (!stream) throw new Error('No thumbnail available');
 
-  const tempFile = tempPathFor(cacheFile);
-  try {
-    // pipeline() handles errors on both sides (network reset, ENOSPC, ...)
-    // and destroys both streams, so nothing is left half-written or unhandled.
-    await pipeline(stream, fs.createWriteStream(tempFile), {
-      signal: AbortSignal.any([
-        signal,
-        AbortSignal.timeout(DRIVE_THUMBNAIL_TIMEOUT_MS),
-      ]),
-    });
-    if (!(await hasContent(tempFile))) {
-      throw new Error('Provider returned an empty thumbnail');
-    }
-    await publish(tempFile, cacheFile);
-  } finally {
-    await fsPromises.rm(tempFile, { force: true }).catch(() => {});
-  }
+  // Collected in memory, so the plaintext never touches the disk.
+  const chunks: Buffer[] = [];
+  let size = 0;
+  const collector = new Writable({
+    write(chunk: Buffer, _encoding, callback) {
+      size += chunk.length;
+      if (size > MAX_PROVIDER_THUMBNAIL_BYTES) {
+        callback(new Error('Provider thumbnail is too large'));
+        return;
+      }
+      chunks.push(chunk);
+      callback();
+    },
+  });
+  // pipeline() handles errors on both sides (network reset, oversize, ...)
+  // and destroys both streams, so nothing is left unhandled.
+  await pipeline(stream, collector, {
+    signal: AbortSignal.any([
+      signal,
+      AbortSignal.timeout(DRIVE_THUMBNAIL_TIMEOUT_MS),
+    ]),
+  });
+  if (size === 0) throw new Error('Provider returned an empty thumbnail');
+  await storeThumbnail(Buffer.concat(chunks, size), cacheFile);
 }
 
-function sendThumbnailFile(
-  res: Response,
-  cacheFile: string,
-  callback: (err: unknown) => void,
-): void {
-  res.sendFile(
-    cacheFile,
-    {
-      // The path is built by the server; its parents may be dot-directories
-      // (e.g. ~/.config on Linux), which send would otherwise refuse with 404.
-      dotfiles: 'allow',
-      headers: {
-        'Content-Type': 'image/jpeg',
-        'Cache-Control': THUMBNAIL_CACHE_CONTROL,
-      },
-    },
-    callback,
-  );
+function sendThumbnail(res: Response, image: Buffer): void {
+  res.set({
+    'Content-Type': 'image/jpeg',
+    'Cache-Control': THUMBNAIL_CACHE_CONTROL,
+  });
+  res.send(image);
 }
 
 /**
  * Helper: Tries to serve a thumbnail from the local cache.
- * Returns true if served, false otherwise.
+ * Returns true if served, false otherwise (missing, or unreadable, e.g.
+ * encrypted with another key: it is then regenerated).
  */
 export async function tryServeFromCache(
   res: Response,
   cacheFile: string,
 ): Promise<boolean> {
-  return new Promise((resolve) => {
-    // Use res.sendFile instead of fs.access + fs.createReadStream.
-    // This saves a syscall and leverages kernel sendfile optimization.
-    // If file doesn't exist, we get an error in callback and return false.
-    sendThumbnailFile(res, cacheFile, (err: unknown) => {
-      if (err) {
-        // If headers already sent, we can't do anything but log
-        if (res.headersSent) {
-          console.error(
-            `[Thumbnail] Error sending cached file ${cacheFile}:`,
-            err,
-          );
-          resolve(true); // Treat as handled to stop further processing
-        } else {
-          // File not found or other error -> Fallback to generation
-          resolve(false);
-        }
-      } else {
-        resolve(true);
-      }
-    });
-  });
+  const image = await loadThumbnail(cacheFile);
+  if (!image) return false;
+  sendThumbnail(res, image);
+  return true;
 }
 
 /**
@@ -360,12 +368,10 @@ export async function generateLocalThumbnail(
     return;
   }
 
-  sendThumbnailFile(res, cacheFile, (err: unknown) => {
-    if (err) {
-      console.error('[Thumbnail] Error sending generated file:', err);
-      if (!res.headersSent) res.status(500).end();
-    }
-  });
+  if (!(await tryServeFromCache(res, cacheFile))) {
+    console.error('[Thumbnail] Generated thumbnail could not be read back');
+    if (!res.headersSent) res.status(500).end();
+  }
 }
 
 async function cacheAgeMs(cacheFile: string): Promise<number | null> {

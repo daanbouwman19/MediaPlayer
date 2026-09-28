@@ -33,9 +33,10 @@ export function createDrivePath(fileId: string): string {
  *
  * The file is named by the SHA-256 digest of the key. It is only a cache file
  * name (the thumbnail route authorises the path before it looks the file up),
- * and SHA-256 keeps the names collision-resistant. Files named by the former
- * MD5 key are simply cache misses: the thumbnail is regenerated and the cache
- * sweeper removes the old file once nobody reads it.
+ * and SHA-256 keeps the names collision-resistant. The file holds the
+ * thumbnail encrypted with the thumbnail cache key (see cache-crypto); the
+ * unencrypted `.jpg` files of earlier versions are cache misses, which the
+ * cache sweeper deletes.
  * @param identity The file's version tag (see getFileIdentity). Including it
  * gives an edited or replaced file a fresh thumbnail; without one only the
  * path is used.
@@ -47,7 +48,7 @@ export function getThumbnailCachePath(
 ) {
   const key = identity ? `${filePath}\0${identity}` : filePath;
   const hash = crypto.createHash('sha256').update(key).digest('hex');
-  return path.join(cacheDir, `${hash}.jpg`);
+  return path.join(cacheDir, `${hash}.jpg.enc`);
 }
 
 /**

@@ -63,6 +63,19 @@ describe('cache maintenance', () => {
       ]);
     });
 
+    it('removes obsolete files whatever their age', async () => {
+      createFile('legacy.old', 0);
+      createFile('entry-1.jpg', DAY);
+
+      const removed = await pruneCacheDir(dir, {
+        ...options,
+        isObsolete: (name) => name.endsWith('.old'),
+      });
+
+      expect(removed).toBe(1);
+      expect(fs.readdirSync(dir)).toEqual(['entry-1.jpg']);
+    });
+
     it('returns 0 for a missing directory', async () => {
       await expect(
         pruneCacheDir(path.join(dir, 'missing'), options),
