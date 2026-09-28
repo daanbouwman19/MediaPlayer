@@ -29,10 +29,10 @@ vi.mock('@/features/player/VideoPlayer.vue', () => ({
       'src',
       'isTranscodingMode',
       'isControlsVisible',
-      'transcodedDuration',
-      'currentTranscodeStartTime',
       'isTranscodingLoading',
       'isBuffering',
+      'initialTime',
+      'poster',
     ],
     emits: [
       'update:video-element',
@@ -107,17 +107,23 @@ describe('MediaDisplay Combined Tests', () => {
       isLoading: ref(false),
       error: ref(null),
       isVideoSupported: ref(true),
+      currentLoadRequestId: ref(0),
       loadMedia: vi.fn(),
+      cancelPendingLoad: vi.fn(),
     };
     (useMediaLoader as Mock).mockReturnValue(mockMediaLoader);
 
     mockTranscoder = {
       isTranscodingMode: ref(false),
       isTranscodingLoading: ref(false),
+      isBuffering: ref(false),
       transcodingProgress: ref(0),
       transcodedDuration: ref(0),
       startTranscoding: vi.fn(),
       resetTranscoderState: vi.fn(),
+      stopTranscodingProgressPoll: vi.fn(),
+      handlePlaybackStarted: vi.fn(),
+      setBuffering: vi.fn(),
     };
     (useTranscoder as Mock).mockReturnValue(mockTranscoder);
 

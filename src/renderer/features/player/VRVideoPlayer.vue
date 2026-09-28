@@ -95,6 +95,11 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import PlayIcon from '@/components/atoms/icons/PlayIcon.vue';
 import PauseIcon from '@/components/atoms/icons/PauseIcon.vue';
 import CloseIcon from '@/components/atoms/icons/CloseIcon.vue';
+import {
+  attachHlsSource,
+  needsHlsJs,
+  type HlsSource,
+} from '@/utils/hlsPlayback';
 
 const STEREO_ASPECT_RATIO_THRESHOLD = 1.9;
 const SPHERE_RADIUS = 500;
@@ -114,6 +119,10 @@ const emit = defineEmits<{
   (e: 'update:video-element', el: HTMLVideoElement | null): void;
   (e: 'play'): void;
   (e: 'pause'): void;
+  (e: 'playing'): void;
+  (e: 'ended'): void;
+  (e: 'error', error: Event | Error): void;
+  (e: 'buffering', isBuffering: boolean): void;
   (e: 'loadedmetadata', event: Event): void;
 }>();
 
@@ -129,51 +138,116 @@ let camera: THREE.PerspectiveCamera | null = null;
 let renderer: THREE.WebGLRenderer | null = null;
 let controls: OrbitControls | null = null;
 let video: HTMLVideoElement | null = null;
+let hlsSource: HlsSource | null = null;
 let videoTexture: THREE.VideoTexture | null = null;
 let sphereGeometry: THREE.SphereGeometry | null = null;
 let sphereMaterial: THREE.MeshBasicMaterial | null = null;
 let sphereMesh: THREE.Mesh | null = null;
 let animationId: number | null = null;
 
-// Motion Control State
-let deviceOrientation: DeviceOrientationEvent | null = null;
+// Motion Control State: the latest real (non-null) sensor reading, in degrees
+let deviceOrientation: { alpha: number; beta: number; gamma: number } | null =
+  null;
 let screenOrientation = 0;
 let initialOffsetAlpha = 0; // For recentering
+let isListeningForOrientation = false;
+
+/** iOS 13+ gates orientation events behind a permission prompt. */
+interface OrientationPermissionApi {
+  requestPermission?: () => Promise<string>;
+}
 
 const onDeviceOrientation = (event: DeviceOrientationEvent) => {
-  deviceOrientation = event;
+  // Desktop browsers may fire an all-null event without any sensor. Using
+  // it would point the camera straight down and freeze the view.
+  if (event.alpha === null || event.beta === null || event.gamma === null) {
+    return;
+  }
+  deviceOrientation = {
+    alpha: event.alpha,
+    beta: event.beta,
+    gamma: event.gamma,
+  };
+  if (!isMotionControlActive.value) {
+    // Real sensor data: switch from mouse/touch look to motion control,
+    // centred on the heading the device has right now.
+    isMotionControlActive.value = true;
+    initialOffsetAlpha = event.alpha;
+    if (controls) {
+      controls.enabled = false; // Disable orbit controls
+    }
+  }
 };
 
 const onScreenOrientationChange = () => {
   screenOrientation = window.orientation || 0;
 };
 
+const stopListeningForOrientation = () => {
+  isListeningForOrientation = false;
+  window.removeEventListener('deviceorientation', onDeviceOrientation);
+  window.removeEventListener('orientationchange', onScreenOrientationChange);
+};
+
+/**
+ * Starts listening for orientation readings. Motion control only takes over
+ * once a real (non-null) reading arrives, so devices without sensors keep
+ * the orbit controls.
+ */
+const listenForOrientation = () => {
+  if (isListeningForOrientation) return;
+  isListeningForOrientation = true;
+  window.addEventListener('deviceorientation', onDeviceOrientation);
+  window.addEventListener('orientationchange', onScreenOrientationChange);
+  onScreenOrientationChange();
+};
+
+/** Leaves motion control and hands the camera back to the orbit controls. */
+const exitMotionControl = () => {
+  stopListeningForOrientation();
+  deviceOrientation = null;
+  isMotionControlActive.value = false;
+  if (controls) {
+    controls.enabled = true;
+  }
+};
+
+const handleCanvasPointerDown = () => {
+  // Dragging the view is the way out of motion mode.
+  if (isMotionControlActive.value) exitMotionControl();
+};
+
 const recenterVR = () => {
-  if (!isMotionControlActive.value) {
-    // Request permission on iOS 13+
-    if (
-      typeof DeviceOrientationEvent !== 'undefined' &&
-      // @ts-expect-error: requestPermission is not in the standard type definition but exists on iOS
-      typeof DeviceOrientationEvent.requestPermission === 'function'
-    ) {
-      // @ts-expect-error: requestPermission is not in the standard type definition but exists on iOS
-      DeviceOrientationEvent.requestPermission()
-        .then((response: string) => {
-          if (response === 'granted') {
-            activateMotion();
-          } else {
-            showPermissionDenied();
-          }
-        })
-        .catch(console.error);
-    } else {
-      activateMotion();
-    }
-  } else {
+  if (isMotionControlActive.value) {
     // Already active, just recenter (reset offset)
-    if (deviceOrientation && deviceOrientation.alpha) {
+    if (deviceOrientation) {
       initialOffsetAlpha = deviceOrientation.alpha;
     }
+    return;
+  }
+
+  // Point the mouse/touch-driven view back at the front of the video.
+  controls?.reset();
+
+  const orientationApi = (
+    window as unknown as { DeviceOrientationEvent?: OrientationPermissionApi }
+  ).DeviceOrientationEvent;
+  if (!orientationApi) return;
+
+  // Request permission on iOS 13+
+  if (typeof orientationApi.requestPermission === 'function') {
+    orientationApi
+      .requestPermission()
+      .then((response) => {
+        if (response === 'granted') {
+          listenForOrientation();
+        } else {
+          showPermissionDenied();
+        }
+      })
+      .catch(console.error);
+  } else {
+    listenForOrientation();
   }
 };
 
@@ -182,17 +256,6 @@ const showPermissionDenied = () => {
   setTimeout(() => {
     showPermissionDeniedToast.value = false;
   }, 3000);
-};
-
-const activateMotion = () => {
-  isMotionControlActive.value = true;
-  window.addEventListener('deviceorientation', onDeviceOrientation);
-  window.addEventListener('orientationchange', onScreenOrientationChange);
-  onScreenOrientationChange();
-
-  if (controls) {
-    controls.enabled = false; // Disable orbit controls
-  }
 };
 
 const togglePlay = () => {
@@ -268,6 +331,78 @@ const handleLoadedMetadata = (event?: Event) => {
   }
 };
 
+// Named so every listener can be removed again on unmount.
+const handlePlay = () => emit('play');
+const handlePause = () => emit('pause');
+const handlePlaying = () => emit('playing');
+const handleEnded = () => emit('ended');
+const handleError = (event: Event) => emit('error', event);
+const handleWaiting = () => emit('buffering', true);
+const handleCanPlay = () => emit('buffering', false);
+
+const videoListeners: [keyof HTMLMediaElementEventMap, (e: Event) => void][] = [
+  ['timeupdate', handleTimeUpdate],
+  ['loadedmetadata', handleLoadedMetadata],
+  ['play', handlePlay],
+  ['pause', handlePause],
+  ['playing', handlePlaying],
+  ['ended', handleEnded],
+  ['error', handleError],
+  ['waiting', handleWaiting],
+  ['canplay', handleCanPlay],
+];
+
+const playVideo = () => {
+  video?.play().catch((e: unknown) => console.warn('Autoplay prevented:', e));
+};
+
+const destroyHls = () => {
+  if (hlsSource) {
+    hlsSource.destroy();
+    hlsSource = null;
+  }
+};
+
+/**
+ * Points the off-screen video at `src`: HLS playlists (transcoded legacy
+ * formats) go through hls.js like in VideoPlayer, everything else is set
+ * directly.
+ */
+const loadSource = (src: string) => {
+  if (!video) return;
+  destroyHls();
+
+  if (needsHlsJs(src)) {
+    hlsSource = attachHlsSource(video, src, {
+      startPosition: props.initialTime,
+      onManifestParsed: () => {
+        if (props.isPlaying) playVideo();
+      },
+      onFatalError: (error) => {
+        hlsSource = null;
+        emit('error', error);
+      },
+    });
+    return;
+  }
+
+  video.src = src;
+  if (props.initialTime && props.initialTime > 0) {
+    video.currentTime = props.initialTime;
+  }
+  if (props.isPlaying) playVideo();
+};
+
+/** Stops playback and releases the current source (e.g. on item change). */
+const reset = () => {
+  destroyHls();
+  if (video) {
+    video.pause();
+    video.removeAttribute('src');
+    video.load();
+  }
+};
+
 const initThree = () => {
   if (!container.value) return;
 
@@ -288,37 +423,25 @@ const initThree = () => {
 
   // Video Element (off-screen)
   video = document.createElement('video');
-  video.src = props.src;
   if (props.poster) {
     video.poster = props.poster;
   }
-  video.loop = true;
+  // No loop: 'ended' must reach MediaDisplay, which replays short videos
+  // while the slideshow timer runs and advances otherwise.
   video.muted = false; // Muted by default or handle volume
   video.crossOrigin = 'anonymous';
   video.playsInline = true;
   video.setAttribute('webkit-playsinline', 'true'); // iOS support
 
+  // Playback, error and metadata (AR detection) events for the parent.
+  for (const [type, listener] of videoListeners) {
+    video.addEventListener(type, listener);
+  }
+
   // Emit the video element so parent can control it (seeking, etc.)
   emit('update:video-element', video);
 
-  // Sync initial time
-  if (props.initialTime) {
-    video.currentTime = props.initialTime;
-  }
-
-  if (props.isPlaying) {
-    video.play().catch((e) => console.warn('Autoplay prevented:', e));
-  }
-
-  // Listen for time updates
-  video.addEventListener('timeupdate', handleTimeUpdate);
-  video.addEventListener('play', () => {
-    emit('play');
-  });
-  video.addEventListener('pause', () => emit('pause'));
-
-  // Detect metadata for AR
-  video.addEventListener('loadedmetadata', handleLoadedMetadata);
+  loadSource(props.src);
 
   // Texture
   videoTexture = new THREE.VideoTexture(video);
@@ -361,6 +484,7 @@ const initThree = () => {
   controls.dampingFactor = 0.05;
   controls.rotateSpeed = -0.5; // Drag direction natural feel
   controls.update();
+  renderer.domElement.addEventListener('pointerdown', handleCanvasPointerDown);
 
   // Resize listener
   window.addEventListener('resize', handleResize);
@@ -388,15 +512,11 @@ const animate = () => {
 
   if (isMotionControlActive.value && camera && deviceOrientation) {
     // Custom Device Orientation Logic (Simplified from Three.js examples)
-    const alpha = deviceOrientation.alpha
-      ? THREE.MathUtils.degToRad(deviceOrientation.alpha - initialOffsetAlpha)
-      : 0; // Z
-    const beta = deviceOrientation.beta
-      ? THREE.MathUtils.degToRad(deviceOrientation.beta)
-      : 0; // X'
-    const gamma = deviceOrientation.gamma
-      ? THREE.MathUtils.degToRad(deviceOrientation.gamma)
-      : 0; // Y''
+    const alpha = THREE.MathUtils.degToRad(
+      deviceOrientation.alpha - initialOffsetAlpha,
+    ); // Z
+    const beta = THREE.MathUtils.degToRad(deviceOrientation.beta); // X'
+    const gamma = THREE.MathUtils.degToRad(deviceOrientation.gamma); // Y''
     const orient = screenOrientation
       ? THREE.MathUtils.degToRad(screenOrientation)
       : 0; // O
@@ -435,8 +555,7 @@ onBeforeUnmount(() => {
   if (animationId) cancelAnimationFrame(animationId);
   window.removeEventListener('resize', handleResize);
   document.removeEventListener('fullscreenchange', handleResize);
-  window.removeEventListener('deviceorientation', onDeviceOrientation);
-  window.removeEventListener('orientationchange', onScreenOrientationChange);
+  stopListeningForOrientation();
 
   // Dispose GPU-side resources explicitly: renderer.dispose() does not free
   // scene geometries, materials, or textures, and OrbitControls keeps DOM
@@ -462,29 +581,35 @@ onBeforeUnmount(() => {
     videoTexture = null;
   }
   if (renderer) {
+    renderer.domElement.removeEventListener(
+      'pointerdown',
+      handleCanvasPointerDown,
+    );
     renderer.dispose();
   }
+  destroyHls();
   if (video) {
+    // Detach the listeners first: releasing the source queues media events
+    // (pause, emptied...) that must not reach the parent any more.
+    for (const [type, listener] of videoListeners) {
+      video.removeEventListener(type, listener);
+    }
     video.pause();
-    video.removeEventListener('timeupdate', handleTimeUpdate);
-    video.removeEventListener('loadedmetadata', handleLoadedMetadata);
-    video.src = '';
+    video.removeAttribute('src');
     video.load();
+    video = null;
+    emit('update:video-element', null);
   }
   if (container.value && renderer) {
     container.value.removeChild(renderer.domElement);
   }
 });
 
-// Watch src changes
+// Watch src changes (e.g. the direct-play -> HLS fallback)
 watch(
   () => props.src,
   (newSrc) => {
-    if (video) {
-      video.src = newSrc;
-      video.load();
-      if (props.isPlaying) video.play().catch(() => {});
-    }
+    loadSource(newSrc);
   },
 );
 
@@ -509,6 +634,7 @@ defineExpose({
   isFullscreen,
   togglePlay,
   togglePlayback,
+  reset,
 });
 </script>
 

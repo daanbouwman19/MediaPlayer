@@ -274,6 +274,7 @@ import StarIcon from '@/components/atoms/icons/StarIcon.vue';
 import HelpIcon from '@/components/atoms/icons/HelpIcon.vue';
 import ProgressBar from '@/components/atoms/ProgressBar.vue';
 import type { MediaFile, HeatmapData } from '../../../core/media/types';
+import type { WatchedSegment } from '@/utils/watchedSegments';
 import { useUIStore } from '@/composables/useUIStore';
 import { computed, ref, onMounted, onUnmounted, watch } from 'vue';
 import { storeToRefs } from 'pinia';
@@ -298,12 +299,15 @@ const props = withDefaults(
     canGoPrevious?: boolean;
     isOpeningVlc?: boolean;
     isMuted?: boolean;
+    /** Played ranges of the current item; owned and persisted by MediaDisplay. */
+    watchedSegments?: WatchedSegment[];
   }>(),
   {
     canGoPrevious: true,
     currentTime: 0,
     duration: 0,
     isOpeningVlc: false,
+    watchedSegments: () => [],
   },
 );
 
@@ -437,7 +441,6 @@ const toggleTimeDisplay = () => {
 };
 
 const heatmapData = ref<HeatmapData | null>(null);
-const watchedSegments = ref<{ start: number; end: number }[]>([]);
 const isHeatmapLoading = ref(false);
 const heatmapProgress = ref(0);
 let fetchTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -540,10 +543,7 @@ const fetchHeatmap = () => {
     fetchTimeout = null;
   }
 
-  if (!props.currentMediaItem) {
-    watchedSegments.value = [];
-    return;
-  }
+  if (!props.currentMediaItem) return;
 
   const filePath = props.currentMediaItem.path;
   // Images have no progress bar, so their heatmap would never be shown.
@@ -556,19 +556,8 @@ const fetchHeatmap = () => {
     fetchTimeout = null;
     try {
       if (wantsHeatmap) await loadHeatmap(filePath, controller.signal);
-      if (controller.signal.aborted) return;
-
-      // Load watched segments
-      const metaMap = await api.getMetadata([filePath]);
-      const meta = metaMap[filePath];
-      if (meta?.watchedSegments) {
-        const parsed = JSON.parse(meta.watchedSegments);
-        if (Array.isArray(parsed)) {
-          watchedSegments.value = parsed;
-        }
-      }
     } catch (e) {
-      console.warn('Failed to fetch heatmap/metadata', e);
+      console.warn('Failed to fetch heatmap', e);
     }
   }, 1000);
 };
@@ -594,10 +583,6 @@ defineEmits<{
   (e: 'scrub-end'): void;
   (e: 'open-shortcuts'): void;
 }>();
-
-defineExpose({
-  watchedSegments,
-});
 </script>
 
 <style scoped>

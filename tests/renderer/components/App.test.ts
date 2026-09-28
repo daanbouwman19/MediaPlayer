@@ -3,10 +3,11 @@ import {
   it,
   expect,
   beforeEach,
+  afterEach,
   vi,
   type Mock,
 } from 'vite-plus/test';
-import { mount } from '@vue/test-utils';
+import { mount, enableAutoUnmount } from '@vue/test-utils';
 import { nextTick } from 'vue';
 import { setActivePinia } from 'pinia';
 import { createTestingPinia } from '@pinia/testing';
@@ -43,6 +44,10 @@ vi.mock('@/features/player/AmbientBackground.vue', () => ({
     template: '<div class="ambient-background-mock">AmbientBackground</div>',
   },
 }));
+
+// Every mounted App registers a document keydown listener; unmount them so a
+// previous test's App cannot consume the next test's key events.
+enableAutoUnmount(afterEach);
 
 describe('App.vue', () => {
   let navigateMedia: Mock;
@@ -223,6 +228,94 @@ describe('App.vue', () => {
 
     document.body.removeChild(input);
     wrapper.unmount();
+  });
+
+  describe('shortcut guards', () => {
+    const press = (target: EventTarget, init: KeyboardEventInit) => {
+      const event = new KeyboardEvent('keydown', {
+        bubbles: true,
+        cancelable: true,
+        ...init,
+      });
+      target.dispatchEvent(event);
+      return event;
+    };
+
+    it('ignores Ctrl/Cmd/Alt chords such as Ctrl+Z and Cmd+X', async () => {
+      const wrapper = mount(App, { attachTo: document.body });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(
+        press(document.body, { key: 'z', ctrlKey: true }).defaultPrevented,
+      ).toBe(false);
+      expect(
+        press(document.body, { key: 'x', metaKey: true }).defaultPrevented,
+      ).toBe(false);
+      expect(
+        press(document.body, { key: 'x', altKey: true }).defaultPrevented,
+      ).toBe(false);
+      expect(navigateMedia).not.toHaveBeenCalled();
+      wrapper.unmount();
+    });
+
+    it('lets Space activate a focused button or checkbox in grid view', async () => {
+      useUIStore().viewMode = 'grid';
+      const wrapper = mount(App, { attachTo: document.body });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      const tile = document.createElement('button');
+      const checkbox = document.createElement('button');
+      checkbox.setAttribute('role', 'checkbox');
+      document.body.append(tile, checkbox);
+
+      expect(press(tile, { key: ' ' }).defaultPrevented).toBe(false);
+      expect(press(checkbox, { key: ' ' }).defaultPrevented).toBe(false);
+      expect(toggleSlideshowTimer).not.toHaveBeenCalled();
+
+      // Anywhere else Space still toggles the timer.
+      expect(press(document.body, { key: ' ' }).defaultPrevented).toBe(true);
+      expect(toggleSlideshowTimer).toHaveBeenCalledTimes(1);
+
+      tile.remove();
+      checkbox.remove();
+      wrapper.unmount();
+    });
+
+    it('ignores shortcuts while a dialog is open, except "?" to close the shortcuts overlay', async () => {
+      const wrapper = mount(App, { attachTo: document.body });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      press(document.body, { key: '?' });
+      await nextTick();
+      expect(document.querySelector('[aria-modal="true"]')).not.toBeNull();
+
+      press(document.body, { key: 'x' });
+      expect(navigateMedia).not.toHaveBeenCalled();
+
+      press(document.body, { key: '?' });
+      await nextTick();
+      expect(
+        (wrapper.vm as unknown as { isShortcutsModalOpen: boolean })
+          .isShortcutsModalOpen,
+      ).toBe(false);
+      wrapper.unmount();
+    });
+
+    it('does not open the shortcuts overlay over another dialog', async () => {
+      const wrapper = mount(App, { attachTo: document.body });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      const lock = document.createElement('div');
+      lock.setAttribute('aria-modal', 'true');
+      document.body.append(lock);
+
+      press(document.body, { key: '?' });
+      expect(
+        (wrapper.vm as unknown as { isShortcutsModalOpen: boolean })
+          .isShortcutsModalOpen,
+      ).toBe(false);
+
+      lock.remove();
+      wrapper.unmount();
+    });
   });
 
   it('should remove event listener on unmount', async () => {

@@ -10,8 +10,6 @@
         :is-loading="isLoading && !mediaUrl"
         :is-transcoding-loading="isTranscodingLoading"
         :is-buffering="isBuffering"
-        :transcoded-duration="transcodedDuration"
-        :current-transcode-start-time="currentTranscodeStartTime"
         :progress="transcodingProgress"
       />
 
@@ -100,9 +98,9 @@
         {{ error }}
       </p>
 
-      <!-- 4. Unsupported Format Message (Only if not loading/transcoding) -->
+      <!-- 4. Unsupported Format Message (direct play and transcoding both failed) -->
       <div
-        v-else-if="!isVideoSupported && !isImage && !isTranscodingMode"
+        v-else-if="!isVideoSupported && !isImage"
         class="absolute inset-0 flex flex-col items-center justify-center bg-black/80 z-10 p-6 text-center"
       >
         <p class="text-lg md:text-xl font-bold text-red-400 mb-2">
@@ -122,9 +120,8 @@
           {{ isOpeningVlc ? 'Opening...' : 'Open in VLC' }}
         </button>
         <button
-          v-if="!isTranscodingMode"
           class="glass-button px-6 py-3 flex items-center gap-2 mt-2"
-          @click="() => tryTranscoding(0)"
+          @click="() => tryTranscoding()"
         >
           Try Transcoding
         </button>
@@ -132,16 +129,19 @@
 
       <!-- 5. Media Content -->
       <template v-else>
-        <Transition v-if="mediaUrl" name="media-fade" mode="out-in">
+        <!-- The Transition stays mounted and each child requires a URL: on an
+             item change the previous media fades out right away and the new
+             item's player only mounts once its own URL is known. -->
+        <Transition name="media-fade" mode="out-in">
           <img
-            v-if="isImage"
+            v-if="mediaUrl && isImage"
             :key="(currentMediaItem?.path || '') + '-img'"
             :src="mediaUrl"
             :alt="currentMediaItem?.name"
             @error="handleMediaError"
           />
           <VRVideoPlayer
-            v-else-if="isVrMode"
+            v-else-if="mediaUrl && isVrMode"
             ref="vrPlayerRef"
             :key="(currentMediaItem?.path || '') + '-vr'"
             :src="mediaUrl"
@@ -153,27 +153,28 @@
             @update:video-element="handleVideoElementUpdate"
             @play="handleVideoPlay"
             @pause="handleVideoPause"
+            @ended="handleVideoEnded"
+            @error="handleMediaError"
+            @buffering="transcoder.setBuffering"
+            @playing="handleVideoPlaying"
             @loadedmetadata="handleLoadedMetadata"
           />
           <VideoPlayer
-            v-else
+            v-else-if="mediaUrl"
             ref="videoPlayerRef"
             :key="(currentMediaItem?.path || '') + '-video'"
             :src="mediaUrl"
             :poster="posterUrl"
             :is-transcoding-mode="isTranscodingMode"
             :is-controls-visible="isControlsVisible"
-            :transcoded-duration="transcodedDuration"
-            :current-transcode-start-time="currentTranscodeStartTime"
             :is-transcoding-loading="isTranscodingLoading"
             :is-buffering="isBuffering"
             :initial-time="savedCurrentTime"
-            :file-path="currentMediaItem?.path"
             @play="handleVideoPlay"
             @pause="handleVideoPause"
             @ended="handleVideoEnded"
             @error="handleMediaError"
-            @trigger-transcode="() => tryTranscoding(0)"
+            @trigger-transcode="() => tryTranscoding()"
             @buffering="transcoder.setBuffering"
             @playing="handleVideoPlaying"
             @update:video-element="handleVideoElementUpdate"
@@ -186,7 +187,6 @@
 
     <!-- Media Controls -->
     <MediaControls
-      ref="mediaControlsRef"
       class="floating-controls"
       :current-media-item="currentMediaItem"
       :is-playing="isPlaying"
@@ -199,6 +199,7 @@
       :is-muted="isMuted"
       :current-time="currentVideoTime"
       :duration="transcodedDuration || videoElement?.duration || 0"
+      :watched-segments="watchedSegments"
       @previous="handlePrevious"
       @next="handleNext"
       @toggle-play="togglePlay"
@@ -249,6 +250,17 @@ import type VRVideoPlayerType from './VRVideoPlayer.vue';
 const VRVideoPlayer = defineAsyncComponent(() => import('./VRVideoPlayer.vue'));
 import { isMediaFileImage } from '@/utils/mediaUtils';
 import { WATCHED_THRESHOLD } from '@/utils/playbackUtils';
+import {
+  isActivatableTarget,
+  isModalOpen,
+  shouldIgnoreGlobalShortcut,
+} from '@/utils/keyboardUtils';
+import {
+  addWatchedSegment as mergeWatchedSegment,
+  parseWatchedSegments,
+  type WatchedSegment,
+} from '@/utils/watchedSegments';
+import type { MediaFile } from '../../../core/media/types';
 
 defineEmits(['open-shortcuts']);
 const libraryStore = useLibraryStore();
@@ -277,7 +289,6 @@ const {
   isBuffering,
   transcodedDuration,
   transcodingProgress,
-  currentTranscodeStartTime,
   startTranscoding,
   resetTranscoderState,
   stopTranscodingProgressPoll,
@@ -295,6 +306,16 @@ const savedCurrentTime = ref(0);
 const isOpeningVlc = ref(false);
 const isMuted = ref(false);
 const isPlaying = ref(false);
+/** Duration of the current item as stored in the library (0 if unknown). */
+const itemDuration = ref(0);
+/** Time ranges of the current item the user has played (seek bar overlay). */
+const watchedSegments = ref<WatchedSegment[]>([]);
+// Path whose stored segments have been loaded into watchedSegments. Saving
+// replaces the stored list, so nothing is written before that load.
+let segmentsOwnerPath: string | null = null;
+let segmentsDirty = false;
+
+const SEEK_STEP_S = 5;
 
 const posterUrl = computed(() => {
   if (currentMediaItem.value && thumbnailUrlGenerator?.value) {
@@ -345,19 +366,18 @@ const toggleFullscreen = () => {
   }
   if (videoElement.value) {
     if (!document.fullscreenElement) {
-      videoElement.value.requestFullscreen().catch((err) => {
-        console.error(
-          `Error attempting to enable fullscreen mode: ${err.message} (${err.name})`,
-        );
+      videoElement.value.requestFullscreen().catch((err: unknown) => {
+        console.error('Error attempting to enable fullscreen mode:', err);
       });
     } else {
-      document.exitFullscreen();
+      void document.exitFullscreen();
     }
   }
 };
 
-const tryTranscoding = async (startTime = 0, requestId?: number) => {
-  if (!currentMediaItem.value) return;
+const tryTranscoding = async (requestId?: number) => {
+  const item = currentMediaItem.value;
+  if (!item) return;
 
   // Use provided requestId or current one if not provided
   const effectiveRequestId =
@@ -366,10 +386,17 @@ const tryTranscoding = async (startTime = 0, requestId?: number) => {
       : mediaLoader.currentLoadRequestId.value;
 
   try {
-    const url = await startTranscoding(currentMediaItem.value.path, startTime);
+    const url = await startTranscoding(item.path, {
+      knownDuration: itemDuration.value,
+    });
 
     // [SECURITY] Race condition check: only update if this is still the active request
-    if (effectiveRequestId !== mediaLoader.currentLoadRequestId.value) return;
+    if (
+      url === null ||
+      effectiveRequestId !== mediaLoader.currentLoadRequestId.value
+    ) {
+      return;
+    }
 
     mediaUrl.value = url;
     isVideoSupported.value = true;
@@ -386,90 +413,118 @@ const lastPositionUpdate = ref(0);
 const SEEK_DETECTION_THRESHOLD_S = 5;
 const UPDATE_INTERVAL_MS = 5000;
 const POSITION_PERSIST_INTERVAL_MS = 5000;
-const mediaControlsRef = ref<InstanceType<typeof MediaControls> | null>(null);
+
+// Position/segment writes still in flight, by path. Opening a file first
+// waits for its own pending writes, so the metadata read returns what was
+// just saved (e.g. when going back to the previous item).
+const pendingWrites = new Map<string, Promise<unknown>>();
+
+const trackWrite = (filePath: string, write: Promise<void>) => {
+  const all = Promise.all([pendingWrites.get(filePath), write]);
+  pendingWrites.set(filePath, all);
+  void all.finally(() => {
+    if (pendingWrites.get(filePath) === all) pendingWrites.delete(filePath);
+  });
+  return write;
+};
 
 const handleTimeUpdate = (time: number) => {
+  // Until the new item's URL is known only the previous, already reset
+  // player can report a time (e.g. 0 after releasing its source). It is not
+  // the new item's position and must not be saved under its path.
+  if (!mediaUrl.value) return;
   savedCurrentTime.value = time;
 
-  if (!isPlaying.value || !currentMediaItem.value || !mediaControlsRef.value)
-    return;
-
-  const realCurrentTime = time;
+  const item = currentMediaItem.value;
+  if (!isPlaying.value || !item) return;
 
   if (lastTrackedTime.value === -1) {
-    lastTrackedTime.value = realCurrentTime;
+    lastTrackedTime.value = time;
   } else {
-    const delta = Math.abs(realCurrentTime - lastTrackedTime.value);
+    const delta = Math.abs(time - lastTrackedTime.value);
     if (delta > 0 && delta < SEEK_DETECTION_THRESHOLD_S) {
       addWatchedSegment(
-        Math.min(lastTrackedTime.value, realCurrentTime),
-        Math.max(lastTrackedTime.value, realCurrentTime),
+        Math.min(lastTrackedTime.value, time),
+        Math.max(lastTrackedTime.value, time),
       );
     }
-    lastTrackedTime.value = realCurrentTime;
+    lastTrackedTime.value = time;
   }
 
-  if (Date.now() - lastSegmentsUpdate.value > UPDATE_INTERVAL_MS) {
-    persistWatchedSegments();
-    lastSegmentsUpdate.value = Date.now();
+  const now = Date.now();
+  if (now - lastSegmentsUpdate.value > UPDATE_INTERVAL_MS) {
+    lastSegmentsUpdate.value = now;
+    void persistWatchedSegments(item.path);
   }
 
-  if (Date.now() - lastPositionUpdate.value > POSITION_PERSIST_INTERVAL_MS) {
-    persistPlaybackPosition(realCurrentTime);
-    lastPositionUpdate.value = Date.now();
+  if (now - lastPositionUpdate.value > POSITION_PERSIST_INTERVAL_MS) {
+    lastPositionUpdate.value = now;
+    void persistPlaybackPosition(item.path, time);
   }
 };
 
 const addWatchedSegment = (start: number, end: number) => {
-  if (!mediaControlsRef.value) return;
-  const segments = [...mediaControlsRef.value.watchedSegments];
-  segments.push({ start, end });
-
-  segments.sort((a, b) => a.start - b.start);
-  const merged: { start: number; end: number }[] = [];
-  for (const segment of segments) {
-    const last = merged[merged.length - 1];
-    if (last && segment.start <= last.end + 0.5) {
-      last.end = Math.max(last.end, segment.end);
-    } else {
-      merged.push(segment);
-    }
-  }
-
-  mediaControlsRef.value.watchedSegments = merged;
+  watchedSegments.value = mergeWatchedSegment(watchedSegments.value, {
+    start,
+    end,
+  });
+  segmentsDirty = true;
 };
 
-const persistWatchedSegments = async () => {
-  if (!currentMediaItem.value || !mediaControlsRef.value) return;
-  try {
-    await api.updateWatchedSegments(
-      currentMediaItem.value.path,
-      JSON.stringify(mediaControlsRef.value.watchedSegments),
-    );
-  } catch (e) {
-    console.error('Failed to persist segments', e);
+/**
+ * Saves the watched segments of `filePath`. They are only written while they
+ * belong to that file and after its stored segments were loaded, because
+ * the write replaces the stored list.
+ */
+const persistWatchedSegments = (filePath: string): Promise<void> => {
+  if (segmentsOwnerPath !== filePath || !segmentsDirty) {
+    return Promise.resolve();
   }
+  segmentsDirty = false;
+  const json = JSON.stringify(watchedSegments.value);
+  return trackWrite(
+    filePath,
+    (async () => {
+      try {
+        await api.updateWatchedSegments(filePath, json);
+      } catch (e) {
+        console.error('Failed to persist segments', e);
+      }
+    })(),
+  );
 };
 
-const persistPlaybackPosition = async (position: number) => {
-  if (!currentMediaItem.value || isImage.value) return;
-  if (!Number.isFinite(position) || position < 0) return;
-  try {
-    await api.updatePlaybackPosition(currentMediaItem.value.path, position);
-  } catch (e) {
-    console.warn('Failed to persist playback position', e);
+const persistPlaybackPosition = (
+  filePath: string,
+  position: number,
+): Promise<void> => {
+  if (!Number.isFinite(position) || position < 0) return Promise.resolve();
+  return trackWrite(
+    filePath,
+    (async () => {
+      try {
+        await api.updatePlaybackPosition(filePath, position);
+      } catch (e) {
+        console.warn('Failed to persist playback position', e);
+      }
+    })(),
+  );
+};
+
+/** Saves the final position and watched segments of `item` under its own path. */
+const persistItemState = (item: MediaFile) => {
+  void persistWatchedSegments(item.path);
+  if (
+    !isMediaFileImage(item, imageExtensionsSet.value) &&
+    Number.isFinite(savedCurrentTime.value) &&
+    savedCurrentTime.value > 0
+  ) {
+    void persistPlaybackPosition(item.path, savedCurrentTime.value);
   }
 };
 
 onBeforeUnmount(() => {
-  persistWatchedSegments();
-  if (
-    currentMediaItem.value &&
-    !isImage.value &&
-    Number.isFinite(savedCurrentTime.value)
-  ) {
-    persistPlaybackPosition(savedCurrentTime.value);
-  }
+  if (currentMediaItem.value) persistItemState(currentMediaItem.value);
   stopTranscodingProgressPoll();
 });
 
@@ -484,22 +539,40 @@ watch(
       cancelled = true;
     });
 
-    // Persist final position from the previous file before swapping.
-    if (
-      oldItem &&
-      !isMediaFileImage(oldItem, imageExtensionsSet.value) &&
-      Number.isFinite(savedCurrentTime.value) &&
-      savedCurrentTime.value > 0
-    ) {
-      persistPlaybackPosition(savedCurrentTime.value);
+    // Synchronously invalidate the previous item's URL and in-flight load,
+    // so it can neither play under the new item's key nor be applied to it
+    // while the new item's metadata is loading.
+    mediaLoader.cancelPendingLoad();
+
+    // Persist the previous file's final state under its own path, before
+    // any per-item state below is reset for the new item.
+    if (oldItem) persistItemState(oldItem);
+
+    // Finish the old item's playback here: its player unmounts in this flush
+    // (mediaUrl was just cleared), so the 'pause' queued by reset() below is
+    // dropped and handleVideoPause never runs. The position it would persist
+    // is already covered by persistItemState.
+    if (isPlaying.value) {
+      isPlaying.value = false;
+      if (pauseTimerOnPlay.value && !isTimerRunning.value) {
+        resumeSlideshowTimer();
+      }
     }
 
     lastTrackedTime.value = -1;
     lastPositionUpdate.value = 0;
+    lastSegmentsUpdate.value = Date.now();
     savedCurrentTime.value = 0;
+    itemDuration.value = 0;
+    watchedSegments.value = [];
+    segmentsOwnerPath = null;
+    segmentsDirty = false;
     resetTranscoderState();
-    if (videoPlayerRef.value) {
-      videoPlayerRef.value.reset();
+    const activePlayer = isVrMode.value
+      ? vrPlayerRef.value
+      : videoPlayerRef.value;
+    if (activePlayer) {
+      activePlayer.reset();
     } else if (videoElement.value) {
       videoElement.value.pause();
       videoElement.value.removeAttribute('src');
@@ -510,10 +583,18 @@ watch(
       const isVideo = !isMediaFileImage(newItem, imageExtensionsSet.value);
       if (isVideo) {
         try {
+          // Read back what was just saved for this file (e.g. going back).
+          const pending = pendingWrites.get(newItem.path);
+          if (pending) await pending;
+          if (cancelled) return;
           const meta = await api.getMetadata([newItem.path]);
           if (cancelled) return;
           const saved = meta[newItem.path]?.playbackPosition;
-          const duration = meta[newItem.path]?.duration ?? 0;
+          const duration =
+            meta[newItem.path]?.duration ?? newItem.duration ?? 0;
+          if (Number.isFinite(duration) && duration > 0) {
+            itemDuration.value = duration;
+          }
           // Resume only if there's a non-trivial saved position and we
           // haven't crossed the shared watched threshold (which would
           // restart the file from the beginning to match the WATCHED
@@ -525,13 +606,17 @@ watch(
           ) {
             savedCurrentTime.value = saved;
           }
+          watchedSegments.value = parseWatchedSegments(
+            meta[newItem.path]?.watchedSegments,
+          );
+          segmentsOwnerPath = newItem.path;
         } catch (e) {
           console.warn('Failed to load saved playback position', e);
         }
       }
 
       if (cancelled) return;
-      await loadMedia(newItem, (_, reqId) => tryTranscoding(0, reqId));
+      await loadMedia(newItem, (_, reqId) => tryTranscoding(reqId));
       if (cancelled) return;
       if (isImage.value && !isTimerRunning.value) {
         resumeSlideshowTimer();
@@ -560,7 +645,10 @@ const toggleMute = () => {
 
 const handleVideoEnded = () => {
   if (!isLoading.value) {
-    if (isTimerRunning.value) {
+    // With "pause timer on play" the countdown is paused while a video plays,
+    // and the 'pause' fired right before 'ended' has just resumed it: a
+    // running timer then doesn't mean the video is shorter than the timer.
+    if (isTimerRunning.value && !pauseTimerOnPlay.value) {
       // If timer is still running, the video is shorter than the timer duration.
       // We should loop the video until the timer finishes.
       if (videoElement.value) {
@@ -600,21 +688,37 @@ const checkAndPauseTimerIfLongVideo = () => {
   }
 };
 
+// A transcoded file's real duration usually arrives after 'play' and
+// 'loadedmetadata', which only saw the growing live playlist's length.
+// Only re-check while the video is actually playing: startTranscoding sets the
+// known duration before anything plays, and pausing the timer then would stall
+// the slideshow on a stream that never starts (no 'play', so no resuming
+// 'pause'). handleVideoPlay runs the check itself once playback begins.
+watch(transcodedDuration, (duration) => {
+  if (duration > 0 && !isImage.value && isPlaying.value) {
+    checkAndPauseTimerIfLongVideo();
+  }
+});
+
 const handleVideoPause = () => {
   if (!isTimerRunning.value && pauseTimerOnPlay.value && !isLoading.value) {
     resumeSlideshowTimer();
   }
   isPlaying.value = false;
-  if (Number.isFinite(savedCurrentTime.value) && savedCurrentTime.value > 0) {
-    persistPlaybackPosition(savedCurrentTime.value);
+  const item = currentMediaItem.value;
+  if (
+    item &&
+    !isImage.value &&
+    Number.isFinite(savedCurrentTime.value) &&
+    savedCurrentTime.value > 0
+  ) {
+    void persistPlaybackPosition(item.path, savedCurrentTime.value);
     lastPositionUpdate.value = Date.now();
   }
 };
 
 const handleVideoPlaying = () => {
-  isTranscodingLoading.value = false;
-  isBuffering.value = false;
-  stopTranscodingProgressPoll();
+  transcoder.handlePlaybackStarted();
 };
 
 const openInVlc = async () => {
@@ -642,54 +746,61 @@ const toggleVrMode = () => {
 };
 
 const togglePlay = () => {
-  if (videoPlayerRef.value) {
-    videoPlayerRef.value.togglePlay();
+  // In VR mode the VR player owns its own (off-DOM) video element.
+  if (isVrMode.value) {
+    vrPlayerRef.value?.togglePlay();
+    return;
   }
+  videoPlayerRef.value?.togglePlay();
+};
+
+/** Longest position a seek may target (0 while unknown). */
+const getSeekableDuration = (el: HTMLVideoElement) => {
+  if (transcodedDuration.value > 0) return transcodedDuration.value;
+  return Number.isFinite(el.duration) && el.duration > 0 ? el.duration : 0;
+};
+
+/**
+ * Seeks the active player. A transcoded file is one HLS stream with an
+ * absolute timeline from 0, so it is seeked natively as well.
+ */
+const seekTo = (time: number) => {
+  const el = videoElement.value;
+  if (!el || !Number.isFinite(time)) return;
+  const duration = getSeekableDuration(el);
+  el.currentTime = Math.max(0, duration > 0 ? Math.min(time, duration) : time);
+};
+
+const seekBy = (delta: number) => {
+  const el = videoElement.value;
+  if (!el || getSeekableDuration(el) <= 0) return;
+  seekTo(el.currentTime + delta);
 };
 
 const handleGlobalKeydown = (event: KeyboardEvent) => {
-  if (event.code === 'Space') {
-    event.preventDefault();
-    if (isImage.value) {
-      toggleSlideshowTimer();
-    } else {
-      togglePlay();
-    }
-  } else if (event.code === 'ArrowRight') {
-    event.preventDefault();
-    if (isTranscodingMode.value) {
-      if (transcodedDuration.value > 0) {
-        const newTime = Math.min(
-          transcodedDuration.value,
-          savedCurrentTime.value + 5,
-        );
-        tryTranscoding(newTime);
+  // Keys typed into fields, browser chords and anything aimed at an open
+  // dialog (lock screen, settings modals) are not player shortcuts.
+  if (shouldIgnoreGlobalShortcut(event) || isModalOpen()) return;
+
+  switch (event.code) {
+    case 'Space':
+      // A focused button, link or checkbox activates itself on Space.
+      if (isActivatableTarget(event.target)) return;
+      event.preventDefault();
+      if (isImage.value) {
+        toggleSlideshowTimer();
+      } else {
+        togglePlay();
       }
-    } else if (
-      videoElement.value &&
-      Number.isFinite(videoElement.value.duration)
-    ) {
-      videoElement.value.currentTime = Math.min(
-        videoElement.value.duration,
-        videoElement.value.currentTime + 5,
-      );
-    }
-  } else if (event.code === 'ArrowLeft') {
-    event.preventDefault();
-    if (isTranscodingMode.value) {
-      if (transcodedDuration.value > 0) {
-        const newTime = Math.max(0, savedCurrentTime.value - 5);
-        tryTranscoding(newTime);
-      }
-    } else if (
-      videoElement.value &&
-      Number.isFinite(videoElement.value.duration)
-    ) {
-      videoElement.value.currentTime = Math.max(
-        0,
-        videoElement.value.currentTime - 5,
-      );
-    }
+      break;
+    case 'ArrowRight':
+      event.preventDefault();
+      seekBy(SEEK_STEP_S);
+      break;
+    case 'ArrowLeft':
+      event.preventDefault();
+      seekBy(-SEEK_STEP_S);
+      break;
   }
 };
 
@@ -701,11 +812,14 @@ const handleMediaError = () => {
 
   if (!isTranscodingMode.value) {
     console.log('Media playback error, attempting auto-transcode...');
-    tryTranscoding(0);
+    void tryTranscoding();
   } else {
-    error.value = 'Failed to display media file.';
+    // Direct play and the HLS transcode both failed: show the "not
+    // supported" panel, which offers VLC and another transcoding attempt.
     isTranscodingLoading.value = false;
+    isBuffering.value = false;
     stopTranscodingProgressPoll();
+    isVideoSupported.value = false;
   }
 };
 
@@ -718,30 +832,33 @@ const handleNext = () => {
 };
 
 const setRating = async (rating: number) => {
-  if (!currentMediaItem.value) return;
+  const item = currentMediaItem.value;
+  if (!item) return;
 
-  const newRating = currentMediaItem.value.rating === rating ? 0 : rating;
-  currentMediaItem.value.rating = newRating;
+  const previousRating = item.rating;
+  const newRating = previousRating === rating ? 0 : rating;
+  // Optimistic update, rolled back below if saving fails.
+  item.rating = newRating;
 
   try {
-    await api.setRating(currentMediaItem.value.path, newRating);
+    await api.setRating(item.path, newRating);
     if (newRating > 0) {
       toast.success(`Rated ${newRating} stars`);
     } else {
       toast.info('Rating cleared');
     }
   } catch (e) {
+    // Only roll back if no newer rating was applied in the meantime.
+    if (item.rating === newRating) {
+      item.rating = previousRating;
+    }
     console.error('Failed to set rating', e);
     toast.error('Failed to set rating. Please try again.');
   }
 };
 
 const handleSeek = (time: number) => {
-  if (isTranscodingMode.value) {
-    tryTranscoding(time);
-  } else if (videoElement.value) {
-    videoElement.value.currentTime = time;
-  }
+  seekTo(time);
 };
 
 const handleScrubStart = () => {
@@ -757,7 +874,6 @@ defineExpose({
   isTranscodingLoading,
   transcodedDuration,
   currentVideoTime,
-  currentTranscodeStartTime,
   isBuffering,
   videoElement,
   tryTranscoding,

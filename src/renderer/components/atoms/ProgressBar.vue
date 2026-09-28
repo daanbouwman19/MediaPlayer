@@ -1,6 +1,7 @@
 <template>
   <div
-    class="progress-container group relative w-full h-10 md:h-12 flex items-center cursor-pointer touch-none select-none outline-none"
+    ref="containerRef"
+    class="progress-container group relative w-full h-10 md:h-12 flex items-center cursor-pointer touch-none select-none outline-none rounded-md focus-visible:ring-2 focus-visible:ring-white/50"
     data-testid="video-progress-bar"
     role="slider"
     tabindex="0"
@@ -13,6 +14,8 @@
     @touchstart="handleTouchStart"
     @mouseenter="isHovering = true"
     @mouseleave="isHovering = false"
+    @focus="handleFocus"
+    @blur="isFocused = false"
     @keydown="handleKeyDown"
   >
     <!-- Heatmap Canvas (Background & Waveform) -->
@@ -67,6 +70,22 @@ const isHovering = ref(false);
 const isFocused = ref(false);
 const localPreviewTime = ref(0);
 const heatmapCanvas = ref<HTMLCanvasElement | null>(null);
+const containerRef = ref<HTMLElement | null>(null);
+
+/**
+ * Shows the scrubber handle for keyboard focus only; a mouse click also
+ * focuses the slider, but its handle follows hover/drag instead.
+ */
+const handleFocus = (event: FocusEvent) => {
+  const target = event.currentTarget;
+  if (!(target instanceof HTMLElement)) return;
+  try {
+    isFocused.value = target.matches(':focus-visible');
+  } catch {
+    // Engines without :focus-visible support
+    isFocused.value = true;
+  }
+};
 
 // Cache theme colors to avoid getComputedStyle in the draw loop
 const themeColors = ref({
@@ -255,14 +274,20 @@ const progressPercentage = computed(() => {
   return Math.min(100, Math.max(0, (displayTime.value / props.duration) * 100));
 });
 
+/**
+ * Maps the pointer's x position onto the bar. Measured against the bar
+ * itself rather than the event target: while dragging, the window-level
+ * move events target whatever is under the cursor, which may be outside the
+ * bar. Without a usable point (e.g. a touch event with no touches) the last
+ * preview time is kept.
+ */
 const calculateTimeFromEvent = (event: MouseEvent | TouchEvent) => {
-  const container = (event.target as HTMLElement).closest(
-    '.progress-container',
-  );
+  const container = containerRef.value;
   const point = 'touches' in event ? event.touches[0] : event;
-  if (!container || !point) return 0;
+  if (!container || !point) return localPreviewTime.value;
 
   const rect = container.getBoundingClientRect();
+  if (rect.width <= 0) return localPreviewTime.value;
   const offsetX = Math.min(Math.max(0, point.clientX - rect.left), rect.width);
   const percentage = offsetX / rect.width;
 
@@ -271,6 +296,9 @@ const calculateTimeFromEvent = (event: MouseEvent | TouchEvent) => {
 
 const handleInteractionStart = (event: MouseEvent | TouchEvent) => {
   isDragging.value = true;
+  // Baseline for calculateTimeFromEvent's fallback, so an event without a
+  // usable point never reuses a previous drag's preview.
+  localPreviewTime.value = props.currentTime;
   localPreviewTime.value = calculateTimeFromEvent(event);
   emit('scrub-start');
   updateTime(event);

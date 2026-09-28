@@ -248,36 +248,38 @@ describe('MediaControls.vue', () => {
     vi.useRealTimers();
   });
 
-  it('fetches heatmap and metadata after debounce', async () => {
+  it('fetches the heatmap after debounce', async () => {
     vi.useFakeTimers();
     vi.mocked(api.getHeatmap).mockResolvedValue({
       audio: [0.5],
       motion: [0.5],
       points: 1,
     } as any);
-    vi.mocked(api.getMetadata).mockResolvedValue({
-      '/clip.mp4': {
-        watchedSegments: JSON.stringify([{ start: 0, end: 10 }]),
-      } as any,
-    });
     vi.mocked(api.getHeatmapProgress).mockResolvedValue(50);
 
-    const wrapper = mount(MediaControls, { props: videoProps });
+    mount(MediaControls, { props: videoProps });
 
     await vi.advanceTimersByTimeAsync(1100);
 
     expect(api.getHeatmap).toHaveBeenCalledWith('/clip.mp4', 100, {
       signal: expect.any(AbortSignal),
     });
-    expect(api.getMetadata).toHaveBeenCalledWith(['/clip.mp4']);
-
-    await vi.advanceTimersByTimeAsync(2100);
-
-    expect((wrapper.vm as any).watchedSegments).toEqual([
-      { start: 0, end: 10 },
-    ]);
+    // Watched segments are owned (loaded and saved) by MediaDisplay.
+    expect(api.getMetadata).not.toHaveBeenCalled();
 
     vi.useRealTimers();
+  });
+
+  it('draws the watched segments it is given', async () => {
+    const watchedSegments = [{ start: 0, end: 10 }];
+    const wrapper = mount(MediaControls, {
+      props: { ...defaultProps, isImage: false, watchedSegments },
+    });
+    const progressBar = wrapper.findComponent('.progress-bar-mock') as any;
+    expect(progressBar.props('watchedSegments')).toEqual(watchedSegments);
+
+    await wrapper.setProps({ watchedSegments: [] });
+    expect(progressBar.props('watchedSegments')).toEqual([]);
   });
 
   it('cleans up observers and timers on unmount', () => {

@@ -20,7 +20,7 @@
       @waiting="handleWaiting"
       @canplay="handleCanPlay"
       @seeking="handleSeeking"
-      @click="togglePlay"
+      @click="handleVideoClick"
     />
 
     <!-- Pause/Replay Overlay -->
@@ -42,18 +42,21 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onUnmounted, computed, onMounted } from 'vue';
+import { ref, watch, onBeforeUnmount, computed, onMounted } from 'vue';
 import PlayIcon from '@/components/atoms/icons/PlayIcon.vue';
 import RefreshIcon from '@/components/atoms/icons/RefreshIcon.vue';
-import Hls from 'hls.js';
+import {
+  attachHlsSource,
+  isHlsSource,
+  needsHlsJs,
+  type HlsSource,
+} from '@/utils/hlsPlayback';
 
 const props = defineProps<{
   src: string | null;
   poster?: string | undefined;
   isTranscodingMode: boolean;
   isControlsVisible: boolean;
-  transcodedDuration: number;
-  currentTranscodeStartTime: number;
   isTranscodingLoading: boolean;
   isBuffering: boolean;
   initialTime?: number;
@@ -75,11 +78,13 @@ const emit = defineEmits<{
 const videoElement = ref<HTMLVideoElement | null>(null);
 const isPlaying = ref(false);
 const isEnded = ref(false);
-const hlsInstance = ref<Hls | null>(null);
+let hlsSource: HlsSource | null = null;
+// Set once unmounting starts. Releasing the element queues media events
+// (pause, timeupdate at 0...) that must not reach the parent, which by then
+// already tracks the next player.
+let isDisposed = false;
 
-const isHls = computed(
-  () => !!props.src?.includes('.m3u8') && Hls.isSupported(),
-);
+const isHls = computed(() => needsHlsJs(props.src));
 
 const effectiveSrc = computed(() => {
   if (isHls.value) {
@@ -88,95 +93,62 @@ const effectiveSrc = computed(() => {
   return props.src || undefined;
 });
 
+const isAbortError = (err: unknown) =>
+  err instanceof Error && err.name === 'AbortError';
+
 const destroyHls = () => {
-  if (hlsInstance.value) {
+  if (hlsSource) {
     console.log('[VideoPlayer] Destroying HLS instance');
-    hlsInstance.value.destroy();
-    hlsInstance.value = null;
+    hlsSource.destroy();
+    hlsSource = null;
   }
+};
+
+const autoplayHls = () => {
+  // Use a small delay to ensure video element is ready for play()
+  setTimeout(() => {
+    const video = videoElement.value;
+    if (video && video.paused && !isDisposed) {
+      video.play().catch((err: unknown) => {
+        if (!isAbortError(err)) {
+          console.warn('[VideoPlayer] Autoplay failed:', err);
+        }
+      });
+    }
+  }, 0);
 };
 
 const initHls = () => {
   destroyHls();
 
-  if (!props.src || !videoElement.value) return;
+  const video = videoElement.value;
+  const src = props.src;
+  if (!src || !video) return;
 
-  if (isHls.value) {
-    console.log('[VideoPlayer] Initializing HLS for:', props.src);
+  if (needsHlsJs(src)) {
+    console.log('[VideoPlayer] Initializing HLS for:', src);
 
     // Explicitly reset video element to clear any previous error state or source
-    videoElement.value.pause();
-    videoElement.value.removeAttribute('src');
-    videoElement.value.load();
+    video.pause();
+    video.removeAttribute('src');
+    video.load();
 
-    const hls = new Hls({
-      maxBufferLength: 30,
-      maxMaxBufferLength: 60,
-      enableWorker: true,
-      startPosition:
-        props.initialTime && props.initialTime > 0 ? props.initialTime : -1,
-    });
-
-    hlsInstance.value = hls;
-    hls.attachMedia(videoElement.value);
-
-    hls.on(Hls.Events.MEDIA_ATTACHED, () => {
-      console.log('[VideoPlayer] HLS Media attached');
-      if (props.src) {
-        hls.loadSource(props.src);
-      }
-    });
-
-    hls.on(Hls.Events.MANIFEST_PARSED, () => {
-      console.log('[VideoPlayer] HLS Manifest parsed');
-      // Use a small delay to ensure video element is ready for play()
-      setTimeout(() => {
-        if (videoElement.value && videoElement.value.paused) {
-          videoElement.value.play().catch((err) => {
-            if (err.name !== 'AbortError') {
-              console.warn('[VideoPlayer] Autoplay failed:', err);
-            }
-          });
-        }
-      }, 0);
-    });
-
-    hls.on(Hls.Events.LEVEL_LOADED, (_event, data) => {
-      console.log(
-        '[VideoPlayer] HLS Level loaded:',
-        data.details.live ? 'live' : 'vod',
-      );
-    });
-
-    hls.on(Hls.Events.ERROR, (_event, data) => {
-      if (data.fatal) {
-        console.error(
-          '[VideoPlayer] HLS Fatal Error:',
-          data.type,
-          data.details,
-        );
-        switch (data.type) {
-          case Hls.ErrorTypes.NETWORK_ERROR:
-            hls.startLoad();
-            break;
-          case Hls.ErrorTypes.MEDIA_ERROR:
-            hls.recoverMediaError();
-            break;
-          default:
-            destroyHls();
-            emit('error', new Error(`HLS Fatal Error: ${data.details}`));
-            break;
-        }
-      }
+    hlsSource = attachHlsSource(video, src, {
+      startPosition: props.initialTime,
+      onManifestParsed: autoplayHls,
+      onFatalError: (error) => {
+        hlsSource = null;
+        if (!isDisposed) emit('error', error);
+      },
     });
   } else if (
-    props.src.includes('.m3u8') &&
-    videoElement.value.canPlayType('application/vnd.apple.mpegurl')
+    isHlsSource(src) &&
+    video.canPlayType('application/vnd.apple.mpegurl')
   ) {
     console.log('[VideoPlayer] Falling back to native HLS');
-    videoElement.value.src = props.src;
+    video.src = src;
     if (props.initialTime && props.initialTime > 0) {
-      videoElement.value.currentTime = props.initialTime;
+      video.currentTime = props.initialTime;
     }
   }
 };
@@ -184,21 +156,31 @@ const initHls = () => {
 onMounted(() => {
   if (videoElement.value) {
     emit('update:video-element', videoElement.value);
-    if (
-      props.initialTime &&
-      props.initialTime > 0 &&
-      !props.src?.includes('.m3u8')
-    ) {
+    if (props.initialTime && props.initialTime > 0 && !isHlsSource(props.src)) {
       videoElement.value.currentTime = props.initialTime;
     }
     initHls();
   }
 });
 
-onUnmounted(() => {
+onBeforeUnmount(() => {
   destroyHls();
+  emit('update:video-element', null);
+  isDisposed = true;
+  const video = videoElement.value;
+  if (video) {
+    // Release the decoder and the network connection now rather than
+    // whenever the detached element is garbage collected.
+    video.pause();
+    video.removeAttribute('src');
+    video.load();
+  }
 });
 
+// flush: 'post' runs initHls after the DOM patch. With the default 'pre'
+// flush, hls.js would attach its MediaSource (blob: src) first and Vue would
+// then patch :src to undefined, detaching it: a direct-play -> HLS fallback
+// on the same instance would never load.
 watch(
   () => props.src,
   (newSrc, oldSrc) => {
@@ -207,28 +189,38 @@ watch(
     isEnded.value = false;
     initHls();
   },
+  { flush: 'post' },
 );
 
+/** Toggles playback unconditionally (keyboard, control bar, play overlay). */
 const togglePlay = () => {
-  if (!props.isControlsVisible) return;
+  const video = videoElement.value;
+  if (!video) return;
 
-  if (videoElement.value) {
-    if (videoElement.value.paused) {
-      // Don't try to play if no source yet
-      if (!videoElement.value.src && !videoElement.value.srcObject) {
-        console.log('[VideoPlayer] Play ignored: No source attached yet');
-        return;
-      }
-
-      videoElement.value.play()?.catch((err) => {
-        if (err.name !== 'AbortError') {
-          console.error('[VideoPlayer] Play failed:', err);
-        }
-      });
-    } else {
-      videoElement.value.pause();
+  if (video.paused) {
+    // Don't try to play if no source yet
+    if (!video.src && !video.srcObject) {
+      console.log('[VideoPlayer] Play ignored: No source attached yet');
+      return;
     }
+
+    video.play()?.catch((err: unknown) => {
+      if (!isAbortError(err)) {
+        console.error('[VideoPlayer] Play failed:', err);
+      }
+    });
+  } else {
+    video.pause();
   }
+};
+
+/**
+ * A click/tap on the video only toggles playback while the controls are
+ * shown; with hidden controls the first tap just reveals them (App.vue).
+ */
+const handleVideoClick = () => {
+  if (!props.isControlsVisible) return;
+  togglePlay();
 };
 
 const reset = () => {
@@ -241,17 +233,20 @@ const reset = () => {
 };
 
 const handlePlay = () => {
+  if (isDisposed) return;
   isPlaying.value = true;
   isEnded.value = false;
   emit('play');
 };
 
 const handlePause = () => {
+  if (isDisposed) return;
   isPlaying.value = false;
   emit('pause');
 };
 
 const handleEnded = () => {
+  if (isDisposed) return;
   isEnded.value = true;
   isPlaying.value = false;
   emit('ended');
@@ -262,22 +257,27 @@ const handleSeeking = () => {
 };
 
 const handleError = (e: Event) => {
+  if (isDisposed) return;
   emit('error', e);
 };
 
 const handlePlaying = () => {
+  if (isDisposed) return;
   emit('playing');
 };
 
 const handleWaiting = () => {
+  if (isDisposed) return;
   emit('buffering', true);
 };
 
 const handleCanPlay = () => {
+  if (isDisposed) return;
   emit('buffering', false);
 };
 
 const handleLoadedMetadata = (event: Event) => {
+  if (isDisposed) return;
   const video = event.target as HTMLVideoElement;
   emit('loadedmetadata', event);
   if (
@@ -291,16 +291,12 @@ const handleLoadedMetadata = (event: Event) => {
   }
 };
 
+// The HLS stream is one absolute timeline from 0 (one transcode session per
+// file), so the element's currentTime already is the real position.
 const handleTimeUpdate = (event: Event) => {
+  if (isDisposed) return;
   const target = event.target as HTMLVideoElement;
-  const { currentTime } = target;
-  let realCurrentTime = currentTime;
-
-  if (props.isTranscodingMode && props.transcodedDuration > 0) {
-    realCurrentTime = props.currentTranscodeStartTime + currentTime;
-  }
-
-  emit('timeupdate', realCurrentTime);
+  emit('timeupdate', target.currentTime);
 };
 
 defineExpose({

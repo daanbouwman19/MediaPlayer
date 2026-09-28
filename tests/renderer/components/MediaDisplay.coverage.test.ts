@@ -40,10 +40,10 @@ vi.mock('@/features/player/VideoPlayer.vue', () => ({
       'src',
       'isTranscodingMode',
       'isControlsVisible',
-      'transcodedDuration',
-      'currentTranscodeStartTime',
       'isTranscodingLoading',
       'isBuffering',
+      'initialTime',
+      'poster',
     ],
     emits: [
       'update:video-element',
@@ -155,6 +155,7 @@ describe('MediaDisplay Coverage Boost', () => {
       isVideoSupported: ref(true),
       currentLoadRequestId: ref(0),
       loadMedia: vi.fn(),
+      cancelPendingLoad: vi.fn(),
     };
     (useMediaLoader as Mock).mockReturnValue(mockMediaLoader);
 
@@ -164,10 +165,10 @@ describe('MediaDisplay Coverage Boost', () => {
       isBuffering: ref(false),
       transcodedDuration: ref(0),
       transcodingProgress: ref(0),
-      currentTranscodeStartTime: ref(0),
       startTranscoding: vi.fn(),
       resetTranscoderState: vi.fn(),
       stopTranscodingProgressPoll: vi.fn(),
+      handlePlaybackStarted: vi.fn(),
       setBuffering: vi.fn(),
     };
     (useTranscoder as Mock).mockReturnValue(mockTranscoder);
@@ -263,39 +264,77 @@ describe('MediaDisplay Coverage Boost', () => {
     expect(mockTranscoder.setBuffering).toHaveBeenCalledWith(true);
 
     // Playing (clears loading)
-    mockTranscoder.isTranscodingLoading.value = true;
     await videoPlayer.vm.$emit('playing');
-    expect(mockTranscoder.isTranscodingLoading.value).toBe(false);
+    expect(mockTranscoder.handlePlaybackStarted).toHaveBeenCalled();
 
-    // Time update for watched segments
-    const controls = wrapper.findComponent(MediaControls);
-    (controls.vm as any).watchedSegments = [];
+    // Time update for watched segments, drawn by the controls
     await videoPlayer.vm.$emit('play');
     await videoPlayer.vm.$emit('timeupdate', 10);
     await videoPlayer.vm.$emit('timeupdate', 12);
-    expect((controls.vm as any).watchedSegments.length).toBeGreaterThan(0);
+    expect((wrapper.vm as any).watchedSegments).toEqual([
+      { start: 10, end: 12 },
+    ]);
+    const controls = wrapper.findComponent(MediaControls);
+    expect(controls.props('watchedSegments')).toEqual([{ start: 10, end: 12 }]);
+  });
+
+  it('leaves the timer running when a transcode learns its duration but never plays', async () => {
+    usePlaylistStore().currentItem = { path: 'video.mkv' } as any;
+    usePlayerStore().pauseTimerOnPlay = true;
+    usePlayerStore().isTimerRunning = true;
+    mockMediaLoader.mediaUrl.value = 'video-url';
+    const wrapper = mount(MediaDisplay);
+    await flushPromises();
+    mockSlideshow.pauseSlideshowTimer.mockClear();
+
+    // startTranscoding publishes the known (DB) duration synchronously, then fails.
+    mockTranscoder.startTranscoding.mockImplementation(async () => {
+      mockTranscoder.transcodedDuration.value = 7200;
+      throw new Error('HLS failed');
+    });
+    await (wrapper.vm as any).tryTranscoding();
+    await flushPromises();
+    expect(mockSlideshow.pauseSlideshowTimer).not.toHaveBeenCalled();
+
+    // Once it really plays, a later duration update re-runs the check.
+    usePlayerStore().pauseTimerOnPlay = false;
+    mockMediaLoader.error.value = null;
+    await flushPromises();
+    const videoPlayer = wrapper.findComponent(VideoPlayer);
+    await videoPlayer.vm.$emit('play');
+    mockSlideshow.pauseSlideshowTimer.mockClear();
+    mockTranscoder.transcodedDuration.value = 7300;
+    await flushPromises();
+    expect(mockSlideshow.pauseSlideshowTimer).toHaveBeenCalled();
   });
 
   it('handles global keyboard shortcuts', async () => {
     usePlaylistStore().currentItem = { path: 'video.mp4' } as any;
     mockMediaLoader.mediaUrl.value = 'video-url';
-    mount(MediaDisplay);
+    const wrapper = mount(MediaDisplay);
     await flushPromises();
+    const videoEl = (wrapper.vm as any).videoElement;
+    const videoPlayer = wrapper.findComponent(VideoPlayer);
 
     // Space to toggle play
     window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Space' }));
+    expect((videoPlayer.vm as any).togglePlay).toHaveBeenCalled();
 
     // ArrowRight to seek
+    videoEl.currentTime = 20;
     window.dispatchEvent(new KeyboardEvent('keydown', { code: 'ArrowRight' }));
+    expect(videoEl.currentTime).toBe(25);
 
     // ArrowLeft to seek
     window.dispatchEvent(new KeyboardEvent('keydown', { code: 'ArrowLeft' }));
+    expect(videoEl.currentTime).toBe(20);
 
-    // ArrowRight in transcoding mode
+    // ArrowRight in transcoding mode seeks the HLS stream natively
     mockTranscoder.isTranscodingMode.value = true;
     mockTranscoder.transcodedDuration.value = 100;
     window.dispatchEvent(new KeyboardEvent('keydown', { code: 'ArrowRight' }));
-    expect(mockTranscoder.startTranscoding).toHaveBeenCalled();
+    expect(videoEl.currentTime).toBe(25);
+    expect(mockTranscoder.startTranscoding).not.toHaveBeenCalled();
   });
 
   it('handles image slideshow', async () => {
@@ -367,10 +406,15 @@ describe('MediaDisplay Coverage Boost', () => {
     await videoPlayer.vm.$emit('error');
     expect(mockTranscoder.startTranscoding).toHaveBeenCalled();
 
-    // Error in transcoding mode
+    // Error in transcoding mode: both failed, offer VLC
     mockTranscoder.isTranscodingMode.value = true;
+    mockTranscoder.isTranscodingLoading.value = true;
     await videoPlayer.vm.$emit('error');
-    expect(mockMediaLoader.error.value).toBe('Failed to display media file.');
+    expect(mockMediaLoader.isVideoSupported.value).toBe(false);
+    expect(mockTranscoder.isTranscodingLoading.value).toBe(false);
+    expect(mockTranscoder.stopTranscodingProgressPoll).toHaveBeenCalled();
+    expect(wrapper.text()).toContain('Video Format Not Supported');
+    expect(wrapper.text()).toContain('Open in VLC');
   });
 
   it('handles rating error', async () => {
@@ -431,31 +475,59 @@ describe('MediaDisplay Coverage Boost', () => {
     usePlaylistStore().currentItem = { path: 'v.mp4' } as any;
     mockMediaLoader.mediaUrl.value = 'url';
     mockTranscoder.isTranscodingMode.value = true;
-    mockTranscoder.transcodedDuration.value = 100;
+    mockTranscoder.transcodedDuration.value = 150;
 
     const wrapper = mount(MediaDisplay);
     await flushPromises();
+    const videoEl = (wrapper.vm as any).videoElement;
 
-    // Near end
-    (wrapper.vm as any).currentVideoTime = 98;
+    // Near end: clamped to the full (transcoded) duration
+    videoEl.currentTime = 148;
     window.dispatchEvent(new KeyboardEvent('keydown', { code: 'ArrowRight' }));
-    expect(mockTranscoder.startTranscoding).toHaveBeenCalledWith('v.mp4', 100);
+    expect(videoEl.currentTime).toBe(150);
 
     // Near start
-    (wrapper.vm as any).currentVideoTime = 2;
+    videoEl.currentTime = 2;
     window.dispatchEvent(new KeyboardEvent('keydown', { code: 'ArrowLeft' }));
-    expect(mockTranscoder.startTranscoding).toHaveBeenCalledWith('v.mp4', 0);
+    expect(videoEl.currentTime).toBe(0);
+    expect(mockTranscoder.startTranscoding).not.toHaveBeenCalled();
+  });
+
+  it('does not seek with the arrow keys while the duration is unknown', async () => {
+    usePlaylistStore().currentItem = { path: 'v.mp4' } as any;
+    mockMediaLoader.mediaUrl.value = 'url';
+    const wrapper = mount(MediaDisplay);
+    await flushPromises();
+    const videoEl = (wrapper.vm as any).videoElement;
+    videoEl.duration = Number.NaN;
+    videoEl.currentTime = 7;
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'ArrowRight' }));
+    expect(videoEl.currentTime).toBe(7);
+
+    // A pointer seek still works (clamped at 0).
+    (wrapper.vm as any).handleSeek(-3);
+    expect(videoEl.currentTime).toBe(0);
+    (wrapper.vm as any).handleSeek(Number.NaN);
+    expect(videoEl.currentTime).toBe(0);
   });
 
   it('handles persistWatchedSegments error', async () => {
-    usePlaylistStore().currentItem = { path: 'v.mp4' } as any;
+    (api.getMetadata as Mock).mockResolvedValue({});
+    usePlaylistStore().currentItem = { name: 'v.mp4', path: 'v.mp4' } as any;
+    mockMediaLoader.mediaUrl.value = 'url';
     const wrapper = mount(MediaDisplay);
     await flushPromises();
 
     (api.updateWatchedSegments as Mock).mockRejectedValue(new Error('Fail'));
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    await (wrapper.vm as any).persistWatchedSegments();
+    (wrapper.vm as any).addWatchedSegment(1, 2);
+    await (wrapper.vm as any).persistWatchedSegments('v.mp4');
+    expect(api.updateWatchedSegments).toHaveBeenCalledWith(
+      'v.mp4',
+      JSON.stringify([{ start: 1, end: 2 }]),
+    );
     expect(consoleSpy).toHaveBeenCalled();
     consoleSpy.mockRestore();
   });
@@ -523,16 +595,17 @@ describe('MediaDisplay Coverage Boost', () => {
       new Error('boom'),
     );
     const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    await (wrapper.vm as any).persistPlaybackPosition(20);
+    await (wrapper.vm as any).persistPlaybackPosition('v.mp4', 20);
     expect(consoleSpy).toHaveBeenCalled();
     consoleSpy.mockRestore();
   });
 
-  it('persistPlaybackPosition is a no-op when no current item', async () => {
+  it('does not persist a position on pause when there is no current item', async () => {
     usePlaylistStore().currentItem = null;
     const wrapper = mount(MediaDisplay);
     await flushPromises();
-    await (wrapper.vm as any).persistPlaybackPosition(15);
+    (wrapper.vm as any).savedCurrentTime = 15;
+    (wrapper.vm as any).handleVideoPause();
     expect(api.updatePlaybackPosition).not.toHaveBeenCalled();
   });
 
@@ -541,8 +614,8 @@ describe('MediaDisplay Coverage Boost', () => {
     const wrapper = mount(MediaDisplay);
     await flushPromises();
     (api.updatePlaybackPosition as Mock).mockClear();
-    await (wrapper.vm as any).persistPlaybackPosition(Number.NaN);
-    await (wrapper.vm as any).persistPlaybackPosition(-1);
+    await (wrapper.vm as any).persistPlaybackPosition('v.mp4', Number.NaN);
+    await (wrapper.vm as any).persistPlaybackPosition('v.mp4', -1);
     expect(api.updatePlaybackPosition).not.toHaveBeenCalled();
   });
 
@@ -567,15 +640,11 @@ describe('MediaDisplay Coverage Boost', () => {
     const wrapper = mount(MediaDisplay);
     await flushPromises();
 
-    mockTranscoder.isTranscodingLoading.value = true;
-    mockTranscoder.isBuffering.value = true;
-
     const videoPlayer = wrapper.findComponent(VideoPlayer);
     await videoPlayer.vm.$emit('playing');
 
-    expect(mockTranscoder.isTranscodingLoading.value).toBe(false);
-    expect(mockTranscoder.isBuffering.value).toBe(false);
-    expect(mockTranscoder.stopTranscodingProgressPoll).toHaveBeenCalled();
+    // The transcoder clears its overlay and decides when to stop polling.
+    expect(mockTranscoder.handlePlaybackStarted).toHaveBeenCalledTimes(1);
   });
 
   it('handles image media error', async () => {
@@ -604,19 +673,18 @@ describe('MediaDisplay Coverage Boost', () => {
     const wrapper = mount(MediaDisplay);
     await flushPromises();
 
-    const controls = wrapper.findComponent(MediaControls);
-    (controls.vm as any).watchedSegments = [{ start: 0, end: 10 }];
+    (wrapper.vm as any).watchedSegments = [{ start: 0, end: 10 }];
 
     // Add overlapping segment
     (wrapper.vm as any).addWatchedSegment(8, 15);
-    expect((controls.vm as any).watchedSegments[0]).toEqual({
+    expect((wrapper.vm as any).watchedSegments[0]).toEqual({
       start: 0,
       end: 15,
     });
 
     // Add non-overlapping segment
     (wrapper.vm as any).addWatchedSegment(20, 30);
-    expect((controls.vm as any).watchedSegments.length).toBe(2);
+    expect((wrapper.vm as any).watchedSegments.length).toBe(2);
   });
 
   it('handles other keys in global keydown', () => {
@@ -635,12 +703,26 @@ describe('MediaDisplay Coverage Boost', () => {
     expect(mockTranscoder.setBuffering).toHaveBeenCalledWith(false);
   });
 
-  it('handles time update without controls ref', async () => {
+  it('only tracks the time while paused', async () => {
     usePlaylistStore().currentItem = { path: 'v.mp4' } as any;
     const wrapper = mount(MediaDisplay);
-    (wrapper.vm as any).mediaControlsRef = null;
-    await (wrapper.vm as any).handleTimeUpdate(10);
-    // Should return early and not crash
+    await flushPromises();
+    mockMediaLoader.mediaUrl.value = 'url';
+    (wrapper.vm as any).handleTimeUpdate(10);
+    (wrapper.vm as any).handleTimeUpdate(12);
+    expect((wrapper.vm as any).savedCurrentTime).toBe(12);
+    expect((wrapper.vm as any).watchedSegments).toEqual([]);
+  });
+
+  it('ignores time updates until the current item has a URL', async () => {
+    usePlaylistStore().currentItem = { path: 'v.mp4' } as any;
+    const wrapper = mount(MediaDisplay);
+    await flushPromises();
+    expect(mockMediaLoader.mediaUrl.value).toBeNull();
+    // e.g. the previous, already released player reporting 0
+    (wrapper.vm as any).handleTimeUpdate(7);
+    expect((wrapper.vm as any).savedCurrentTime).toBe(0);
+    expect(api.updatePlaybackPosition).not.toHaveBeenCalled();
   });
 
   it('toggles play on space key when video player is not ready', () => {

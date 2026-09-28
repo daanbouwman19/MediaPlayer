@@ -31,48 +31,61 @@ const canvas = ref<HTMLCanvasElement | null>(null);
 const mediaUrl = ref<string | null>(null);
 const isImage = ref(false);
 let animationFrameId: number | null = null;
+// Bumped on every item change; async work for an older item compares its
+// captured value and drops its result.
+let loadGeneration = 0;
+
+/** Canvas size: a tenth of the window, low res for performance & blur. */
+const getTargetSize = () => ({
+  width: Math.floor(window.innerWidth / 10),
+  height: Math.floor(window.innerHeight / 10),
+});
 
 /**
  * Loads the media URL for the background.
  * Cancels any existing animation loop before starting a new one.
  */
 const loadMedia = async () => {
+  const generation = ++loadGeneration;
   if (animationFrameId) {
     cancelAnimationFrame(animationFrameId);
     animationFrameId = null;
   }
 
-  if (!currentMediaItem.value) {
+  const item = currentMediaItem.value;
+  if (!item) {
     mediaUrl.value = null;
     return;
   }
 
+  const ext = item.path.slice(item.path.lastIndexOf('.')).toLowerCase();
+  isImage.value = supportedExtensions.value.images.includes(ext);
+
+  // Videos are drawn frame by frame from the player's own element; no URL
+  // (and, in Electron, no data URL built over IPC) is needed for them.
+  if (!isImage.value) {
+    mediaUrl.value = null;
+    startVideoLoop();
+    return;
+  }
+
   try {
-    const result = await api.loadFileAsDataURL(currentMediaItem.value.path);
+    const result = await api.loadFileAsDataURL(item.path);
+    if (generation !== loadGeneration) return;
 
     if (
       (result.type === 'data-url' || result.type === 'http-url') &&
       result.url
     ) {
       mediaUrl.value = result.url;
-
-      const ext = currentMediaItem.value.path
-        .slice(currentMediaItem.value.path.lastIndexOf('.'))
-        .toLowerCase();
-      isImage.value = supportedExtensions.value.images.includes(ext);
-
-      if (isImage.value) {
-        drawImageToCanvas();
-      } else {
-        startVideoLoop();
-      }
+      drawImageToCanvas(generation);
     }
   } catch (err) {
     console.error('Failed to load background media:', err);
   }
 };
 
-const drawImageToCanvas = () => {
+const drawImageToCanvas = (generation: number) => {
   if (!canvas.value || !mediaUrl.value) return;
   const ctx = canvas.value.getContext('2d');
   if (!ctx) return;
@@ -80,10 +93,11 @@ const drawImageToCanvas = () => {
   const img = new Image();
   img.src = mediaUrl.value;
   img.onload = () => {
-    if (!canvas.value) return;
-    canvas.value.width = window.innerWidth / 10; // Low res for performance & blur
-    canvas.value.height = window.innerHeight / 10;
-    ctx.drawImage(img, 0, 0, canvas.value.width, canvas.value.height);
+    if (!canvas.value || generation !== loadGeneration) return;
+    const { width, height } = getTargetSize();
+    canvas.value.width = width;
+    canvas.value.height = height;
+    ctx.drawImage(img, 0, 0, width, height);
   };
 };
 
@@ -100,9 +114,12 @@ const startVideoLoop = () => {
     ) {
       const ctx = canvas.value.getContext('2d');
       if (ctx) {
-        if (canvas.value.width !== window.innerWidth / 10) {
-          canvas.value.width = window.innerWidth / 10;
-          canvas.value.height = window.innerHeight / 10;
+        // Canvas dimensions are integers: compare against the floored target
+        // size, or every frame would reassign (and clear) the bitmap.
+        const { width, height } = getTargetSize();
+        if (canvas.value.width !== width || canvas.value.height !== height) {
+          canvas.value.width = width;
+          canvas.value.height = height;
         }
         try {
           ctx.drawImage(
@@ -126,12 +143,13 @@ const startVideoLoop = () => {
 watch(
   currentMediaItem,
   () => {
-    loadMedia();
+    void loadMedia();
   },
   { immediate: true },
 );
 
 onUnmounted(() => {
+  loadGeneration++;
   if (animationFrameId) cancelAnimationFrame(animationFrameId);
 });
 </script>

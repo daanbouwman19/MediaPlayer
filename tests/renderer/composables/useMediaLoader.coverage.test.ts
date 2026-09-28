@@ -59,6 +59,43 @@ describe('useMediaLoader Coverage Boost', () => {
     expect(error.value).toBeNull();
   });
 
+  it('cancelPendingLoad drops the previous URL and invalidates in-flight loads', async () => {
+    const {
+      loadMedia,
+      cancelPendingLoad,
+      mediaUrl,
+      error,
+      isLoading,
+      isVideoSupported,
+      currentLoadRequestId,
+    } = useMediaLoader();
+    await loadMedia({ name: 'a.mp4', path: 'a.mp4' } as any, vi.fn());
+    expect(mediaUrl.value).toBe('http://media/a.mp4');
+    error.value = 'old error';
+    isVideoSupported.value = false;
+
+    // A legacy file whose transcode request is still pending...
+    let finishTranscode!: () => void;
+    const pending = loadMedia(
+      { name: 'b.mkv', path: 'b.mkv' } as any,
+      () => new Promise<void>((resolve) => (finishTranscode = resolve)),
+    );
+    const staleRequestId = currentLoadRequestId.value;
+    expect(isLoading.value).toBe(true);
+
+    // ...is superseded by an item change.
+    cancelPendingLoad();
+    expect(currentLoadRequestId.value).toBe(staleRequestId + 1);
+    expect(mediaUrl.value).toBeNull();
+    expect(error.value).toBeNull();
+    expect(isVideoSupported.value).toBe(true);
+    expect(isLoading.value).toBe(false);
+
+    finishTranscode();
+    await pending;
+    expect(isLoading.value).toBe(false);
+  });
+
   it('ignores stale results after transcode request', async () => {
     const { loadMedia, isLoading, currentLoadRequestId } = useMediaLoader();
     const item = { name: 'test.mkv', path: 'test.mkv' } as any;
