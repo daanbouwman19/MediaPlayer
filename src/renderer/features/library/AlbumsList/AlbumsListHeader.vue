@@ -30,7 +30,7 @@
         class="p-2 text-muted hover:text-accent hover:bg-black/5 rounded-md transition-colors"
         title="Privacy"
         aria-label="Privacy settings"
-        @click="isPrivacyModalVisible = true"
+        @click="openPrivacySettings"
       >
         <LockIcon class="w-5 h-5" />
       </button>
@@ -133,6 +133,10 @@ onBeforeUnmount(() => {
 
 const openModal = () => {
   isSourcesModalVisible.value = true;
+};
+
+const openPrivacySettings = () => {
+  isPrivacyModalVisible.value = true;
 };
 
 const openSmartPlaylistModal = () => {
