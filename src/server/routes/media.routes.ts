@@ -181,10 +181,11 @@ export function createMediaRoutes({
   );
 
   // Watched-progress telemetry (saved every few seconds while playing), so it
-  // uses the lenient read limiter rather than the strict write limiter.
+  // shares the telemetry budget with view/position saves rather than using
+  // the strict write limiter or eating into the read budget.
   router.post(
     '/api/media/watched-segments',
-    readLimiter,
+    telemetryLimiter,
     asyncHandler(async (req, res) => {
       const { filePath, segmentsJson } = req.body as {
         filePath?: unknown;

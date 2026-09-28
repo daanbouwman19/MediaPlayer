@@ -70,8 +70,10 @@ describe('media metadata routes', () => {
         '/media/movie.mp4',
         segmentsJson,
       );
-      // Saved every few seconds: must not consume the strict write budget.
-      expect(limiters.readLimiter).toHaveBeenCalled();
+      // Saved every few seconds: uses the telemetry budget, not the strict
+      // write budget or the read budget shared with browsing.
+      expect(limiters.telemetryLimiter).toHaveBeenCalled();
+      expect(limiters.readLimiter).not.toHaveBeenCalled();
       expect(limiters.writeLimiter).not.toHaveBeenCalled();
     });
 

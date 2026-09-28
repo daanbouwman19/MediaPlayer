@@ -68,4 +68,37 @@ describe('MediaRepository.cacheAlbums auth-cache invalidation', () => {
     await expect(repo.cacheAlbums([])).rejects.toThrow('Operation timed out');
     expect(spy).toHaveBeenCalledTimes(1);
   });
+
+  it('does not cache a Drive authorization resolved across the scan write', async () => {
+    const drivePath = 'gdrive://file-1';
+    let resolveLookup: ((value: Record<string, unknown>) => void) | undefined;
+    let inLibrary = true;
+    mocks.WorkerClientInstance.sendMessage.mockImplementation(
+      (type: string) => {
+        if (type === 'getMediaDirectories') return Promise.resolve([]);
+        if (type === 'getMetadata') {
+          if (!resolveLookup) {
+            // The first lookup is held open while the scan runs.
+            return new Promise((resolve) => (resolveLookup = resolve));
+          }
+          return Promise.resolve(inLibrary ? { [drivePath]: {} } : {});
+        }
+        return Promise.resolve(undefined);
+      },
+    );
+    security.clearAuthCache();
+
+    const inFlight = security.authorizeFilePath(drivePath);
+    await vi.waitFor(() => expect(resolveLookup).toBeDefined());
+    // The scan demotes the file while the lookup is still running.
+    inLibrary = false;
+    await repo.cacheAlbums([]);
+    resolveLookup?.({ [drivePath]: {} });
+    expect((await inFlight).isAllowed).toBe(true);
+
+    // The stale "allowed" decision was not cached: the next request re-checks.
+    expect((await security.authorizeFilePath(drivePath)).isAllowed).toBe(false);
+    mocks.WorkerClientInstance.sendMessage.mockReset();
+    mocks.WorkerClientInstance.sendMessage.mockResolvedValue(undefined);
+  });
 });
