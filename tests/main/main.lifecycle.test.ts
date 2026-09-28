@@ -105,6 +105,9 @@ vi.mock('../../src/infrastructure/drive-cache-manager', () => ({
   cleanupDriveCacheManager: vi.fn(),
   initializeDriveCacheManager: vi.fn(() => ({ on: vi.fn() })),
 }));
+vi.mock('../../src/main/lock-triggers', () => ({
+  registerLockTriggers: vi.fn(),
+}));
 vi.mock('../../src/main/ipc/auth-controller', () => ({
   registerAuthHandlers: vi.fn(),
 }));

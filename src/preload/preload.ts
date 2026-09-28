@@ -24,6 +24,7 @@ import type {
   DriveCacheProgressEvent,
   DriveCacheStatus,
 } from '../shared/ipc/media.contract';
+import type { PinUnlockResult } from '../shared/ipc/auth.contract';
 
 export interface LoadResult {
   type: 'data-url' | 'http-url' | 'error';
@@ -133,6 +134,18 @@ export interface ElectronAPI {
 
   // Theme
   setTheme: (theme: string) => void;
+
+  // App lock (optional PIN)
+  getLockStatus: () => Promise<
+    IpcResult<{ enabled: boolean; isAuthenticated: boolean }>
+  >;
+  unlock: (pin: string) => Promise<IpcResult<PinUnlockResult>>;
+  lock: () => Promise<IpcResult<void>>;
+  setPin: (pin: string) => Promise<IpcResult<void>>;
+  clearPin: () => Promise<IpcResult<void>>;
+  minimizeWindow: () => void;
+  /** The OS session locked or suspended; returns an unsubscribe function. */
+  onLockRequest: (callback: () => void) => () => void;
 
   // Transcode Jobs
   addTranscodeJobs: (filePaths: string[]) => Promise<IpcResult<void>>;
@@ -284,6 +297,20 @@ const api: ElectronAPI = {
 
   setTheme: (theme: string) =>
     ipcRenderer.send(IPC_CHANNELS.THEME_CHANGED, theme),
+
+  getLockStatus: () => ipcRenderer.invoke(IPC_CHANNELS.AUTH_LOCK_STATUS),
+  unlock: (pin: string) => ipcRenderer.invoke(IPC_CHANNELS.AUTH_UNLOCK, pin),
+  lock: () => ipcRenderer.invoke(IPC_CHANNELS.AUTH_LOCK),
+  setPin: (pin: string) => ipcRenderer.invoke(IPC_CHANNELS.AUTH_SET_PIN, pin),
+  clearPin: () => ipcRenderer.invoke(IPC_CHANNELS.AUTH_CLEAR_PIN),
+  minimizeWindow: () => ipcRenderer.send(IPC_CHANNELS.MINIMIZE_WINDOW),
+  onLockRequest: (callback) => {
+    const listener = () => callback();
+    ipcRenderer.on(IPC_CHANNELS.LOCK_REQUEST, listener);
+    return () => {
+      ipcRenderer.removeListener(IPC_CHANNELS.LOCK_REQUEST, listener);
+    };
+  },
 
   addTranscodeJobs: (filePaths: string[]) =>
     ipcRenderer.invoke(IPC_CHANNELS.TRANSCODE_JOB_ADD, filePaths),

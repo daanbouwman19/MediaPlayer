@@ -11,8 +11,31 @@ import { getDriveFolderInfo } from '../../infrastructure/google-drive-service';
 import { getGoogleRedirectUri } from '../../infrastructure/google-secrets';
 import { addMediaDirectory } from '../../core/database/database';
 import { handleIpc } from '../utils/ipc-helper';
+import {
+  clearAppPin,
+  getAppLockStatus,
+  lockApp,
+  setAppPin,
+  unlockApp,
+} from '../app-lock';
 
 export function registerAuthHandlers() {
+  handleIpc(IPC_CHANNELS.AUTH_LOCK_STATUS, () => getAppLockStatus());
+
+  handleIpc(IPC_CHANNELS.AUTH_UNLOCK, (_event: IpcMainInvokeEvent, pin) =>
+    unlockApp(pin),
+  );
+
+  handleIpc(IPC_CHANNELS.AUTH_LOCK, () => {
+    lockApp();
+  });
+
+  handleIpc(IPC_CHANNELS.AUTH_SET_PIN, (_event: IpcMainInvokeEvent, pin) =>
+    setAppPin(pin),
+  );
+
+  handleIpc(IPC_CHANNELS.AUTH_CLEAR_PIN, () => clearAppPin());
+
   handleIpc(IPC_CHANNELS.AUTH_GOOGLE_DRIVE_STATUS, async () => {
     return await checkGoogleDriveAuth();
   });

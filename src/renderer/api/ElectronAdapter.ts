@@ -1,4 +1,5 @@
 import { IMediaBackend, LoadResult, AuthStatus } from './types';
+import { HttpError } from './http-error';
 import type {
   Album,
   MediaDirectory,
@@ -67,13 +68,41 @@ export class ElectronAdapter implements IMediaBackend {
     throw new Error(result.error);
   }
 
-  // Global Password Lock (Not used in Electron)
+  // Optional PIN lock, kept by the main process.
+  readonly supportsLocalPin = true;
+
   async getLockStatus(): Promise<AuthStatus> {
-    return { enabled: false, isAuthenticated: true };
+    return this.invoke(this.bridge.getLockStatus());
   }
 
-  async unlock(): Promise<boolean> {
-    return true;
+  async unlock(pin: string): Promise<boolean> {
+    const result = await this.invoke(this.bridge.unlock(pin));
+    if (result === 'rateLimited') {
+      // Same signal the web backend gives, so the lock screen treats both
+      // modes alike.
+      throw new HttpError(429, 'Too many attempts');
+    }
+    return result === 'ok';
+  }
+
+  async lock(): Promise<void> {
+    return this.invoke(this.bridge.lock());
+  }
+
+  async setPin(pin: string): Promise<void> {
+    return this.invoke(this.bridge.setPin(pin));
+  }
+
+  async clearPin(): Promise<void> {
+    return this.invoke(this.bridge.clearPin());
+  }
+
+  minimizeWindow(): void {
+    this.bridge.minimizeWindow();
+  }
+
+  onLockRequest(callback: () => void): () => void {
+    return this.bridge.onLockRequest(callback);
   }
 
   async loadFileAsDataURL(filePath: string): Promise<LoadResult> {

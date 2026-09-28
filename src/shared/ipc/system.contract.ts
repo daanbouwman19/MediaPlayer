@@ -13,6 +13,10 @@ export const SYSTEM_IPC_CHANNELS = {
   LIST_DIRECTORY: 'list-directory',
   GET_PARENT_DIRECTORY: 'get-parent-directory',
   THEME_CHANGED: 'theme-changed',
+  // One-way: renderer asks main to minimize the window (panic key).
+  MINIMIZE_WINDOW: 'system:minimize-window',
+  // One-way: main tells the renderer to lock (OS lock screen / suspend).
+  LOCK_REQUEST: 'system:lock-request',
 } as const;
 
 export interface SystemIpcContract {

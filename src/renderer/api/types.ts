@@ -25,9 +25,26 @@ export interface AuthStatus {
 }
 
 export interface IMediaBackend {
-  // Global Password Lock
+  // App lock: GLOBAL_PASSWORD in web mode, an optional PIN on desktop.
   getLockStatus(): Promise<AuthStatus>;
+  /**
+   * Resolves false for a wrong password. Rejects with an `HttpError` status
+   * 429 when too many attempts were made.
+   */
   unlock(password: string): Promise<boolean>;
+  /** Ends the unlocked session so the password is needed again. */
+  lock(): Promise<void>;
+  /** Whether the PIN can be set from the app (desktop only). */
+  readonly supportsLocalPin: boolean;
+  setPin(pin: string): Promise<void>;
+  clearPin(): Promise<void>;
+  /** Minimizes the app window; a no-op in the browser. */
+  minimizeWindow(): void;
+  /**
+   * Subscribes to lock requests from the OS (session lock, suspend);
+   * returns the unsubscriber. Never fires in the browser.
+   */
+  onLockRequest(callback: () => void): () => void;
 
   loadFileAsDataURL(filePath: string): Promise<LoadResult>;
   recordMediaView(filePath: string): Promise<void>;

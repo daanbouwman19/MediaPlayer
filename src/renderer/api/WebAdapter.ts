@@ -38,6 +38,31 @@ export class WebAdapter implements IMediaBackend {
     }
   }
 
+  async lock(): Promise<void> {
+    await this.request<{ success: boolean }>('/api/auth/lock', {
+      method: 'POST',
+    });
+  }
+
+  // The web password comes from the server's GLOBAL_PASSWORD setting.
+  readonly supportsLocalPin = false;
+
+  async setPin(): Promise<void> {
+    throw new Error('Set GLOBAL_PASSWORD on the server to change the password');
+  }
+
+  async clearPin(): Promise<void> {
+    throw new Error('Set GLOBAL_PASSWORD on the server to change the password');
+  }
+
+  minimizeWindow(): void {
+    // Browsers don't let a page minimize its window.
+  }
+
+  onLockRequest(): () => void {
+    return () => {};
+  }
+
   private async request<T>(
     url: string,
     options?: RequestInit & { responseType?: 'json' | 'text' },

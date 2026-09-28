@@ -33,7 +33,41 @@ vi.mock('../../../src/core/database/database', () => ({
   addMediaDirectory: vi.fn(),
 }));
 
+vi.mock('../../../src/main/app-lock', () => ({
+  getAppLockStatus: vi.fn(async () => ({
+    enabled: true,
+    isAuthenticated: false,
+  })),
+  unlockApp: vi.fn(async () => 'ok'),
+  lockApp: vi.fn(),
+  setAppPin: vi.fn(async () => undefined),
+  clearAppPin: vi.fn(async () => undefined),
+}));
+
 describe('auth-controller', () => {
+  describe('app lock handlers', () => {
+    const getHandler = (channel: string) =>
+      (handleIpc as Mock).mock.calls.find((c) => c[0] === channel)![1];
+
+    it('delegates lock status, unlock, lock and PIN changes', async () => {
+      const lock = await import('../../../src/main/app-lock');
+      registerAuthHandlers();
+      await expect(
+        getHandler(IPC_CHANNELS.AUTH_LOCK_STATUS)({}),
+      ).resolves.toEqual({ enabled: true, isAuthenticated: false });
+      await expect(
+        getHandler(IPC_CHANNELS.AUTH_UNLOCK)({}, '1234'),
+      ).resolves.toBe('ok');
+      expect(lock.unlockApp).toHaveBeenCalledWith('1234');
+      getHandler(IPC_CHANNELS.AUTH_LOCK)({});
+      expect(lock.lockApp).toHaveBeenCalled();
+      await getHandler(IPC_CHANNELS.AUTH_SET_PIN)({}, '5678');
+      expect(lock.setAppPin).toHaveBeenCalledWith('5678');
+      await getHandler(IPC_CHANNELS.AUTH_CLEAR_PIN)({});
+      expect(lock.clearAppPin).toHaveBeenCalled();
+    });
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
   });

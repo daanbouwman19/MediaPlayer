@@ -123,6 +123,10 @@ export const useLibraryStore = defineStore('library', () => {
     }
   };
 
+  // Whether loadInitialData has succeeded once, so an unlock after a
+  // re-lock doesn't reload the whole library.
+  const hasLoadedInitialData = ref(false);
+
   const loadInitialData = async () => {
     try {
       const [albums, directories, playlists, extensions, mediaGen, thumbGen] =
@@ -141,6 +145,7 @@ export const useLibraryStore = defineStore('library', () => {
       supportedExtensions.value = extensions;
       mediaUrlGenerator.value = mediaGen;
       thumbnailUrlGenerator.value = thumbGen;
+      hasLoadedInitialData.value = true;
 
       const savedSelection = localStorage.getItem('albumSelection');
       if (savedSelection) {
@@ -185,6 +190,7 @@ export const useLibraryStore = defineStore('library', () => {
     thumbnailUrlGenerator,
     imageExtensionsSet,
     videoExtensionsSet,
+    hasLoadedInitialData,
     loadInitialData,
     selectAllAlbumsRecursively,
     fetchHistory,

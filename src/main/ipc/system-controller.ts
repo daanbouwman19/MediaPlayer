@@ -4,6 +4,7 @@ import {
   dialog,
   ipcMain,
   nativeTheme,
+  BrowserWindow,
 } from 'electron';
 import { IPC_CHANNELS } from '../../shared/ipc-channels';
 import {
@@ -25,6 +26,7 @@ import {
   resolveMediaSourceDirectory,
 } from '../../core/media/file-system';
 import { handleIpc } from '../utils/ipc-helper';
+import { isTrustedIpcSender } from '../renderer-security';
 import { assertNoSourceOverlap } from '../../core/media/utils/source-paths';
 
 export function registerSystemHandlers() {
@@ -129,6 +131,11 @@ export function registerSystemHandlers() {
       return getParentDirectory(targetPath);
     },
   );
+
+  ipcMain.on(IPC_CHANNELS.MINIMIZE_WINDOW, (event) => {
+    if (!isTrustedIpcSender(event)) return;
+    BrowserWindow.fromWebContents(event.sender)?.minimize();
+  });
 
   ipcMain.on(IPC_CHANNELS.THEME_CHANGED, (_event, theme: string) => {
     nativeTheme.themeSource =
