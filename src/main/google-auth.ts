@@ -1,6 +1,7 @@
 import type { OAuth2Client, Credentials } from 'google-auth-library';
 import { google } from 'googleapis';
 import crypto from 'crypto';
+import { isMainThread } from 'worker_threads';
 import {
   getGoogleClientId,
   getGoogleClientSecret,
@@ -27,9 +28,21 @@ export function getPendingAuthState(): string | null {
   return pendingAuthState;
 }
 
+// Tokens handed over by initializeManualCredentials before the client exists.
+let pendingManualCredentials: Credentials | null = null;
+
+/**
+ * Seeds the client with tokens passed in from elsewhere (the scan worker gets
+ * them from the main thread, as it has no database). The client itself is
+ * only created on first Drive use, so a missing OAuth client configuration
+ * fails just the Drive requests, not a scan that also covers local folders.
+ */
 export function initializeManualCredentials(credentials: Credentials): void {
-  const client = getOAuth2Client();
-  client.setCredentials(credentials);
+  if (oauth2Client) {
+    oauth2Client.setCredentials(credentials);
+  } else {
+    pendingManualCredentials = credentials;
+  }
 }
 
 export function getOAuth2Client(): OAuth2Client {
@@ -50,29 +63,42 @@ export function getOAuth2Client(): OAuth2Client {
     ) as unknown as OAuth2Client;
     oauth2Client = client;
 
-    // [PERSISTENCE] Automatically save tokens whenever they are refreshed
-    const tokenEventsClient = client as OAuth2Client & {
-      on?: (event: 'tokens', listener: (tokens: Credentials) => void) => void;
-    };
+    if (pendingManualCredentials) {
+      client.setCredentials(pendingManualCredentials);
+      pendingManualCredentials = null;
+    }
 
-    tokenEventsClient.on?.('tokens', (tokens) => {
-      // Merge tokens into current credentials to ensure we don't lose existing ones
-      client.setCredentials({
-        ...client.credentials,
-        ...tokens,
-      });
-      callWithRetry(() => saveCredentials(client), {
-        retries: 2,
-        initialDelay: 500,
-      }).catch((err) => {
-        console.error(
-          '[GoogleAuth] Failed to auto-save refreshed tokens after retries:',
-          err,
-        );
-      });
-    });
+    // Worker threads (the scan worker) have no database connection, so saving
+    // there can only fail; a token refreshed in a worker lives for that worker.
+    if (isMainThread) {
+      persistRefreshedTokens(client);
+    }
   }
   return oauth2Client;
+}
+
+/** [PERSISTENCE] Automatically save tokens whenever they are refreshed. */
+function persistRefreshedTokens(client: OAuth2Client): void {
+  const tokenEventsClient = client as OAuth2Client & {
+    on?: (event: 'tokens', listener: (tokens: Credentials) => void) => void;
+  };
+
+  tokenEventsClient.on?.('tokens', (tokens) => {
+    // Merge tokens into current credentials to ensure we don't lose existing ones
+    client.setCredentials({
+      ...client.credentials,
+      ...tokens,
+    });
+    callWithRetry(() => saveCredentials(client), {
+      retries: 2,
+      initialDelay: 500,
+    }).catch((err) => {
+      console.error(
+        '[GoogleAuth] Failed to auto-save refreshed tokens after retries:',
+        err,
+      );
+    });
+  });
 }
 
 export async function loadSavedCredentialsIfExist(): Promise<boolean> {

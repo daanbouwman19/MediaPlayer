@@ -91,8 +91,14 @@ export const useLibraryStore = defineStore('library', () => {
   const fetchHistory = async (limit = 50) => {
     try {
       const items = await api.getRecentlyPlayed(limit);
+      const knownFiles = allMediaFilesMap.value;
       historyMedia.value = items.map((item) => {
-        const name = item.file_path.split(/[/\\]/).pop() || item.file_path;
+        // Prefer the scanned name: a Drive path (gdrive://<id>) has no file
+        // name in it, and the renderer tells images from videos by extension.
+        const name =
+          knownFiles.get(item.file_path)?.name ||
+          item.file_path.split(/[/\\]/).pop() ||
+          item.file_path;
         return {
           name,
           path: item.file_path,

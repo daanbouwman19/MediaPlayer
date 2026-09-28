@@ -567,13 +567,14 @@ describe('Server Coverage', () => {
     });
 
     it('POST /api/sources/google-drive handles failure', async () => {
-      vi.mocked(googleDriveService.getDriveClient).mockRejectedValue(
+      vi.mocked(googleDriveService.getDriveFolderInfo).mockRejectedValue(
         new Error('Fail'),
       );
       const res = await request(app)
         .post('/api/sources/google-drive')
         .send({ folderId: 'bad' });
       expect(res.status).toBe(500);
+      expect(database.addMediaDirectory).not.toHaveBeenCalled();
     });
 
     it('GET /api/smart-playlists handles db error', async () => {

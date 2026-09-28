@@ -19,8 +19,9 @@ import {
   MAX_PATH_LENGTH,
 } from '../../src/core/media/constants';
 import fs from 'fs/promises';
+import { AppError } from '../../src/core/media/errors';
 import {
-  getDriveClient,
+  getDriveFolderInfo,
   listDriveDirectory,
   getDriveParent,
 } from '../../src/main/google-drive-service';
@@ -181,7 +182,7 @@ vi.mock('../../src/main/google-auth', () => ({
 
 // Mock google-drive-service
 vi.mock('../../src/main/google-drive-service', () => ({
-  getDriveClient: vi.fn(),
+  getDriveFolderInfo: vi.fn(),
   listDriveDirectory: vi.fn(),
   getDriveParent: vi.fn(),
 }));
@@ -716,13 +717,10 @@ describe('Server Combined Tests', () => {
   // --- Drive Routes ---
   describe('Drive Routes', () => {
     beforeEach(() => {
-      vi.mocked(getDriveClient).mockResolvedValue({
-        files: {
-          get: vi
-            .fn()
-            .mockResolvedValue({ data: { id: 'f1', name: 'Folder' } }),
-        },
-      } as any);
+      vi.mocked(getDriveFolderInfo).mockResolvedValue({
+        id: 'f1',
+        name: 'Folder',
+      });
       vi.mocked(listDriveDirectory).mockResolvedValue([]);
       vi.mocked(getDriveParent).mockResolvedValue('parent-id');
     });
@@ -733,7 +731,26 @@ describe('Server Combined Tests', () => {
         .send({ folderId: 'xyz' });
       expect(res.status).toBe(200);
       expect(res.body).toEqual({ success: true, name: 'Folder' });
-      expect(database.addMediaDirectory).toHaveBeenCalledWith('gdrive://f1');
+      expect(getDriveFolderInfo).toHaveBeenCalledWith('xyz');
+      // Stored as a named Drive source, as in Electron mode, not as 'local'
+      // with the folder ID for a name.
+      expect(database.addMediaDirectory).toHaveBeenCalledWith({
+        path: 'gdrive://f1',
+        type: 'google_drive',
+        name: 'Folder',
+      });
+    });
+
+    it('POST /api/sources/google-drive rejects IDs that are not folders', async () => {
+      vi.mocked(getDriveFolderInfo).mockRejectedValue(
+        new AppError(400, 'Not a Google Drive folder'),
+      );
+      const res = await request(app)
+        .post('/api/sources/google-drive')
+        .send({ folderId: 'file-id' });
+      expect(res.status).toBe(400);
+      expect(res.body).toEqual({ error: 'Not a Google Drive folder' });
+      expect(database.addMediaDirectory).not.toHaveBeenCalled();
     });
 
     it('GET /api/drive/files should list files', async () => {

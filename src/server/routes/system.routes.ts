@@ -34,7 +34,7 @@ import {
 import { validateInput } from '../../core/auth/security.ts';
 import { getQueryParam } from '../../core/network/http-utils.ts';
 import {
-  getDriveClient,
+  getDriveFolderInfo,
   getDriveParent,
   listDriveDirectory,
 } from '../../main/google-drive-service.ts';
@@ -310,16 +310,14 @@ export function createSystemRoutes(limiters: RateLimiters) {
         throw new AppError(400, 'Missing folderId');
       }
 
-      const drive = await getDriveClient();
-      const driveRes = await drive.files.get({
-        fileId: folderId,
-        fields: 'id, name',
+      const folder = await getDriveFolderInfo(folderId);
+      await addMediaDirectory({
+        path: `gdrive://${folder.id}`,
+        type: 'google_drive',
+        name: folder.name,
       });
-      const name = driveRes.data.name || 'Google Drive Folder';
 
-      await addMediaDirectory(`gdrive://${driveRes.data.id}`);
-
-      res.json({ success: true, name });
+      res.json({ success: true, name: folder.name });
     }),
   );
 

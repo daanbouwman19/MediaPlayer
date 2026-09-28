@@ -54,13 +54,9 @@ vi.mock('../../src/main/google-auth', () => ({
 }));
 
 vi.mock('../../src/main/google-drive-service', () => ({
-  getDriveClient: vi.fn().mockResolvedValue({
-    files: {
-      get: vi.fn().mockResolvedValue({
-        data: { id: 'gdrive_id', name: 'Drive Folder' },
-      }),
-    },
-  }),
+  getDriveFolderInfo: vi
+    .fn()
+    .mockResolvedValue({ id: 'gdrive_id', name: 'Drive Folder' }),
 }));
 
 // Import app creator - we need to dynamic import to ensure mocks apply
@@ -103,6 +99,14 @@ describe('Server Google Drive Routes', () => {
       .send({ folderId: 'folder123' });
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ success: true, name: 'Drive Folder' });
+    // Same shape as the Electron handler: a Drive-typed, named source.
+    const { addMediaDirectory } =
+      await import('../../src/core/database/database');
+    expect(addMediaDirectory).toHaveBeenCalledWith({
+      path: 'gdrive://gdrive_id',
+      type: 'google_drive',
+      name: 'Drive Folder',
+    });
   });
 
   it('POST /api/sources/google-drive returns 400 if missing id', async () => {

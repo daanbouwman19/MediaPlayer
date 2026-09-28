@@ -7,7 +7,7 @@ import {
   getPendingAuthState,
 } from '../google-auth';
 import { startAuthServer } from '../auth-server';
-import { getDriveClient } from '../google-drive-service';
+import { getDriveFolderInfo } from '../google-drive-service';
 import { addMediaDirectory } from '../../core/database/database';
 import { handleIpc } from '../utils/ipc-helper';
 
@@ -37,17 +37,13 @@ export function registerAuthHandlers() {
   handleIpc(
     IPC_CHANNELS.ADD_GOOGLE_DRIVE_SOURCE,
     async (_event: IpcMainInvokeEvent, folderId: string) => {
-      const drive = await getDriveClient();
-      const res = await drive.files.get({
-        fileId: folderId,
-        fields: 'id, name',
-      });
+      const folder = await getDriveFolderInfo(folderId);
       await addMediaDirectory({
-        path: `gdrive://${res.data.id}`,
+        path: `gdrive://${folder.id}`,
         type: 'google_drive',
-        name: res.data.name || 'Google Drive Folder',
+        name: folder.name,
       });
-      return { name: res.data.name || undefined };
+      return { name: folder.name };
     },
   );
 }

@@ -7,7 +7,7 @@ import {
   authenticateWithCode,
 } from '../../../src/main/google-auth';
 import { startAuthServer } from '../../../src/main/auth-server';
-import { getDriveClient } from '../../../src/main/google-drive-service';
+import { getDriveFolderInfo } from '../../../src/main/google-drive-service';
 import { addMediaDirectory } from '../../../src/core/database/database';
 
 vi.mock('../../../src/main/utils/ipc-helper', () => ({
@@ -25,7 +25,7 @@ vi.mock('../../../src/main/auth-server', () => ({
 }));
 
 vi.mock('../../../src/main/google-drive-service', () => ({
-  getDriveClient: vi.fn(),
+  getDriveFolderInfo: vi.fn(),
 }));
 
 vi.mock('../../../src/core/database/database', () => ({
@@ -119,28 +119,22 @@ describe('auth-controller', () => {
   });
 
   describe('ADD_GOOGLE_DRIVE_SOURCE', () => {
-    it('fetches folder info and adds directory', async () => {
+    const getHandler = () => {
       registerAuthHandlers();
-      const handler = (handleIpc as Mock).mock.calls.find(
+      return (handleIpc as Mock).mock.calls.find(
         (call) => call[0] === IPC_CHANNELS.ADD_GOOGLE_DRIVE_SOURCE,
       )![1];
+    };
 
-      const mockDrive = {
-        files: {
-          get: vi.fn().mockResolvedValue({
-            data: { id: 'folder-id', name: 'Folder Name' },
-          }),
-        },
-      };
-      (getDriveClient as Mock).mockResolvedValue(mockDrive);
-
-      const result = await handler({}, 'folder-id');
-
-      expect(getDriveClient).toHaveBeenCalled();
-      expect(mockDrive.files.get).toHaveBeenCalledWith({
-        fileId: 'folder-id',
-        fields: 'id, name',
+    it('looks the folder up and adds it as a named Drive source', async () => {
+      (getDriveFolderInfo as Mock).mockResolvedValue({
+        id: 'folder-id',
+        name: 'Folder Name',
       });
+
+      const result = await getHandler()({}, 'folder-id');
+
+      expect(getDriveFolderInfo).toHaveBeenCalledWith('folder-id');
       expect(addMediaDirectory).toHaveBeenCalledWith({
         path: 'gdrive://folder-id',
         type: 'google_drive',
@@ -149,28 +143,28 @@ describe('auth-controller', () => {
       expect(result).toEqual({ name: 'Folder Name' });
     });
 
-    it('uses default name if name missing', async () => {
-      registerAuthHandlers();
-      const handler = (handleIpc as Mock).mock.calls.find(
-        (call) => call[0] === IPC_CHANNELS.ADD_GOOGLE_DRIVE_SOURCE,
-      )![1];
+    it('stores the canonical folder ID (e.g. of My Drive or a shortcut target)', async () => {
+      (getDriveFolderInfo as Mock).mockResolvedValue({
+        id: '0AbCdEf',
+        name: 'My Drive',
+      });
 
-      const mockDrive = {
-        files: {
-          get: vi.fn().mockResolvedValue({
-            data: { id: 'folder-id' }, // no name
-          }),
-        },
-      };
-      (getDriveClient as Mock).mockResolvedValue(mockDrive);
-
-      await handler({}, 'folder-id');
+      await getHandler()({}, 'root');
 
       expect(addMediaDirectory).toHaveBeenCalledWith(
-        expect.objectContaining({
-          name: 'Google Drive Folder',
-        }),
+        expect.objectContaining({ path: 'gdrive://0AbCdEf' }),
       );
+    });
+
+    it('adds nothing when the ID is not a folder', async () => {
+      (getDriveFolderInfo as Mock).mockRejectedValue(
+        new Error('Not a Google Drive folder'),
+      );
+
+      await expect(getHandler()({}, 'file-id')).rejects.toThrow(
+        'Not a Google Drive folder',
+      );
+      expect(addMediaDirectory).not.toHaveBeenCalled();
     });
   });
 });

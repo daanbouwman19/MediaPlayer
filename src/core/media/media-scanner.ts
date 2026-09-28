@@ -135,7 +135,8 @@ async function scanDirectoryRecursive(
     if (textures.length > 0 || children.length > 0) {
       return {
         id: directoryPath,
-        name: path.basename(directoryPath),
+        // A drive root such as D:\ has no basename; show the path instead.
+        name: path.basename(directoryPath) || directoryPath,
         textures,
         children,
       };

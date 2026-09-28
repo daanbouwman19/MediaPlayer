@@ -281,6 +281,63 @@ describe('Database Worker Combined Tests', () => {
         const result = await sendMessage('getMediaDirectories', {});
         expect((result.data as any[]).length).toBe(0);
       });
+
+      it('stores a gdrive:// path as a Google Drive source even without a type', async () => {
+        await sendMessage('addMediaDirectory', {
+          directoryObj: { path: 'gdrive://1AbCdEf' },
+        });
+        const result = await sendMessage('getMediaDirectories', {});
+        const dirs = result.data as Directory[];
+        expect(dirs[0].type).toBe('google_drive');
+      });
+
+      it('re-adding a source corrects its type and name', async () => {
+        // What older web-mode builds stored: the folder ID as the name.
+        await sendMessage('addMediaDirectory', {
+          directoryObj: { path: 'gdrive://1AbCdEf' },
+        });
+        await sendMessage('setDirectoryActiveState', {
+          directoryPath: 'gdrive://1AbCdEf',
+          isActive: false,
+        });
+        await sendMessage('addMediaDirectory', {
+          directoryObj: {
+            path: 'gdrive://1AbCdEf',
+            type: 'google_drive',
+            name: 'Holiday Videos',
+          },
+        });
+
+        const result = await sendMessage('getMediaDirectories', {});
+        const dirs = result.data as Directory[];
+        expect(dirs).toHaveLength(1);
+        expect(dirs[0]).toMatchObject({
+          path: 'gdrive://1AbCdEf',
+          type: 'google_drive',
+          name: 'Holiday Videos',
+          isActive: true,
+        });
+      });
+    });
+
+    it("reports existing gdrive:// rows stored as 'local' as Google Drive sources", async () => {
+      const legacyDbPath = path.join(tempDir, 'legacy_drive_type.sqlite');
+      await sendMessage('init', { dbPath: legacyDbPath });
+      await sendMessage('close', {});
+
+      const tempDb = new DatabaseSync(legacyDbPath);
+      tempDb
+        .prepare(
+          'INSERT INTO media_directories (id, path, type, name, is_active) VALUES (?, ?, ?, ?, ?)',
+        )
+        .run('legacy', 'gdrive://1AbCdEf', 'local', '1AbCdEf', 1);
+      tempDb.close();
+
+      await sendMessage('init', { dbPath: legacyDbPath });
+      const result = await sendMessage('getMediaDirectories', {});
+      const dirs = result.data as Directory[];
+      expect(dirs).toHaveLength(1);
+      expect(dirs[0].type).toBe('google_drive');
     });
 
     describe('Smart Playlists & Metadata', () => {

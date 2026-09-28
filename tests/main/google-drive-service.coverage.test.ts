@@ -22,6 +22,8 @@ describe('Google Drive Service Coverage', () => {
   beforeEach(async () => {
     vi.resetModules();
     vi.clearAllMocks();
+    mockDrive.files.list.mockReset();
+    mockDrive.files.get.mockReset();
 
     // Setup default mock behavior for authentication
     const googleAuth = await import('../../src/main/google-auth');
@@ -43,61 +45,81 @@ describe('Google Drive Service Coverage', () => {
     expect(google.drive).toHaveBeenCalledTimes(1);
   });
 
+  // listDriveFiles looks the root folder up first, then lists each folder
+  // (media, subfolders and shortcuts together) in one paginated query.
+  const mockRootFolder = () =>
+    (mockDrive.files.get as any).mockResolvedValueOnce({
+      data: {
+        id: 'root',
+        name: 'My Drive',
+        mimeType: 'application/vnd.google-apps.folder',
+      },
+    });
+
   it('listDriveFiles handles undefined files in response', async () => {
     const driveService = await import('../../src/main/google-drive-service');
-    const listMock = mockDrive.files.list as any;
-    listMock.mockResolvedValueOnce({ data: {} });
-    listMock.mockResolvedValueOnce({ data: { files: [] } });
+    mockRootFolder();
+    (mockDrive.files.list as any).mockResolvedValueOnce({ data: {} });
 
     const result = await driveService.listDriveFiles('root');
     expect(result.textures).toEqual([]);
+    expect(result.name).toBe('My Drive');
   });
 
   it('listDriveFiles defaults names', async () => {
     const driveService = await import('../../src/main/google-drive-service');
+    mockRootFolder();
     const listMock = mockDrive.files.list as any;
-    listMock.mockResolvedValueOnce({ data: { files: [{ id: 'f1' }] } });
     listMock.mockResolvedValueOnce({
       data: {
-        files: [{ id: 'sub1', mimeType: 'application/vnd.google-apps.folder' }],
+        files: [
+          { id: 'f1', mimeType: 'image/jpeg' },
+          { id: 'sub1', mimeType: 'application/vnd.google-apps.folder' },
+        ],
       },
     });
-    listMock.mockResolvedValueOnce({ data: { files: [] } });
-    listMock.mockResolvedValueOnce({ data: { files: [] } });
+    listMock.mockResolvedValueOnce({
+      data: { files: [{ id: 'f2', name: 'b.png', mimeType: 'image/png' }] },
+    });
 
     const result = await driveService.listDriveFiles('root');
-    expect(result.textures[0].name).toBe('Untitled');
+    expect(result.textures[0].name).toBe('Untitled.jpg');
     expect(result.children[0].name).toBe('Untitled Folder');
   });
 
   it('listDriveFiles handles pagination', async () => {
     const driveService = await import('../../src/main/google-drive-service');
+    mockRootFolder();
     const listMock = mockDrive.files.list as any;
     listMock.mockResolvedValueOnce({
       data: {
-        files: [{ id: 'f1' }],
+        files: [{ id: 'f1', name: 'a.jpg', mimeType: 'image/jpeg' }],
         nextPageToken: 'token2',
       },
     });
     listMock.mockResolvedValueOnce({
       data: {
-        files: [{ id: 'f2' }],
+        files: [{ id: 'f2', name: 'b.jpg', mimeType: 'image/jpeg' }],
       },
     });
-    listMock.mockResolvedValueOnce({ data: { files: [] } });
 
     const result = await driveService.listDriveFiles('root');
     expect(result.textures).toHaveLength(2);
+    expect(listMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ pageToken: 'token2' }),
+    );
   });
 
   it('listDriveFiles handles shortcuts correctly', async () => {
     const driveService = await import('../../src/main/google-drive-service');
+    mockRootFolder();
     const listMock = mockDrive.files.list as any;
     listMock.mockResolvedValueOnce({
       data: {
         files: [
           {
             id: 'sc1',
+            name: 'photo.jpg',
             mimeType: 'application/vnd.google-apps.shortcut',
             shortcutDetails: {
               targetMimeType: 'image/jpeg',
@@ -112,12 +134,6 @@ describe('Google Drive Service Coverage', () => {
               targetId: 'target2',
             },
           },
-        ],
-      },
-    });
-    listMock.mockResolvedValueOnce({
-      data: {
-        files: [
           {
             id: 'sc_folder',
             mimeType: 'application/vnd.google-apps.shortcut',
@@ -129,12 +145,16 @@ describe('Google Drive Service Coverage', () => {
         ],
       },
     });
-    listMock.mockResolvedValueOnce({ data: { files: [] } });
-    listMock.mockResolvedValueOnce({ data: { files: [] } });
+    listMock.mockResolvedValueOnce({
+      data: { files: [{ id: 'f3', name: 'c.mp4', mimeType: 'video/mp4' }] },
+    });
 
     const result = await driveService.listDriveFiles('root');
-    expect(result.textures).toHaveLength(1);
+    expect(result.textures).toEqual([
+      { name: 'photo.jpg', path: 'gdrive://target1' },
+    ]);
     expect(result.children).toHaveLength(1);
+    expect(result.children[0].id).toBe('target_folder');
   });
 
   it('listDriveDirectory handles generic files and shortcuts', async () => {

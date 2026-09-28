@@ -587,7 +587,7 @@ export function initDatabase(dbPath: string): WorkerResult {
     statements.addMediaDirectory = db.prepare(`
       INSERT INTO media_directories (id, path, type, name, is_active)
       VALUES (?, ?, ?, ?, 1)
-      ON CONFLICT(path) DO UPDATE SET is_active = 1;
+      ON CONFLICT(path) DO UPDATE SET is_active = 1, type = excluded.type, name = excluded.name;
     `);
     statements.getMediaDirectories = db.prepare(
       'SELECT id, path, type, name, is_active FROM media_directories',
@@ -1562,7 +1562,11 @@ export function addMediaDirectory(payload: {
   if (!db) return { success: false, error: 'Database not initialized' };
   try {
     const id = payload.id || crypto.randomUUID();
-    const type = payload.type || 'local';
+    // The gdrive:// prefix is what scanning and authorization key off, so it
+    // decides the type even when a caller only passes the path.
+    const type = isDrivePath(payload.path)
+      ? 'google_drive'
+      : payload.type || 'local';
     const name = payload.name || path.basename(payload.path) || payload.path;
 
     getStatement('addMediaDirectory').run(id, payload.path, type, name);
@@ -1593,7 +1597,10 @@ export function getMediaDirectories(): WorkerResult {
     const directories = rows.map((row) => ({
       id: row.id,
       path: row.path,
-      type: row.type as 'local' | 'google_drive',
+      // Older web-mode builds stored Drive sources as 'local'.
+      type: isDrivePath(row.path)
+        ? 'google_drive'
+        : (row.type as 'local' | 'google_drive'),
       name: row.name,
       isActive: !!row.is_active,
     }));
