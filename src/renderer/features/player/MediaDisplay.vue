@@ -271,7 +271,7 @@ const toast = useToast();
 
 const { imageExtensionsSet, mediaDirectories, thumbnailUrlGenerator } =
   storeToRefs(libraryStore);
-const { pauseTimerOnPlay, isTimerRunning, mainVideoElement } =
+const { pauseTimerOnPlay, isTimerRunning, mainVideoElement, isMuted } =
   storeToRefs(playerStore);
 const { currentItem: currentMediaItem } = storeToRefs(playlistStore);
 const { isControlsVisible, isSourcesModalVisible, isSidebarVisible } =
@@ -304,7 +304,6 @@ const vrPlayerRef = ref<InstanceType<typeof VRVideoPlayerType> | null>(null);
 const isVrMode = ref(false);
 const savedCurrentTime = ref(0);
 const isOpeningVlc = ref(false);
-const isMuted = ref(false);
 const isPlaying = ref(false);
 /** Duration of the current item as stored in the library (0 if unknown). */
 const itemDuration = ref(0);

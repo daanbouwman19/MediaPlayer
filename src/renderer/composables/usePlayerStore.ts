@@ -21,6 +21,9 @@ export const usePlayerStore = defineStore('player', () => {
   // (currentTime, play/pause). Deep reactive proxying adds overhead and can
   // interfere with the native element, and nothing here relies on it.
   const mainVideoElement = shallowRef<HTMLVideoElement | null>(null);
+  // Applied to whichever video element is current (MediaDisplay), so the
+  // panic key can mute from outside the player and the UI stays in sync.
+  const isMuted = ref(false);
 
   /** Cancels the pending auto-advance timeout and clears its countdown window. */
   const clearSlideshowTimeout = () => {
@@ -93,6 +96,7 @@ export const usePlayerStore = defineStore('player', () => {
     timerEndTime,
     pauseTimerOnPlay,
     mainVideoElement,
+    isMuted,
     resetPlayerState,
     startSlideshowTimer,
     stopSlideshowTimer,

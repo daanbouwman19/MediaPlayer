@@ -1,5 +1,6 @@
 import { describe, it, expect, afterEach } from 'vite-plus/test';
 import {
+  formatKeyCode,
   isActivatableTarget,
   isEditableTarget,
   isModalOpen,
@@ -126,5 +127,31 @@ describe('keyboardUtils', () => {
         ),
       ).toBe(true);
     });
+  });
+});
+
+describe('formatKeyCode', () => {
+  it.each([
+    ['Backquote', '`'],
+    ['KeyP', 'P'],
+    ['Digit7', '7'],
+    ['Numpad0', 'Num 0'],
+    ['Escape', 'Esc'],
+    ['F9', 'F9'],
+  ])('%s → %s', (code, label) => {
+    expect(formatKeyCode(code)).toBe(label);
+  });
+});
+
+describe('formatKeyCode', () => {
+  it.each([
+    ['Backquote', '`'],
+    ['KeyP', 'P'],
+    ['Digit7', '7'],
+    ['Numpad0', 'Num 0'],
+    ['Escape', 'Esc'],
+    ['F9', 'F9'],
+  ])('%s -> %s', (code, label) => {
+    expect(formatKeyCode(code)).toBe(label);
   });
 });

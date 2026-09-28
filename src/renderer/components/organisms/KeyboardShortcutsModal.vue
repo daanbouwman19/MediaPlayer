@@ -97,6 +97,22 @@
             </div>
           </div>
 
+          <!-- Privacy -->
+          <div class="space-y-2">
+            <h3
+              class="text-xs font-bold uppercase tracking-wider text-accent-secondary mb-2"
+            >
+              Privacy
+            </h3>
+            <div class="flex justify-between items-center">
+              <span class="text-sm text-muted">Panic: pause and hide</span>
+              <kbd
+                class="px-2 py-1 bg-accent rounded font-mono text-xs text-button-text min-w-[28px] text-center font-bold"
+                >{{ panicKeyLabel }}</kbd
+              >
+            </div>
+          </div>
+
           <!-- Seeking -->
           <div class="space-y-2">
             <h3
@@ -137,8 +153,10 @@
 
 <script setup lang="ts">
 import CloseIcon from '@/components/atoms/icons/CloseIcon.vue';
-import { onMounted, onUnmounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useFocusTrap } from '@/composables/useFocusTrap';
+import { usePrivacyStore } from '@/composables/usePrivacyStore';
+import { formatKeyCode } from '@/utils/keyboardUtils';
 
 const props = defineProps<{
   isOpen: boolean;
@@ -147,6 +165,9 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'close'): void;
 }>();
+
+const privacyStore = usePrivacyStore();
+const panicKeyLabel = computed(() => formatKeyCode(privacyStore.panicKey));
 
 const dialogRef = ref<HTMLElement | null>(null);
 useFocusTrap(dialogRef, () => props.isOpen);

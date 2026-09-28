@@ -136,6 +136,7 @@ import { useUIStore } from './composables/useUIStore';
 import { useAuthStore } from './composables/useAuthStore';
 import { useSlideshow } from './composables/useSlideshow';
 import { useTheme } from './composables/useTheme';
+import { usePanic } from './composables/usePanic';
 import {
   isActivatableTarget,
   isModalOpen,
@@ -161,6 +162,7 @@ const {
 const initializeApp = libraryStore.loadInitialData;
 const { navigateMedia, toggleSlideshowTimer } = useSlideshow();
 const { initTheme, cleanupTheme } = useTheme();
+usePanic();
 initTheme();
 
 const isShortcutsModalOpen = ref(false);

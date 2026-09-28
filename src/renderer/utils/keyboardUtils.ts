@@ -90,3 +90,36 @@ export function shouldIgnoreGlobalShortcut(event: KeyboardEvent): boolean {
     isEditableTarget(event.target)
   );
 }
+
+const KEY_CODE_LABELS: Record<string, string> = {
+  Backquote: '`',
+  Minus: '-',
+  Equal: '=',
+  BracketLeft: '[',
+  BracketRight: ']',
+  Backslash: '\\',
+  Semicolon: ';',
+  Quote: "'",
+  Comma: ',',
+  Period: '.',
+  Slash: '/',
+  Space: 'Space',
+  Escape: 'Esc',
+  ArrowLeft: '←',
+  ArrowRight: '→',
+  ArrowUp: '↑',
+  ArrowDown: '↓',
+};
+
+/**
+ * Short label for a `KeyboardEvent.code` (layout-independent physical key),
+ * e.g. `KeyP` → `P`, `Digit1` → `1`, `Numpad1` → `Num 1`, `Backquote` → `` ` ``.
+ */
+export function formatKeyCode(code: string): string {
+  const label = KEY_CODE_LABELS[code];
+  if (label) return label;
+  if (/^Key[A-Z]$/.test(code)) return code.slice(3);
+  if (/^Digit\d$/.test(code)) return code.slice(5);
+  if (code.startsWith('Numpad')) return `Num ${code.slice(6)}`;
+  return code;
+}
