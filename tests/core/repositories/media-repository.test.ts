@@ -5,7 +5,7 @@ import * as database from '../../../src/core/database/database';
 vi.mock('../../../src/core/database/database', () => ({
   readMediaDirectories: vi.fn(),
   saveSetting: vi.fn(),
-  storeAlbumCache: vi.fn(),
+  cacheAlbums: vi.fn(),
   getCachedAlbums: vi.fn(),
   getAllMetadata: vi.fn(),
   getAllMetadataAndStats: vi.fn(),
@@ -39,9 +39,9 @@ describe('MediaRepository', () => {
 
   it('caches albums strictly (failures propagate)', async () => {
     await repo.cacheAlbums([]);
-    expect(database.storeAlbumCache).toHaveBeenCalledWith([]);
+    expect(database.cacheAlbums).toHaveBeenCalledWith([]);
 
-    vi.mocked(database.storeAlbumCache).mockRejectedValueOnce(
+    vi.mocked(database.cacheAlbums).mockRejectedValueOnce(
       new Error('Operation timed out'),
     );
     await expect(repo.cacheAlbums([])).rejects.toThrow('Operation timed out');

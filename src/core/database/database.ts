@@ -314,25 +314,6 @@ async function cacheAlbums(albums: Album[]): Promise<void> {
 }
 
 /**
- * Caches the list of albums (file index) and propagates failures, including
- * the operation timeout. Library scans use this so the album cache is only
- * stamped as current once the new tree is confirmed stored.
- * @param albums - The array of album objects to cache.
- * @throws {Error} If the database operation fails or times out.
- */
-async function storeAlbumCache(albums: Album[]): Promise<void> {
-  try {
-    await getClient().sendMessage<void>('cacheAlbums', {
-      cacheKey: FILE_INDEX_CACHE_KEY,
-      albums,
-    });
-  } catch (error) {
-    safeError('[database.js] Error caching albums:', error);
-    throw error;
-  }
-}
-
-/**
  * Retrieves the cached list of albums from the database.
  * @returns A promise that resolves to the cached albums, or null if not found or an error occurs.
  */
@@ -859,7 +840,6 @@ export {
   recordMediaView,
   getMediaViewCounts,
   cacheAlbums,
-  storeAlbumCache,
   getCachedAlbums,
   addMediaDirectory,
   getMediaDirectories,

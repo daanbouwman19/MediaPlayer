@@ -13,7 +13,10 @@ import type { Album } from '../media/types.ts';
 import { FILE_INDEX_CACHE_KEY } from '../media/constants.ts';
 import { getDriveId, isDrivePath } from '../media/media-utils.ts';
 import { assignFileIds, generateUniqueFileId } from '../media/utils/file-id.ts';
-import { isMetadataComplete } from '../media/utils/metadata-status.ts';
+import {
+  isExtractionBackedOff,
+  isMetadataComplete,
+} from '../media/utils/metadata-status.ts';
 import {
   initializeDatabase,
   JOB_TYPE_TRANSCODE,
@@ -61,7 +64,7 @@ type StatementName =
   | 'getRecentlyPlayed'
   | 'getSetting'
   | 'getSmartPlaylists'
-  | 'getSuccessfulPathsBatch'
+  | 'getExtractionStateBatch'
   | 'insertWatchedSegment'
   | 'listJobs'
   | 'promoteLibraryPathsBatch'
@@ -621,11 +624,14 @@ export function initDatabase(dbPath: string): WorkerResult {
     statements.deleteCachedAlbum = db.prepare(
       'DELETE FROM app_cache WHERE cache_key = ?',
     );
-    // The last parameter is 1 only for library scans. On conflict membership
-    // is never revoked here; only scans and source removal demote rows.
+    // in_library is 1 only for library scans. On conflict membership is
+    // never revoked here; only scans and source removal demote rows.
+    // A 'failed' result adds one to the consecutive-failure count and a
+    // 'success' resets it; both record the attempt time (bound by the caller).
+    // Writes without a result status keep both.
     statements.upsertMetadata = db.prepare(
-      `INSERT INTO media_metadata (file_path_hash, file_path, duration, size, created_at, rating, extraction_status, playback_position, in_library)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO media_metadata (file_path_hash, file_path, duration, size, created_at, rating, extraction_status, playback_position, in_library, extraction_attempts, extraction_attempted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(file_path_hash) DO UPDATE SET
        file_path = excluded.file_path,
        duration = COALESCE(excluded.duration, media_metadata.duration),
@@ -634,7 +640,14 @@ export function initDatabase(dbPath: string): WorkerResult {
        rating = COALESCE(excluded.rating, media_metadata.rating),
        extraction_status = COALESCE(excluded.extraction_status, media_metadata.extraction_status),
        playback_position = COALESCE(excluded.playback_position, media_metadata.playback_position),
-       in_library = CASE WHEN excluded.in_library = 1 THEN 1 ELSE media_metadata.in_library END`,
+       in_library = CASE WHEN excluded.in_library = 1 THEN 1 ELSE media_metadata.in_library END,
+       extraction_attempts = CASE excluded.extraction_status
+         WHEN 'failed' THEN COALESCE(media_metadata.extraction_attempts, 0) + 1
+         WHEN 'success' THEN 0
+         ELSE media_metadata.extraction_attempts END,
+       extraction_attempted_at = CASE
+         WHEN excluded.extraction_status IN ('failed', 'success') THEN excluded.extraction_attempted_at
+         ELSE media_metadata.extraction_attempted_at END`,
     );
     statements.getLibraryMemberPaths = db.prepare(
       `SELECT DISTINCT file_path FROM media_metadata WHERE in_library = 1 AND file_path IS NOT NULL`,
@@ -759,9 +772,10 @@ export function initDatabase(dbPath: string): WorkerResult {
        FROM media_metadata WHERE file_path IS NOT NULL AND in_library = 1`,
     );
 
-    // Filter Optimization: Get successful paths in batch
-    statements.getSuccessfulPathsBatch = db.prepare(
-      `SELECT file_path, duration FROM media_metadata WHERE file_path IN (${placeholders}) AND extraction_status = 'success'`,
+    // Extraction state of finished rows, for filterProcessingNeeded.
+    statements.getExtractionStateBatch = db.prepare(
+      `SELECT file_path, extraction_status, duration, extraction_attempts, extraction_attempted_at
+       FROM media_metadata WHERE file_path IN (${placeholders}) AND extraction_status IN ('success', 'failed')`,
     );
 
     statements.getFileIdsByPathsBatch = db.prepare(
@@ -866,6 +880,8 @@ function runMetadataUpsert(
   payload: MetadataPayload,
   markInLibrary: boolean,
 ): void {
+  const status = payload.status === undefined ? null : payload.status;
+  const isAttempt = status === 'failed' || status === 'success';
   getStatement('upsertMetadata').run(
     fileId,
     payload.filePath,
@@ -873,9 +889,12 @@ function runMetadataUpsert(
     payload.size === undefined ? null : payload.size,
     payload.createdAt === undefined ? null : payload.createdAt,
     payload.rating === undefined ? null : payload.rating,
-    payload.status === undefined ? null : payload.status,
+    status,
     payload.playbackPosition === undefined ? null : payload.playbackPosition,
     markInLibrary ? 1 : 0,
+    // Used as-is only for a new row; an existing row counts on conflict.
+    status === 'failed' ? 1 : 0,
+    isAttempt ? Date.now() : null,
   );
   if (
     payload.watchedSegments !== undefined &&
@@ -1148,8 +1167,11 @@ export function getAllMetadataVerification(): WorkerResult {
 
 /**
  * Filters a list of file paths to only those that need metadata processing.
- * Removes paths whose metadata is complete: marked 'success' and, for a
- * video, stored with a duration.
+ * Removes paths whose metadata is complete (marked 'success' and, for a
+ * video, stored with a duration) and paths whose extraction failed recently
+ * enough to still be backing off, so files that never yield metadata are not
+ * probed on every scan. Explicit client requests (forceCheck) don't use this
+ * filter and still probe them.
  * @param filePaths - The list of file paths to check.
  * @returns The filtered list of file paths.
  */
@@ -1163,18 +1185,33 @@ export async function filterProcessingNeeded(
     }
 
     const successfulPathsSet = new Set<string>();
+    const now = Date.now();
 
-    forEachBatchedRow<{ file_path: string; duration: number | null }>(
-      getStatement('getSuccessfulPathsBatch'),
-      filePaths,
-      (row) => {
-        // Older versions stored videos whose duration probe failed as
-        // 'success' with a NULL duration; those still need extraction.
-        if (isMetadataComplete(row.file_path, 'success', row.duration)) {
-          successfulPathsSet.add(row.file_path);
-        }
-      },
-    );
+    forEachBatchedRow<{
+      file_path: string;
+      extraction_status: string;
+      duration: number | null;
+      extraction_attempts: number | null;
+      extraction_attempted_at: number | null;
+    }>(getStatement('getExtractionStateBatch'), filePaths, (row) => {
+      // Older versions stored videos whose duration probe failed as
+      // 'success' with a NULL duration; those still need extraction.
+      if (
+        isMetadataComplete(
+          row.file_path,
+          row.extraction_status,
+          row.duration,
+        ) ||
+        isExtractionBackedOff(
+          row.extraction_status,
+          row.extraction_attempts,
+          row.extraction_attempted_at,
+          now,
+        )
+      ) {
+        successfulPathsSet.add(row.file_path);
+      }
+    });
 
     const neededPaths: string[] = [];
     for (const p of filePaths) {

@@ -2,7 +2,7 @@
  * @file Repository for media-related database operations.
  */
 import {
-  storeAlbumCache,
+  cacheAlbums,
   getAllMetadata,
   getAllMetadataAndStats,
   getAllMetadataVerification,
@@ -25,8 +25,9 @@ export class MediaRepository implements IMediaRepository {
   }
 
   async cacheAlbums(albums: Album[]) {
-    // Scans must know whether the tree was stored before stamping it.
-    return storeAlbumCache(albums);
+    // Rethrows so scans know whether the tree was stored before stamping it,
+    // and always invalidates the auth cache: membership authorizes gdrive://.
+    return cacheAlbums(albums);
   }
 
   async getCachedAlbums() {

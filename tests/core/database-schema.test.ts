@@ -106,6 +106,13 @@ describe('Database Schema', () => {
       expect(columns).not.toContain('watched_segments');
     });
 
+    it('media_metadata records failed extraction attempts', () => {
+      initializeDatabase(db);
+      const columns = getColumnNames('media_metadata');
+      expect(columns).toContain('extraction_attempts');
+      expect(columns).toContain('extraction_attempted_at');
+    });
+
     it('is idempotent (re-running performs no further migrations)', () => {
       initializeDatabase(db);
       const logSpy = vi.spyOn(console, 'log');

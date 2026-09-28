@@ -408,6 +408,8 @@ describe('Database Worker Coverage', () => {
       null, // status
       null, // playbackPosition
       0, // in_library: client upserts never make a file a library member
+      0, // extraction_attempts: no failed result
+      null, // extraction_attempted_at: no extraction result
     );
   });
 
@@ -440,6 +442,8 @@ describe('Database Worker Coverage', () => {
       null, // status
       null, // playbackPosition
       0, // in_library: extraction upserts leave membership to scans
+      0, // extraction_attempts: no failed result
+      null, // extraction_attempted_at: no extraction result
     );
   });
 

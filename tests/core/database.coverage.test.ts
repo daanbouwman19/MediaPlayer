@@ -31,7 +31,6 @@ import {
   removeMediaDirectory,
   setDirectoryActiveState,
   cacheAlbums,
-  storeAlbumCache,
   getCachedAlbums,
   isFileInLibrary,
   filterProcessingNeeded,
@@ -469,21 +468,6 @@ describe('database.ts coverage', () => {
     // presented as the library.
     await expect(cacheAlbums([])).rejects.toThrow('Fail');
     expect(spy).toHaveBeenCalledTimes(1);
-  });
-
-  it('storeAlbumCache sends the cacheAlbums message', async () => {
-    await storeAlbumCache([]);
-    expect(mocks.WorkerClientInstance.sendMessage).toHaveBeenCalledWith(
-      'cacheAlbums',
-      expect.objectContaining({ albums: [] }),
-    );
-  });
-
-  it('storeAlbumCache rethrows failures such as timeouts', async () => {
-    mocks.WorkerClientInstance.sendMessage.mockRejectedValueOnce(
-      new Error('Operation timed out'),
-    );
-    await expect(storeAlbumCache([])).rejects.toThrow('Operation timed out');
   });
 
   it('getCachedAlbums sends correct message', async () => {
