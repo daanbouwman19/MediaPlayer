@@ -2,7 +2,7 @@
   <div class="mb-4">
     <div class="flex items-center justify-between px-3 mb-2">
       <button
-        class="flex items-center gap-1.5 text-xs font-bold text-muted uppercase tracking-wider focus:outline-none hover:text-accent cursor-pointer"
+        class="flex items-center gap-1.5 text-xs font-bold text-muted uppercase tracking-wider rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-accent hover:text-accent cursor-pointer"
         aria-label="Toggle Queue Panel"
         @click="isOpen = !isOpen"
       >
@@ -16,7 +16,7 @@
 
       <button
         v-if="queue.length > 0"
-        class="text-xs text-muted hover:text-red-400 font-semibold focus:outline-none cursor-pointer"
+        class="text-xs text-muted hover:text-red-400 font-semibold rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-accent cursor-pointer"
         title="Clear entire queue"
         @click="clearPlaylist"
       >
@@ -71,7 +71,7 @@
 
               <!-- Play button / thumbnail -->
               <button
-                class="flex items-center gap-1.5 truncate text-sm text-color group-hover:text-accent text-left focus:outline-none cursor-pointer min-w-0 font-medium"
+                class="flex items-center gap-1.5 truncate text-sm text-color group-hover:text-accent text-left rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent cursor-pointer min-w-0 font-medium"
                 :aria-label="'Play track ' + item.name"
                 @click="playTrack(item)"
               >
@@ -81,7 +81,7 @@
 
             <!-- Right side: Remove single item button -->
             <button
-              class="opacity-0 group-hover:opacity-100 focus:opacity-100 text-muted hover:text-red-400 p-0.5 rounded transition-opacity focus:outline-none cursor-pointer"
+              class="opacity-0 group-hover:opacity-100 focus:opacity-100 text-muted hover:text-red-400 p-0.5 rounded transition-opacity focus:outline-none focus-visible:ring-2 focus-visible:ring-accent cursor-pointer"
               title="Remove from queue"
               :aria-label="'Remove ' + item.name + ' from queue'"
               @click.stop="removeFromQueue(item)"
@@ -101,14 +101,14 @@
           </span>
           <div class="flex gap-2">
             <button
-              class="text-[11px] text-accent hover:underline font-bold focus:outline-none cursor-pointer"
+              class="text-[11px] text-accent hover:underline font-bold rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-accent cursor-pointer"
               @click="displayLimit += 100"
             >
               Show 100 more
             </button>
             <span class="text-muted text-[11px] select-none">|</span>
             <button
-              class="text-[11px] text-accent hover:underline font-bold focus:outline-none cursor-pointer"
+              class="text-[11px] text-accent hover:underline font-bold rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-accent cursor-pointer"
               @click="displayLimit = queue.length"
             >
               Show all

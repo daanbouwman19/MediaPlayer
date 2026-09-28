@@ -17,6 +17,11 @@ import { useUIStore } from '@/composables/useUIStore';
 import { useToast } from '@/composables/useToast';
 import { api } from '@/api';
 
+const errorToasts = () =>
+  useToast()
+    .toasts.value.filter((t) => t.type === 'error')
+    .map((t) => t.message);
+
 vi.mock('@/api', () => ({
   api: {
     addMediaDirectory: vi.fn(),
@@ -38,6 +43,7 @@ vi.mock('@/api', () => ({
 describe('SourcesModal.vue', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    useToast().toasts.value = [];
     setActivePinia(
       createTestingPinia({ stubActions: false, createSpy: vi.fn }),
     );
@@ -95,30 +101,138 @@ describe('SourcesModal.vue', () => {
     expect(wrapper.text()).toContain('No media sources configured yet');
   });
 
-  it('shows warning when Google Drive is disconnected on mount', async () => {
-    useLibraryStore().mediaDirectories = [
-      ...useLibraryStore().mediaDirectories,
-      {
-        path: 'gdrive://123',
-        isActive: true,
-        id: '3',
-        name: 'Drive',
-        type: 'google_drive',
-      },
-    ] as any;
-    (api.checkGoogleDriveAuth as Mock).mockResolvedValue(false);
+  describe('Google Drive disconnected warning', () => {
+    const driveSource = {
+      path: 'gdrive://123',
+      isActive: true,
+      id: '3',
+      name: 'Drive',
+      type: 'google_drive',
+    };
 
-    const wrapper = mount(SourcesModal);
-    await flushPromises();
+    it('checks Drive auth when opened after the sources have loaded', async () => {
+      // Like in App: the modal is mounted hidden before the library loads
+      useUIStore().isSourcesModalVisible = false;
+      useLibraryStore().mediaDirectories = [] as any;
+      (api.checkGoogleDriveAuth as Mock).mockResolvedValue(false);
 
-    expect(api.checkGoogleDriveAuth).toHaveBeenCalled();
-    expect(wrapper.text()).toContain('Google Drive Disconnected');
+      const wrapper = mount(SourcesModal);
+      await flushPromises();
+      expect(api.checkGoogleDriveAuth).not.toHaveBeenCalled();
 
-    const reauthBtn = wrapper
-      .findAll('button')
-      .find((b) => b.text() === 'Re-authenticate Drive');
-    await reauthBtn?.trigger('click');
-    expect((wrapper.vm as any).showDriveAuth).toBe(true);
+      // The library loads, then the user opens the modal
+      useLibraryStore().mediaDirectories = [driveSource] as any;
+      await flushPromises();
+      useUIStore().isSourcesModalVisible = true;
+      await flushPromises();
+
+      expect(api.checkGoogleDriveAuth).toHaveBeenCalledTimes(1);
+      expect(wrapper.text()).toContain('Google Drive Disconnected');
+
+      const reauthBtn = wrapper
+        .findAll('button')
+        .find((b) => b.text() === 'Re-authenticate Drive');
+      await reauthBtn?.trigger('click');
+      expect((wrapper.vm as any).showDriveAuth).toBe(true);
+    });
+
+    it('re-checks every time the modal is opened', async () => {
+      useUIStore().isSourcesModalVisible = false;
+      useLibraryStore().mediaDirectories = [driveSource] as any;
+      (api.checkGoogleDriveAuth as Mock).mockResolvedValue(true);
+
+      const wrapper = mount(SourcesModal);
+      useUIStore().isSourcesModalVisible = true;
+      await flushPromises();
+      expect(wrapper.text()).not.toContain('Google Drive Disconnected');
+
+      useUIStore().isSourcesModalVisible = false;
+      await flushPromises();
+      (api.checkGoogleDriveAuth as Mock).mockResolvedValue(false);
+      useUIStore().isSourcesModalVisible = true;
+      await flushPromises();
+
+      expect(api.checkGoogleDriveAuth).toHaveBeenCalledTimes(2);
+      expect(wrapper.text()).toContain('Google Drive Disconnected');
+    });
+
+    it('recognises Drive sources stored with type "local" by their gdrive:// path', async () => {
+      useLibraryStore().mediaDirectories = [
+        { ...driveSource, type: 'local' },
+      ] as any;
+      (api.checkGoogleDriveAuth as Mock).mockResolvedValue(false);
+
+      const wrapper = mount(SourcesModal);
+      await flushPromises();
+
+      expect(api.checkGoogleDriveAuth).toHaveBeenCalled();
+      expect(wrapper.text()).toContain('Google Drive Disconnected');
+      expect(wrapper.find('span[title="Google Drive"]').exists()).toBe(true);
+    });
+
+    it('does not check when there is no Drive source', async () => {
+      mount(SourcesModal);
+      await flushPromises();
+      expect(api.checkGoogleDriveAuth).not.toHaveBeenCalled();
+    });
+
+    it('clears the warning once the last Drive source is removed', async () => {
+      useLibraryStore().mediaDirectories = [driveSource] as any;
+      (api.checkGoogleDriveAuth as Mock).mockResolvedValue(false);
+      const wrapper = mount(SourcesModal);
+      await flushPromises();
+      expect(wrapper.text()).toContain('Google Drive Disconnected');
+
+      await (wrapper.vm as any).confirmRemove('gdrive://123');
+      await flushPromises();
+
+      expect(wrapper.text()).not.toContain('Google Drive Disconnected');
+    });
+
+    it('ignores an outdated answer from a superseded check', async () => {
+      useUIStore().isSourcesModalVisible = false;
+      useLibraryStore().mediaDirectories = [driveSource] as any;
+      let resolveFirst!: (value: boolean) => void;
+      (api.checkGoogleDriveAuth as Mock)
+        .mockReturnValueOnce(
+          new Promise<boolean>((resolve) => {
+            resolveFirst = resolve;
+          }),
+        )
+        .mockResolvedValueOnce(true);
+
+      const wrapper = mount(SourcesModal);
+      useUIStore().isSourcesModalVisible = true;
+      await flushPromises();
+      useUIStore().isSourcesModalVisible = false;
+      await flushPromises();
+      useUIStore().isSourcesModalVisible = true;
+      await flushPromises();
+
+      resolveFirst(false);
+      await flushPromises();
+
+      expect(wrapper.text()).not.toContain('Google Drive Disconnected');
+    });
+
+    it('logs instead of throwing when the check fails', async () => {
+      useLibraryStore().mediaDirectories = [driveSource] as any;
+      const error = new Error('offline');
+      (api.checkGoogleDriveAuth as Mock).mockRejectedValue(error);
+      const consoleSpy = vi
+        .spyOn(console, 'error')
+        .mockImplementation(() => {});
+
+      const wrapper = mount(SourcesModal);
+      await flushPromises();
+
+      expect(consoleSpy).toHaveBeenCalledWith(
+        'Error checking Google Drive authentication:',
+        error,
+      );
+      expect(wrapper.text()).not.toContain('Google Drive Disconnected');
+      consoleSpy.mockRestore();
+    });
   });
 
   it('should close modal when close button clicked', async () => {
@@ -309,6 +423,9 @@ describe('SourcesModal.vue', () => {
       error,
     );
     expect(useLibraryStore().isScanning).toBe(false);
+    expect(errorToasts()).toEqual([
+      'Re-indexing the library failed. Please try again.',
+    ]);
     consoleSpy.mockRestore();
   });
 
@@ -325,6 +442,7 @@ describe('SourcesModal.vue', () => {
       'Error adding media directory via explorer:',
       error,
     );
+    expect(errorToasts()).toEqual(['Could not add folder: Add failed']);
     consoleSpy.mockRestore();
   });
 
@@ -343,12 +461,42 @@ describe('SourcesModal.vue', () => {
       'Error toggling directory active state:',
       error,
     );
+    // The checkbox goes back to the saved state instead of showing the
+    // change that never happened, and the user is told about it.
+    expect((checkbox.element as HTMLInputElement).checked).toBe(true);
+    expect(useLibraryStore().mediaDirectories[0].isActive).toBe(true);
+    expect(errorToasts()).toEqual([
+      'Could not disable this source. Please try again.',
+    ]);
     consoleSpy.mockRestore();
+  });
+
+  it('reverts a failed enable to unchecked', async () => {
+    (api.setDirectoryActiveState as Mock).mockRejectedValue(new Error('429'));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const wrapper = mount(SourcesModal);
+    const checkbox = wrapper.findAll('input[type="checkbox"]')[1];
+
+    await checkbox.setValue(true);
+    await flushPromises();
+
+    expect((checkbox.element as HTMLInputElement).checked).toBe(false);
+    expect(errorToasts()).toEqual([
+      'Could not enable this source. Please try again.',
+    ]);
+    vi.mocked(console.error).mockRestore();
   });
 
   it('should handle directory not found during toggle', async () => {
     const wrapper = mount(SourcesModal);
-    await (wrapper.vm as any).handleToggleActive('/non-existent/path', true);
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.checked = true;
+    await (wrapper.vm as any).handleToggleActive(
+      '/non-existent/path',
+      checkbox,
+    );
     expect(useLibraryStore().mediaDirectories[0].isActive).toBe(true);
     expect(useLibraryStore().mediaDirectories[1].isActive).toBe(false);
   });
@@ -371,6 +519,11 @@ describe('SourcesModal.vue', () => {
     await flushPromises();
 
     expect(consoleSpy).toHaveBeenCalledWith('Error removing directory:', error);
+    expect(errorToasts()).toEqual([
+      'Could not remove this source. Please try again.',
+    ]);
+    // The source stays listed
+    expect(wrapper.text()).toContain('/path/to/dir1');
     consoleSpy.mockRestore();
   });
 
@@ -590,6 +743,46 @@ describe('SourcesModal.vue', () => {
       await wrapper.find('button[aria-label="Close"]').trigger('click');
       expect(api.reindexMediaLibrary).not.toHaveBeenCalled();
       toasts.value = [];
+    });
+  });
+
+  describe('focus management', () => {
+    it('keeps focus in the top-most dialog and restores it when each closes', async () => {
+      useUIStore().isSourcesModalVisible = false;
+      const trigger = document.createElement('button');
+      trigger.textContent = 'Manage Sources';
+      document.body.appendChild(trigger);
+      trigger.focus();
+
+      const wrapper = mount(SourcesModal, { attachTo: document.body });
+      useUIStore().isSourcesModalVisible = true;
+      await flushPromises();
+
+      const sourcesDialog = wrapper.find('[aria-labelledby="modal-title"]');
+      expect(sourcesDialog.element.contains(document.activeElement)).toBe(true);
+
+      const addDriveBtn = wrapper
+        .findAll('button')
+        .find((b) => b.text().includes('Add Google Drive'))!;
+      (addDriveBtn.element as HTMLButtonElement).focus();
+      await addDriveBtn.trigger('click');
+      await flushPromises();
+
+      const driveDialog = wrapper.find('[aria-labelledby="drive-auth-title"]');
+      expect(driveDialog.element.contains(document.activeElement)).toBe(true);
+
+      // Escape closes only the Drive dialog; focus goes back to its opener
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+      await flushPromises();
+      expect(document.activeElement).toBe(addDriveBtn.element);
+
+      // Closing the sources modal returns focus to what opened it
+      await wrapper.find('button[aria-label="Close"]').trigger('click');
+      await flushPromises();
+      expect(document.activeElement).toBe(trigger);
+
+      wrapper.unmount();
+      trigger.remove();
     });
   });
 });

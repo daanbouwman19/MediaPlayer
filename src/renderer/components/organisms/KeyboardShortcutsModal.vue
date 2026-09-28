@@ -13,6 +13,7 @@
       @click.self="close"
     >
       <div
+        ref="dialogRef"
         class="relative w-full max-w-sm glass-panel md:rounded-2xl shadow-2xl overflow-hidden flex flex-col transition-all"
         role="dialog"
         aria-modal="true"
@@ -136,7 +137,8 @@
 
 <script setup lang="ts">
 import CloseIcon from '@/components/atoms/icons/CloseIcon.vue';
-import { onMounted, onUnmounted } from 'vue';
+import { onMounted, onUnmounted, ref } from 'vue';
+import { useFocusTrap } from '@/composables/useFocusTrap';
 
 const props = defineProps<{
   isOpen: boolean;
@@ -145,6 +147,9 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'close'): void;
 }>();
+
+const dialogRef = ref<HTMLElement | null>(null);
+useFocusTrap(dialogRef, () => props.isOpen);
 
 const close = () => {
   emit('close');

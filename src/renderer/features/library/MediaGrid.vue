@@ -26,7 +26,7 @@
       >
       <button
         v-if="selectedHaveTranscode"
-        class="glass-button text-sm px-3 py-1.5 rounded text-red-400 hover:bg-red-400/10 transition-colors duration-200"
+        class="glass-button text-sm px-3 py-1.5 rounded text-danger hover:bg-danger/10 transition-colors duration-200"
         title="Remove pre-transcoded HLS for selected files"
         @click="handleClearTranscode"
       >
@@ -40,7 +40,7 @@
         Pre-transcode
       </button>
       <button
-        class="glass-button text-sm px-3 py-1.5 rounded text-muted"
+        class="glass-button text-sm px-3 py-1.5 rounded text-muted hover:text-color"
         title="Clear selection"
         @click="clearSelection"
       >

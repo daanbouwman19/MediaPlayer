@@ -10,6 +10,7 @@ import type {
 } from '../../core/media/types';
 import type { FileSystemEntry } from '../../core/media/file-system';
 import type { DriveCacheStatus } from '../../shared/ipc/media.contract';
+import { HttpError } from './http-error';
 
 export class WebAdapter implements IMediaBackend {
   // The server streams Drive files through its own cache, but there is no
@@ -21,11 +22,20 @@ export class WebAdapter implements IMediaBackend {
   }
 
   async unlock(password: string): Promise<boolean> {
-    const res = await this.request<{ success: boolean }>('/api/auth/unlock', {
-      method: 'POST',
-      body: JSON.stringify({ password }),
-    });
-    return res.success;
+    try {
+      const res = await this.request<{ success: boolean }>('/api/auth/unlock', {
+        method: 'POST',
+        body: JSON.stringify({ password }),
+      });
+      return res.success;
+    } catch (error) {
+      // 401 is the server's answer to a wrong password. Anything else (429
+      // rate limiting, 5xx, network failure) is not, so let it propagate.
+      if (error instanceof HttpError && error.status === 401) {
+        return false;
+      }
+      throw error;
+    }
   }
 
   private async request<T>(
@@ -75,7 +85,8 @@ export class WebAdapter implements IMediaBackend {
       } catch {
         // Ignore JSON parse error for error response
       }
-      throw new Error(
+      throw new HttpError(
+        res.status,
         errorMessage || `Request failed with status ${res.status}`,
       );
     }

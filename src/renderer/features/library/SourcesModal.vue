@@ -13,6 +13,7 @@
       @click.self="closeModal"
     >
       <div
+        ref="sourcesDialogRef"
         class="relative w-full max-w-2xl glass-panel md:rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-dvh md:max-h-[85vh] transition-all"
         role="dialog"
         aria-modal="true"
@@ -115,7 +116,7 @@
                       @change="
                         handleToggleActive(
                           dir.path,
-                          ($event.target as HTMLInputElement).checked,
+                          $event.target as HTMLInputElement,
                         )
                       "
                     />
@@ -136,7 +137,7 @@
 
                   <!-- Icon -->
                   <span
-                    v-if="dir.type === 'google_drive'"
+                    v-if="isDriveSource(dir)"
                     class="mr-3 text-accent-secondary shrink-0"
                     title="Google Drive"
                   >
@@ -276,6 +277,7 @@
   >
     <div
       v-if="showDriveAuth"
+      ref="driveAuthDialogRef"
       class="fixed inset-0 z-60 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
       role="dialog"
       aria-modal="true"
@@ -453,7 +455,8 @@
   <!-- File Explorer Modal -->
   <div
     v-if="isFileExplorerOpen"
-    class="fixed inset-0 z-70 bg-black bg-opacity-75 flex items-center justify-center p-4 modal-overlay"
+    ref="fileExplorerDialogRef"
+    class="fixed inset-0 z-70 bg-black/75 flex items-center justify-center p-4 modal-overlay"
     role="dialog"
     aria-modal="true"
     aria-label="File Explorer"
@@ -483,12 +486,15 @@ import { usePlayerStore } from '@/composables/usePlayerStore'; // For resetting 
 import { usePlaylistStore } from '@/composables/usePlaylistStore';
 import { selectAllAlbums } from '@/utils/albumUtils';
 import { api } from '@/api/index';
-import { ref, onMounted } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import FileExplorer from './FileExplorer.vue';
 import CloseIcon from '@/components/atoms/icons/CloseIcon.vue';
 import { useEscapeKey } from '@/composables/useEscapeKey';
+import { useFocusTrap } from '@/composables/useFocusTrap';
 import { useToast } from '@/composables/useToast';
+import { GDRIVE_PROTOCOL } from '../../../core/media/constants';
+import type { MediaDirectory } from '../../../core/media/types';
 
 const toast = useToast();
 const libraryStore = useLibraryStore();
@@ -517,15 +523,58 @@ const hasDriveAuthError = ref(false);
 /** Set once sources change, so closing the dialog by any means re-indexes. */
 const hasSourceChanges = ref(false);
 
-onMounted(async () => {
-  const hasDrive = mediaDirectories.value.some(
-    (d) => d.type === 'google_drive',
-  );
-  if (hasDrive) {
+// Each dialog keeps keyboard focus while it is the top-most one open.
+const sourcesDialogRef = ref<HTMLElement | null>(null);
+const driveAuthDialogRef = ref<HTMLElement | null>(null);
+const fileExplorerDialogRef = ref<HTMLElement | null>(null);
+useFocusTrap(sourcesDialogRef, isSourcesModalVisible);
+useFocusTrap(driveAuthDialogRef, showDriveAuth);
+useFocusTrap(fileExplorerDialogRef, isFileExplorerOpen);
+
+/**
+ * Whether a source is a Google Drive folder. The path prefix also covers rows
+ * stored with type 'local' by older web-mode versions.
+ */
+const isDriveSource = (dir: MediaDirectory) =>
+  dir.type === 'google_drive' || dir.path.startsWith(GDRIVE_PROTOCOL);
+
+const hasDriveSource = computed(() =>
+  mediaDirectories.value.some(isDriveSource),
+);
+
+let driveAuthCheckId = 0;
+
+/**
+ * Checks whether the stored Google Drive credentials still work, so the modal
+ * can offer re-authentication. Errors are logged, never thrown.
+ */
+const checkDriveAuth = async () => {
+  const checkId = ++driveAuthCheckId;
+  try {
     const isAuth = await api.checkGoogleDriveAuth();
-    hasDriveAuthError.value = !isAuth;
+    // Ignore answers to a check that a newer one has superseded.
+    if (checkId === driveAuthCheckId) {
+      hasDriveAuthError.value = !isAuth;
+    }
+  } catch (error) {
+    console.error('Error checking Google Drive authentication:', error);
   }
-});
+};
+
+// The modal is always mounted, before the library (and its sources) loads,
+// so check whenever it is opened with a Drive source rather than on mount.
+watch(
+  [isSourcesModalVisible, hasDriveSource],
+  ([visible, hasDrive]) => {
+    if (!hasDrive) {
+      driveAuthCheckId++;
+      hasDriveAuthError.value = false;
+    } else if (visible) {
+      void checkDriveAuth();
+    }
+  },
+  { immediate: true },
+);
 
 /**
  * Closes the modal.
@@ -614,9 +663,10 @@ const resetSlideshowState = () => {
 /**
  * Toggles the active state of a media directory.
  * @param path - The path of the directory.
- * @param isActive - The new active state.
+ * @param checkbox - The checkbox the user toggled; its state is the new one.
  */
-const handleToggleActive = async (path: string, isActive: boolean) => {
+const handleToggleActive = async (path: string, checkbox: HTMLInputElement) => {
+  const isActive = checkbox.checked;
   try {
     await api.setDirectoryActiveState(path, isActive);
     hasSourceChanges.value = true;
@@ -626,6 +676,13 @@ const handleToggleActive = async (path: string, isActive: boolean) => {
     }
   } catch (error) {
     console.error('Error toggling directory active state:', error);
+    // The binding is one-way and dir.isActive never changed, so Vue won't
+    // re-render the checkbox: put it back to the last saved state by hand.
+    const dir = mediaDirectories.value.find((d) => d.path === path);
+    checkbox.checked = dir ? dir.isActive : !isActive;
+    toast.error(
+      `Could not ${isActive ? 'enable' : 'disable'} this source. Please try again.`,
+    );
   }
 };
 
@@ -652,6 +709,7 @@ const confirmRemove = async (path: string) => {
     pathsPendingRemoval.value.delete(path);
   } catch (error) {
     console.error('Error removing directory:', error);
+    toast.error('Could not remove this source. Please try again.');
   }
 };
 
@@ -718,6 +776,7 @@ const reindex = async () => {
     resetSlideshowState();
   } catch (error) {
     console.error('Error re-indexing library:', error);
+    toast.error('Re-indexing the library failed. Please try again.');
   } finally {
     libraryStore.isScanning = false;
   }

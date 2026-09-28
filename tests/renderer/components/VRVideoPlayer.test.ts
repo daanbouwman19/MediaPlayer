@@ -621,10 +621,16 @@ describe('VRVideoPlayer.vue', () => {
     (window as any).DeviceOrientationEvent = {};
 
     const recenterBtn = wrapper.find('button[title="Recenter VR View"]');
+    expect(recenterBtn.classes()).toContain('text-white');
+    expect(recenterBtn.classes()).not.toContain('text-accent');
     await recenterBtn.trigger('click');
     dispatchOrientation(0, 90, 0);
+    await wrapper.vm.$nextTick();
 
     expect((wrapper.vm as any).isMotionControlActive).toBe(true);
+    // Only one text colour at a time, so the accent cue is not overridden
+    expect(recenterBtn.classes()).toContain('text-accent');
+    expect(recenterBtn.classes()).not.toContain('text-white');
     (window as any).DeviceOrientationEvent = originalDOE;
     wrapper.unmount();
   });

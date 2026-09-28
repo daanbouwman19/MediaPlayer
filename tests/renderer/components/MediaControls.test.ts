@@ -143,6 +143,19 @@ describe('MediaControls.vue', () => {
     expect(wrapper.emitted('open-in-vlc')).toBeTruthy();
   });
 
+  it('gives the VR toggle exactly one text colour per state', async () => {
+    const wrapper = mount(MediaControls, {
+      props: { ...defaultProps, isImage: false, isVrMode: false },
+    });
+    const vrButton = () => wrapper.find('button[aria-label="Toggle VR Mode"]');
+    expect(vrButton().classes()).toContain('text-white');
+    expect(vrButton().classes()).not.toContain('text-button-text');
+
+    await wrapper.setProps({ isVrMode: true });
+    expect(vrButton().classes()).toContain('text-button-text');
+    expect(vrButton().classes()).not.toContain('text-white');
+  });
+
   it('should emit set-rating when star clicked', async () => {
     const wrapper = mount(MediaControls, { props: defaultProps });
     await wrapper.vm.$nextTick();

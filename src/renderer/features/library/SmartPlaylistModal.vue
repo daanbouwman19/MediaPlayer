@@ -13,6 +13,7 @@
       @click.self="close"
     >
       <div
+        ref="dialogRef"
         class="relative w-full max-w-lg overflow-hidden rounded-2xl glass-panel shadow-2xl transform transition-all"
         role="dialog"
         aria-modal="true"
@@ -57,11 +58,11 @@
               </label>
               <input
                 id="playlist-name"
+                ref="nameInput"
                 v-model="name"
                 type="text"
                 class="w-full glass-input rounded-xl px-4 py-3 placeholder-muted focus:ring-2 focus:ring-accent/20 transition-all"
                 placeholder="e.g. My Top Rated Videos"
-                autofocus
               />
             </div>
 
@@ -186,7 +187,7 @@
             </button>
             <button
               class="px-6 py-2.5 rounded-xl bg-accent hover:bg-accent-hover text-white font-semibold shadow-lg shadow-accent/20 transition-all transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
-              :disabled="!name.trim()"
+              :disabled="!name.trim() || isSaving"
               @click="save"
             >
               {{ isEditing ? 'Save Changes' : 'Create Playlist' }}
@@ -199,7 +200,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, computed } from 'vue';
+import { ref, watch, computed, onBeforeUnmount } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useUIStore } from '@/composables/useUIStore';
 import { useLibraryStore } from '@/composables/useLibraryStore';
@@ -207,6 +208,10 @@ import { useToast } from '@/composables/useToast';
 import { api } from '@/api/index';
 import CloseIcon from '@/components/atoms/icons/CloseIcon.vue';
 import { useEscapeKey } from '@/composables/useEscapeKey';
+import { useFocusTrap } from '@/composables/useFocusTrap';
+
+/** Matches the leave transition, so the form doesn't visibly reset mid-fade. */
+const RESET_DELAY_MS = 300;
 
 const props = defineProps<{
   playlistToEdit?: {
@@ -233,10 +238,41 @@ const maxViews = ref<number | undefined>(undefined);
 const minDaysSinceView = ref<number | undefined>(undefined);
 
 const isEditing = computed(() => !!props.playlistToEdit);
+const isSaving = ref(false);
+
+const dialogRef = ref<HTMLElement | null>(null);
+const nameInput = ref<HTMLInputElement | null>(null);
+useFocusTrap(dialogRef, isSmartPlaylistModalVisible, {
+  initialFocus: nameInput,
+});
+
+const resetForm = () => {
+  name.value = '';
+  minRating.value = 0;
+  minDurationMinutes.value = 0;
+  minViews.value = undefined;
+  maxViews.value = undefined;
+  minDaysSinceView.value = undefined;
+};
+
+let resetTimer: ReturnType<typeof setTimeout> | null = null;
+
+const cancelPendingReset = () => {
+  if (resetTimer !== null) {
+    clearTimeout(resetTimer);
+    resetTimer = null;
+  }
+};
 
 // Watch for modal opening to populate/reset form
 watch(isSmartPlaylistModalVisible, (visible) => {
+  // A reset scheduled by a previous close must not fire into this session:
+  // it would wipe the form and clear the playlist being edited.
+  cancelPendingReset();
+
   if (visible) {
+    // Start from a clean form: the delayed reset may not have run yet.
+    resetForm();
     if (props.playlistToEdit) {
       name.value = props.playlistToEdit.name;
       try {
@@ -253,24 +289,25 @@ watch(isSmartPlaylistModalVisible, (visible) => {
       }
     }
   } else {
-    // Reset form after delay
-    setTimeout(() => {
-      name.value = '';
-      minRating.value = 0;
-      minDurationMinutes.value = 0;
-      minViews.value = undefined;
-      maxViews.value = undefined;
-      minDaysSinceView.value = undefined;
+    // Reset form after the leave transition
+    resetTimer = setTimeout(() => {
+      resetTimer = null;
+      resetForm();
       emit('close'); // Notify parent to clear edit selection
-    }, 300);
+    }, RESET_DELAY_MS);
   }
 });
+
+onBeforeUnmount(cancelPendingReset);
 
 const close = () => {
   isSmartPlaylistModalVisible.value = false;
 };
 
 const save = async () => {
+  // Ignore repeat clicks while a save is in flight, and clicks on the button
+  // while the closed dialog is still fading out.
+  if (isSaving.value || !isSmartPlaylistModalVisible.value) return;
   if (!name.value.trim()) return;
 
   const criteria = {
@@ -282,6 +319,7 @@ const save = async () => {
     minDaysSinceView: minDaysSinceView.value,
   };
 
+  isSaving.value = true;
   try {
     if (isEditing.value && props.playlistToEdit) {
       await api.updateSmartPlaylist(
@@ -294,16 +332,24 @@ const save = async () => {
       await api.createSmartPlaylist(name.value, JSON.stringify(criteria));
       toast.success('Playlist created');
     }
-
-    // Optimistically update list or re-fetch
-    smartPlaylists.value = await api.getSmartPlaylists();
-
-    close();
   } catch (err) {
     console.error('Failed to save playlist:', err);
     toast.error(
       'Failed to save playlist. Please check your input and try again.',
     );
+    return;
+  } finally {
+    isSaving.value = false;
+  }
+
+  close();
+
+  // Re-fetch the list. The playlist is already saved, so a failure here must
+  // not be reported as a failed save (a retry would create a duplicate).
+  try {
+    smartPlaylists.value = await api.getSmartPlaylists();
+  } catch (err) {
+    console.error('Failed to refresh smart playlists:', err);
   }
 };
 

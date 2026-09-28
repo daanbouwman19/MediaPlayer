@@ -18,4 +18,14 @@ describe('LoadingMask.vue', () => {
     });
     expect(wrapper.text()).toContain(message);
   });
+
+  it('dims the app with a translucent backdrop (Tailwind v4 opacity syntax)', () => {
+    const wrapper = mount(LoadingMask);
+    const classes = wrapper.classes();
+    // Tailwind v4 dropped bg-opacity-*, so bg-black + bg-opacity-75 renders
+    // solid black; the colour must carry its own alpha.
+    expect(classes).toContain('bg-black/75');
+    expect(classes).not.toContain('bg-black');
+    expect(classes.some((c) => c.startsWith('bg-opacity-'))).toBe(false);
+  });
 });

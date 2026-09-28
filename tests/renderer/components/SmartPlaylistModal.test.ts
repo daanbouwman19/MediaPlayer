@@ -4,6 +4,7 @@ import {
   expect,
   vi,
   beforeEach,
+  afterEach,
   type Mock,
 } from 'vite-plus/test';
 import { mount, flushPromises } from '@vue/test-utils';
@@ -215,5 +216,204 @@ describe('SmartPlaylistModal.vue', () => {
       expect.stringContaining('"minRating":4'),
     );
     expect(useUIStore().isSmartPlaylistModalVisible).toBe(false);
+  });
+
+  describe('save guard', () => {
+    const findCreateButton = (wrapper: ReturnType<typeof mount>) =>
+      wrapper.findAll('button').find((b) => b.text() === 'Create Playlist')!;
+
+    it('ignores a double click while the first save is in flight', async () => {
+      useUIStore().isSmartPlaylistModalVisible = true;
+      const wrapper = mount(SmartPlaylistModal);
+      await wrapper.vm.$nextTick();
+      await wrapper.find('input[type="text"]').setValue('Double Click');
+
+      let resolveCreate!: (value: unknown) => void;
+      (api.createSmartPlaylist as Mock).mockReturnValue(
+        new Promise((resolve) => {
+          resolveCreate = resolve;
+        }),
+      );
+      (api.getSmartPlaylists as Mock).mockResolvedValue([]);
+
+      const createBtn = findCreateButton(wrapper);
+      await createBtn.trigger('click');
+      await createBtn.trigger('click');
+
+      expect(api.createSmartPlaylist).toHaveBeenCalledTimes(1);
+      expect(createBtn.attributes('disabled')).toBeDefined();
+
+      // A direct second call is refused as well, not just the disabled button
+      await (wrapper.vm as any).save();
+      expect(api.createSmartPlaylist).toHaveBeenCalledTimes(1);
+
+      resolveCreate({ id: 1 });
+      await flushPromises();
+
+      expect(api.createSmartPlaylist).toHaveBeenCalledTimes(1);
+      expect(useUIStore().isSmartPlaylistModalVisible).toBe(false);
+    });
+
+    it('ignores clicks on the button while the closed dialog fades out', async () => {
+      useUIStore().isSmartPlaylistModalVisible = true;
+      const wrapper = mount(SmartPlaylistModal);
+      await wrapper.vm.$nextTick();
+      await wrapper.find('input[type="text"]').setValue('Fade Out');
+      (api.createSmartPlaylist as Mock).mockResolvedValue({ id: 1 });
+      (api.getSmartPlaylists as Mock).mockResolvedValue([]);
+
+      await findCreateButton(wrapper).trigger('click');
+      await flushPromises();
+      expect(useUIStore().isSmartPlaylistModalVisible).toBe(false);
+
+      // The leaving element is still in the DOM during the transition
+      await (wrapper.vm as any).save();
+      expect(api.createSmartPlaylist).toHaveBeenCalledTimes(1);
+    });
+
+    it('re-enables saving after a failed attempt', async () => {
+      useUIStore().isSmartPlaylistModalVisible = true;
+      const wrapper = mount(SmartPlaylistModal);
+      await wrapper.vm.$nextTick();
+      await wrapper.find('input[type="text"]').setValue('Retry');
+      const consoleSpy = vi
+        .spyOn(console, 'error')
+        .mockImplementation(() => {});
+      (api.createSmartPlaylist as Mock).mockRejectedValueOnce(
+        new Error('offline'),
+      );
+
+      await findCreateButton(wrapper).trigger('click');
+      await flushPromises();
+
+      expect(findCreateButton(wrapper).attributes('disabled')).toBeUndefined();
+      expect(useUIStore().isSmartPlaylistModalVisible).toBe(true);
+      consoleSpy.mockRestore();
+    });
+
+    it('does not report a failed save when only the list refresh fails', async () => {
+      useUIStore().isSmartPlaylistModalVisible = true;
+      const wrapper = mount(SmartPlaylistModal);
+      await wrapper.vm.$nextTick();
+      await wrapper.find('input[type="text"]').setValue('Saved Anyway');
+      const consoleSpy = vi
+        .spyOn(console, 'error')
+        .mockImplementation(() => {});
+      (api.createSmartPlaylist as Mock).mockResolvedValue({ id: 1 });
+      (api.getSmartPlaylists as Mock).mockRejectedValue(new Error('offline'));
+
+      await findCreateButton(wrapper).trigger('click');
+      await flushPromises();
+
+      expect(useUIStore().isSmartPlaylistModalVisible).toBe(false);
+      expect(consoleSpy).toHaveBeenCalledWith(
+        'Failed to refresh smart playlists:',
+        expect.any(Error),
+      );
+      expect(consoleSpy).not.toHaveBeenCalledWith(
+        'Failed to save playlist:',
+        expect.anything(),
+      );
+      consoleSpy.mockRestore();
+    });
+  });
+
+  describe('delayed reset', () => {
+    const playlistA = {
+      id: 7,
+      name: 'Playlist A',
+      criteria: JSON.stringify({ minRating: 3 }),
+    };
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('is cancelled when the modal is reopened within the delay', async () => {
+      vi.useFakeTimers();
+      const wrapper = mount(SmartPlaylistModal, {
+        props: { playlistToEdit: playlistA },
+      });
+
+      useUIStore().isSmartPlaylistModalVisible = true;
+      await wrapper.vm.$nextTick();
+      expect((wrapper.vm as any).name).toBe('Playlist A');
+
+      // Escape, then Enter on the still-focused Edit button 100 ms later
+      useUIStore().isSmartPlaylistModalVisible = false;
+      await wrapper.vm.$nextTick();
+      vi.advanceTimersByTime(100);
+      useUIStore().isSmartPlaylistModalVisible = true;
+      await wrapper.vm.$nextTick();
+
+      vi.advanceTimersByTime(1000);
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.emitted('close')).toBeUndefined();
+      expect((wrapper.vm as any).name).toBe('Playlist A');
+      expect((wrapper.vm as any).minRating).toBe(3);
+      expect(wrapper.find('h2').text()).toContain('Edit Smart Playlist');
+    });
+
+    it('starts a create session with an empty form even before the reset ran', async () => {
+      vi.useFakeTimers();
+      const wrapper = mount(SmartPlaylistModal, {
+        props: { playlistToEdit: playlistA },
+      });
+      useUIStore().isSmartPlaylistModalVisible = true;
+      await wrapper.vm.$nextTick();
+
+      useUIStore().isSmartPlaylistModalVisible = false;
+      await wrapper.vm.$nextTick();
+      vi.advanceTimersByTime(100);
+
+      await wrapper.setProps({ playlistToEdit: null });
+      useUIStore().isSmartPlaylistModalVisible = true;
+      await wrapper.vm.$nextTick();
+
+      expect((wrapper.vm as any).name).toBe('');
+      expect((wrapper.vm as any).minRating).toBe(0);
+      expect(wrapper.find('h2').text()).toContain('Create Smart Playlist');
+    });
+
+    it('is cancelled when the component unmounts', async () => {
+      vi.useFakeTimers();
+      const wrapper = mount(SmartPlaylistModal, {
+        props: { playlistToEdit: playlistA },
+      });
+      useUIStore().isSmartPlaylistModalVisible = true;
+      await wrapper.vm.$nextTick();
+      useUIStore().isSmartPlaylistModalVisible = false;
+      await wrapper.vm.$nextTick();
+      expect(vi.getTimerCount()).toBe(1);
+
+      wrapper.unmount();
+
+      expect(vi.getTimerCount()).toBe(0);
+    });
+  });
+
+  describe('focus management', () => {
+    it('moves focus to the name field on open and back to the trigger on close', async () => {
+      const trigger = document.createElement('button');
+      trigger.textContent = 'Add Playlist';
+      document.body.appendChild(trigger);
+      trigger.focus();
+
+      const wrapper = mount(SmartPlaylistModal, { attachTo: document.body });
+      useUIStore().isSmartPlaylistModalVisible = true;
+      await flushPromises();
+
+      expect(document.activeElement).toBe(
+        wrapper.find('#playlist-name').element,
+      );
+
+      useUIStore().isSmartPlaylistModalVisible = false;
+      await flushPromises();
+      expect(document.activeElement).toBe(trigger);
+
+      wrapper.unmount();
+      trigger.remove();
+    });
   });
 });

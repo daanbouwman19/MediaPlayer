@@ -2,7 +2,17 @@ import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import { WebAdapter } from '../api/WebAdapter';
 import { ElectronAdapter } from '../api/ElectronAdapter';
+import { HttpError } from '../api/http-error';
 import type { IMediaBackend } from '../api/types';
+
+/**
+ * Outcome of an unlock attempt:
+ * - `ok`: the library is unlocked.
+ * - `invalid`: the password was rejected.
+ * - `rateLimited`: too many attempts; the server refused to check it (429).
+ * - `error`: the attempt could not be completed (network or server error).
+ */
+export type UnlockResult = 'ok' | 'invalid' | 'rateLimited' | 'error';
 
 export const useAuthStore = defineStore('auth', () => {
   // Detect environment inside factory to allow easier mocking/stubbing in tests
@@ -28,17 +38,20 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  async function unlock(password: string): Promise<boolean> {
+  async function unlock(password: string): Promise<UnlockResult> {
     try {
       const success = await backend.unlock(password);
       if (success) {
         isLocked.value = false;
-        return true;
+        return 'ok';
       }
-      return false;
+      return 'invalid';
     } catch (error) {
+      if (error instanceof HttpError && error.status === 429) {
+        return 'rateLimited';
+      }
       console.error('Unlock failed:', error);
-      return false;
+      return 'error';
     }
   }
 

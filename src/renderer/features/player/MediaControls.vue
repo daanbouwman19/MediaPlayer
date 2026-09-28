@@ -161,10 +161,10 @@
           <!-- VR Mode -->
           <button
             v-if="!isImage && currentMediaItem"
-            class="p-1.5 md:p-2 rounded-full text-white transition-all duration-200 hover:bg-(--accent-color) hover:text-button-text focus-visible:ring-2 focus-visible:ring-white/50 focus-visible:outline-none shrink-0 hidden sm:block"
-            :class="{
-              'bg-(--accent-color) text-button-text': isVrMode,
-            }"
+            class="p-1.5 md:p-2 rounded-full transition-all duration-200 hover:bg-(--accent-color) hover:text-button-text focus-visible:ring-2 focus-visible:ring-white/50 focus-visible:outline-none shrink-0 hidden sm:block"
+            :class="
+              isVrMode ? 'bg-(--accent-color) text-button-text' : 'text-white'
+            "
             title="Toggle VR Mode (180°)"
             aria-label="Toggle VR Mode"
             :aria-pressed="isVrMode"

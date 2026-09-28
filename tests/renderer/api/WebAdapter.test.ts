@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vite-plus/test';
 import { WebAdapter } from '../../../src/renderer/api/WebAdapter';
+import { HttpError } from '../../../src/renderer/api/http-error';
 import { runBackendContractTests } from './backend.contract';
 
 const fetchMock = vi.fn();
@@ -309,6 +310,57 @@ describe('WebAdapter', () => {
       const adapter = new WebAdapter();
       const res = await adapter.unlock('password');
       expect(res).toBe(true);
+    });
+
+    it('unlock returns false when the server rejects the password (401)', async () => {
+      const reloadSpy = vi.fn();
+      Object.defineProperty(window, 'location', {
+        value: { reload: reloadSpy },
+        writable: true,
+      });
+      fetchMock.mockResolvedValue({
+        ok: false,
+        status: 401,
+        statusText: 'Unauthorized',
+        json: () => Promise.resolve({ error: 'Invalid password' }),
+      });
+      const adapter = new WebAdapter();
+      await expect(adapter.unlock('wrong')).resolves.toBe(false);
+      expect(reloadSpy).not.toHaveBeenCalled();
+    });
+
+    it('unlock rethrows rate limiting (429) with its status instead of reporting a wrong password', async () => {
+      fetchMock.mockResolvedValue({
+        ok: false,
+        status: 429,
+        statusText: 'Too Many Requests',
+        json: () =>
+          Promise.resolve({
+            error: 'Too many auth attempts. Please try again later.',
+          }),
+      });
+      const adapter = new WebAdapter();
+      const error: unknown = await adapter.unlock('pwd').catch((e) => e);
+      expect(error).toBeInstanceOf(HttpError);
+      expect((error as HttpError).status).toBe(429);
+      expect((error as HttpError).message).toBe(
+        'Too many auth attempts. Please try again later.',
+      );
+    });
+
+    it('request errors carry the HTTP status code', async () => {
+      fetchMock.mockResolvedValue({
+        ok: false,
+        status: 503,
+        statusText: 'Service Unavailable',
+        json: () => Promise.reject(new Error('not json')),
+      });
+      const adapter = new WebAdapter();
+      const error: unknown = await adapter
+        .addMediaDirectory('/path')
+        .catch((e) => e);
+      expect(error).toBeInstanceOf(HttpError);
+      expect((error as HttpError).status).toBe(503);
     });
 
     it('getHeatmapProgress catches and returns null on error', async () => {

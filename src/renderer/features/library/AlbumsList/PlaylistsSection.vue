@@ -11,7 +11,7 @@
         >
           <!-- Name (Main Action - Slideshow) -->
           <button
-            class="grow flex items-center gap-2 truncate text-sm text-color group-hover:text-accent text-left focus:outline-none cursor-pointer min-w-0"
+            class="grow flex items-center gap-2 truncate text-sm text-color group-hover:text-accent text-left rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-accent cursor-pointer min-w-0"
             aria-label="Recently Played Slideshow"
             :disabled="!!loadingAction"
             @click="handleHistorySlideshow"
@@ -89,7 +89,7 @@
         >
           <!-- Name (Main Action) -->
           <button
-            class="grow flex items-center gap-2 truncate text-sm text-color group-hover:text-accent text-left focus:outline-none cursor-pointer min-w-0"
+            class="grow flex items-center gap-2 truncate text-sm text-color group-hover:text-accent text-left rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-accent cursor-pointer min-w-0"
             :aria-label="'Play ' + playlist.name"
             :disabled="!!loadingAction"
             @click="handleSmartPlaylistSlideshow(playlist)"

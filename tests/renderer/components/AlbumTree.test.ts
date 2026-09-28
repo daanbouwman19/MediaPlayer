@@ -63,6 +63,38 @@ describe('AlbumTree.vue', () => {
     expect(wrapper.find('.toggle-button').exists()).toBe(false);
   });
 
+  it('indents every nesting level by the same amount', async () => {
+    const leaf = (id: string, children: any[] = []) => ({
+      id,
+      name: id,
+      textures: [{ name: `${id}.jpg`, path: `/${id}.jpg` }],
+      children,
+    });
+    const deepAlbum = leaf('level0', [
+      leaf('level1', [leaf('level2', [leaf('level3', [leaf('level4')])])]),
+    ]);
+    const wrapper = mount(AlbumTree, {
+      props: { album: deepAlbum, selection: {} },
+    });
+
+    for (let level = 0; level < 4; level++) {
+      await wrapper.findAll('.toggle-button')[level].trigger('click');
+    }
+
+    const items = wrapper.findAll('li');
+    expect(items).toHaveLength(5);
+    // Nested items render inside their parent's <li>, so a per-item offset
+    // (e.g. margin-left: depth * 20px) would compound at every level.
+    for (const item of items) {
+      expect(item.attributes('style') ?? '').not.toMatch(/margin/);
+    }
+    const lists = wrapper.findAll('ul');
+    expect(lists).toHaveLength(4);
+    for (const list of lists) {
+      expect(list.classes()).toContain('pl-3.5');
+    }
+  });
+
   it('does not render children by default', () => {
     const wrapper = mount(AlbumTree, {
       props: {

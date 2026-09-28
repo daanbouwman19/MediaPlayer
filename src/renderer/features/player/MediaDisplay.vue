@@ -894,16 +894,9 @@ defineExpose({
   border-radius: 12px;
 }
 
-.glass-button {
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(4px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  color: white;
-}
-
-.glass-button:hover {
-  background: rgba(255, 255, 255, 0.2);
-}
+/* .glass-button comes from main.css (@layer components). Don't redefine it
+ * here: a scoped copy is unlayered and would override the utilities on the
+ * buttons (bg-accent, text-accent, ...). */
 
 .media-fade-enter-active,
 .media-fade-leave-active {
