@@ -375,8 +375,12 @@ const loadSource = (src: string) => {
   if (needsHlsJs(src)) {
     hlsSource = attachHlsSource(video, src, {
       startPosition: props.initialTime,
+      // Like VideoPlayer, always start HLS (transcodes and the direct-play
+      // fallback) once it is playable: MediaDisplay only clears the
+      // 'Transcoding...' overlay on 'playing', and a fresh item starts with
+      // isPlaying=false, so waiting for it would keep the overlay up.
       onManifestParsed: () => {
-        if (props.isPlaying) playVideo();
+        if (video?.paused) playVideo();
       },
       onFatalError: (error) => {
         hlsSource = null;

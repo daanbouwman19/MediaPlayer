@@ -255,10 +255,36 @@ describe('VRVideoPlayer playback wiring', () => {
     wrapper.unmount();
   });
 
-  it('waits for the manifest before playing, and only if playback is wanted', async () => {
+  it('autoplays a transcode once its manifest is parsed, even for a fresh (paused) item', async () => {
+    // A fresh item starts with isPlaying=false; MediaDisplay only clears the
+    // 'Transcoding...' overlay on 'playing', so the stream must start itself.
+    (video.play as Mock).mockImplementation(() => {
+      video.dispatchEvent(new Event('play'));
+      video.dispatchEvent(new Event('playing'));
+      return Promise.resolve();
+    });
     const wrapper = await mountPlayer({
       src: '/api/hls/master.m3u8?file=movie.mkv',
       isPlaying: false,
+    });
+    expect(video.play).not.toHaveBeenCalled();
+
+    hlsInstances[0].fire('manifestParsed');
+
+    expect(video.play).toHaveBeenCalledTimes(1);
+    expect(wrapper.emitted('play')).toHaveLength(1);
+    expect(wrapper.emitted('playing')).toHaveLength(1);
+    wrapper.unmount();
+  });
+
+  it('does not call play() again on a manifest reload while already playing', async () => {
+    const wrapper = await mountPlayer({
+      src: '/api/hls/master.m3u8?file=movie.mkv',
+      isPlaying: true,
+    });
+    Object.defineProperty(video, 'paused', {
+      configurable: true,
+      get: () => false,
     });
     hlsInstances[0].fire('manifestParsed');
     expect(video.play).not.toHaveBeenCalled();
