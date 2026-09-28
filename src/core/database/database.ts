@@ -310,6 +310,25 @@ async function cacheAlbums(albums: Album[]): Promise<void> {
 }
 
 /**
+ * Caches the list of albums (file index) and propagates failures, including
+ * the operation timeout. Library scans use this so the album cache is only
+ * stamped as current once the new tree is confirmed stored.
+ * @param albums - The array of album objects to cache.
+ * @throws {Error} If the database operation fails or times out.
+ */
+async function storeAlbumCache(albums: Album[]): Promise<void> {
+  try {
+    await getClient().sendMessage<void>('cacheAlbums', {
+      cacheKey: FILE_INDEX_CACHE_KEY,
+      albums,
+    });
+  } catch (error) {
+    safeError('[database.js] Error caching albums:', error);
+    throw error;
+  }
+}
+
+/**
  * Retrieves the cached list of albums from the database.
  * @returns A promise that resolves to the cached albums, or null if not found or an error occurs.
  */
@@ -641,6 +660,8 @@ async function getAllMetadataVerification(): Promise<{
         size: number;
         createdAt: string;
         status: string;
+        // SQL NULL arrives as null; consumers check it with isMetadataComplete.
+        duration?: number;
       }[]
     >('getAllMetadataVerification');
 
@@ -657,6 +678,22 @@ async function getAllMetadataVerification(): Promise<{
     safeError('[database.js] Error getting all metadata verification:', error);
     return {};
   }
+}
+
+/**
+ * Reads the media directories straight from the database, bypassing the
+ * directory cache, and propagates failures. Library scans use this so a
+ * database error (e.g. during a worker restart) aborts the scan instead of
+ * being read as "no sources" and cached as an empty library. Authorization
+ * keeps using the fail-closed {@link getMediaDirectories}.
+ * @returns A promise that resolves to all media directory objects.
+ * @throws {Error} If the database operation fails.
+ */
+async function readMediaDirectories(): Promise<MediaDirectory[]> {
+  const directories = await getClient().sendMessage<MediaDirectory[]>(
+    'getMediaDirectories',
+  );
+  return directories || [];
 }
 
 /**
@@ -818,9 +855,11 @@ export {
   recordMediaView,
   getMediaViewCounts,
   cacheAlbums,
+  storeAlbumCache,
   getCachedAlbums,
   addMediaDirectory,
   getMediaDirectories,
+  readMediaDirectories,
   removeMediaDirectory,
   setDirectoryActiveState,
   setOperationTimeout,

@@ -439,6 +439,7 @@ describe('Database Worker Combined Tests', () => {
       await sendMessage('upsertMetadata', {
         filePath: fileA,
         status: 'success',
+        duration: 12,
       });
       await sendMessage('upsertMetadata', {
         filePath: fileB,
@@ -453,6 +454,22 @@ describe('Database Worker Combined Tests', () => {
       expect(needed).not.toContain(fileA);
       expect(needed).toContain(fileB);
       expect(needed).toContain('/path/c.mp4');
+    });
+
+    it('keeps a success video without a duration (legacy row), but not an image', async () => {
+      await sendMessage('upsertMetadata', {
+        filePath: '/path/legacy.mp4',
+        status: 'success',
+      });
+      await sendMessage('upsertMetadata', {
+        filePath: '/path/photo.jpg',
+        status: 'success',
+      });
+
+      const result = await sendMessage('filterProcessingNeeded', {
+        filePaths: ['/path/legacy.mp4', '/path/photo.jpg'],
+      });
+      expect(result.data).toEqual(['/path/legacy.mp4']);
     });
   });
 

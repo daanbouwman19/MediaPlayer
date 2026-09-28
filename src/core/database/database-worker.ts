@@ -12,7 +12,8 @@ import path from 'path';
 import type { Album } from '../media/types.ts';
 import { FILE_INDEX_CACHE_KEY } from '../media/constants.ts';
 import { getDriveId, isDrivePath } from '../media/media-utils.ts';
-import { generateFileId } from '../media/utils/file-id.ts';
+import { assignFileIds, generateUniqueFileId } from '../media/utils/file-id.ts';
+import { isMetadataComplete } from '../media/utils/metadata-status.ts';
 import {
   initializeDatabase,
   JOB_TYPE_TRANSCODE,
@@ -54,6 +55,7 @@ type StatementName =
   | 'getMediaDirectoryByPath'
   | 'getMediaViewCountsBatch'
   | 'getMetadataBatch'
+  | 'getPathByFileId'
   | 'getPendingJobs'
   | 'getPendingMetadata'
   | 'getRecentlyPlayed'
@@ -243,25 +245,29 @@ async function generateFileIdsBatched(
     }
   }
 
-  // 3. Process missing paths with fs.stat (limited concurrency)
-  const IO_BATCH_SIZE = 50;
-  for (let i = 0; i < missingPaths.length; i += IO_BATCH_SIZE) {
-    const batch = missingPaths.slice(i, i + IO_BATCH_SIZE);
-    const results = await Promise.allSettled(
-      batch.map(async (filePath) => {
-        const fileId = await generateFileId(filePath);
-        return { filePath, fileId };
-      }),
-    );
-
-    for (const result of results) {
-      if (result.status === 'fulfilled') {
-        const { filePath, fileId } = result.value;
-        pathIdMap.set(filePath, fileId);
-      }
-    }
+  // 3. Process missing paths with fs.stat (limited concurrency). IDs that
+  // already belong to another existing file (a copy) are disambiguated.
+  const generated = await assignFileIds(missingPaths, lookupPathForFileId);
+  for (const [filePath, fileId] of generated) {
+    pathIdMap.set(filePath, fileId);
   }
   return pathIdMap;
+}
+
+/**
+ * Returns the path stored for a file ID, used to detect ID collisions
+ * between distinct files (see {@link assignFileIds}).
+ */
+function lookupPathForFileId(fileId: string): string | null {
+  const stmt = statements.getPathByFileId;
+  if (!db || !stmt) return null;
+  try {
+    const row = stmt.get(fileId) as { file_path: string | null } | undefined;
+    return row?.file_path ?? null;
+  } catch (err) {
+    console.warn('[worker] Failed to look up path for file ID:', err);
+    return null;
+  }
 }
 
 /**
@@ -283,7 +289,7 @@ async function getExistingIdOrGenerate(filePath: string): Promise<string> {
     );
   }
 
-  return generateFileId(filePath);
+  return generateUniqueFileId(filePath, lookupPathForFileId);
 }
 
 /**
@@ -569,6 +575,9 @@ export function initDatabase(dbPath: string): WorkerResult {
     statements.getFileIdByPath = db.prepare(
       `SELECT file_path_hash FROM media_metadata WHERE file_path = ?`,
     );
+    statements.getPathByFileId = db.prepare(
+      `SELECT file_path FROM media_metadata WHERE file_path_hash = ?`,
+    );
     statements.cacheAlbum = db.prepare(
       `INSERT OR REPLACE INTO app_cache (cache_key, cache_value, last_updated) VALUES (?, ?, ?)`,
     );
@@ -738,19 +747,21 @@ export function initDatabase(dbPath: string): WorkerResult {
        FROM media_metadata WHERE file_path IS NOT NULL AND in_library = 1`,
     );
 
-    // Optimized query for metadata verification (skips duration, rating, watched segments)
+    // Optimized query for metadata verification (skips rating, watched segments).
+    // The duration tells whether a 'success' video row is complete.
     statements.getAllMetadataVerification = db.prepare(
       `SELECT
         file_path as filePath,
         size,
         created_at as createdAt,
-        extraction_status as status
+        extraction_status as status,
+        duration
        FROM media_metadata WHERE file_path IS NOT NULL AND in_library = 1`,
     );
 
     // Filter Optimization: Get successful paths in batch
     statements.getSuccessfulPathsBatch = db.prepare(
-      `SELECT file_path FROM media_metadata WHERE file_path IN (${placeholders}) AND extraction_status = 'success'`,
+      `SELECT file_path, duration FROM media_metadata WHERE file_path IN (${placeholders}) AND extraction_status = 'success'`,
     );
 
     statements.getFileIdsByPathsBatch = db.prepare(
@@ -1124,6 +1135,7 @@ export function getAllMetadataVerification(): WorkerResult {
       size: number;
       createdAt: string;
       status: string;
+      duration: number | null;
     }[];
 
     // Return raw rows to avoid blocking worker with heavy transformation.
@@ -1136,7 +1148,8 @@ export function getAllMetadataVerification(): WorkerResult {
 
 /**
  * Filters a list of file paths to only those that need metadata processing.
- * Removes paths that are already marked as 'success' in the database.
+ * Removes paths whose metadata is complete: marked 'success' and, for a
+ * video, stored with a duration.
  * @param filePaths - The list of file paths to check.
  * @returns The filtered list of file paths.
  */
@@ -1151,10 +1164,16 @@ export async function filterProcessingNeeded(
 
     const successfulPathsSet = new Set<string>();
 
-    forEachBatchedRow<{ file_path: string }>(
+    forEachBatchedRow<{ file_path: string; duration: number | null }>(
       getStatement('getSuccessfulPathsBatch'),
       filePaths,
-      (row) => successfulPathsSet.add(row.file_path),
+      (row) => {
+        // Older versions stored videos whose duration probe failed as
+        // 'success' with a NULL duration; those still need extraction.
+        if (isMetadataComplete(row.file_path, 'success', row.duration)) {
+          successfulPathsSet.add(row.file_path);
+        }
+      },
     );
 
     const neededPaths: string[] = [];

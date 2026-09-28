@@ -191,10 +191,9 @@ describe('main.js IPC Security', () => {
   it('should filter unauthorized paths in get-media-view-counts', async () => {
     const paths = ['/media/allowed.mp4', '/etc/passwd', 'gdrive://123'];
     const security = await import('../../src/core/auth/security');
-    (security.filterAuthorizedPaths as unknown as Mock).mockResolvedValue([
-      '/media/allowed.mp4',
-      'gdrive://123',
-    ]);
+    (security.authorizeFilePath as unknown as Mock).mockImplementation(
+      async (p: string) => ({ isAllowed: p !== '/etc/passwd' }),
+    );
 
     const db = await import('../../src/core/database/database');
     const handler = handlers['get-media-view-counts'];

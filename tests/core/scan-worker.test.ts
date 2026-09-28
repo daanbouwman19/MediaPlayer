@@ -35,7 +35,7 @@ describe('scan-worker', () => {
     vi.resetModules();
   });
 
-  it('initializes credentials if tokens are provided', async () => {
+  it('initializes credentials if tokens are provided for a Drive source', async () => {
     const tokens = { refresh_token: 'abc' };
     vi.mocked(mediaScanner.performFullMediaScan).mockResolvedValue([]);
 
@@ -46,13 +46,68 @@ describe('scan-worker', () => {
       id: 1,
       type: 'START_SCAN',
       payload: {
-        directories: ['/dir'],
+        directories: ['/dir', 'gdrive://folder'],
         tokens,
       },
     });
 
     expect(googleAuth.initializeManualCredentials).toHaveBeenCalledWith(tokens);
     expect(mediaScanner.performFullMediaScan).toHaveBeenCalled();
+  });
+
+  it('registers the Drive backend for a Drive scan without tokens', async () => {
+    vi.mocked(mediaScanner.performFullMediaScan).mockResolvedValue([]);
+
+    const { handleScanMessage: callback } =
+      await import('../../src/core/media/scan-worker');
+    const { getDriveBackend } =
+      await import('../../src/core/media/drive-backend');
+
+    await callback({
+      id: 1,
+      type: 'START_SCAN',
+      payload: { directories: ['gdrive://folder'] },
+    });
+
+    expect(() => getDriveBackend()).not.toThrow();
+    expect(googleAuth.initializeManualCredentials).not.toHaveBeenCalled();
+    expect(mediaScanner.performFullMediaScan).toHaveBeenCalledWith([
+      'gdrive://folder',
+    ]);
+  });
+
+  it('does not load the Google client for a purely local scan', async () => {
+    vi.mocked(mediaScanner.performFullMediaScan).mockResolvedValue([]);
+
+    const { handleScanMessage: callback } =
+      await import('../../src/core/media/scan-worker');
+
+    await callback({
+      id: 1,
+      type: 'START_SCAN',
+      payload: {
+        directories: ['/dir'],
+        tokens: { refresh_token: 'abc' },
+      },
+    });
+
+    expect(googleAuth.initializeManualCredentials).not.toHaveBeenCalled();
+    expect(mediaScanner.performFullMediaScan).toHaveBeenCalledWith(['/dir']);
+  });
+
+  it('does not statically import the Google Drive modules', async () => {
+    // googleapis costs ~0.8 s and ~128 MB per scan worker, so the worker and
+    // scanner must only load it on demand (dynamic import).
+    const fs = await import('fs/promises');
+    for (const file of [
+      'src/core/media/scan-worker.ts',
+      'src/core/media/media-scanner.ts',
+    ]) {
+      const source = await fs.readFile(file, 'utf8');
+      expect(source).not.toMatch(
+        /^import[^;]*from '[^']*(main\/google-|infrastructure\/google-drive-backend)/m,
+      );
+    }
   });
 
   it('registers message listener on startup', async () => {
@@ -93,10 +148,7 @@ describe('scan-worker', () => {
       payload: { directories: ['/dir'] },
     });
 
-    expect(mediaScanner.performFullMediaScan).toHaveBeenCalledWith(
-      ['/dir'],
-      expect.any(Set),
-    );
+    expect(mediaScanner.performFullMediaScan).toHaveBeenCalledWith(['/dir']);
     expect(mockPostMessage).toHaveBeenCalledWith({
       id: 1,
       result: { success: true, data: albums },

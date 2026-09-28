@@ -31,7 +31,6 @@ describe('WorkerScannerService', () => {
     const params = {
       directories: ['/test'],
       tokens: {},
-      previousPaths: [],
     };
 
     const result = await service.runScan(params);
@@ -48,7 +47,6 @@ describe('WorkerScannerService', () => {
     const result = await service.runScan({
       directories: [],
       tokens: null,
-      previousPaths: [],
     });
     expect(result).toEqual([]);
   });
@@ -56,7 +54,7 @@ describe('WorkerScannerService', () => {
   it('cleans up even on error', async () => {
     mockClient.sendMessage.mockRejectedValue(new Error('Fail'));
     await expect(
-      service.runScan({ directories: [], tokens: null, previousPaths: [] }),
+      service.runScan({ directories: [], tokens: null }),
     ).rejects.toThrow('Fail');
     expect(mockClient.terminate).toHaveBeenCalled();
   });
@@ -68,7 +66,7 @@ describe('WorkerScannerService', () => {
       configurable: true,
     });
 
-    await service.runScan({ directories: [], tokens: null, previousPaths: [] });
+    await service.runScan({ directories: [], tokens: null });
 
     expect(WorkerFactory.getWorkerPath).toHaveBeenCalledWith(
       'scan-worker',
@@ -85,7 +83,7 @@ describe('WorkerScannerService', () => {
     const originalEnv = process.env.NODE_ENV;
     process.env.NODE_ENV = 'production';
 
-    await service.runScan({ directories: [], tokens: null, previousPaths: [] });
+    await service.runScan({ directories: [], tokens: null });
 
     expect(WorkerFactory.getWorkerPath).toHaveBeenCalledWith(
       'scan-worker',

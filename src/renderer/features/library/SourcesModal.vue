@@ -514,6 +514,8 @@ const isAddingDrive = ref(false);
 const addDriveError = ref('');
 const pathsPendingRemoval = ref(new Set<string>());
 const hasDriveAuthError = ref(false);
+/** Set once sources change, so closing the dialog by any means re-indexes. */
+const hasSourceChanges = ref(false);
 
 onMounted(async () => {
   const hasDrive = mediaDirectories.value.some(
@@ -533,6 +535,11 @@ const closeModal = () => {
   // Reset drive state
   cancelDriveAuth();
   pathsPendingRemoval.value.clear();
+  // Otherwise the library keeps showing the old sources' albums.
+  if (hasSourceChanges.value) {
+    hasSourceChanges.value = false;
+    void reindex();
+  }
 };
 
 const cancelDriveAuth = () => {
@@ -582,6 +589,7 @@ const addDriveSource = async () => {
   try {
     const fid = driveFolderId.value || 'root';
     await api.addGoogleDriveSource(fid);
+    hasSourceChanges.value = true;
     // Update local list
     mediaDirectories.value = await api.getMediaDirectories();
     cancelDriveAuth();
@@ -610,6 +618,7 @@ const resetSlideshowState = () => {
 const handleToggleActive = async (path: string, isActive: boolean) => {
   try {
     await api.setDirectoryActiveState(path, isActive);
+    hasSourceChanges.value = true;
     const dir = mediaDirectories.value.find((d) => d.path === path);
     if (dir) {
       dir.isActive = isActive;
@@ -634,6 +643,7 @@ const cancelRemove = (path: string) => {
 const confirmRemove = async (path: string) => {
   try {
     await api.removeMediaDirectory(path);
+    hasSourceChanges.value = true;
     const index = mediaDirectories.value.findIndex((d) => d.path === path);
     if (index !== -1) {
       mediaDirectories.value.splice(index, 1);
@@ -673,12 +683,14 @@ const handleFileExplorerSelect = async (path: string) => {
     try {
       const result = await api.addMediaDirectory(path);
       if (result) {
+        hasSourceChanges.value = true;
         mediaDirectories.value = await api.getMediaDirectories();
       }
     } catch (error) {
       console.error('Error adding media directory via explorer:', error);
       // Both backends explain the rejection (missing, sensitive, outside the
-      // allowed folders); show it rather than failing silently.
+      // allowed folders, overlapping an existing source); show it rather than
+      // failing silently.
       const reason = error instanceof Error ? error.message : '';
       toast.error(
         reason ? `Could not add folder: ${reason}` : 'Could not add folder.',
@@ -714,8 +726,8 @@ const reindex = async () => {
  * Closes the modal and triggers a re-index.
  */
 const closeModalAndReindex = () => {
+  hasSourceChanges.value = true;
   closeModal();
-  reindex();
 };
 
 const handleEscape = () => {

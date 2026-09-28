@@ -31,7 +31,7 @@ vi.mock('../../../src/core/database/database', () => ({
   addMediaDirectory: vi.fn(),
   removeMediaDirectory: vi.fn(),
   setDirectoryActiveState: vi.fn(),
-  getMediaDirectories: vi.fn(),
+  getMediaDirectories: vi.fn().mockResolvedValue([]),
 }));
 
 vi.mock('../../../src/infrastructure/vlc-player', () => ({

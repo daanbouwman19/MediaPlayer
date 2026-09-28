@@ -5,6 +5,7 @@ import type {
   MediaLibraryItem,
   MediaDirectory,
 } from '../../src/core/media/types.ts';
+import { isMetadataComplete } from '../../src/core/media/utils/metadata-status.ts';
 
 export class InMemoryMediaRepository implements IMediaRepository {
   private albums: Album[] | null = null;
@@ -78,14 +79,19 @@ export class InMemoryMediaRepository implements IMediaRepository {
   }
 
   async filterProcessingNeeded(filePaths: string[]) {
+    // Mirrors the worker: a 'success' video without a duration is retried.
     return filePaths.filter((path) => {
       const meta = this.metadata.get(path);
-      return !meta || meta.status !== 'success';
+      return !isMetadataComplete(path, meta?.status, meta?.duration);
     });
   }
 
   async getSetting(key: string) {
     return this.settings.get(key) || null;
+  }
+
+  async saveSetting(key: string, value: string) {
+    this.settings.set(key, value);
   }
 
   setSetting(key: string, value: string) {

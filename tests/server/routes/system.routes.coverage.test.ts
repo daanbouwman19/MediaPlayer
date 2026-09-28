@@ -50,9 +50,44 @@ describe('System Routes Coverage', () => {
     vi.mocked(fileSystem.resolveMediaSourceDirectory).mockImplementation(
       async (p: string) => p,
     );
+    vi.mocked(database.getMediaDirectories).mockResolvedValue([]);
   });
 
   describe('POST /api/directories', () => {
+    it('rejects a folder nested inside an active source with 409', async () => {
+      vi.mocked(database.getMediaDirectories).mockResolvedValue([
+        { id: '1', path: '/media', type: 'local', name: 'm', isActive: true },
+      ]);
+
+      const res = await request(app)
+        .post('/api/directories')
+        .send({ path: '/media/sub' });
+
+      expect(res.status).toBe(409);
+      expect(res.body.error).toContain('is inside the media source "/media"');
+      expect(database.addMediaDirectory).not.toHaveBeenCalled();
+    });
+
+    it('rejects a folder that contains an active source with 409', async () => {
+      vi.mocked(database.getMediaDirectories).mockResolvedValue([
+        {
+          id: '1',
+          path: '/media/sub',
+          type: 'local',
+          name: 's',
+          isActive: true,
+        },
+      ]);
+
+      const res = await request(app)
+        .post('/api/directories')
+        .send({ path: '/media' });
+
+      expect(res.status).toBe(409);
+      expect(res.body.error).toContain('contains the media source');
+      expect(database.addMediaDirectory).not.toHaveBeenCalled();
+    });
+
     it('should block non-absolute paths', async () => {
       const res = await request(app)
         .post('/api/directories')

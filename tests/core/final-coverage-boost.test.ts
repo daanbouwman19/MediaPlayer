@@ -191,7 +191,6 @@ import * as dbWorker from '../../src/core/database/database-worker';
 import { MediaService } from '../../src/core/media/media-service';
 import * as mediaHandler from '../../src/core/media/media-handler';
 import * as mediaUtils from '../../src/core/media/media-utils';
-import { MediaRepository } from '../../src/core/database/repositories/media-repository';
 import { createTestMediaService } from '../utils/test-factory';
 
 describe('Final Coverage Boost', () => {
@@ -361,7 +360,11 @@ describe('Final Coverage Boost', () => {
         .mockResolvedValue('invalid-json');
       const getDirsSpy = vi
         .spyOn(mediaRepo, 'getMediaDirectories')
-        .mockResolvedValue([{ path: '/dir', isActive: true }] as any);
+        .mockResolvedValue([{ path: 'gdrive://dir', isActive: true }] as any);
+      // Tokens are only read when a Drive source is scanned.
+      vi.mocked(mediaUtils.isDrivePath).mockImplementation((p) =>
+        p.startsWith('gdrive://'),
+      );
       const cacheSpy = vi
         .spyOn(mediaRepo, 'cacheAlbums')
         .mockResolvedValue(undefined);
@@ -385,6 +388,7 @@ describe('Final Coverage Boost', () => {
       const getMetaSpy = vi.spyOn(mediaRepo, 'getMetadata').mockResolvedValue({
         '/file.mp4': {
           status: 'success',
+          duration: 30,
           size: 100,
           createdAt: '2023-01-01T00:00:00.000Z',
         },
@@ -406,16 +410,15 @@ describe('Final Coverage Boost', () => {
       upsertSpy.mockRestore();
     });
 
-    it('extractAndSaveMetadata: skips drive paths', async () => {
+    it('extractAndSaveMetadata: marks drive files without metadata as failed', async () => {
       vi.mocked(mediaUtils.isDrivePath).mockReturnValue(true);
-      const upsertSpy = vi.spyOn(
-        MediaRepository.prototype,
-        'bulkUpsertMetadata',
-      );
 
       await service.extractAndSaveMetadata(['gdrive://file.mp4'], 'ffmpeg');
 
-      expect(upsertSpy).not.toHaveBeenCalled();
+      // The fake handler has no metadata for this file, so the provider call
+      // fails; the row leaves 'pending' and is retried on a later scan.
+      const meta = await mediaRepo.getMetadata(['gdrive://file.mp4']);
+      expect(meta['gdrive://file.mp4']?.status).toBe('failed');
     });
   });
 

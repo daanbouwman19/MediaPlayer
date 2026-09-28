@@ -27,6 +27,10 @@ import {
   resolveMediaSourceDirectory,
   ROOT_DIRECTORY,
 } from '../../core/media/file-system.ts';
+import {
+  describeSourceOverlap,
+  findActiveSourceOverlap,
+} from '../../core/media/utils/source-paths.ts';
 import { validateInput } from '../../core/auth/security.ts';
 import { getQueryParam } from '../../core/network/http-utils.ts';
 import {
@@ -172,6 +176,15 @@ export function createSystemRoutes(limiters: RateLimiters) {
       // Canonicalises the folder and applies the same confinement as the
       // /api/fs/* browser (allowed roots, sensitive locations): 400 / 403.
       const resolvedPath = await resolveMediaSourceDirectory(dirPath);
+
+      // Nested sources would index the overlap twice.
+      const overlap = findActiveSourceOverlap(
+        resolvedPath,
+        await getMediaDirectories(),
+      );
+      if (overlap) {
+        throw new AppError(409, describeSourceOverlap(resolvedPath, overlap));
+      }
 
       await addMediaDirectory(resolvedPath);
       return res.json(resolvedPath);

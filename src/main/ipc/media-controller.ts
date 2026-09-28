@@ -1,9 +1,6 @@
 import { IpcMainInvokeEvent } from 'electron';
 import { IPC_CHANNELS } from '../../shared/ipc-channels';
-import {
-  validatePathAccess,
-  filterAuthorizedPaths,
-} from '../utils/security-utils';
+import { validatePathAccess } from '../utils/security-utils';
 import {
   generateFileUrl,
   getVideoDuration,
@@ -23,6 +20,7 @@ import {
 } from '../../core/database/database';
 import { TranscodeQueueManager } from '../../core/media/transcode-queue-manager';
 import { MediaService } from '../../core/media/media-service';
+import { filterAuthorizedLibraryPaths } from '../../core/media/utils/authorized-paths';
 import { isDrivePath, getDriveId } from '../../core/media/media-utils';
 import { MediaAnalyzer } from '../../core/media/analysis/media-analyzer';
 import { HlsManager } from '../../core/media/hls-manager';
@@ -74,7 +72,8 @@ export function registerMediaHandlers(mediaService: MediaService) {
   handleIpc(
     IPC_CHANNELS.GET_MEDIA_VIEW_COUNTS,
     async (_event: IpcMainInvokeEvent, filePaths: string[]) => {
-      const allowedPaths = await filterAuthorizedPaths(filePaths);
+      // Rows are keyed by the library's spelling, not the resolved real path.
+      const allowedPaths = await filterAuthorizedLibraryPaths(filePaths);
       return getMediaViewCounts(allowedPaths);
     },
   );
@@ -132,14 +131,15 @@ export function registerMediaHandlers(mediaService: MediaService) {
         return;
       }
 
-      // [SECURITY] Filter out unauthorized paths to prevent arbitrary file access
-      const allowedPaths = await filterAuthorizedPaths(filePaths);
+      // [SECURITY] Filter out unauthorized paths to prevent arbitrary file access.
+      // Keeps the library's spelling so metadata lands on the scanned rows.
+      const allowedPaths = await filterAuthorizedLibraryPaths(filePaths);
 
-      mediaService
-        .extractAndSaveMetadata(allowedPaths, ffmpegPath, {
-          forceCheck: true,
-        })
-        .catch((err) => console.error('State extraction failed', err));
+      // Joins the single background extraction job instead of running
+      // another one alongside it.
+      mediaService.queueMetadataExtraction(allowedPaths, ffmpegPath, {
+        forceCheck: true,
+      });
     },
   );
 

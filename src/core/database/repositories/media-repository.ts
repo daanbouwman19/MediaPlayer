@@ -2,15 +2,16 @@
  * @file Repository for media-related database operations.
  */
 import {
-  cacheAlbums,
+  storeAlbumCache,
   getAllMetadata,
   getAllMetadataAndStats,
   getAllMetadataVerification,
   getCachedAlbums,
-  getMediaDirectories,
+  readMediaDirectories,
   getMetadata,
   getPendingMetadata,
   getSetting,
+  saveSetting,
   bulkUpsertMetadata,
   filterProcessingNeeded,
 } from '../database.ts';
@@ -19,11 +20,13 @@ import { IMediaRepository } from './media-repository.interface.ts';
 
 export class MediaRepository implements IMediaRepository {
   async getMediaDirectories() {
-    return getMediaDirectories();
+    // Scans must see read failures rather than an empty source list.
+    return readMediaDirectories();
   }
 
   async cacheAlbums(albums: Album[]) {
-    return cacheAlbums(albums);
+    // Scans must know whether the tree was stored before stamping it.
+    return storeAlbumCache(albums);
   }
 
   async getCachedAlbums() {
@@ -60,5 +63,9 @@ export class MediaRepository implements IMediaRepository {
 
   async getSetting(key: string) {
     return getSetting(key);
+  }
+
+  async saveSetting(key: string, value: string) {
+    return saveSetting(key, value);
   }
 }

@@ -6,10 +6,7 @@ import {
   generateFileUrl,
   getVideoDuration,
 } from '../../../src/core/media/media-handler';
-import {
-  validatePathAccess,
-  filterAuthorizedPaths,
-} from '../../../src/main/utils/security-utils';
+import { validatePathAccess } from '../../../src/main/utils/security-utils';
 import {
   recordMediaView,
   getMediaViewCounts,
@@ -23,6 +20,7 @@ import {
   getDriveParent,
 } from '../../../src/main/google-drive-service';
 import { MediaService } from '../../../src/core/media/media-service';
+import { filterAuthorizedLibraryPaths } from '../../../src/core/media/utils/authorized-paths';
 import { createTestMediaService } from '../../utils/test-factory';
 import { generateSessionId } from '../../../src/core/media/hls-handler';
 
@@ -43,7 +41,10 @@ vi.mock('../../../src/core/media/media-handler', () => ({
 
 vi.mock('../../../src/main/utils/security-utils', () => ({
   validatePathAccess: vi.fn(),
-  filterAuthorizedPaths: vi.fn(),
+}));
+
+vi.mock('../../../src/core/media/utils/authorized-paths', () => ({
+  filterAuthorizedLibraryPaths: vi.fn(),
 }));
 
 vi.mock('../../../src/core/database/database', () => ({
@@ -170,12 +171,12 @@ describe('Media Controller Combined', () => {
     describe('GET_MEDIA_VIEW_COUNTS', () => {
       it('filters paths and gets counts', async () => {
         const handler = getHandler(IPC_CHANNELS.GET_MEDIA_VIEW_COUNTS);
-        (filterAuthorizedPaths as Mock).mockResolvedValue(['/path/1']);
+        (filterAuthorizedLibraryPaths as Mock).mockResolvedValue(['/path/1']);
         (getMediaViewCounts as Mock).mockResolvedValue({ '/path/1': 10 });
 
         const result = await handler({}, ['/path/1', '/path/2']);
 
-        expect(filterAuthorizedPaths).toHaveBeenCalledWith([
+        expect(filterAuthorizedLibraryPaths).toHaveBeenCalledWith([
           '/path/1',
           '/path/2',
         ]);
@@ -255,23 +256,26 @@ describe('Media Controller Combined', () => {
     });
 
     describe('MEDIA_EXTRACT_METADATA', () => {
-      it('extracts metadata', async () => {
+      it('queues the paths on the single background extraction job', async () => {
         const handler = getHandler(IPC_CHANNELS.MEDIA_EXTRACT_METADATA);
-        (filterAuthorizedPaths as Mock).mockResolvedValue(['/path']);
-        vi.spyOn(service, 'extractAndSaveMetadata').mockResolvedValue(
-          undefined,
-        );
+        (filterAuthorizedLibraryPaths as Mock).mockResolvedValue(['/path']);
+        const queue = vi
+          .spyOn(service, 'queueMetadataExtraction')
+          .mockReturnValue(undefined);
+        const extract = vi.spyOn(service, 'extractAndSaveMetadata');
+
         await handler({}, ['/path']);
-        expect(service.extractAndSaveMetadata).toHaveBeenCalledWith(
-          ['/path'],
-          '/mock/ffmpeg',
-          { forceCheck: true },
-        );
+
+        expect(queue).toHaveBeenCalledWith(['/path'], '/mock/ffmpeg', {
+          forceCheck: true,
+        });
+        // It never starts an extraction job of its own.
+        expect(extract).not.toHaveBeenCalled();
       });
 
       it('logs error on extraction failure', async () => {
         const handler = getHandler(IPC_CHANNELS.MEDIA_EXTRACT_METADATA);
-        (filterAuthorizedPaths as Mock).mockResolvedValue(['/path']);
+        (filterAuthorizedLibraryPaths as Mock).mockResolvedValue(['/path']);
         vi.spyOn(service, 'extractAndSaveMetadata').mockRejectedValue(
           new Error('Extract Fail'),
         );
@@ -280,12 +284,17 @@ describe('Media Controller Combined', () => {
           .mockImplementation(() => {});
 
         await handler({}, ['/path']);
-        await new Promise((r) => setTimeout(r, 10));
 
-        expect(service.extractAndSaveMetadata).toHaveBeenCalled();
-        expect(consoleSpy).toHaveBeenCalledWith(
-          'State extraction failed',
-          expect.any(Error),
+        await vi.waitFor(() =>
+          expect(consoleSpy).toHaveBeenCalledWith(
+            '[media-service] Background metadata extraction failed:',
+            expect.any(Error),
+          ),
+        );
+        expect(service.extractAndSaveMetadata).toHaveBeenCalledWith(
+          ['/path'],
+          '/mock/ffmpeg',
+          { forceCheck: true },
         );
         consoleSpy.mockRestore();
       });
@@ -467,15 +476,15 @@ describe('Media Controller Combined', () => {
         const inputPaths = ['/authorized/path.mp4', '/unauthorized/path.mp4'];
         const authorizedPaths = ['/authorized/path.mp4'];
 
-        (filterAuthorizedPaths as Mock).mockResolvedValue(authorizedPaths);
-        vi.spyOn(service, 'extractAndSaveMetadata').mockResolvedValue(
-          undefined,
+        (filterAuthorizedLibraryPaths as Mock).mockResolvedValue(
+          authorizedPaths,
         );
+        vi.spyOn(service, 'queueMetadataExtraction').mockReturnValue(undefined);
 
         await handler({}, inputPaths);
 
-        expect(filterAuthorizedPaths).toHaveBeenCalledWith(inputPaths);
-        expect(service.extractAndSaveMetadata).toHaveBeenCalledWith(
+        expect(filterAuthorizedLibraryPaths).toHaveBeenCalledWith(inputPaths);
+        expect(service.queueMetadataExtraction).toHaveBeenCalledWith(
           authorizedPaths,
           '/mock/ffmpeg',
           { forceCheck: true },

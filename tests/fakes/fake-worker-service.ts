@@ -7,7 +7,6 @@ export class FakeWorkerService implements IWorkerService {
   async runScan(_params: {
     directories: string[];
     tokens: unknown;
-    previousPaths: string[];
   }): Promise<Album[]> {
     void _params;
     return this.result;

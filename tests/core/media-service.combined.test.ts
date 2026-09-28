@@ -9,12 +9,24 @@ vi.mock('../../src/core/auth/encryption', () => ({
   encrypt: vi.fn(),
 }));
 
+const DRIVE_DIR = 'gdrive://folder';
+
 describe('MediaService Combined Tests (DI Refactored)', () => {
   let service: MediaService;
   let repo: InMemoryMediaRepository;
   let mockFs: { stat: any };
   let mockWorker: { runScan: any };
-  let mockMediaHandler: { getVideoDuration: any };
+  let mockMediaHandler: { getVideoDuration: any; getFileMetadata: any };
+
+  /** Caches `albums` the way a real scan does (tree + source stamp). */
+  const seedCacheByScan = async (albums: any[]) => {
+    repo.setMediaDirectories([
+      { id: '1', path: '/dir', type: 'local', name: 'dir', isActive: true },
+    ]);
+    mockWorker.runScan.mockResolvedValueOnce(albums);
+    await service.scanDiskForAlbumsAndCache();
+    mockWorker.runScan.mockClear();
+  };
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -31,6 +43,7 @@ describe('MediaService Combined Tests (DI Refactored)', () => {
     };
     mockMediaHandler = {
       getVideoDuration: vi.fn().mockResolvedValue({ duration: 100 }),
+      getFileMetadata: vi.fn(),
     };
 
     service = new MediaService(
@@ -62,6 +75,13 @@ describe('MediaService Combined Tests (DI Refactored)', () => {
     it('triggers worker scan with correct params', async () => {
       repo.setMediaDirectories([
         { id: '1', path: '/dir', type: 'local', name: 'dir', isActive: true },
+        {
+          id: '2',
+          path: DRIVE_DIR,
+          type: 'google_drive',
+          name: 'd',
+          isActive: true,
+        },
       ]);
       repo.setSetting('google_tokens', 'ENCRYPTED_TOKENS');
       vi.mocked(encryption.decrypt).mockReturnValue(
@@ -69,16 +89,36 @@ describe('MediaService Combined Tests (DI Refactored)', () => {
       );
 
       await service.scanDiskForAlbumsAndCache();
-      expect(mockWorker.runScan).toHaveBeenCalledWith(
-        expect.objectContaining({
-          tokens: { access_token: 'abc' },
-        }),
-      );
+      expect(mockWorker.runScan).toHaveBeenCalledWith({
+        directories: ['/dir', DRIVE_DIR],
+        tokens: { access_token: 'abc' },
+      });
+    });
+
+    it('does not read or send Google tokens for a purely local scan', async () => {
+      repo.setMediaDirectories([
+        { id: '1', path: '/dir', type: 'local', name: 'dir', isActive: true },
+      ]);
+      repo.setSetting('google_tokens', 'ENCRYPTED_TOKENS');
+
+      await service.scanDiskForAlbumsAndCache();
+
+      expect(encryption.decrypt).not.toHaveBeenCalled();
+      expect(mockWorker.runScan).toHaveBeenCalledWith({
+        directories: ['/dir'],
+        tokens: null,
+      });
     });
 
     it('handles google tokens decryption failure', async () => {
       repo.setMediaDirectories([
-        { id: '1', path: '/dir', type: 'local', name: 'dir', isActive: true },
+        {
+          id: '2',
+          path: DRIVE_DIR,
+          type: 'google_drive',
+          name: 'd',
+          isActive: true,
+        },
       ]);
       repo.setSetting('google_tokens', 'BAD_TOKENS');
       vi.mocked(encryption.decrypt).mockReturnValue(null);
@@ -93,7 +133,13 @@ describe('MediaService Combined Tests (DI Refactored)', () => {
 
     it('handles google tokens JSON parse failure', async () => {
       repo.setMediaDirectories([
-        { id: '1', path: '/dir', type: 'local', name: 'dir', isActive: true },
+        {
+          id: '2',
+          path: DRIVE_DIR,
+          type: 'google_drive',
+          name: 'd',
+          isActive: true,
+        },
       ]);
       repo.setSetting('google_tokens', 'BAD_JSON');
       vi.mocked(encryption.decrypt).mockReturnValue('invalid-json');
@@ -154,6 +200,7 @@ describe('MediaService Combined Tests (DI Refactored)', () => {
         {
           filePath: '/success.mp4',
           status: 'success',
+          duration: 10,
           size: 100,
           createdAt: '',
         },
@@ -194,6 +241,7 @@ describe('MediaService Combined Tests (DI Refactored)', () => {
         {
           filePath,
           status: 'success',
+          duration: 45,
           size: 1024,
           createdAt: now.toISOString(),
         },
@@ -211,12 +259,52 @@ describe('MediaService Combined Tests (DI Refactored)', () => {
       expect(mockFs.stat).not.toHaveBeenCalled();
     });
 
-    it('should skip drive paths', async () => {
-      const filePath = 'gdrive://file.mp4';
-      const spy = vi.spyOn(repo, 'bulkUpsertMetadata');
+    it('re-probes an unchanged success video that has no duration (legacy row)', async () => {
+      const filePath = '/legacy.mp4';
+      const now = new Date();
+      await repo.bulkUpsertMetadata([
+        {
+          filePath,
+          status: 'success',
+          size: 1024,
+          createdAt: now.toISOString(),
+        },
+      ]);
+      mockFs.stat.mockResolvedValue({ size: 1024, birthtime: now });
+      mockMediaHandler.getVideoDuration.mockResolvedValue({ duration: 33 });
+
       await service.extractAndSaveMetadata([filePath], 'ffmpeg');
+
+      expect(mockMediaHandler.getVideoDuration).toHaveBeenCalledWith(
+        filePath,
+        'ffmpeg',
+      );
+      expect((await repo.getMetadata([filePath]))[filePath]).toMatchObject({
+        status: 'success',
+        duration: 33,
+      });
+    });
+
+    it('reads drive files from provider metadata instead of stat/ffmpeg', async () => {
+      const filePath = 'gdrive://video-id';
+      mockMediaHandler.getFileMetadata.mockResolvedValue({
+        size: 2048,
+        mimeType: 'video/mp4',
+        lastModified: new Date('2024-01-02T03:04:05.000Z'),
+        duration: 42,
+      });
+
+      await service.extractAndSaveMetadata([filePath], 'ffmpeg');
+
       expect(mockFs.stat).not.toHaveBeenCalled();
-      expect(spy).not.toHaveBeenCalled();
+      expect(mockMediaHandler.getVideoDuration).not.toHaveBeenCalled();
+      const meta = await repo.getMetadata([filePath]);
+      expect(meta[filePath]).toEqual({
+        status: 'success',
+        size: 2048,
+        createdAt: '2024-01-02T03:04:05.000Z',
+        duration: 42,
+      });
     });
   });
 
@@ -243,7 +331,7 @@ describe('MediaService Combined Tests (DI Refactored)', () => {
         },
       ]);
 
-      await repo.cacheAlbums([mockAlbum as any]);
+      await seedCacheByScan([mockAlbum]);
 
       const result = await service.getAlbumsWithViewCounts();
 
@@ -275,7 +363,7 @@ describe('MediaService Combined Tests (DI Refactored)', () => {
         },
       ]);
 
-      await repo.cacheAlbums([mockAlbum as any]);
+      await seedCacheByScan([mockAlbum]);
       const result = await service.getAlbumsWithViewCounts();
       expect(result[0].textures[0].rating).toBe(3);
       expect(result[0].textures[0].duration).toBeUndefined();

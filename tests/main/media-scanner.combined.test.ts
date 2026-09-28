@@ -254,15 +254,15 @@ describe('Media Scanner Combined', () => {
       await performFullMediaScan(['/base']);
 
       expect(consoleLogSpy).toHaveBeenCalled();
-      // Verify specific logs if needed, but just calling is enough for coverage
+      // One summary line per source, never one line per file or folder.
       expect(consoleLogSpy).toHaveBeenCalledWith(
-        expect.stringMatching(/\[MediaScanner\] Found file: .*image\.jpg/),
-      );
-      expect(consoleLogSpy).toHaveBeenCalledWith(
-        expect.stringContaining('[MediaScanner] Folder: base - Files: 1'),
+        expect.stringContaining('Scanned /base: 1 files.'),
       );
       expect(consoleLogSpy).toHaveBeenCalledWith(
         expect.stringContaining('root albums with 1 total files'),
+      );
+      expect(consoleLogSpy).not.toHaveBeenCalledWith(
+        expect.stringContaining('image.jpg'),
       );
 
       consoleLogSpy.mockRestore();

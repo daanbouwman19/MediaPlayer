@@ -287,6 +287,7 @@ describe('Coverage Boost - MediaService', () => {
       getAllMetadataVerification: vi.fn(),
       getMetadata: vi.fn(),
       bulkUpsertMetadata: vi.fn(),
+      saveSetting: vi.fn(),
     };
     const fsMock = {
       stat: vi.fn(),
@@ -309,7 +310,7 @@ describe('Coverage Boost - MediaService', () => {
 
   it('scanDiskForAlbumsAndCache - handles getSetting error gracefully', async () => {
     repoMock.getMediaDirectories.mockResolvedValue([
-      { path: '/data', isActive: true },
+      { path: 'gdrive://folder', isActive: true },
     ]);
     repoMock.getSetting.mockRejectedValue(new Error('DB Error'));
 
@@ -345,6 +346,11 @@ describe('Coverage Boost - MediaService', () => {
     ];
 
     repoMock.getCachedAlbums.mockResolvedValue(albums);
+    // The cache was stamped by a scan of the current (empty) source set.
+    repoMock.getMediaDirectories.mockResolvedValue([]);
+    repoMock.getSetting.mockResolvedValue(
+      JSON.stringify({ sources: '[]', scannedAt: Date.now() }),
+    );
     repoMock.getAllMetadataAndStats.mockResolvedValue([
       {
         file_path: '/1.jpg',
@@ -372,6 +378,8 @@ describe('Coverage Boost - MediaService', () => {
     const metadata = {
       '/test.mp4': {
         status: 'success',
+        // A video row is only complete with a duration (F95).
+        duration: 60,
         size: 1000,
         createdAt: '2023-01-01T00:00:00.000Z',
       },

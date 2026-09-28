@@ -13,6 +13,7 @@ import SourcesModal from '@/features/library/SourcesModal.vue';
 
 import { useLibraryStore } from '@/composables/useLibraryStore';
 import { useUIStore } from '@/composables/useUIStore';
+import { useToast } from '@/composables/useToast';
 import { api } from '@/api';
 
 vi.mock('@/api', () => ({
@@ -451,6 +452,114 @@ describe('SourcesModal.vue', () => {
       await flushPromises();
 
       expect(wrapper.text()).toContain('Failed');
+    });
+  });
+
+  describe('re-indexing after source changes (F39)', () => {
+    const clickClose = async (wrapper: ReturnType<typeof mount>) => {
+      await wrapper.find('button[aria-label="Close"]').trigger('click');
+      await flushPromises();
+    };
+
+    it('re-indexes when closed with X after toggling a source', async () => {
+      const wrapper = mount(SourcesModal);
+      await wrapper.findAll('input[type="checkbox"]')[0].setValue(false);
+      await flushPromises();
+
+      await clickClose(wrapper);
+
+      expect(useUIStore().isSourcesModalVisible).toBe(false);
+      expect(api.reindexMediaLibrary).toHaveBeenCalledTimes(1);
+    });
+
+    it('re-indexes when closed with Escape after removing a source', async () => {
+      const wrapper = mount(SourcesModal);
+      await (wrapper.vm as any).confirmRemove('/path/to/dir1');
+
+      // The component's Escape handler (window listeners of other test
+      // instances would also react to a dispatched key event).
+      (wrapper.vm as any).handleEscape();
+      await flushPromises();
+
+      expect(useUIStore().isSourcesModalVisible).toBe(false);
+      expect(api.reindexMediaLibrary).toHaveBeenCalledTimes(1);
+    });
+
+    it('re-indexes when the backdrop is clicked after adding a folder', async () => {
+      const wrapper = mount(SourcesModal);
+      await (wrapper.vm as any).handleFileExplorerSelect('/new/folder');
+      await flushPromises();
+
+      await wrapper.find('.fixed.inset-0').trigger('click');
+      await flushPromises();
+
+      expect(api.reindexMediaLibrary).toHaveBeenCalledTimes(1);
+    });
+
+    it('re-indexes after adding a Drive source', async () => {
+      (api.addGoogleDriveSource as Mock).mockResolvedValue({ name: 'Drive' });
+      const wrapper = mount(SourcesModal);
+      await (wrapper.vm as any).addDriveSource();
+      await clickClose(wrapper);
+      expect(api.reindexMediaLibrary).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not re-index when nothing changed', async () => {
+      const wrapper = mount(SourcesModal);
+      await clickClose(wrapper);
+      expect(api.reindexMediaLibrary).not.toHaveBeenCalled();
+    });
+
+    it('does not re-index for a failed change', async () => {
+      (api.setDirectoryActiveState as Mock).mockRejectedValue(new Error('x'));
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      const wrapper = mount(SourcesModal);
+      await wrapper.findAll('input[type="checkbox"]')[0].setValue(false);
+      await flushPromises();
+
+      await clickClose(wrapper);
+
+      expect(api.reindexMediaLibrary).not.toHaveBeenCalled();
+    });
+
+    it('Apply & Re-index re-indexes exactly once, even after changes', async () => {
+      const wrapper = mount(SourcesModal);
+      await wrapper.findAll('input[type="checkbox"]')[0].setValue(false);
+      await flushPromises();
+
+      const applyButton = wrapper
+        .findAll('button')
+        .find((b) => b.text().includes('APPLY CHANGES & RE-INDEX'));
+      await applyButton?.trigger('click');
+      await flushPromises();
+
+      expect(api.reindexMediaLibrary).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('refused folders (F106)', () => {
+    it('shows why a folder could not be added', async () => {
+      const message =
+        '"/path/to/dir1/sub" is inside the media source "/path/to/dir1", which already includes it.';
+      (api.addMediaDirectory as Mock).mockRejectedValue(new Error(message));
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      const { toasts } = useToast();
+      toasts.value = [];
+
+      const wrapper = mount(SourcesModal);
+      await (wrapper.vm as any).handleFileExplorerSelect('/path/to/dir1/sub');
+      await flushPromises();
+
+      expect(toasts.value).toContainEqual(
+        expect.objectContaining({
+          type: 'error',
+          message: `Could not add folder: ${message}`,
+        }),
+      );
+      // Nothing changed, so closing does not re-index.
+      await wrapper.find('button[aria-label="Close"]').trigger('click');
+      expect(api.reindexMediaLibrary).not.toHaveBeenCalled();
+      toasts.value = [];
     });
   });
 });

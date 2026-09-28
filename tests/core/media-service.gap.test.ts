@@ -76,7 +76,12 @@ describe('Media Service Final Gap Fill (DI Refactored)', () => {
       },
     ];
 
-    await repo.cacheAlbums(deepAlbums as any);
+    // Cache the tree the way a scan does (albums + source stamp).
+    repo.setMediaDirectories([
+      { id: '1', path: '/dir', type: 'local', name: 'dir', isActive: true },
+    ]);
+    mockWorker.runScan.mockResolvedValueOnce(deepAlbums);
+    await service.scanDiskForAlbumsAndCache();
     repo.setAllMetadataAndStats([
       {
         file_path: '/1.mp4',

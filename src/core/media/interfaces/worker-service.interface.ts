@@ -5,9 +5,5 @@ export interface ScanResult {
 }
 
 export interface IWorkerService {
-  runScan(params: {
-    directories: string[];
-    tokens: unknown;
-    previousPaths: string[];
-  }): Promise<Album[]>;
+  runScan(params: { directories: string[]; tokens: unknown }): Promise<Album[]>;
 }

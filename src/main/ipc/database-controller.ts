@@ -1,9 +1,7 @@
 import { IpcMainInvokeEvent } from 'electron';
 import { IPC_CHANNELS } from '../../shared/ipc-channels';
-import {
-  validatePathAccess,
-  filterAuthorizedPaths,
-} from '../utils/security-utils';
+import { validatePathAccess } from '../utils/security-utils';
+import { filterAuthorizedLibraryPaths } from '../../core/media/utils/authorized-paths';
 import {
   upsertMetadata,
   getMetadata,
@@ -53,7 +51,8 @@ export function registerDatabaseHandlers() {
   handleIpc(
     IPC_CHANNELS.DB_GET_METADATA,
     async (_event: IpcMainInvokeEvent, filePaths: string[]) => {
-      const allowedPaths = await filterAuthorizedPaths(filePaths);
+      // Rows are keyed by the library's spelling, not the resolved real path.
+      const allowedPaths = await filterAuthorizedLibraryPaths(filePaths);
       return getMetadata(allowedPaths);
     },
   );

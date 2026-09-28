@@ -16,6 +16,7 @@ import {
 } from '../../../src/core/media/file-system';
 import { getServerPort } from '../../../src/main/local-server';
 import { shell, dialog, ipcMain, nativeTheme } from 'electron';
+import path from 'path';
 
 vi.mock('../../../src/main/utils/ipc-helper', () => ({
   handleIpc: vi.fn(),
@@ -26,7 +27,7 @@ vi.mock('../../../src/core/database/database', () => ({
   addMediaDirectory: vi.fn(),
   removeMediaDirectory: vi.fn(),
   setDirectoryActiveState: vi.fn(),
-  getMediaDirectories: vi.fn(),
+  getMediaDirectories: vi.fn().mockResolvedValue([]),
 }));
 
 vi.mock('../../../src/infrastructure/vlc-player', () => ({
@@ -106,6 +107,53 @@ describe('system-controller', () => {
       const handler = getHandler(IPC_CHANNELS.ADD_MEDIA_DIRECTORY);
       const result = await handler({});
       expect(result).toBeNull();
+    });
+
+    it('rejects a folder nested inside an active source with a clear error', async () => {
+      const handler = getHandler(IPC_CHANNELS.ADD_MEDIA_DIRECTORY);
+      const parent = path.resolve('/media/pictures');
+      const child = path.join(parent, 'vacation');
+      (resolveMediaSourceDirectory as Mock).mockResolvedValue(child);
+      (getMediaDirectories as Mock).mockResolvedValueOnce([
+        { id: '1', path: parent, type: 'local', name: 'p', isActive: true },
+      ]);
+
+      await expect(handler({}, child)).rejects.toThrow(
+        /is inside the media source/,
+      );
+      expect(addMediaDirectory).not.toHaveBeenCalled();
+    });
+
+    it('rejects a folder that contains an active source', async () => {
+      const handler = getHandler(IPC_CHANNELS.ADD_MEDIA_DIRECTORY);
+      const parent = path.resolve('/media/pictures');
+      const child = path.join(parent, 'vacation');
+      (resolveMediaSourceDirectory as Mock).mockResolvedValue(parent);
+      (getMediaDirectories as Mock).mockResolvedValueOnce([
+        { id: '1', path: child, type: 'local', name: 'c', isActive: true },
+      ]);
+
+      await expect(handler({}, parent)).rejects.toThrow(
+        /contains the media source/,
+      );
+      expect(addMediaDirectory).not.toHaveBeenCalled();
+    });
+
+    it('allows a subfolder of an inactive source', async () => {
+      const handler = getHandler(IPC_CHANNELS.ADD_MEDIA_DIRECTORY);
+      const parent = path.resolve('/media/pictures');
+      const child = path.join(parent, 'vacation');
+      (resolveMediaSourceDirectory as Mock).mockResolvedValue(child);
+      (addMediaDirectory as Mock).mockResolvedValue(undefined);
+      (getMediaDirectories as Mock).mockResolvedValueOnce([
+        { id: '1', path: parent, type: 'local', name: 'p', isActive: false },
+      ]);
+
+      await expect(handler({}, child)).resolves.toBe(child);
+      expect(addMediaDirectory).toHaveBeenCalledWith({
+        path: child,
+        type: 'local',
+      });
     });
   });
 

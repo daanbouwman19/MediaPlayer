@@ -2,10 +2,8 @@ import { describe, it, expect, vi, beforeEach, Mock } from 'vite-plus/test';
 import { registerDatabaseHandlers } from '../../../src/main/ipc/database-controller';
 import { IPC_CHANNELS } from '../../../src/shared/ipc-channels';
 import { handleIpc } from '../../../src/main/utils/ipc-helper';
-import {
-  validatePathAccess,
-  filterAuthorizedPaths,
-} from '../../../src/main/utils/security-utils';
+import { validatePathAccess } from '../../../src/main/utils/security-utils';
+import { filterAuthorizedLibraryPaths } from '../../../src/core/media/utils/authorized-paths';
 import {
   upsertMetadata,
   getMetadata,
@@ -25,7 +23,10 @@ vi.mock('../../../src/main/utils/ipc-helper', () => ({
 
 vi.mock('../../../src/main/utils/security-utils', () => ({
   validatePathAccess: vi.fn(),
-  filterAuthorizedPaths: vi.fn(),
+}));
+
+vi.mock('../../../src/core/media/utils/authorized-paths', () => ({
+  filterAuthorizedLibraryPaths: vi.fn(),
 }));
 
 vi.mock('../../../src/core/database/database', () => ({
@@ -90,14 +91,14 @@ describe('database-controller', () => {
   });
 
   describe('DB_GET_METADATA', () => {
-    it('gets metadata for authorized paths', async () => {
+    it('gets metadata for authorized paths, keyed by the library spelling', async () => {
       const handler = getHandler(IPC_CHANNELS.DB_GET_METADATA);
-      (filterAuthorizedPaths as Mock).mockResolvedValue(['/path']);
+      (filterAuthorizedLibraryPaths as Mock).mockResolvedValue(['/path']);
       (getMetadata as Mock).mockResolvedValue([{ duration: 10 }]);
 
       const result = await handler({}, ['/path']);
 
-      expect(filterAuthorizedPaths).toHaveBeenCalledWith(['/path']);
+      expect(filterAuthorizedLibraryPaths).toHaveBeenCalledWith(['/path']);
       expect(getMetadata).toHaveBeenCalledWith(['/path']);
       expect(result).toEqual([{ duration: 10 }]);
     });

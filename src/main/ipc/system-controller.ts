@@ -25,6 +25,7 @@ import {
   resolveMediaSourceDirectory,
 } from '../../core/media/file-system';
 import { handleIpc } from '../utils/ipc-helper';
+import { assertNoSourceOverlap } from '../../core/media/utils/source-paths';
 
 export function registerSystemHandlers() {
   handleIpc(
@@ -35,6 +36,9 @@ export function registerSystemHandlers() {
       // missing, sensitive or outside the allowed roots, instead of a silent
       // null.
       const resolvedPath = await resolveMediaSourceDirectory(targetPath);
+      // Nested sources would index the overlap twice; SourceOverlapError
+      // reaches the renderer as the IPC error.
+      assertNoSourceOverlap(resolvedPath, await getMediaDirectories());
       await addMediaDirectory({ path: resolvedPath, type: 'local' });
       return resolvedPath;
     },

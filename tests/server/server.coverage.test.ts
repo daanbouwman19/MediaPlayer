@@ -174,16 +174,19 @@ describe('Server Coverage', () => {
     });
 
     it('POST /api/media/views filters unauthorized paths', async () => {
-      vi.mocked(security.filterAuthorizedPaths).mockResolvedValue([
-        '/allowed.mp4',
-      ]);
+      vi.mocked(security.authorizeFilePath).mockImplementation(async (p) =>
+        p === '/allowed.mp4'
+          ? { isAllowed: true, realPath: '/real/allowed.mp4' }
+          : { isAllowed: false, message: 'No access' },
+      );
       vi.mocked(database.getMediaViewCounts).mockResolvedValue({});
 
       const res = await request(app)
         .post('/api/media/views')
         .send({ filePaths: ['/allowed.mp4', '/secret.mp4'] });
       expect(res.status).toBe(200);
-      // Verify only allowed path was passed to DB
+      // Only the allowed path reaches the DB, in the library's spelling
+      // (rows are keyed by it), not as the resolved real path.
       expect(database.getMediaViewCounts).toHaveBeenCalledWith([
         '/allowed.mp4',
       ]);

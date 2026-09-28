@@ -100,6 +100,7 @@ describe('Server Security', () => {
           ? 'C:\\Users\\User\\Videos'
           : '/home/user/Videos';
       vi.mocked(fs.stat).mockResolvedValue({ isDirectory: () => true } as any);
+      vi.mocked(database.getMediaDirectories).mockResolvedValue([]);
 
       const response = await request(app)
         .post('/api/directories')

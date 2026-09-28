@@ -13,7 +13,6 @@ export class WorkerScannerService implements IWorkerService {
   async runScan(params: {
     directories: string[];
     tokens: unknown;
-    previousPaths: string[];
   }): Promise<Album[]> {
     const isElectron = !!process.versions['electron'];
 

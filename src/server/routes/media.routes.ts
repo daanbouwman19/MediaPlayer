@@ -21,10 +21,8 @@ import {
   parseMetadataUpdate,
 } from '../../core/database/metadata-validation.ts';
 import { TranscodeQueueManager } from '../../core/media/transcode-queue-manager.ts';
-import {
-  authorizeFilePath,
-  filterAuthorizedPaths,
-} from '../../core/auth/security.ts';
+import { authorizeFilePath } from '../../core/auth/security.ts';
+import { filterAuthorizedLibraryPaths } from '../../core/media/utils/authorized-paths.ts';
 import { getQueryParam } from '../../core/network/http-utils.ts';
 import { MAX_API_BATCH_SIZE } from '../../core/media/constants.ts';
 import {
@@ -121,7 +119,8 @@ export function createMediaRoutes({
           .send(`Batch size exceeds limit of ${MAX_API_BATCH_SIZE}`);
       }
 
-      const allowedPaths = await filterAuthorizedPaths(filePaths);
+      // Rows are keyed by the library's spelling, not the resolved real path.
+      const allowedPaths = await filterAuthorizedLibraryPaths(filePaths);
 
       const counts = await getMediaViewCounts(allowedPaths);
       return res.json(counts);
@@ -277,7 +276,8 @@ export function createMediaRoutes({
           .send(`Batch size exceeds limit of ${MAX_API_BATCH_SIZE}`);
       }
 
-      const allowedPaths = await filterAuthorizedPaths(filePaths);
+      // Rows are keyed by the library's spelling, not the resolved real path.
+      const allowedPaths = await filterAuthorizedLibraryPaths(filePaths);
 
       const result = await getMetadata(allowedPaths);
       return res.json(result);
