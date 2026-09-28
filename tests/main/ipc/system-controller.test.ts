@@ -9,10 +9,14 @@ import {
   getMediaDirectories,
 } from '../../../src/core/database/database';
 import { openMediaInVlc } from '../../../src/infrastructure/vlc-player';
-import { listDirectory } from '../../../src/core/media/file-system';
+import {
+  getParentDirectory,
+  listDirectory,
+  resolveMediaSourceDirectory,
+} from '../../../src/core/media/file-system';
 import { getServerPort } from '../../../src/main/local-server';
 import { shell, dialog, ipcMain, nativeTheme } from 'electron';
-import fs from 'fs/promises';
+import path from 'path';
 
 vi.mock('../../../src/main/utils/ipc-helper', () => ({
   handleIpc: vi.fn(),
@@ -23,15 +27,19 @@ vi.mock('../../../src/core/database/database', () => ({
   addMediaDirectory: vi.fn(),
   removeMediaDirectory: vi.fn(),
   setDirectoryActiveState: vi.fn(),
-  getMediaDirectories: vi.fn(),
+  getMediaDirectories: vi.fn().mockResolvedValue([]),
 }));
 
 vi.mock('../../../src/infrastructure/vlc-player', () => ({
   openMediaInVlc: vi.fn(),
 }));
 
+// The real file-system / security behaviour is covered by
+// system-controller.security.test.ts; here only the wiring is checked.
 vi.mock('../../../src/core/media/file-system', () => ({
   listDirectory: vi.fn(),
+  getParentDirectory: vi.fn(),
+  resolveMediaSourceDirectory: vi.fn(),
 }));
 
 vi.mock('../../../src/main/local-server', () => ({
@@ -43,13 +51,6 @@ vi.mock('electron', () => ({
   dialog: { showMessageBox: vi.fn() },
   ipcMain: { on: vi.fn(), handle: vi.fn() },
   nativeTheme: { themeSource: 'system' },
-}));
-
-vi.mock('fs/promises', () => ({
-  default: {
-    access: vi.fn(),
-    realpath: vi.fn((p) => Promise.resolve(p)), // Mock realpath
-  },
 }));
 
 describe('system-controller', () => {
@@ -67,45 +68,92 @@ describe('system-controller', () => {
   };
 
   describe('ADD_MEDIA_DIRECTORY', () => {
-    it('adds valid directory', async () => {
+    it('adds the resolved directory', async () => {
       const handler = getHandler(IPC_CHANNELS.ADD_MEDIA_DIRECTORY);
-      const targetPath = '/valid/path';
-      (fs.realpath as Mock).mockResolvedValue(targetPath); // realpath succeeds
+      const targetPath = '/valid/link';
+      (resolveMediaSourceDirectory as Mock).mockResolvedValue('/valid/path');
 
       const result = await handler({}, targetPath);
 
-      expect(fs.realpath).toHaveBeenCalledWith(targetPath);
+      expect(resolveMediaSourceDirectory).toHaveBeenCalledWith(targetPath);
       expect(addMediaDirectory).toHaveBeenCalledWith({
-        path: targetPath,
+        path: '/valid/path',
         type: 'local',
       });
-      expect(result).toBe(targetPath);
+      expect(result).toBe('/valid/path');
     });
 
-    it('returns null if path inaccessible', async () => {
+    it('rejects with the validation error instead of returning null', async () => {
       const handler = getHandler(IPC_CHANNELS.ADD_MEDIA_DIRECTORY);
-      (fs.realpath as Mock).mockRejectedValue(new Error('ENOENT'));
+      (resolveMediaSourceDirectory as Mock).mockRejectedValue(
+        new Error('Directory does not exist'),
+      );
 
-      const result = await handler({}, '/invalid/path');
-
-      expect(result).toBeNull();
+      await expect(handler({}, '/invalid/path')).rejects.toThrow(
+        'Directory does not exist',
+      );
       expect(addMediaDirectory).not.toHaveBeenCalled();
     });
 
-    it('returns null if addMediaDirectory fails', async () => {
+    it('rejects if addMediaDirectory fails', async () => {
       const handler = getHandler(IPC_CHANNELS.ADD_MEDIA_DIRECTORY);
-      (fs.realpath as Mock).mockResolvedValue('/valid/path');
+      (resolveMediaSourceDirectory as Mock).mockResolvedValue('/valid/path');
       (addMediaDirectory as Mock).mockRejectedValue(new Error('DB Error'));
 
-      const result = await handler({}, '/valid/path');
-
-      expect(result).toBeNull();
+      await expect(handler({}, '/valid/path')).rejects.toThrow('DB Error');
     });
 
     it('returns null if no path provided', async () => {
       const handler = getHandler(IPC_CHANNELS.ADD_MEDIA_DIRECTORY);
       const result = await handler({});
       expect(result).toBeNull();
+    });
+
+    it('rejects a folder nested inside an active source with a clear error', async () => {
+      const handler = getHandler(IPC_CHANNELS.ADD_MEDIA_DIRECTORY);
+      const parent = path.resolve('/media/pictures');
+      const child = path.join(parent, 'vacation');
+      (resolveMediaSourceDirectory as Mock).mockResolvedValue(child);
+      (getMediaDirectories as Mock).mockResolvedValueOnce([
+        { id: '1', path: parent, type: 'local', name: 'p', isActive: true },
+      ]);
+
+      await expect(handler({}, child)).rejects.toThrow(
+        /is inside the media source/,
+      );
+      expect(addMediaDirectory).not.toHaveBeenCalled();
+    });
+
+    it('rejects a folder that contains an active source', async () => {
+      const handler = getHandler(IPC_CHANNELS.ADD_MEDIA_DIRECTORY);
+      const parent = path.resolve('/media/pictures');
+      const child = path.join(parent, 'vacation');
+      (resolveMediaSourceDirectory as Mock).mockResolvedValue(parent);
+      (getMediaDirectories as Mock).mockResolvedValueOnce([
+        { id: '1', path: child, type: 'local', name: 'c', isActive: true },
+      ]);
+
+      await expect(handler({}, parent)).rejects.toThrow(
+        /contains the media source/,
+      );
+      expect(addMediaDirectory).not.toHaveBeenCalled();
+    });
+
+    it('allows a subfolder of an inactive source', async () => {
+      const handler = getHandler(IPC_CHANNELS.ADD_MEDIA_DIRECTORY);
+      const parent = path.resolve('/media/pictures');
+      const child = path.join(parent, 'vacation');
+      (resolveMediaSourceDirectory as Mock).mockResolvedValue(child);
+      (addMediaDirectory as Mock).mockResolvedValue(undefined);
+      (getMediaDirectories as Mock).mockResolvedValueOnce([
+        { id: '1', path: parent, type: 'local', name: 'p', isActive: false },
+      ]);
+
+      await expect(handler({}, child)).resolves.toBe(child);
+      expect(addMediaDirectory).toHaveBeenCalledWith({
+        path: child,
+        type: 'local',
+      });
     });
   });
 
@@ -194,11 +242,10 @@ describe('system-controller', () => {
   describe('OPEN_IN_VLC', () => {
     it('calls openMediaInVlc', async () => {
       const handler = getHandler(IPC_CHANNELS.OPEN_IN_VLC);
-      (getServerPort as Mock).mockReturnValue(3000);
 
       await handler({}, '/path/to/media.mp4');
 
-      expect(openMediaInVlc).toHaveBeenCalledWith('/path/to/media.mp4', 3000);
+      expect(openMediaInVlc).toHaveBeenCalledWith('/path/to/media.mp4');
     });
   });
 
@@ -211,23 +258,18 @@ describe('system-controller', () => {
   });
 
   describe('GET_PARENT_DIRECTORY', () => {
-    it('returns parent', async () => {
+    it('returns the shared getParentDirectory result', async () => {
       const handler = getHandler(IPC_CHANNELS.GET_PARENT_DIRECTORY);
+      (getParentDirectory as Mock).mockResolvedValue('/path/to');
       const result = await handler({}, '/path/to/file');
-      // path.dirname('/path/to/file') should be '/path/to'
-      // Note: testing logic relies on 'path' module which we didn't mock, so it uses real implementation
+      expect(getParentDirectory).toHaveBeenCalledWith('/path/to/file');
       expect(result).toBe('/path/to');
     });
 
-    it('returns null if root', async () => {
+    it('returns null at a root', async () => {
       const handler = getHandler(IPC_CHANNELS.GET_PARENT_DIRECTORY);
+      (getParentDirectory as Mock).mockResolvedValue(null);
       const result = await handler({}, '/');
-      expect(result).toBeNull();
-    });
-
-    it('returns null if empty', async () => {
-      const handler = getHandler(IPC_CHANNELS.GET_PARENT_DIRECTORY);
-      const result = await handler({}, '');
       expect(result).toBeNull();
     });
   });

@@ -35,7 +35,7 @@ vi.mock('../../src/core/database/database', () => ({
 }));
 
 // We need to mock other dependencies of media-controller that we aren't testing to avoid errors
-vi.mock('../../src/main/google-drive-service', () => ({
+vi.mock('../../src/infrastructure/google-drive-service', () => ({
   getDriveFileMetadata: vi.fn(),
   listDriveDirectory: vi.fn(),
   getDriveParent: vi.fn(),

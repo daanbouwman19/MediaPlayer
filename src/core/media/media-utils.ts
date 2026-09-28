@@ -28,8 +28,25 @@ export function createDrivePath(fileId: string): string {
   return `${GDRIVE_PROTOCOL}${fileId}`;
 }
 
-export function getThumbnailCachePath(filePath: string, cacheDir: string) {
-  const hash = crypto.createHash('md5').update(filePath).digest('hex');
+/**
+ * Returns the thumbnail cache file for a media file.
+ *
+ * The file is named by the SHA-256 digest of the key. It is only a cache file
+ * name (the thumbnail route authorises the path before it looks the file up),
+ * and SHA-256 keeps the names collision-resistant. Files named by the former
+ * MD5 key are simply cache misses: the thumbnail is regenerated and the cache
+ * sweeper removes the old file once nobody reads it.
+ * @param identity The file's version tag (see getFileIdentity). Including it
+ * gives an edited or replaced file a fresh thumbnail; without one only the
+ * path is used.
+ */
+export function getThumbnailCachePath(
+  filePath: string,
+  cacheDir: string,
+  identity?: string | null,
+) {
+  const key = identity ? `${filePath}\0${identity}` : filePath;
+  const hash = crypto.createHash('sha256').update(key).digest('hex');
   return path.join(cacheDir, `${hash}.jpg`);
 }
 

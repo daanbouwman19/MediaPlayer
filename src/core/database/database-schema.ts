@@ -243,6 +243,24 @@ export function migrateV4JobsTable(db: DatabaseSync): void {
 }
 
 /**
+ * v4 -> v5: Track failed metadata extractions.
+ *
+ * Some files can never produce a duration (a corrupt video, or a Drive
+ * video Drive never processes). Without a record of past attempts every
+ * scan probes them again. extraction_attempts counts consecutive failures
+ * and extraction_attempted_at (epoch ms) records the last attempt, so scans
+ * can back off; see isExtractionBackedOff.
+ */
+export function migrateV5ExtractionAttempts(db: DatabaseSync): void {
+  db.exec(
+    `ALTER TABLE media_metadata ADD COLUMN extraction_attempts INTEGER DEFAULT 0`,
+  );
+  db.exec(
+    `ALTER TABLE media_metadata ADD COLUMN extraction_attempted_at INTEGER`,
+  );
+}
+
+/**
  * Ordered migration steps. MIGRATIONS[n] upgrades version n to n + 1.
  */
 const MIGRATIONS: ((db: DatabaseSync) => void)[] = [
@@ -250,6 +268,7 @@ const MIGRATIONS: ((db: DatabaseSync) => void)[] = [
   migrateV2MergeMediaViews,
   migrateV3MediaSegments,
   migrateV4JobsTable,
+  migrateV5ExtractionAttempts,
 ];
 
 export const LATEST_DB_VERSION = MIGRATIONS.length;

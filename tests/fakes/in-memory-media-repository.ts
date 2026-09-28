@@ -5,6 +5,7 @@ import type {
   MediaLibraryItem,
   MediaDirectory,
 } from '../../src/core/media/types.ts';
+import { isMetadataComplete } from '../../src/core/media/utils/metadata-status.ts';
 
 export class InMemoryMediaRepository implements IMediaRepository {
   private albums: Album[] | null = null;
@@ -15,6 +16,14 @@ export class InMemoryMediaRepository implements IMediaRepository {
 
   async getMediaDirectories() {
     return this.directories;
+  }
+
+  async repairDriveSourceName(directoryPath: string, name: string) {
+    if (!directoryPath.startsWith('gdrive://')) return;
+    const id = directoryPath.slice('gdrive://'.length);
+    for (const dir of this.directories) {
+      if (dir.path === directoryPath && dir.name === id) dir.name = name;
+    }
   }
 
   setMediaDirectories(directories: MediaDirectory[]) {
@@ -78,14 +87,19 @@ export class InMemoryMediaRepository implements IMediaRepository {
   }
 
   async filterProcessingNeeded(filePaths: string[]) {
+    // Mirrors the worker: a 'success' video without a duration is retried.
     return filePaths.filter((path) => {
       const meta = this.metadata.get(path);
-      return !meta || meta.status !== 'success';
+      return !isMetadataComplete(path, meta?.status, meta?.duration);
     });
   }
 
   async getSetting(key: string) {
     return this.settings.get(key) || null;
+  }
+
+  async saveSetting(key: string, value: string) {
+    this.settings.set(key, value);
   }
 
   setSetting(key: string, value: string) {

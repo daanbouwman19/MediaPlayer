@@ -10,6 +10,12 @@ import type {
   TranscodeJob,
 } from '../../core/media/types';
 import type { FileSystemEntry } from '../../core/media/file-system';
+import type {
+  DriveCacheProgressEvent,
+  DriveCacheStatus,
+} from '../../shared/ipc/media.contract';
+
+type DriveCacheListener = (event: DriveCacheProgressEvent) => void;
 
 /**
  * URL cache with LRU eviction: hits refresh recency, overflow evicts only
@@ -41,6 +47,16 @@ function createLruUrlCache(maxSize: number) {
 const URL_CACHE_MAX_SIZE = 10000;
 
 export class ElectronAdapter implements IMediaBackend {
+  readonly supportsDriveOfflineCache = true;
+
+  // One bridge subscription fans cache events out to the tiles showing that
+  // file, instead of every Drive tile filtering every event itself.
+  private readonly driveCacheListeners = new Map<
+    string,
+    Set<DriveCacheListener>
+  >();
+  private unsubscribeDriveCacheBridge: (() => void) | null = null;
+
   constructor(private bridge = window.electronAPI) {}
 
   private async invoke<T>(promise: Promise<IpcResult<T>>): Promise<T> {
@@ -190,8 +206,33 @@ export class ElectronAdapter implements IMediaBackend {
     return { duration: res.duration };
   }
 
-  async getHeatmap(filePath: string, points?: number): Promise<HeatmapData> {
-    return this.invoke(this.bridge.getHeatmap(filePath, points));
+  async getHeatmap(
+    filePath: string,
+    points?: number,
+    options: { signal?: AbortSignal } = {},
+  ): Promise<HeatmapData> {
+    const { signal } = options;
+    signal?.throwIfAborted();
+    const request = this.invoke(this.bridge.getHeatmap(filePath, points));
+    if (!signal) return request;
+
+    // An IPC call cannot be aborted, so tell the main process this window
+    // no longer needs the analysis and stop waiting for it.
+    let onAbort = () => {};
+    const aborted = new Promise<never>((_resolve, reject) => {
+      onAbort = () => {
+        this.bridge.cancelHeatmap(filePath).catch(() => {});
+        reject(new DOMException('The operation was aborted.', 'AbortError'));
+      };
+      signal.addEventListener('abort', onAbort, { once: true });
+    });
+    try {
+      return await Promise.race([request, aborted]);
+    } finally {
+      signal.removeEventListener('abort', onAbort);
+      // The abandoned request may still settle; nobody is waiting for it.
+      request.catch(() => {});
+    }
   }
 
   async getHeatmapProgress(filePath: string): Promise<number | null> {
@@ -307,6 +348,50 @@ export class ElectronAdapter implements IMediaBackend {
 
   async getGoogleDriveParent(folderId: string): Promise<string | null> {
     return this.invoke(this.bridge.getGoogleDriveParent(folderId));
+  }
+
+  async getDriveCacheStatus(fileId: string): Promise<DriveCacheStatus> {
+    return this.invoke(this.bridge.getDriveCacheStatus(fileId));
+  }
+
+  async triggerDriveCache(fileId: string): Promise<void> {
+    return this.invoke(this.bridge.triggerDriveCache(fileId));
+  }
+
+  onDriveCacheProgress(
+    fileId: string,
+    callback: DriveCacheListener,
+  ): () => void {
+    let listeners = this.driveCacheListeners.get(fileId);
+    if (!listeners) {
+      listeners = new Set();
+      this.driveCacheListeners.set(fileId, listeners);
+    }
+    listeners.add(callback);
+
+    if (!this.unsubscribeDriveCacheBridge) {
+      this.unsubscribeDriveCacheBridge = this.bridge.onDriveCacheProgress(
+        (_event, data) => {
+          const targets = this.driveCacheListeners.get(data.fileId);
+          if (!targets) return;
+          for (const listener of Array.from(targets)) {
+            listener(data);
+          }
+        },
+      );
+    }
+
+    return () => {
+      const current = this.driveCacheListeners.get(fileId);
+      if (!current || !current.delete(callback)) return;
+      if (current.size === 0) {
+        this.driveCacheListeners.delete(fileId);
+      }
+      if (this.driveCacheListeners.size === 0) {
+        this.unsubscribeDriveCacheBridge?.();
+        this.unsubscribeDriveCacheBridge = null;
+      }
+    };
   }
 
   async addTranscodeJobs(paths: string[]): Promise<void> {

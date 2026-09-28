@@ -29,10 +29,10 @@ vi.mock('@/features/player/VideoPlayer.vue', () => ({
       'src',
       'isTranscodingMode',
       'isControlsVisible',
-      'transcodedDuration',
-      'currentTranscodeStartTime',
       'isTranscodingLoading',
       'isBuffering',
+      'initialTime',
+      'poster',
     ],
     emits: [
       'update:video-element',
@@ -107,24 +107,30 @@ describe('MediaDisplay Combined Tests', () => {
       isLoading: ref(false),
       error: ref(null),
       isVideoSupported: ref(true),
+      currentLoadRequestId: ref(0),
       loadMedia: vi.fn(),
+      cancelPendingLoad: vi.fn(),
     };
     (useMediaLoader as Mock).mockReturnValue(mockMediaLoader);
 
     mockTranscoder = {
       isTranscodingMode: ref(false),
       isTranscodingLoading: ref(false),
+      isBuffering: ref(false),
       transcodingProgress: ref(0),
       transcodedDuration: ref(0),
       startTranscoding: vi.fn(),
       resetTranscoderState: vi.fn(),
+      stopTranscodingProgressPoll: vi.fn(),
+      handlePlaybackStarted: vi.fn(),
+      setBuffering: vi.fn(),
     };
     (useTranscoder as Mock).mockReturnValue(mockTranscoder);
 
     mockSlideshow = {
       navigateMedia: vi.fn(),
-      resumeSlideshowTimer: vi.fn(),
-      pauseSlideshowTimer: vi.fn(),
+      resumeSlideshowTimerAfterVideo: vi.fn(),
+      pauseSlideshowTimerForVideo: vi.fn(),
     };
     (useSlideshow as Mock).mockReturnValue(mockSlideshow);
   });
@@ -237,7 +243,7 @@ describe('MediaDisplay Combined Tests', () => {
       // In the mock, duration is 100, which is > 5
       videoPlayer.vm.$emit('loadedmetadata');
 
-      expect(mockSlideshow.pauseSlideshowTimer).toHaveBeenCalled();
+      expect(mockSlideshow.pauseSlideshowTimerForVideo).toHaveBeenCalled();
     });
   });
 });

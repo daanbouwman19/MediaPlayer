@@ -87,6 +87,8 @@ vi.mock('three/examples/jsm/controls/OrbitControls.js', () => ({
       target: { set: vi.fn() },
       update: vi.fn(),
       dispose: vi.fn(),
+      reset: vi.fn(),
+      enabled: true,
       enableZoom: true,
       enablePan: true,
       enableDamping: true,
@@ -485,6 +487,18 @@ describe('VRVideoPlayer.vue', () => {
     createElementSpy.mockRestore();
   });
 
+  const dispatchOrientation = (
+    alpha: number | null,
+    beta: number | null,
+    gamma: number | null,
+  ) => {
+    const event = new Event('deviceorientation');
+    Object.defineProperty(event, 'alpha', { value: alpha });
+    Object.defineProperty(event, 'beta', { value: beta });
+    Object.defineProperty(event, 'gamma', { value: gamma });
+    window.dispatchEvent(event);
+  };
+
   it('handles recenterVR with permission granted', async () => {
     const wrapper = mount(VRVideoPlayer, { props: defaultProps });
     await wrapper.vm.$nextTick();
@@ -502,9 +516,78 @@ describe('VRVideoPlayer.vue', () => {
     await flushPromises();
 
     expect(requestPermission).toHaveBeenCalled();
+    // Motion control takes over only once real sensor readings arrive.
+    expect((wrapper.vm as any).isMotionControlActive).toBe(false);
+    dispatchOrientation(10, 20, 30);
     expect((wrapper.vm as any).isMotionControlActive).toBe(true);
 
     (window as any).DeviceOrientationEvent = originalDOE;
+    wrapper.unmount();
+  });
+
+  it('keeps mouse look on desktop, where orientation events carry no data', async () => {
+    const { OrbitControls } =
+      await import('three/examples/jsm/controls/OrbitControls.js');
+    const wrapper = mount(VRVideoPlayer, { props: defaultProps });
+    await wrapper.vm.$nextTick();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const controls = vi.mocked(OrbitControls).mock.results[0].value;
+
+    const originalDOE = (window as any).DeviceOrientationEvent;
+    (window as any).DeviceOrientationEvent = {};
+
+    await wrapper.find('button[title="Recenter VR View"]').trigger('click');
+    // Recenter resets the orbit view instead...
+    expect(controls.reset).toHaveBeenCalled();
+    // ...and an all-null event (no sensor) must not take over the camera.
+    dispatchOrientation(null, null, null);
+    expect((wrapper.vm as any).isMotionControlActive).toBe(false);
+    expect(controls.enabled).toBe(true);
+
+    (window as any).DeviceOrientationEvent = originalDOE;
+    wrapper.unmount();
+  });
+
+  it('leaves motion mode when the user drags the view', async () => {
+    const { OrbitControls } =
+      await import('three/examples/jsm/controls/OrbitControls.js');
+    const wrapper = mount(VRVideoPlayer, { props: defaultProps });
+    await wrapper.vm.$nextTick();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const controls = vi.mocked(OrbitControls).mock.results[0].value;
+    const renderer = vi.mocked(THREE.WebGLRenderer).mock.results[0].value;
+
+    const originalDOE = (window as any).DeviceOrientationEvent;
+    (window as any).DeviceOrientationEvent = {};
+    await wrapper.find('button[title="Recenter VR View"]').trigger('click');
+    dispatchOrientation(90, 45, 0);
+    expect((wrapper.vm as any).isMotionControlActive).toBe(true);
+    expect(controls.enabled).toBe(false);
+
+    renderer.domElement.dispatchEvent(new Event('pointerdown'));
+    expect((wrapper.vm as any).isMotionControlActive).toBe(false);
+    expect(controls.enabled).toBe(true);
+
+    // No longer listening: further readings don't re-activate it.
+    dispatchOrientation(90, 45, 0);
+    expect((wrapper.vm as any).isMotionControlActive).toBe(false);
+
+    (window as any).DeviceOrientationEvent = originalDOE;
+    wrapper.unmount();
+  });
+
+  it('does nothing beyond resetting the view without orientation support', async () => {
+    const wrapper = mount(VRVideoPlayer, { props: defaultProps });
+    await wrapper.vm.$nextTick();
+    const originalDOE = (window as any).DeviceOrientationEvent;
+    delete (window as any).DeviceOrientationEvent;
+
+    await wrapper.find('button[title="Recenter VR View"]').trigger('click');
+    dispatchOrientation(10, 20, 30);
+    expect((wrapper.vm as any).isMotionControlActive).toBe(false);
+
+    (window as any).DeviceOrientationEvent = originalDOE;
+    wrapper.unmount();
   });
 
   it('handles recenterVR with permission denied', async () => {
@@ -538,14 +621,31 @@ describe('VRVideoPlayer.vue', () => {
     (window as any).DeviceOrientationEvent = {};
 
     const recenterBtn = wrapper.find('button[title="Recenter VR View"]');
+    expect(recenterBtn.classes()).toContain('text-white');
+    expect(recenterBtn.classes()).not.toContain('text-accent');
     await recenterBtn.trigger('click');
+    dispatchOrientation(0, 90, 0);
+    await wrapper.vm.$nextTick();
 
     expect((wrapper.vm as any).isMotionControlActive).toBe(true);
+    // Only one text colour at a time, so the accent cue is not overridden
+    expect(recenterBtn.classes()).toContain('text-accent');
+    expect(recenterBtn.classes()).not.toContain('text-white');
     (window as any).DeviceOrientationEvent = originalDOE;
+    wrapper.unmount();
   });
 
   it('recenters VR when motion is already active', async () => {
+    let animateCallback: FrameRequestCallback | null = null;
+    const originalRAF = window.requestAnimationFrame;
+    window.requestAnimationFrame = vi.fn((cb: FrameRequestCallback) => {
+      animateCallback = cb;
+      return 1;
+    }) as any;
+
     const wrapper = mount(VRVideoPlayer, { props: defaultProps });
+    await wrapper.vm.$nextTick();
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
     // 1. Activate motion (force via non-iOS path)
     const originalDOE = (window as any).DeviceOrientationEvent;
@@ -553,18 +653,22 @@ describe('VRVideoPlayer.vue', () => {
 
     const recenterBtn = wrapper.find('button[title="Recenter VR View"]');
     await recenterBtn.trigger('click');
+    dispatchOrientation(90, 0, 0);
     expect((wrapper.vm as any).isMotionControlActive).toBe(true);
 
-    // 2. Simulate device orientation event to set 'deviceOrientation' variable
-    const event = new Event('deviceorientation');
-    Object.defineProperty(event, 'alpha', { value: 90 });
-    window.dispatchEvent(event);
-
-    // 3. Click recenter again - triggers the 'else' branch
+    // 2. The device turns; recentering makes the new heading the front.
+    dispatchOrientation(135, 0, 0);
     await recenterBtn.trigger('click');
+    vi.mocked(THREE.Euler).mockClear();
+    (animateCallback as FrameRequestCallback | null)?.(0);
+    const euler = vi.mocked(THREE.Euler).mock.results[0].value;
+    // alpha (yaw) relative to the recentred heading is 0.
+    expect(euler.set).toHaveBeenCalledWith(0, 0, -0, 'YXZ');
 
     // Restore
+    window.requestAnimationFrame = originalRAF;
     (window as any).DeviceOrientationEvent = originalDOE;
+    wrapper.unmount();
   });
 
   it('updates camera quaternion in animation loop when motion active', async () => {
@@ -589,11 +693,7 @@ describe('VRVideoPlayer.vue', () => {
     (window as any).DeviceOrientationEvent = originalDOE;
 
     // Simulate event data
-    const event = new Event('deviceorientation');
-    (event as any).alpha = 10;
-    (event as any).beta = 20;
-    (event as any).gamma = 30;
-    window.dispatchEvent(event);
+    dispatchOrientation(10, 20, 30);
 
     // Manually invoke the animate callback
     if (animateCallback) {

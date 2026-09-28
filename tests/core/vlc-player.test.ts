@@ -9,11 +9,19 @@ import {
 import { EventEmitter } from 'events';
 import { openMediaInVlc } from '../../src/infrastructure/vlc-player';
 
-const { mockSpawn, mockAuthorizeFilePath, mockFsAccess } = vi.hoisted(() => ({
-  mockSpawn: vi.fn(),
-  mockAuthorizeFilePath: vi.fn(),
-  mockFsAccess: vi.fn(),
+const { mockSpawn, mockAuthorizeFilePath, mockFsAccess, mockGetFFmpegInput } =
+  vi.hoisted(() => ({
+    mockSpawn: vi.fn(),
+    mockAuthorizeFilePath: vi.fn(),
+    mockFsAccess: vi.fn(),
+    mockGetFFmpegInput: vi.fn(),
+  }));
+
+vi.mock('../../src/core/media/media-source', () => ({
+  createMediaSource: vi.fn(() => ({ getFFmpegInput: mockGetFFmpegInput })),
 }));
+
+const PROXY_URL = 'http://127.0.0.1:4567/stream/123.mp4?token=proxy-token';
 
 vi.mock('child_process', () => ({
   spawn: mockSpawn,
@@ -44,6 +52,8 @@ describe('vlc-player unit tests', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockSpawn.mockReset();
+    mockAuthorizeFilePath.mockResolvedValue({ isAllowed: true });
+    mockGetFFmpegInput.mockResolvedValue(PROXY_URL);
     vi.useFakeTimers();
   });
 
@@ -54,11 +64,8 @@ describe('vlc-player unit tests', () => {
   /**
    * Helper to handle the async spawn and timeout pattern in openMediaInVlc
    */
-  async function testOpenMediaAndAdvanceTimers(
-    filePath: string,
-    serverPort: number,
-  ) {
-    const promise = openMediaInVlc(filePath, serverPort);
+  async function testOpenMediaAndAdvanceTimers(filePath: string) {
+    const promise = openMediaInVlc(filePath);
     // Wait for spawn to be called, as getVlcPath() is async
     await vi.waitFor(() => expect(mockSpawn).toHaveBeenCalled());
     // Fast-forward past the 300ms timeout in openMediaInVlc
@@ -72,28 +79,52 @@ describe('vlc-player unit tests', () => {
       Object.defineProperty(process, 'platform', { value: originalPlatform });
     });
 
-    it('should return error for Drive file if serverPort is 0', async () => {
-      const result = await openMediaInVlc('gdrive://123', 0);
-      expect(result).toEqual({
-        success: false,
-        message: 'Local server is not running to stream files.',
+    it('should refuse Drive files outside the library', async () => {
+      mockAuthorizeFilePath.mockResolvedValue({
+        isAllowed: false,
+        message: 'Access denied',
       });
+      const result = await openMediaInVlc('gdrive://not-in-library');
+      expect(result).toEqual({ success: false, message: 'Access denied' });
+      expect(mockGetFFmpegInput).not.toHaveBeenCalled();
+      expect(mockSpawn).not.toHaveBeenCalled();
     });
 
-    it('should prepare stream url for Drive file', async () => {
+    it('should hand VLC the internal Drive proxy URL for Drive files', async () => {
       Object.defineProperty(process, 'platform', { value: 'linux' });
       // Mock spawn to succeed
       const mockChild = { unref: vi.fn(), on: vi.fn() };
       mockSpawn.mockReturnValue(mockChild);
 
-      const result = await testOpenMediaAndAdvanceTimers('gdrive://123', 3000);
+      const result = await testOpenMediaAndAdvanceTimers('gdrive://123');
 
       expect(result).toEqual({ success: true });
+      expect(mockAuthorizeFilePath).toHaveBeenCalledWith('gdrive://123');
       expect(mockSpawn).toHaveBeenCalledWith(
         '/usr/bin/vlc',
-        ['--', expect.stringContaining('http://localhost:3000/video/stream')],
+        ['--', PROXY_URL],
         expect.anything(),
       );
+    });
+
+    it('should report a Drive stream that cannot be prepared', async () => {
+      mockGetFFmpegInput.mockRejectedValue(new Error('proxy down'));
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      const result = await openMediaInVlc('gdrive://123');
+
+      expect(result).toEqual({
+        success: false,
+        message: 'Could not prepare the Google Drive file for VLC.',
+      });
+      expect(mockSpawn).not.toHaveBeenCalled();
+    });
+
+    it('should refuse local files outside the library', async () => {
+      mockAuthorizeFilePath.mockResolvedValue({ isAllowed: false });
+      const result = await openMediaInVlc('/etc/passwd');
+      expect(result).toEqual({ success: false, message: 'Access denied' });
+      expect(mockSpawn).not.toHaveBeenCalled();
     });
 
     it.each(['--malicious-flag.mp4', '-h.mp4', '--fullscreen'])(
@@ -105,7 +136,7 @@ describe('vlc-player unit tests', () => {
         mockSpawn.mockReturnValue(mockChild);
 
         // Act
-        const result = await testOpenMediaAndAdvanceTimers(maliciousFile, 3000);
+        const result = await testOpenMediaAndAdvanceTimers(maliciousFile);
 
         // Assert
         expect(result).toEqual({ success: true });
@@ -125,7 +156,7 @@ describe('vlc-player unit tests', () => {
       const mockChild = { unref: vi.fn(), on: vi.fn() };
       mockSpawn.mockReturnValue(mockChild);
 
-      const result = await testOpenMediaAndAdvanceTimers('/local.mp4', 3000);
+      const result = await testOpenMediaAndAdvanceTimers('/local.mp4');
       expect(result).toEqual({ success: true });
     });
 
@@ -136,7 +167,7 @@ describe('vlc-player unit tests', () => {
       const mockChild = { unref: vi.fn(), on: vi.fn() };
       mockSpawn.mockReturnValue(mockChild);
 
-      const result = await testOpenMediaAndAdvanceTimers('/local.mp4', 3000);
+      const result = await testOpenMediaAndAdvanceTimers('/local.mp4');
       expect(result).toEqual({ success: true });
     });
 
@@ -149,7 +180,7 @@ describe('vlc-player unit tests', () => {
         .spyOn(console, 'error')
         .mockImplementation(() => {});
 
-      const promise = openMediaInVlc('gdrive://123', 3000);
+      const promise = openMediaInVlc('gdrive://123');
 
       // Wait for spawn to be called (handles async getVlcPath)
       await vi.waitFor(() => expect(mockSpawn).toHaveBeenCalled());
@@ -176,7 +207,7 @@ describe('vlc-player unit tests', () => {
       (mockChild as any).unref = vi.fn();
       mockSpawn.mockReturnValue(mockChild);
 
-      const promise = openMediaInVlc('gdrive://123', 3000);
+      const promise = openMediaInVlc('gdrive://123');
 
       // Wait for spawn to be called (handles async getVlcPath)
       await vi.waitFor(() => expect(mockSpawn).toHaveBeenCalled());

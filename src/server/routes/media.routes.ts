@@ -11,15 +11,18 @@ import {
   recordMediaView,
   setRating,
   updatePlaybackPosition,
+  updateWatchedSegments,
   upsertMetadata,
   listTranscodeJobs,
   deleteTranscodeJob,
 } from '../../core/database/database.ts';
-import { TranscodeQueueManager } from '../../core/media/transcode-queue-manager.ts';
 import {
-  authorizeFilePath,
-  filterAuthorizedPaths,
-} from '../../core/auth/security.ts';
+  normalizeWatchedSegments,
+  parseMetadataUpdate,
+} from '../../core/database/metadata-validation.ts';
+import { TranscodeQueueManager } from '../../core/media/transcode-queue-manager.ts';
+import { authorizeFilePath } from '../../core/auth/security.ts';
+import { filterAuthorizedLibraryPaths } from '../../core/media/utils/authorized-paths.ts';
 import { getQueryParam } from '../../core/network/http-utils.ts';
 import { MAX_API_BATCH_SIZE } from '../../core/media/constants.ts';
 import {
@@ -69,11 +72,19 @@ export function createMediaRoutes({
   ffmpegPath,
 }: MediaRoutesOptions) {
   const router = Router();
-  const { writeLimiter, readLimiter, fileLimiter, streamLimiter } = limiters;
+  const {
+    writeLimiter,
+    telemetryLimiter,
+    readLimiter,
+    fileLimiter,
+    streamLimiter,
+  } = limiters;
 
+  // View counts and playback position are recorded on every slide / every few
+  // seconds of playback: they use the telemetry budget, not the strict one.
   router.post(
     '/api/media/view',
-    writeLimiter,
+    telemetryLimiter,
     asyncHandler(async (req, res) => {
       const { filePath } = req.body as { filePath?: unknown };
       if (!filePath || typeof filePath !== 'string') {
@@ -108,7 +119,8 @@ export function createMediaRoutes({
           .send(`Batch size exceeds limit of ${MAX_API_BATCH_SIZE}`);
       }
 
-      const allowedPaths = await filterAuthorizedPaths(filePaths);
+      // Rows are keyed by the library's spelling, not the resolved real path.
+      const allowedPaths = await filterAuthorizedLibraryPaths(filePaths);
 
       const counts = await getMediaViewCounts(allowedPaths);
       return res.json(counts);
@@ -143,7 +155,7 @@ export function createMediaRoutes({
 
   router.post(
     '/api/media/playback-position',
-    writeLimiter,
+    telemetryLimiter,
     asyncHandler(async (req, res) => {
       const { filePath, position } = req.body as {
         filePath?: unknown;
@@ -164,6 +176,32 @@ export function createMediaRoutes({
       }
 
       await updatePlaybackPosition(filePath, Math.max(0, position));
+      return res.sendStatus(200);
+    }),
+  );
+
+  // Watched-progress telemetry (saved every few seconds while playing), so it
+  // shares the telemetry budget with view/position saves rather than using
+  // the strict write limiter or eating into the read budget.
+  router.post(
+    '/api/media/watched-segments',
+    telemetryLimiter,
+    asyncHandler(async (req, res) => {
+      const { filePath, segmentsJson } = req.body as {
+        filePath?: unknown;
+        segmentsJson?: unknown;
+      };
+      if (!filePath || typeof filePath !== 'string') {
+        throw new AppError(400, 'Missing or invalid filePath');
+      }
+      const segments = normalizeWatchedSegments(segmentsJson);
+
+      const auth = await authorizeFilePath(filePath);
+      if (!auth.isAllowed) {
+        return res.status(403).send(auth.message || 'Access denied');
+      }
+
+      await updateWatchedSegments(filePath, segments);
       return res.sendStatus(200);
     }),
   );
@@ -208,13 +246,15 @@ export function createMediaRoutes({
       ) {
         return res.status(400).send('Missing or invalid arguments');
       }
+      // Only known fields are kept; the authorized filePath always wins.
+      const fields = parseMetadataUpdate(metadata);
 
       const auth = await authorizeFilePath(filePath);
       if (!auth.isAllowed) {
         return res.status(403).send(auth.message || 'Access denied');
       }
 
-      await upsertMetadata(filePath, metadata);
+      await upsertMetadata(filePath, fields);
       return res.sendStatus(200);
     }),
   );
@@ -237,7 +277,8 @@ export function createMediaRoutes({
           .send(`Batch size exceeds limit of ${MAX_API_BATCH_SIZE}`);
       }
 
-      const allowedPaths = await filterAuthorizedPaths(filePaths);
+      // Rows are keyed by the library's spelling, not the resolved real path.
+      const allowedPaths = await filterAuthorizedLibraryPaths(filePaths);
 
       const result = await getMetadata(allowedPaths);
       return res.json(result);
@@ -414,6 +455,7 @@ export function createMediaRoutes({
 
   router.post(
     '/api/transcode/jobs',
+    writeLimiter,
     asyncHandler(async (req, res) => {
       const { paths } = req.body as { paths?: unknown };
       if (!Array.isArray(paths) || paths.length === 0) {
@@ -426,14 +468,18 @@ export function createMediaRoutes({
         if (!auth.isAllowed) {
           return res.status(403).send(auth.message || 'Access denied');
         }
-        await manager.enqueue(p);
+        // Queue the resolved path, like Electron does: the HLS session id is
+        // derived from it, so playback finds the pre-transcoded output.
+        await manager.enqueue(auth.realPath ?? p);
       }
       return res.status(204).send();
     }),
   );
 
+  // Polled every few seconds while jobs run.
   router.get(
     '/api/transcode/jobs',
+    readLimiter,
     asyncHandler(async (_req, res) => {
       const jobs = await listTranscodeJobs();
       res.json(jobs);
@@ -442,6 +488,7 @@ export function createMediaRoutes({
 
   router.delete(
     '/api/transcode/jobs',
+    writeLimiter,
     asyncHandler(async (req, res) => {
       const { path: filePath } = req.body as { path?: unknown };
       if (typeof filePath !== 'string' || !filePath) {
@@ -451,8 +498,15 @@ export function createMediaRoutes({
       if (!auth.isAllowed) {
         return res.status(403).send(auth.message || 'Access denied');
       }
-      await TranscodeQueueManager.getInstance().cancel(filePath);
-      await deleteTranscodeJob(filePath);
+      const jobPath = auth.realPath ?? filePath;
+      await TranscodeQueueManager.getInstance().cancel(jobPath);
+      await deleteTranscodeJob(jobPath);
+      if (jobPath !== filePath) {
+        // Jobs queued by older versions are keyed (and resumed) by the
+        // unresolved path, so their queue entry and session use it too.
+        await TranscodeQueueManager.getInstance().cancel(filePath);
+        await deleteTranscodeJob(filePath);
+      }
       return res.status(204).send();
     }),
   );

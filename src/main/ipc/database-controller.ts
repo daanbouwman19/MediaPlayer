@@ -1,9 +1,7 @@
 import { IpcMainInvokeEvent } from 'electron';
 import { IPC_CHANNELS } from '../../shared/ipc-channels';
-import {
-  validatePathAccess,
-  filterAuthorizedPaths,
-} from '../utils/security-utils';
+import { validatePathAccess } from '../utils/security-utils';
+import { filterAuthorizedLibraryPaths } from '../../core/media/utils/authorized-paths';
 import {
   upsertMetadata,
   getMetadata,
@@ -17,18 +15,34 @@ import {
   executeSmartPlaylist,
   getAllMetadataAndStats,
 } from '../../core/database/database';
+import {
+  normalizeWatchedSegments,
+  parseMetadataUpdate,
+} from '../../core/database/metadata-validation';
 import { handleIpc } from '../utils/ipc-helper';
+
+/** IPC payloads are untyped at runtime; reject a non-string path early. */
+function assertFilePath(filePath: unknown): asserts filePath is string {
+  if (typeof filePath !== 'string' || !filePath) {
+    throw new Error('Invalid file path');
+  }
+}
 
 export function registerDatabaseHandlers() {
   handleIpc(
     IPC_CHANNELS.DB_UPSERT_METADATA,
     async (_event: IpcMainInvokeEvent, { filePath, metadata }) => {
+      // The facade keeps only known fields and applies filePath last.
       await upsertMetadata(filePath, metadata);
     },
     {
       validators: [
         async ({ filePath }) => {
+          assertFilePath(filePath);
           await validatePathAccess(filePath);
+        },
+        ({ metadata }) => {
+          parseMetadataUpdate(metadata);
         },
       ],
     },
@@ -37,7 +51,8 @@ export function registerDatabaseHandlers() {
   handleIpc(
     IPC_CHANNELS.DB_GET_METADATA,
     async (_event: IpcMainInvokeEvent, filePaths: string[]) => {
-      const allowedPaths = await filterAuthorizedPaths(filePaths);
+      // Rows are keyed by the library's spelling, not the resolved real path.
+      const allowedPaths = await filterAuthorizedLibraryPaths(filePaths);
       return getMetadata(allowedPaths);
     },
   );
@@ -88,7 +103,12 @@ export function registerDatabaseHandlers() {
     {
       validators: [
         async ({ filePath }) => {
+          assertFilePath(filePath);
           await validatePathAccess(filePath);
+        },
+        // Same limits as POST /api/media/watched-segments.
+        ({ segmentsJson }) => {
+          normalizeWatchedSegments(segmentsJson);
         },
       ],
     },

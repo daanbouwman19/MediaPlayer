@@ -23,7 +23,7 @@ vi.mock('fs/promises', () => ({
 }));
 
 // Mock google-drive-service
-vi.mock('../../src/main/google-drive-service', () => ({
+vi.mock('../../src/infrastructure/google-drive-service', () => ({
   listDriveFiles: vi.fn(),
 }));
 
@@ -90,5 +90,21 @@ describe('MediaScanner', () => {
     const result = await mediaScanner.performFullMediaScan([rootDir]);
     // performFullMediaScan filters null albums, and scanDirectoryRecursive returns null if empty
     expect(result).toHaveLength(0);
+  });
+
+  it('names a drive-root source after its path instead of leaving it blank', async () => {
+    // e.g. D:\ on Windows or / elsewhere: path.basename() is ''.
+    const driveRoot = path.parse(process.cwd()).root;
+    mockFs.readdir.mockImplementation(async (dirPath: any) =>
+      dirPath === driveRoot
+        ? [{ name: 'photo.jpg', isDirectory: () => false, isFile: () => true }]
+        : [],
+    );
+    mockFs.access.mockResolvedValue(undefined);
+
+    const result = await mediaScanner.performFullMediaScan([driveRoot]);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].name).toBe(driveRoot);
   });
 });

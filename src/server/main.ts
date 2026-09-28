@@ -3,10 +3,15 @@
  */
 import https from 'https';
 import path from 'path';
-import fs from 'fs/promises';
 import { fileURLToPath } from 'url';
-import selfsigned from 'selfsigned';
 import { createApp } from './app.ts';
+import { installServerLifecycle } from './lifecycle.ts';
+import {
+  CERT_RENEWAL_CHECK_INTERVAL_MS,
+  ensureCertificates,
+  resolveCertDir,
+} from './certificates.ts';
+import { getUnauthenticatedExposureWarning } from './network-exposure.ts';
 import {
   DEFAULT_SERVER_HOST,
   DEFAULT_SERVER_PORT,
@@ -17,35 +22,15 @@ import { NodeFileSystem } from '../infrastructure/node-file-system.ts';
 import { WorkerScannerService } from '../infrastructure/worker-scanner-service.ts';
 import { MediaDurationHandler } from '../infrastructure/media-duration-handler.ts';
 
-const CERT_DIR = path.join(process.cwd(), 'certs');
-const KEY_PATH = path.join(CERT_DIR, 'server.key');
-const CERT_PATH = path.join(CERT_DIR, 'server.cert');
-
-async function ensureCertificates() {
-  try {
-    await Promise.all([fs.access(KEY_PATH), fs.access(CERT_PATH)]);
-    console.log('SSL Certificates found.');
-  } catch (e: unknown) {
-    const error = e as { code?: string };
-    if (error.code !== 'ENOENT') {
-      console.error(
-        'An unexpected error occurred while checking for SSL certificates:',
-        error,
-      );
-      throw e;
-    }
-
-    console.log('Generating SSL Certificates...');
-    await fs.mkdir(CERT_DIR, { recursive: true });
-
-    const attrs = [{ name: 'commonName', value: 'localhost' }];
-    // @ts-expect-error - The types might be slightly off or options vary by version, but days is standard.
-    const pems = await selfsigned.generate(attrs, { days: 365 });
-
-    await fs.writeFile(CERT_PATH, pems.cert);
-    await fs.writeFile(KEY_PATH, pems.private);
-
-    console.log('SSL Certificates generated successfully.');
+/**
+ * The compiled bundle (dist/server/index.js), which `npm run web:start` and the
+ * Docker image run with plain node, only ships the production workers and the
+ * built client, so it defaults NODE_ENV to production. Running the sources
+ * (tsx src/server/main.ts, as web:dev does) keeps the development default.
+ */
+export function applyDefaultNodeEnv(entryUrl: string = import.meta.url) {
+  if (!process.env.NODE_ENV && !/\.[cm]?ts$/.test(entryUrl)) {
+    process.env.NODE_ENV = 'production';
   }
 }
 
@@ -55,8 +40,11 @@ export async function bootstrap() {
   // to the user's home dir unless ALLOWED_FS_ROOTS is set). The Electron build
   // never runs this bootstrap.
   process.env.MEDIAPLAYER_WEB_MODE = '1';
+  applyDefaultNodeEnv();
 
-  await ensureCertificates();
+  const host = process.env.HOST || DEFAULT_SERVER_HOST;
+  const certDir = resolveCertDir();
+  let credentials = await ensureCertificates({ certDir, host });
 
   const mediaRepo = new MediaRepository();
   const fileSystem = new NodeFileSystem();
@@ -70,7 +58,6 @@ export async function bootstrap() {
   );
 
   const app = await createApp(mediaService);
-  const host = process.env.HOST || DEFAULT_SERVER_HOST;
   let port = DEFAULT_SERVER_PORT;
 
   if (process.env.PORT) {
@@ -84,13 +71,39 @@ export async function bootstrap() {
     }
   }
 
-  const credentials = {
-    key: await fs.readFile(KEY_PATH),
-    cert: await fs.readFile(CERT_PATH),
-  };
+  const exposureWarning = getUnauthenticatedExposureWarning(host, port);
+  if (exposureWarning) {
+    console.warn(exposureWarning);
+  }
 
+  // No idle socket timeout: a reindex, a first scan or heatmap analysis can
+  // keep a response silent for minutes, and a paused media stream stays idle
+  // until the player reads again. Node's headersTimeout and requestTimeout
+  // still bound how long a client may take to send its request.
   const server = https.createServer(credentials, app);
-  server.setTimeout(30000);
+  installServerLifecycle(server);
+
+  // A server that is never restarted (e.g. a NAS container) re-checks its
+  // certificate daily, so the self-signed one is renewed before it expires
+  // and a replaced one is picked up without a restart.
+  const certRenewal = setInterval(() => {
+    ensureCertificates({ certDir, host, quiet: true })
+      .then((next) => {
+        if (
+          !next.cert.equals(credentials.cert) ||
+          !next.key.equals(credentials.key)
+        ) {
+          server.setSecureContext(next);
+          credentials = next;
+          console.log('TLS certificate reloaded.');
+        }
+      })
+      .catch((e: unknown) => {
+        console.error('Certificate renewal failed:', e);
+      });
+  }, CERT_RENEWAL_CHECK_INTERVAL_MS);
+  certRenewal.unref();
+  server.on('close', () => clearInterval(certRenewal));
 
   server.listen(port, host, () => {
     console.log(`Server running at https://${host}:${port}`);

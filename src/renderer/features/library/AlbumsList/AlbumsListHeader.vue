@@ -87,8 +87,12 @@ import ThemeIcon from '@/components/atoms/icons/ThemeIcon.vue';
 defineEmits(['close']);
 
 const uiStore = useUIStore();
-const { themeMode, isSourcesModalVisible, isSmartPlaylistModalVisible } =
-  storeToRefs(uiStore);
+const {
+  themeMode,
+  isSourcesModalVisible,
+  isSmartPlaylistModalVisible,
+  playlistToEdit,
+} = storeToRefs(uiStore);
 
 const isThemeDropdownOpen = ref(false);
 const themeDropdownRef = ref<HTMLElement | null>(null);
@@ -121,6 +125,9 @@ const openModal = () => {
 };
 
 const openSmartPlaylistModal = () => {
+  // Always open in create mode, even if a previous edit's selection has not
+  // been cleared yet (the modal clears it only after its close transition).
+  playlistToEdit.value = null;
   isSmartPlaylistModalVisible.value = true;
 };
 </script>

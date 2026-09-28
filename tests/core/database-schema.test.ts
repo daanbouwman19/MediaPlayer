@@ -7,6 +7,7 @@ import {
   vi,
 } from 'vite-plus/test';
 import { DatabaseSync } from 'node:sqlite';
+import os from 'os';
 import path from 'path';
 import fs from 'fs';
 import {
@@ -54,9 +55,7 @@ describe('Database Schema', () => {
   let dbPath: string;
 
   beforeEach(() => {
-    tempDir = fs.mkdtempSync(
-      path.join(process.cwd(), 'tests', 'temp', 'schema-'),
-    );
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mediaplayer-schema-'));
     dbPath = path.join(tempDir, 'test.db');
     db = new DatabaseSync(dbPath);
   });
@@ -105,6 +104,13 @@ describe('Database Schema', () => {
       expect(columns).toContain('last_viewed');
       expect(columns).toContain('in_library');
       expect(columns).not.toContain('watched_segments');
+    });
+
+    it('media_metadata records failed extraction attempts', () => {
+      initializeDatabase(db);
+      const columns = getColumnNames('media_metadata');
+      expect(columns).toContain('extraction_attempts');
+      expect(columns).toContain('extraction_attempted_at');
     });
 
     it('is idempotent (re-running performs no further migrations)', () => {

@@ -7,6 +7,7 @@
  */
 import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
 import { IPC_CHANNELS } from '../shared/ipc-channels';
+import { installDropGuard } from './drop-guard';
 import type {
   Album,
   MediaDirectory,
@@ -19,6 +20,10 @@ import type {
 } from '../core/media/types';
 
 import type { FileSystemEntry } from '../core/media/file-system';
+import type {
+  DriveCacheProgressEvent,
+  DriveCacheStatus,
+} from '../shared/ipc/media.contract';
 
 export interface LoadResult {
   type: 'data-url' | 'http-url' | 'error';
@@ -61,6 +66,7 @@ export interface ElectronAPI {
     points?: number,
   ) => Promise<IpcResult<HeatmapData>>;
   getHeatmapProgress: (filePath: string) => Promise<IpcResult<number | null>>;
+  cancelHeatmap: (filePath: string) => Promise<IpcResult<void>>;
   getHlsStatus: (
     filePath: string,
   ) => Promise<
@@ -119,22 +125,10 @@ export interface ElectronAPI {
     folderId: string,
   ) => Promise<IpcResult<FileSystemEntry[]>>;
   getGoogleDriveParent: (folderId: string) => Promise<IpcResult<string | null>>;
-  getDriveCacheStatus: (
-    fileId: string,
-  ) => Promise<
-    IpcResult<{ status: 'ready' | 'syncing' | 'cloud'; progress: number }>
-  >;
+  getDriveCacheStatus: (fileId: string) => Promise<IpcResult<DriveCacheStatus>>;
   triggerDriveCache: (fileId: string) => Promise<IpcResult<void>>;
   onDriveCacheProgress: (
-    callback: (
-      event: IpcRendererEvent,
-      data: {
-        fileId: string;
-        progress: number;
-        downloadedBytes: number;
-        totalSize: number;
-      },
-    ) => void,
+    callback: (event: IpcRendererEvent, data: DriveCacheProgressEvent) => void,
   ) => () => void;
 
   // Theme
@@ -197,6 +191,9 @@ const api: ElectronAPI = {
 
   getHeatmapProgress: (filePath: string) =>
     ipcRenderer.invoke(IPC_CHANNELS.GET_HEATMAP_PROGRESS, filePath),
+
+  cancelHeatmap: (filePath: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.CANCEL_HEATMAP, filePath),
 
   getHlsStatus: (filePath: string) =>
     ipcRenderer.invoke(IPC_CHANNELS.GET_HLS_STATUS, filePath),
@@ -277,15 +274,8 @@ const api: ElectronAPI = {
   triggerDriveCache: (fileId: string) =>
     ipcRenderer.invoke(IPC_CHANNELS.DRIVE_CACHE_TRIGGER, fileId),
   onDriveCacheProgress: (callback) => {
-    const listener = (
-      event: IpcRendererEvent,
-      data: {
-        fileId: string;
-        progress: number;
-        downloadedBytes: number;
-        totalSize: number;
-      },
-    ) => callback(event, data);
+    const listener = (event: IpcRendererEvent, data: DriveCacheProgressEvent) =>
+      callback(event, data);
     ipcRenderer.on(IPC_CHANNELS.DRIVE_CACHE_PROGRESS, listener);
     return () => {
       ipcRenderer.removeListener(IPC_CHANNELS.DRIVE_CACHE_PROGRESS, listener);
@@ -305,3 +295,5 @@ const api: ElectronAPI = {
 };
 
 contextBridge.exposeInMainWorld('electronAPI', api);
+
+installDropGuard(window);

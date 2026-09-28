@@ -14,6 +14,10 @@ import {
   DriveMediaSource,
   createMediaSource,
 } from '../../src/core/media/media-source';
+import {
+  registerDriveBackend,
+  resetDriveBackend,
+} from '../../src/core/media/drive-backend';
 
 // Mocks
 const {
@@ -32,10 +36,6 @@ const {
 
 vi.mock('../../src/core/auth/security', () => ({
   authorizeFilePath: mockAuthorizeFilePath,
-}));
-
-vi.mock('../../src/main/google-drive-service', () => ({
-  getDriveFileMetadata: mockGetDriveFileMetadata,
 }));
 
 vi.mock('../../src/core/media/drive-stream', () => ({
@@ -63,6 +63,16 @@ describe('media-source', () => {
     mockGetDriveFileMetadata.mockReset();
     mockGetDriveStreamWithCache.mockReset();
     mockProxyGetUrlForFile.mockReset();
+
+    // Fresh Drive backend (and shared metadata cache) for every test
+    resetDriveBackend();
+    registerDriveBackend({
+      getFileMetadata: mockGetDriveFileMetadata,
+      getFileStream: vi.fn(),
+      listFolder: vi.fn(),
+      setCredentials: vi.fn(),
+      getCachedFile: vi.fn(),
+    });
 
     // Setup spies
     mockFsStat = vi.spyOn(fs.promises, 'stat');
@@ -234,6 +244,35 @@ describe('media-source', () => {
       mockGetDriveFileMetadata.mockResolvedValue({ size: '999' });
       expect(await source.getSize()).toBe(999);
     });
+
+    it('getSize rejects when Drive reports no size', async () => {
+      mockGetDriveFileMetadata.mockResolvedValue({ id: '123' });
+      await expect(source.getSize()).rejects.toThrow('no downloadable size');
+    });
+
+    it('lower-cases the extension hint', async () => {
+      mockProxyGetUrlForFile.mockResolvedValue('http://proxy/123.mkv?token=t');
+      mockGetDriveFileMetadata.mockResolvedValue({ name: 'Movie.MKV' });
+
+      await source.getFFmpegInput();
+      expect(mockProxyGetUrlForFile).toHaveBeenCalledWith('123', '.mkv');
+    });
+
+    it.each([
+      ['a query character', 'What.mp4?'],
+      ['a fragment character', 'Clip.m#4'],
+      ['a space', 'Pt. 2'],
+      ['an over-long suffix', 'archive.backup01'],
+    ])(
+      'drops an extension hint containing %s (it would displace the token)',
+      async (_label, name) => {
+        mockProxyGetUrlForFile.mockResolvedValue('http://proxy/123?token=t');
+        mockGetDriveFileMetadata.mockResolvedValue({ name });
+
+        await source.getFFmpegInput();
+        expect(mockProxyGetUrlForFile).toHaveBeenCalledWith('123', '');
+      },
+    );
   });
 
   describe('createMediaSource', () => {
@@ -288,6 +327,21 @@ describe('media-source', () => {
       await source.getMimeType();
 
       // Verify getDriveFileMetadata was called once (cached)
+      expect(mockGetDriveFileMetadata).toHaveBeenCalledTimes(1);
+    });
+
+    it('DriveMediaSource instances share one metadata lookup per file', async () => {
+      // A new source is created for every HTTP request (every seek), so the
+      // cache must outlive the instance.
+      mockGetDriveFileMetadata.mockResolvedValue({
+        mimeType: 'video/mp4',
+        size: '1000',
+      });
+
+      await new DriveMediaSource('gdrive://123').getSize();
+      await new DriveMediaSource('gdrive://123').getMimeType();
+      await new DriveMediaSource('gdrive://123').getSize();
+
       expect(mockGetDriveFileMetadata).toHaveBeenCalledTimes(1);
     });
   });

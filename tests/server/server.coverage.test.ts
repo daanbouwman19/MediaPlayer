@@ -9,12 +9,13 @@ import {
 import request from 'supertest';
 import * as database from '../../src/core/database/database';
 import * as security from '../../src/core/auth/security';
-import * as googleDriveService from '../../src/main/google-drive-service';
+import * as googleDriveService from '../../src/infrastructure/google-drive-service';
 import * as mediaHandler from '../../src/core/media/media-handler';
-import * as googleAuth from '../../src/main/google-auth';
+import * as googleAuth from '../../src/infrastructure/google-auth';
 
 import * as mediaSource from '../../src/core/media/media-source';
 import * as fileSystem from '../../src/core/media/file-system';
+import { AppError } from '../../src/core/media/errors';
 
 // Auto-mock dependencies
 vi.mock('../../src/core/database/database');
@@ -22,8 +23,8 @@ vi.mock('../../src/core/network/rate-limiter', () => ({
   createRateLimiter: vi.fn(() => (_req: any, _res: any, next: any) => next()),
 }));
 vi.mock('../../src/core/media/file-system');
-vi.mock('../../src/main/google-drive-service');
-vi.mock('../../src/main/drive-cache-manager');
+vi.mock('../../src/infrastructure/google-drive-service');
+vi.mock('../../src/infrastructure/drive-cache-manager');
 vi.mock('../../src/core/media/media-source');
 const { MockMediaHandler, getLastMediaHandler } = vi.hoisted(() => {
   class MockMediaHandler {
@@ -64,7 +65,7 @@ vi.mock('../../src/core/media/media-handler', () => ({
   serveHlsSegment: vi.fn(),
   validateFileAccess: vi.fn(),
 }));
-vi.mock('../../src/main/google-auth');
+vi.mock('../../src/infrastructure/google-auth');
 
 // Partially mock security to keep escapeHtml but mock others
 vi.mock('../../src/core/auth/security', async (importOriginal) => {
@@ -173,16 +174,19 @@ describe('Server Coverage', () => {
     });
 
     it('POST /api/media/views filters unauthorized paths', async () => {
-      vi.mocked(security.filterAuthorizedPaths).mockResolvedValue([
-        '/allowed.mp4',
-      ]);
+      vi.mocked(security.authorizeFilePath).mockImplementation(async (p) =>
+        p === '/allowed.mp4'
+          ? { isAllowed: true, realPath: '/real/allowed.mp4' }
+          : { isAllowed: false, message: 'No access' },
+      );
       vi.mocked(database.getMediaViewCounts).mockResolvedValue({});
 
       const res = await request(app)
         .post('/api/media/views')
         .send({ filePaths: ['/allowed.mp4', '/secret.mp4'] });
       expect(res.status).toBe(200);
-      // Verify only allowed path was passed to DB
+      // Only the allowed path reaches the DB, in the library's spelling
+      // (rows are keyed by it), not as the resolved real path.
       expect(database.getMediaViewCounts).toHaveBeenCalledWith([
         '/allowed.mp4',
       ]);
@@ -313,18 +317,19 @@ describe('Server Coverage', () => {
 
   describe('File System Routes', () => {
     it('GET /api/fs/parent returns parent path', async () => {
+      vi.mocked(fileSystem.getParentDirectory).mockResolvedValueOnce('/a');
       const res = await request(app)
         .get('/api/fs/parent')
         .query({ path: '/a/b' });
       // Expect precise parent path
       expect(res.body).toEqual({ parent: '/a' });
+      expect(fileSystem.getParentDirectory).toHaveBeenCalledWith('/a/b');
     });
 
     it('GET /api/fs/parent returns null for root', async () => {
-      // Logic assumes parent === dirPath.
-      // On win32, path.dirname('C:\\') === 'C:\\'.
-      // On posix, path.dirname('/') === '/'.
+      // getParentDirectory returns null at a drive / allowed root.
       const root = process.platform === 'win32' ? 'C:\\' : '/';
+      vi.mocked(fileSystem.getParentDirectory).mockResolvedValueOnce(null);
       const res = await request(app)
         .get('/api/fs/parent')
         .query({ path: root });
@@ -528,16 +533,20 @@ describe('Server Coverage', () => {
     });
 
     it('POST /api/directories handles sensitive path', async () => {
-      vi.mocked(security.isSensitiveDirectory).mockReturnValueOnce(true);
+      vi.mocked(fileSystem.resolveMediaSourceDirectory).mockRejectedValueOnce(
+        new AppError(403, 'Access restricted for sensitive system directories'),
+      );
       const res = await request(app)
         .post('/api/directories')
         .send({ path: '/etc' });
       expect(res.status).toBe(403);
+      expect(database.addMediaDirectory).not.toHaveBeenCalled();
     });
 
     it('POST /api/directories handles non-existent directory', async () => {
-      // Mock realpath to fail
-      vi.mocked(mockFs.realpath).mockRejectedValue(new Error('ENOENT'));
+      vi.mocked(fileSystem.resolveMediaSourceDirectory).mockRejectedValueOnce(
+        new AppError(400, 'Directory does not exist'),
+      );
       const res = await request(app)
         .post('/api/directories')
         .send({ path: '/non/existent' });
@@ -545,7 +554,9 @@ describe('Server Coverage', () => {
     });
 
     it('GET /api/fs/ls handles restricted path', async () => {
-      vi.mocked(security.isRestrictedPath).mockReturnValueOnce(true);
+      vi.mocked(fileSystem.listDirectory).mockRejectedValueOnce(
+        new AppError(403, 'Access denied'),
+      );
       const res = await request(app).get('/api/fs/ls').query({ path: '/root' });
       expect(res.status).toBe(403);
     });
@@ -556,13 +567,14 @@ describe('Server Coverage', () => {
     });
 
     it('POST /api/sources/google-drive handles failure', async () => {
-      vi.mocked(googleDriveService.getDriveClient).mockRejectedValue(
+      vi.mocked(googleDriveService.getDriveFolderInfo).mockRejectedValue(
         new Error('Fail'),
       );
       const res = await request(app)
         .post('/api/sources/google-drive')
         .send({ folderId: 'bad' });
       expect(res.status).toBe(500);
+      expect(database.addMediaDirectory).not.toHaveBeenCalled();
     });
 
     it('GET /api/smart-playlists handles db error', async () => {

@@ -8,6 +8,8 @@ import {
   RATE_LIMIT_FILE_WINDOW_MS,
   RATE_LIMIT_READ_MAX_REQUESTS,
   RATE_LIMIT_READ_WINDOW_MS,
+  RATE_LIMIT_TELEMETRY_MAX_REQUESTS,
+  RATE_LIMIT_TELEMETRY_WINDOW_MS,
   RATE_LIMIT_WRITE_MAX_REQUESTS,
   RATE_LIMIT_WRITE_WINDOW_MS,
 } from '../../../src/core/media/constants';
@@ -41,21 +43,24 @@ describe('Rate Limiters Factory', () => {
       'Too many auth attempts. Please try again later.',
     );
 
-    // Check basicAuthLimiter
-    expect(limiters.basicAuthLimiter).toBeDefined();
-    expect(createRateLimiterSpy).toHaveBeenCalledWith(
-      RATE_LIMIT_AUTH_WINDOW_MS,
-      RATE_LIMIT_AUTH_MAX_REQUESTS,
-      'Too many failed authentication attempts. Please try again later.',
-      { skipSuccessfulRequests: true },
-    );
-
     // Check writeLimiter
     expect(limiters.writeLimiter).toBeDefined();
     expect(createRateLimiterSpy).toHaveBeenCalledWith(
       RATE_LIMIT_WRITE_WINDOW_MS,
       RATE_LIMIT_WRITE_MAX_REQUESTS,
       'Too many requests. Please slow down.',
+    );
+
+    // Check telemetryLimiter: a separate, more generous budget than writes
+    expect(limiters.telemetryLimiter).toBeDefined();
+    expect(limiters.telemetryLimiter).not.toBe(limiters.writeLimiter);
+    expect(createRateLimiterSpy).toHaveBeenCalledWith(
+      RATE_LIMIT_TELEMETRY_WINDOW_MS,
+      RATE_LIMIT_TELEMETRY_MAX_REQUESTS,
+      'Too many requests. Please slow down.',
+    );
+    expect(RATE_LIMIT_TELEMETRY_MAX_REQUESTS).toBeGreaterThan(
+      RATE_LIMIT_WRITE_MAX_REQUESTS,
     );
 
     // Check readLimiter

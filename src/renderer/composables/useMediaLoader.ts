@@ -14,6 +14,20 @@ export function useMediaLoader() {
   const error = ref<string | null>(null);
   const isVideoSupported = ref(true);
 
+  /**
+   * Invalidates any in-flight load and drops the previous item's URL and
+   * error state. Call it synchronously when the current item changes, before
+   * any await, so the previous URL can neither be rendered for nor applied
+   * to the next item while its own load is still pending.
+   */
+  const cancelPendingLoad = () => {
+    currentLoadRequestId.value++;
+    isLoading.value = false;
+    mediaUrl.value = null;
+    error.value = null;
+    isVideoSupported.value = true;
+  };
+
   const loadMedia = async (
     item: MediaFile | null,
     onTranscodeRequest: (filePath: string, reqId: number) => Promise<void>,
@@ -70,6 +84,7 @@ export function useMediaLoader() {
     mediaUrl,
     error,
     isVideoSupported,
+    cancelPendingLoad,
     loadMedia,
   };
 }

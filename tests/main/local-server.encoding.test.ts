@@ -15,6 +15,8 @@ import {
   startLocalServer,
   stopLocalServer,
   getServerPort,
+  getServerAccessToken,
+  ACCESS_TOKEN_HEADER,
 } from '../../src/main/local-server';
 import { getMediaDirectories } from '../../src/core/database/database';
 import { createTestMediaService } from '../utils/test-factory';
@@ -66,9 +68,7 @@ describe('Local Server Encoding Bug', () => {
 
   it('should handle file paths with percent characters without crashing', async () => {
     const { service } = createTestMediaService();
-    await new Promise<void>((resolve) => {
-      void startLocalServer('/tmp', service, resolve);
-    });
+    await startLocalServer('/tmp', service);
     const port = getServerPort();
 
     // A file name with a '%' that is NOT followed by two hex digits.
@@ -79,6 +79,7 @@ describe('Local Server Encoding Bug', () => {
     await new Promise<void>((resolve, reject) => {
       const req = http.get(
         `http://localhost:${port}/video/metadata?file=${encodedFileName}`,
+        { headers: { [ACCESS_TOKEN_HEADER]: getServerAccessToken() } },
         (res) => {
           // If we receive a response, the server didn't crash.
           // We expect a valid status code.

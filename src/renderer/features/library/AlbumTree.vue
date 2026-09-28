@@ -5,7 +5,6 @@
       'bg-accent/15 border-l-2 border-accent': selectionState !== 'none',
       'hover:bg-accent/5': selectionState === 'none',
     }"
-    :style="{ marginLeft: `${depth * 20}px` }"
   >
     <div
       class="group flex items-center gap-2 w-full text-color hover:text-accent"
@@ -118,13 +117,14 @@
       </div>
     </div>
 
-    <!-- Recursive Children -->
-    <ul v-if="isFolder && isOpen" class="w-full mt-1">
+    <!-- Recursive Children. Each level renders inside its parent's <li>, so a
+         constant padding indents it relative to the parent (the li's own p-1.5
+         plus pl-3.5 makes 20px per level) without compounding with depth. -->
+    <ul v-if="isFolder && isOpen" class="w-full mt-1 pl-3.5">
       <AlbumTree
         v-for="child in album.children"
         :key="child.id"
         :album="child"
-        :depth="depth + 1"
         :selection="selection"
         @toggle-selection="$emit('toggleSelection', $event)"
         @album-click="$emit('albumClick', $event)"
@@ -146,16 +146,10 @@ import GridIcon from '@/components/atoms/icons/GridIcon.vue';
 import ChevronRightIcon from '@/components/atoms/icons/ChevronRightIcon.vue';
 import type { Album } from '../../../core/media/types';
 
-const props = withDefaults(
-  defineProps<{
-    album: Album;
-    depth?: number;
-    selection: { [key: string]: boolean };
-  }>(),
-  {
-    depth: 0,
-  },
-);
+const props = defineProps<{
+  album: Album;
+  selection: { [key: string]: boolean };
+}>();
 
 const emit = defineEmits<{
   (e: 'toggleSelection', payload: { album: Album; recursive: boolean }): void;

@@ -1,441 +1,384 @@
-import { describe, it, expect, vi, beforeEach } from 'vite-plus/test';
-import { InternalMediaProxy } from '../../src/core/media/media-proxy';
+// @vitest-environment node
+import {
+  describe,
+  it,
+  expect,
+  vi,
+  beforeEach,
+  afterEach,
+  afterAll,
+} from 'vite-plus/test';
+import http from 'http';
+import { PassThrough, Readable } from 'stream';
+import {
+  InternalMediaProxy,
+  redactProxyTokens,
+} from '../../src/core/media/media-proxy';
+import {
+  registerDriveBackend,
+  resetDriveBackend,
+  type DriveBackend,
+} from '../../src/core/media/drive-backend';
 
-// Hoist mocks
-const {
-  mockListen,
-  mockCreateServer,
-  getCallback,
-  getErrorCallback,
-  mockGetDriveFileMetadata,
-  mockGetDriveStreamWithCache,
-  mockIsFileInLibrary,
-} = vi.hoisted(() => {
-  const mockListen = vi.fn();
-  let serverCallback: any;
-  let errorCallback: any;
-
-  const mockOn = vi.fn((event, cb) => {
-    if (event === 'error') errorCallback = cb;
-  });
-
-  const mockCreateServer = vi.fn((cb) => {
-    serverCallback = cb;
-    return {
-      listen: mockListen,
-      address: vi.fn().mockReturnValue({ port: 54321 }),
-      on: mockOn,
-      close: vi.fn(),
-    };
-  });
-  return {
-    mockListen,
-    mockCreateServer,
-    getCallback: () => serverCallback,
-    getErrorCallback: () => errorCallback,
-    mockGetDriveFileMetadata: vi.fn(),
-    mockGetDriveStreamWithCache: vi.fn(),
-    mockIsFileInLibrary: vi.fn().mockResolvedValue(true),
-  };
-});
-
-/**
- * The http listener starts handleRequest without awaiting it, so tests call
- * handleRequest directly and assert once the request has been fully handled.
- */
-const getHandler =
-  () =>
-  (req: any, res: any): Promise<void> =>
-    (InternalMediaProxy.getInstance() as any).handleRequest(req, res);
-
-vi.mock('http', () => ({
-  default: {
-    createServer: mockCreateServer,
-  },
-}));
-
-vi.mock('../../src/main/google-drive-service', () => ({
-  getDriveFileMetadata: mockGetDriveFileMetadata,
-}));
-
-vi.mock('../../src/core/media/drive-stream', () => ({
-  getDriveStreamWithCache: mockGetDriveStreamWithCache,
+const { mockIsFileInLibrary } = vi.hoisted(() => ({
+  mockIsFileInLibrary: vi.fn(),
 }));
 
 vi.mock('../../src/core/database/database', () => ({
   isFileInLibrary: mockIsFileInLibrary,
 }));
 
+/**
+ * The proxy runs as a real loopback HTTP server, on top of the real
+ * drive-stream, with only the Drive API itself faked: it serves byte ranges
+ * of an in-memory file.
+ */
+const TOTAL = 4096;
+const REMOTE = Buffer.alloc(TOTAL);
+for (let i = 0; i < TOTAL; i++) REMOTE[i] = i % 251;
+
+let backend: {
+  getFileMetadata: ReturnType<typeof vi.fn>;
+  getFileStream: ReturnType<typeof vi.fn>;
+  listFolder: ReturnType<typeof vi.fn>;
+  setCredentials: ReturnType<typeof vi.fn>;
+  getCachedFile: ReturnType<typeof vi.fn>;
+};
+
+interface ProxyResponse {
+  status: number;
+  headers: http.IncomingHttpHeaders;
+  body: Buffer;
+  complete: boolean;
+}
+
+function get(
+  url: string,
+  headers: Record<string, string> = {},
+): Promise<ProxyResponse> {
+  return new Promise((resolve, reject) => {
+    const req = http.get(url, { headers, agent: false }, (res) => {
+      const chunks: Buffer[] = [];
+      const done = () =>
+        resolve({
+          status: res.statusCode ?? 0,
+          headers: res.headers,
+          body: Buffer.concat(chunks),
+          complete: res.complete,
+        });
+      res.on('data', (chunk: Buffer) => chunks.push(chunk));
+      res.on('end', done);
+      res.on('error', done);
+      res.on('close', done);
+    });
+    req.on('error', reject);
+  });
+}
+
+function withToken(url: string, token: string): string {
+  const u = new URL(url);
+  u.searchParams.set('token', token);
+  return u.toString();
+}
+
+const proxy = InternalMediaProxy.getInstance();
+
+beforeEach(() => {
+  vi.spyOn(console, 'error').mockImplementation(() => {});
+  vi.spyOn(console, 'warn').mockImplementation(() => {});
+  vi.spyOn(console, 'log').mockImplementation(() => {});
+  mockIsFileInLibrary.mockReset().mockResolvedValue(true);
+  backend = {
+    getFileMetadata: vi.fn(async (id: string) => ({
+      id,
+      name: `${id}.mp4`,
+      size: String(TOTAL),
+      mimeType: 'video/mp4',
+    })),
+    getFileStream: vi.fn(
+      async (_id: string, range?: { start?: number; end?: number }) =>
+        Readable.from([
+          REMOTE.subarray(range?.start ?? 0, (range?.end ?? TOTAL - 1) + 1),
+        ]),
+    ),
+    listFolder: vi.fn(),
+    setCredentials: vi.fn(),
+    // No local cache: every byte comes from "Drive".
+    getCachedFile: vi.fn().mockRejectedValue(new Error('no cache')),
+  };
+  resetDriveBackend();
+  registerDriveBackend(backend as unknown as DriveBackend);
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+afterAll(async () => {
+  const server = (proxy as unknown as { server: http.Server }).server;
+  await new Promise<void>((resolve) => server.close(() => resolve()));
+});
+
 describe('InternalMediaProxy', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mockListen.mockReset();
-    (InternalMediaProxy as any).instance = null;
-    mockIsFileInLibrary.mockResolvedValue(true); // Default allow for all tests
+  it('getInstance returns a singleton', () => {
+    expect(InternalMediaProxy.getInstance()).toBe(proxy);
   });
 
-  it('getInstance returns singleton', () => {
-    const i1 = InternalMediaProxy.getInstance();
-    const i2 = InternalMediaProxy.getInstance();
-    expect(i1).toBe(i2);
-    expect(mockCreateServer).toHaveBeenCalledTimes(1);
+  it('starts once, even for concurrent callers', async () => {
+    await Promise.all([proxy.start(), proxy.start(), proxy.getUrlForFile('a')]);
+    expect(proxy.getPort()).toBeGreaterThan(0);
   });
 
-  describe('start()', () => {
-    it('starts server and resolves', async () => {
-      const proxy = InternalMediaProxy.getInstance();
-
-      mockListen.mockImplementation((_port: any, host: any, cb: any) => {
-        if (typeof host === 'function') host();
-        else if (typeof cb === 'function') cb();
-      });
-
-      await proxy.start();
-      expect(mockListen).toHaveBeenCalled();
-      expect(proxy.getPort()).toBe(54321);
+  describe('getUrlForFile', () => {
+    it('returns a loopback URL for the file with a token', async () => {
+      const url = new URL(await proxy.getUrlForFile('file1', '.mp4'));
+      expect(url.hostname).toBe('127.0.0.1');
+      expect(url.pathname).toBe('/stream/file1.mp4');
+      expect(url.searchParams.get('token')).toMatch(/^[0-9a-f]{64}$/);
     });
 
-    it('rejects if server error occurs', async () => {
-      const proxy = InternalMediaProxy.getInstance();
-      const startPromise = proxy.start(); // This sets up the listeners
-
-      const errCb = getErrorCallback();
-      expect(errCb).toBeDefined();
-      errCb(new Error('Listen failed'));
-
-      await expect(startPromise).rejects.toThrow('Listen failed');
-    });
-  });
-
-  it('getUrlForFile starts server if needed and returns url with token', async () => {
-    const proxy = InternalMediaProxy.getInstance();
-
-    // Setup listen callback
-    mockListen.mockImplementation((_port: any, host: any, cb: any) => {
-      if (typeof host === 'function') host();
-      else if (typeof cb === 'function') cb();
+    it('mints a new token for every URL', async () => {
+      const a = new URL(await proxy.getUrlForFile('file1'));
+      const b = new URL(await proxy.getUrlForFile('file1'));
+      expect(a.searchParams.get('token')).not.toBe(b.searchParams.get('token'));
     });
 
-    const url = await proxy.getUrlForFile('file1');
-
-    expect(mockListen).toHaveBeenCalled();
-    expect(url).toContain('127.0.0.1:54321/stream/file1');
-    expect(url).toContain('?token=');
-  });
-
-  it('server listener forwards requests to handleRequest', async () => {
-    (InternalMediaProxy as any).instance = null;
-    InternalMediaProxy.getInstance();
-    const res = { writeHead: vi.fn(), end: vi.fn(), headersSent: false };
-
-    getCallback()({ url: '/stream/x', headers: {}, on: vi.fn() }, res);
-
-    await vi.waitFor(() => expect(res.writeHead).toHaveBeenCalledWith(403));
-  });
-
-  describe('Request Handling', () => {
-    let handler: any;
-    let req: any;
-    let res: any;
-    let authToken: string;
-
-    beforeEach(() => {
-      (InternalMediaProxy as any).instance = null; // Reset singleton to get fresh token
-      const proxy = InternalMediaProxy.getInstance(); // Ensure instance created
-      authToken = (proxy as any).authToken;
-      handler = getHandler();
-      req = { url: '', headers: { host: 'localhost:54321' }, on: vi.fn() };
-      res = {
-        writeHead: vi.fn(),
-        end: vi.fn(),
-        headersSent: false,
-      };
-    });
-
-    it('returns 403 for missing token', async () => {
-      req.url = '/stream/file-123';
-      await handler(req, res);
-      expect(res.writeHead).toHaveBeenCalledWith(403);
-      expect(res.end).toHaveBeenCalledWith('Access denied');
-    });
-
-    it('returns 403 for invalid token', async () => {
-      req.url = '/stream/file-123?token=invalid';
-      await handler(req, res);
-      expect(res.writeHead).toHaveBeenCalledWith(403);
-      expect(res.end).toHaveBeenCalledWith('Access denied');
-    });
-
-    it('returns 404 for invalid url (with valid token)', async () => {
-      req.url = `/invalid?token=${authToken}`;
-      await handler(req, res);
-      expect(res.writeHead).toHaveBeenCalledWith(404);
-      expect(res.end).toHaveBeenCalledWith('Not Found');
-    });
-
-    it('handles request processing error (with valid token)', async () => {
-      req.url = `/stream/file-123?token=${authToken}`;
-      mockGetDriveFileMetadata.mockRejectedValue(new Error('API Fail'));
-
-      await handler(req, res);
-
-      expect(res.writeHead).toHaveBeenCalledWith(500);
-      expect(res.end).toHaveBeenCalled();
-    });
-
-    it('handles valid stream request (with valid token)', async () => {
-      req.url = `/stream/file-123?token=${authToken}`;
-      const mockStream = { pipe: vi.fn(), on: vi.fn(), destroy: vi.fn() };
-
-      mockGetDriveFileMetadata.mockResolvedValue({
-        size: '1000',
-        mimeType: 'video/mp4',
-      });
-      mockGetDriveStreamWithCache.mockResolvedValue({
-        stream: mockStream,
-        length: 1000,
-      });
-
-      await handler(req, res);
-
-      expect(mockGetDriveFileMetadata).toHaveBeenCalledWith('file-123');
-      expect(mockGetDriveStreamWithCache).toHaveBeenCalledWith('file-123', {
-        start: 0,
-        end: 999,
-      });
-      expect(res.writeHead).toHaveBeenCalledWith(
-        206,
-        expect.objectContaining({
-          'Content-Type': 'video/mp4',
-          'Content-Length': 1000,
-          'Content-Range': 'bytes 0-999/1000',
-        }),
-      );
-      expect(mockStream.pipe).toHaveBeenCalledWith(res);
-    });
-
-    it('handles range requests (with valid token)', async () => {
-      req.url = `/stream/file-123?token=${authToken}`;
-      req.headers.range = 'bytes=100-199';
-      const mockStream = { pipe: vi.fn(), on: vi.fn(), destroy: vi.fn() };
-
-      mockGetDriveFileMetadata.mockResolvedValue({ size: '1000' });
-      mockGetDriveStreamWithCache.mockResolvedValue({
-        stream: mockStream,
-        length: 100,
-      });
-
-      await handler(req, res);
-
-      expect(mockGetDriveStreamWithCache).toHaveBeenCalledWith('file-123', {
-        start: 100,
-        end: 199,
-      });
-      expect(res.writeHead).toHaveBeenCalledWith(
-        206,
-        expect.objectContaining({
-          'Content-Length': 100,
-          'Content-Range': 'bytes 100-199/1000',
-        }),
-      );
-    });
-
-    it('handles unsatisfiable range requests (with valid token)', async () => {
-      req.url = `/stream/file-123?token=${authToken}`;
-      // bytes=2000-3000 where size is 1000
-      req.headers.range = 'bytes=2000-3000';
-
-      mockGetDriveFileMetadata.mockResolvedValue({ size: '1000' });
-      // range-parser will return -1 for unsatisfiable ranges if we used it directly,
-      // but here we are relying on InternalMediaProxy to use range-parser.
-      // 2000 >= 1000, so it is unsatisfiable.
-
-      await handler(req, res);
-
-      expect(res.writeHead).toHaveBeenCalledWith(
-        416,
-        expect.objectContaining({ 'Content-Range': 'bytes */1000' }),
-      );
-      expect(res.end).toHaveBeenCalledWith('Requested range not satisfiable.');
-    });
-
-    it('ignores malformed range requests and serves full content (with valid token)', async () => {
-      req.url = `/stream/file-123?token=${authToken}`;
-      req.headers.range = 'invalid-unit=0-100';
-
-      mockGetDriveFileMetadata.mockResolvedValue({
-        size: '1000',
-        mimeType: 'video/mp4',
-      });
-      // InternalMediaProxy uses range-parser. malformed -> -2.
-      // Logic: if array -> use it. else if -1 -> 416. else -> full content.
-      // So malformed should result in full content.
-
-      const mockStream = { pipe: vi.fn(), on: vi.fn(), destroy: vi.fn() };
-      mockGetDriveStreamWithCache.mockResolvedValue({
-        stream: mockStream,
-        length: 1000,
-      });
-
-      await handler(req, res);
-
-      expect(res.writeHead).toHaveBeenCalledWith(
-        206,
-        expect.objectContaining({
-          'Content-Range': 'bytes 0-999/1000',
-          'Content-Length': 1000,
-        }),
-      );
-    });
-
-    it('handles open-ended range requests (with valid token)', async () => {
-      req.url = `/stream/file-123?token=${authToken}`;
-      req.headers.range = 'bytes=100-';
-      const mockStream = { pipe: vi.fn(), on: vi.fn(), destroy: vi.fn() };
-
-      mockGetDriveFileMetadata.mockResolvedValue({
-        size: '1000',
-        mimeType: 'video/mp4',
-      });
-      mockGetDriveStreamWithCache.mockResolvedValue({
-        stream: mockStream,
-        length: 900,
-      });
-
-      await handler(req, res);
-
-      expect(mockGetDriveStreamWithCache).toHaveBeenCalledWith('file-123', {
-        start: 100,
-        end: 999,
-      });
-      expect(res.writeHead).toHaveBeenCalledWith(
-        206,
-        expect.objectContaining({
-          'Content-Range': 'bytes 100-999/1000',
-        }),
-      );
-    });
-
-    it('handles stream errors (with valid token)', async () => {
-      req.url = `/stream/file-123?token=${authToken}`;
-      const mockStream = { pipe: vi.fn(), on: vi.fn(), destroy: vi.fn() };
-
-      mockGetDriveFileMetadata.mockResolvedValue({ size: '1000' });
-      mockGetDriveStreamWithCache.mockResolvedValue({
-        stream: mockStream,
-        length: 1000,
-      });
-
-      await handler(req, res);
-
-      // Simulate stream error
-      const errorCall = mockStream.on.mock.calls.find(
-        (c: any) => c[0] === 'error',
-      );
-      if (errorCall) {
-        const errorCallback = errorCall[1];
-        errorCallback(new Error('Stream failed'));
-      }
-
-      expect(res.writeHead).toHaveBeenCalledWith(500);
-      expect(res.end).toHaveBeenCalled();
-    });
-
-    it('destroys stream on request close (with valid token)', async () => {
-      req.url = `/stream/file-123?token=${authToken}`;
-      const mockStream = { pipe: vi.fn(), on: vi.fn(), destroy: vi.fn() };
-
-      mockGetDriveFileMetadata.mockResolvedValue({ size: '1000' });
-      mockGetDriveStreamWithCache.mockResolvedValue({
-        stream: mockStream,
-        length: 1000,
-      });
-
-      await handler(req, res);
-
-      // Emit close on req
-      const closeCall = req.on.mock.calls.find((c: any) => c[0] === 'close');
-      if (closeCall) {
-        closeCall[1]();
-      }
-
-      expect(mockStream.destroy).toHaveBeenCalled();
-    });
-  });
-
-  it('getUrlForFile returns cached port if listening', async () => {
-    const proxy = InternalMediaProxy.getInstance();
-    mockListen.mockImplementation((_p, _h, cb) => {
-      if (cb) cb();
-    });
-
-    await proxy.getUrlForFile('id1');
-    expect(mockListen).toHaveBeenCalledTimes(1);
-
-    const url2 = await proxy.getUrlForFile('id2');
-    expect(mockListen).toHaveBeenCalledTimes(1); // Should not accept listen again
-    expect(url2).toContain('54321');
-  });
-
-  it('start() is idempotent', async () => {
-    const proxy = InternalMediaProxy.getInstance();
-    mockListen.mockImplementation((_p, _h, cb) => {
-      if (cb) cb();
-    });
-    await proxy.start();
-    await proxy.start();
-    expect(mockListen).toHaveBeenCalledTimes(1);
-  });
-
-  it('does not send error response if headers already sent', async () => {
-    (InternalMediaProxy as any).instance = null;
-    const proxy = InternalMediaProxy.getInstance();
-    const authToken = (proxy as any).authToken;
-    const handler = getHandler();
-    const req = {
-      url: `/stream/file-error?token=${authToken}`,
-      headers: { host: 'localhost:54321' },
-      on: vi.fn(),
-    };
-    const res = {
-      writeHead: vi.fn(),
-      end: vi.fn(),
-      headersSent: true,
-    };
-
-    mockGetDriveFileMetadata.mockRejectedValue(new Error('Fail after headers'));
-
-    await handler(req, res);
-
-    expect(res.writeHead).not.toHaveBeenCalled();
-    expect(res.end).not.toHaveBeenCalled();
-  });
-
-  it('blocks access to file NOT in library (IDOR Prevention)', async () => {
-    (InternalMediaProxy as any).instance = null;
-    const proxy = InternalMediaProxy.getInstance();
-    const authToken = (proxy as any).authToken;
-    const handler = getHandler();
-    const req = {
-      url: `/stream/file-not-in-lib?token=${authToken}`,
-      headers: { host: 'localhost:54321' },
-      on: vi.fn(),
-    };
-    const res = {
-      writeHead: vi.fn(),
-      end: vi.fn(),
-      headersSent: false,
-    };
-
-    // Override mock for this test case
-    mockIsFileInLibrary.mockResolvedValueOnce(false);
-
-    await handler(req, res);
-
-    expect(mockIsFileInLibrary).toHaveBeenCalledWith(
-      'gdrive://file-not-in-lib',
+    it.each(['.mp4?x', '.m#4', '. 2', '.toolong', 'mp4'])(
+      'drops an unsafe extension %j',
+      async (ext) => {
+        const url = new URL(await proxy.getUrlForFile('file1', ext));
+        expect(url.pathname).toBe('/stream/file1');
+        expect(url.searchParams.get('token')).toMatch(/^[0-9a-f]{64}$/);
+      },
     );
-    expect(res.writeHead).toHaveBeenCalledWith(403);
-    expect(res.end).toHaveBeenCalledWith('Access denied');
+
+    it('rejects an invalid Drive file ID', async () => {
+      await expect(proxy.getUrlForFile('a/../b')).rejects.toThrow(
+        'Invalid Drive file ID',
+      );
+      await expect(proxy.getUrlForFile('a?b')).rejects.toThrow(
+        'Invalid Drive file ID',
+      );
+    });
+  });
+
+  describe('request handling', () => {
+    it('rejects a request without a token', async () => {
+      const url = new URL(await proxy.getUrlForFile('file1'));
+      url.search = '';
+      const res = await get(url.toString());
+      expect(res.status).toBe(403);
+      expect(res.body.toString()).toBe('Access denied');
+    });
+
+    it('rejects an unknown token', async () => {
+      const url = withToken(await proxy.getUrlForFile('file1'), 'f'.repeat(64));
+      expect((await get(url)).status).toBe(403);
+    });
+
+    it('rejects a token minted for a different file', async () => {
+      // A leaked URL must not unlock the rest of the library.
+      const url = new URL(await proxy.getUrlForFile('file1'));
+      url.pathname = '/stream/other-file';
+      const res = await get(url.toString());
+      expect(res.status).toBe(403);
+      expect(backend.getFileMetadata).not.toHaveBeenCalled();
+    });
+
+    it('returns 404 for an unknown path with a valid token', async () => {
+      const url = new URL(await proxy.getUrlForFile('file1'));
+      url.pathname = '/invalid';
+      expect((await get(url.toString())).status).toBe(404);
+    });
+
+    it('blocks a file that is not in the library (IDOR prevention)', async () => {
+      mockIsFileInLibrary.mockResolvedValue(false);
+      const res = await get(await proxy.getUrlForFile('not-in-lib'));
+      expect(res.status).toBe(403);
+      expect(mockIsFileInLibrary).toHaveBeenCalledWith('gdrive://not-in-lib');
+      expect(backend.getFileStream).not.toHaveBeenCalled();
+    });
+
+    it('serves the whole file as a 200 without a Range header', async () => {
+      const res = await get(await proxy.getUrlForFile('file1', '.mp4'));
+      expect(res.status).toBe(200);
+      expect(res.headers['content-type']).toBe('video/mp4');
+      expect(res.headers['content-length']).toBe(String(TOTAL));
+      expect(res.headers['accept-ranges']).toBe('bytes');
+      expect(res.headers['content-range']).toBeUndefined();
+      expect(res.body.equals(REMOTE)).toBe(true);
+    });
+
+    it('serves a byte range as a 206', async () => {
+      const res = await get(await proxy.getUrlForFile('file1'), {
+        Range: 'bytes=100-199',
+      });
+      expect(res.status).toBe(206);
+      expect(res.headers['content-range']).toBe(`bytes 100-199/${TOTAL}`);
+      expect(res.headers['content-length']).toBe('100');
+      expect(res.body.equals(REMOTE.subarray(100, 200))).toBe(true);
+    });
+
+    it('serves an open-ended range', async () => {
+      const res = await get(await proxy.getUrlForFile('file1'), {
+        Range: 'bytes=4000-',
+      });
+      expect(res.status).toBe(206);
+      expect(res.headers['content-range']).toBe(
+        `bytes 4000-${TOTAL - 1}/${TOTAL}`,
+      );
+      expect(res.body.equals(REMOTE.subarray(4000))).toBe(true);
+    });
+
+    it('answers an unsatisfiable range with 416', async () => {
+      const res = await get(await proxy.getUrlForFile('file1'), {
+        Range: `bytes=${TOTAL}-`,
+      });
+      expect(res.status).toBe(416);
+      expect(res.headers['content-range']).toBe(`bytes */${TOTAL}`);
+    });
+
+    it('ignores a malformed Range header and serves a 200', async () => {
+      const res = await get(await proxy.getUrlForFile('file1'), {
+        Range: 'invalid-unit=0-100',
+      });
+      expect(res.status).toBe(200);
+      expect(res.body.equals(REMOTE)).toBe(true);
+    });
+
+    it('answers a metadata failure with a 500', async () => {
+      backend.getFileMetadata.mockRejectedValue(new Error('API Fail'));
+      const res = await get(await proxy.getUrlForFile('file1'));
+      expect(res.status).toBe(500);
+    });
+
+    it('reuses cached metadata across requests', async () => {
+      const url = await proxy.getUrlForFile('cached-meta');
+      await get(url, { Range: 'bytes=0-9' });
+      await get(url, { Range: 'bytes=10-19' });
+      await get(url, { Range: 'bytes=20-29' });
+      expect(backend.getFileMetadata).toHaveBeenCalledTimes(1);
+    });
+
+    it('answers a Drive failure before the first byte with a clean 500', async () => {
+      backend.getFileStream.mockRejectedValue(new Error('403 from Drive'));
+      const res = await get(await proxy.getUrlForFile('file1'));
+      expect(res.status).toBe(500);
+      // No stale Content-Length/Content-Range for a body that never comes.
+      expect(res.headers['content-length']).not.toBe(String(TOTAL));
+      expect(res.headers['content-range']).toBeUndefined();
+      expect(res.body.length).toBe(0);
+      expect(res.complete).toBe(true);
+    });
+
+    it('terminates the response when Drive fails mid-stream', async () => {
+      // Regression (F29): the response used to stay open forever, so ffmpeg
+      // blocked on its input.
+      const drive = new PassThrough();
+      backend.getFileStream.mockResolvedValue(drive);
+      const pending = get(await proxy.getUrlForFile('file1'));
+      await vi.waitFor(() => expect(backend.getFileStream).toHaveBeenCalled());
+      drive.write(REMOTE.subarray(0, 100));
+      await new Promise((r) => setTimeout(r, 20));
+      drive.destroy(new Error('ECONNRESET from Google'));
+
+      const res = await pending;
+      expect(res.status).toBe(200);
+      expect(res.complete).toBe(false);
+    });
+
+    it('destroys the Drive download when the client disconnects', async () => {
+      const drive = new PassThrough();
+      backend.getFileStream.mockResolvedValue(drive);
+      const url = await proxy.getUrlForFile('file1');
+
+      await new Promise<void>((resolve) => {
+        const req = http.get(url, { agent: false }, (res) => {
+          res.once('data', () => {
+            req.destroy();
+            resolve();
+          });
+        });
+        req.on('error', () => {});
+        void vi
+          .waitFor(() => expect(backend.getFileStream).toHaveBeenCalled())
+          .then(() => drive.write(REMOTE.subarray(0, 100)));
+      });
+
+      await vi.waitFor(() => expect(drive.destroyed).toBe(true));
+    });
+
+    it('never opens Drive for a client that left during the metadata lookup', async () => {
+      let resolveMeta!: (meta: object) => void;
+      backend.getFileMetadata.mockReturnValue(
+        new Promise((resolve) => {
+          resolveMeta = resolve;
+        }),
+      );
+      const url = await proxy.getUrlForFile('slow-meta');
+
+      const req = http.get(url, { agent: false });
+      req.on('error', () => {});
+      await vi.waitFor(() =>
+        expect(backend.getFileMetadata).toHaveBeenCalled(),
+      );
+      req.destroy();
+      await new Promise((r) => setTimeout(r, 20));
+      resolveMeta({ id: 'slow-meta', size: String(TOTAL) });
+      await new Promise((r) => setTimeout(r, 20));
+
+      expect(backend.getFileStream).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('token lifetime', () => {
+    it('expires a token that has not been used for a while', async () => {
+      const now = Date.now();
+      const clock = vi.spyOn(Date, 'now').mockReturnValue(now);
+      const url = await proxy.getUrlForFile('file1');
+
+      expect((await get(url, { Range: 'bytes=0-9' })).status).toBe(206);
+
+      clock.mockReturnValue(now + 4 * 60 * 1000);
+      expect((await get(url, { Range: 'bytes=0-9' })).status).toBe(206);
+
+      clock.mockReturnValue(now + 10 * 60 * 1000);
+      expect((await get(url, { Range: 'bytes=0-9' })).status).toBe(403);
+    });
+
+    it('keeps a token alive while one of its requests is streaming', async () => {
+      const now = Date.now();
+      const clock = vi.spyOn(Date, 'now').mockReturnValue(now);
+      const drive = new PassThrough();
+      backend.getFileStream.mockResolvedValueOnce(drive);
+      const url = await proxy.getUrlForFile('file1');
+
+      // A long-running read (e.g. an HLS transcode) holds the token.
+      const longRead = get(url);
+      await vi.waitFor(() => expect(backend.getFileStream).toHaveBeenCalled());
+
+      clock.mockReturnValue(now + 60 * 60 * 1000);
+      // ffmpeg seeks: a second request with the same URL is still accepted.
+      expect((await get(url, { Range: 'bytes=0-9' })).status).toBe(206);
+
+      drive.end(REMOTE);
+      expect((await longRead).status).toBe(200);
+    });
+  });
+});
+
+describe('redactProxyTokens', () => {
+  it('masks the token in an ffmpeg error line', () => {
+    const line =
+      'http://127.0.0.1:5000/stream/abc.mp4?token=0123abcd: Server returned 403 Forbidden';
+    expect(redactProxyTokens(line)).toBe(
+      'http://127.0.0.1:5000/stream/abc.mp4?token=[redacted]: Server returned 403 Forbidden',
+    );
+  });
+
+  it('leaves text without a token untouched', () => {
+    expect(redactProxyTokens('frame=  10 fps=0.0 q=0.0')).toBe(
+      'frame=  10 fps=0.0 q=0.0',
+    );
   });
 });

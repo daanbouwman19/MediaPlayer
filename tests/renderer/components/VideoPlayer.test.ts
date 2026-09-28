@@ -23,6 +23,7 @@ vi.mock('hls.js', () => {
     this.destroy = vi.fn();
     this.startLoad = vi.fn();
     this.recoverMediaError = vi.fn();
+    this.swapAudioCodec = vi.fn();
     Object.assign(mockHlsInstance, this);
   });
 
@@ -31,6 +32,8 @@ vi.mock('hls.js', () => {
     ERROR: 'hlsError',
     MANIFEST_PARSED: 'manifestParsed',
     LEVEL_LOADED: 'levelLoaded',
+    MEDIA_ATTACHED: 'mediaAttached',
+    FRAG_BUFFERED: 'fragBuffered',
   };
   (mockHls as any).ErrorTypes = {
     NETWORK_ERROR: 'networkError',
@@ -50,8 +53,6 @@ describe('VideoPlayer Coverage', () => {
     initialTime: 0,
     isControlsVisible: true,
     isTranscodingMode: false,
-    transcodedDuration: 0,
-    currentTranscodeStartTime: 0,
     isTranscodingLoading: false,
     isBuffering: false,
   };
@@ -176,19 +177,13 @@ describe('VideoPlayer Coverage', () => {
     levelLoadedCall![1](Hls.Events.LEVEL_LOADED, {
       details: { live: true },
     });
-    expect(consoleSpy).toHaveBeenCalledWith(
-      '[VideoPlayer] HLS Level loaded:',
-      'live',
-    );
+    expect(consoleSpy).toHaveBeenCalledWith('[HLS] Level loaded:', 'live');
 
     // VOD data
     levelLoadedCall![1](Hls.Events.LEVEL_LOADED, {
       details: { live: false },
     });
-    expect(consoleSpy).toHaveBeenCalledWith(
-      '[VideoPlayer] HLS Level loaded:',
-      'vod',
-    );
+    expect(consoleSpy).toHaveBeenCalledWith('[HLS] Level loaded:', 'vod');
 
     consoleSpy.mockRestore();
   });
@@ -260,13 +255,11 @@ describe('VideoPlayer Coverage', () => {
     await wrapper.find('video').trigger('timeupdate');
     expect(wrapper.emitted('timeupdate')![0]).toEqual([10]);
 
-    await wrapper.setProps({
-      isTranscodingMode: true,
-      transcodedDuration: 100,
-      currentTranscodeStartTime: 50,
-    });
+    // The HLS transcode is one absolute timeline from 0: the element's time
+    // is reported as-is, never shifted by an offset.
+    await wrapper.setProps({ isTranscodingMode: true, src: 'test.m3u8' });
     await wrapper.find('video').trigger('timeupdate');
-    expect(wrapper.emitted('timeupdate')![1]).toEqual([60]);
+    expect(wrapper.emitted('timeupdate')![1]).toEqual([10]);
   });
 
   it('reset method works correctly', async () => {
@@ -361,20 +354,245 @@ describe('VideoPlayer Coverage', () => {
   });
 
   it('handles HLS fatal network error', async () => {
+    vi.useFakeTimers();
     mount(VideoPlayer, {
+      props: { ...defaultProps, src: 'test.m3u8' },
+    });
+    await nextTick();
+    const handler = (event: string) =>
+      mockHlsInstance.on.mock.calls.find((c: any) => c[0] === event)[1];
+    vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined);
+    handler(Hls.Events.MANIFEST_PARSED)();
+
+    handler(Hls.Events.ERROR)('event', {
+      fatal: true,
+      type: Hls.ErrorTypes.NETWORK_ERROR,
+      details: 'net',
+    });
+    // Retried after a backoff delay, not in a tight loop.
+    expect(mockHlsInstance.startLoad).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1000);
+    expect(mockHlsInstance.startLoad).toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
+  it('reports an unrecoverable HLS network error instead of retrying forever', async () => {
+    vi.useFakeTimers();
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const wrapper = mount(VideoPlayer, {
       props: { ...defaultProps, src: 'test.m3u8' },
     });
     await nextTick();
     const errorCallback = mockHlsInstance.on.mock.calls.find(
       (c: any) => c[0] === Hls.Events.ERROR,
     )[1];
-
-    errorCallback('event', {
+    const fatalNetworkError = {
       fatal: true,
       type: Hls.ErrorTypes.NETWORK_ERROR,
-      details: 'net',
+      details: 'manifestLoadError',
+    };
+
+    // The playlist itself failed (e.g. HTTP 500): each retry requests it
+    // again, as startLoad() cannot recover before a manifest was parsed.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      errorCallback('event', fatalNetworkError);
+      vi.advanceTimersByTime(10_000);
+    }
+    expect(mockHlsInstance.loadSource).toHaveBeenCalledTimes(3);
+    expect(mockHlsInstance.loadSource).toHaveBeenCalledWith('test.m3u8');
+    expect(wrapper.emitted('error')).toBeFalsy();
+
+    errorCallback('event', fatalNetworkError);
+    expect(mockHlsInstance.loadSource).toHaveBeenCalledTimes(3);
+    expect(mockHlsInstance.startLoad).not.toHaveBeenCalled();
+    expect(mockHlsInstance.destroy).toHaveBeenCalled();
+    expect(wrapper.emitted('error')).toHaveLength(1);
+    expect((wrapper.emitted('error')![0][0] as Error).message).toContain(
+      'manifestLoadError',
+    );
+    errorSpy.mockRestore();
+    vi.useRealTimers();
+  });
+
+  it('escalates repeated HLS media errors and finally reports them', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const wrapper = mount(VideoPlayer, {
+      props: { ...defaultProps, src: 'test.m3u8' },
     });
-    expect(mockHlsInstance.startLoad).toHaveBeenCalled();
+    await nextTick();
+    const errorCallback = mockHlsInstance.on.mock.calls.find(
+      (c: any) => c[0] === Hls.Events.ERROR,
+    )[1];
+    const mediaError = {
+      fatal: true,
+      type: Hls.ErrorTypes.MEDIA_ERROR,
+      details: 'bufferAppendError',
+    };
+
+    errorCallback('event', mediaError);
+    expect(mockHlsInstance.recoverMediaError).toHaveBeenCalledTimes(1);
+    expect(mockHlsInstance.swapAudioCodec).not.toHaveBeenCalled();
+
+    errorCallback('event', mediaError);
+    expect(mockHlsInstance.swapAudioCodec).toHaveBeenCalledTimes(1);
+    expect(mockHlsInstance.recoverMediaError).toHaveBeenCalledTimes(2);
+    expect(wrapper.emitted('error')).toBeFalsy();
+
+    errorCallback('event', mediaError);
+    expect(mockHlsInstance.destroy).toHaveBeenCalled();
+    expect(wrapper.emitted('error')).toHaveLength(1);
+    errorSpy.mockRestore();
+  });
+
+  it('starts HLS playback at 0, not at the live edge, when there is no resume time', async () => {
+    mount(VideoPlayer, {
+      props: { ...defaultProps, src: 'test.m3u8', initialTime: 0 },
+    });
+    await nextTick();
+    expect(Hls).toHaveBeenCalledWith(
+      expect.objectContaining({ startPosition: 0 }),
+    );
+  });
+
+  it('starts HLS playback at the resume position', async () => {
+    mount(VideoPlayer, {
+      props: { ...defaultProps, src: 'test.m3u8', initialTime: 42 },
+    });
+    await nextTick();
+    expect(Hls).toHaveBeenCalledWith(
+      expect.objectContaining({ startPosition: 42 }),
+    );
+  });
+
+  it('keeps the MediaSource hls.js attached when direct play falls back to HLS on the same instance', async () => {
+    const wrapper = mount(VideoPlayer, {
+      props: { ...defaultProps, src: 'direct.mp4' },
+    });
+    await nextTick();
+    const video = wrapper.find('video').element as HTMLVideoElement;
+    expect(video.getAttribute('src')).toBe('direct.mp4');
+
+    // Like hls.js, attachMedia points the element at a MediaSource blob URL
+    // synchronously.
+    (Hls as unknown as Mock).mockImplementationOnce(function (this: any) {
+      this.on = vi.fn();
+      this.loadSource = vi.fn();
+      this.destroy = vi.fn();
+      this.attachMedia = vi.fn((media: HTMLVideoElement) => {
+        media.src = 'blob:hls-media-source';
+      });
+    });
+
+    await wrapper.setProps({ src: '/api/hls/master.m3u8?file=direct.mp4' });
+    await nextTick();
+
+    // Vue's :src patch (to undefined) must happen before hls.js attaches,
+    // not after it, or it removes the blob URL and nothing ever loads.
+    expect(video.getAttribute('src')).toBe('blob:hls-media-source');
+  });
+
+  it('togglePlay works while the controls are hidden (keyboard / control bar)', async () => {
+    const wrapper = mount(VideoPlayer, {
+      props: { ...defaultProps, isControlsVisible: false },
+    });
+    const video = wrapper.find('video').element as HTMLVideoElement;
+    Object.defineProperty(video, 'paused', { value: true, configurable: true });
+    video.play = vi.fn().mockResolvedValue(undefined);
+
+    (wrapper.vm as any).togglePlay();
+    expect(video.play).toHaveBeenCalled();
+  });
+
+  it('clears the parent video element and releases the source on unmount', async () => {
+    const wrapper = mount(VideoPlayer, {
+      props: { ...defaultProps, src: 'test.mp4' },
+    });
+    const video = wrapper.find('video').element as HTMLVideoElement;
+    video.pause = vi.fn();
+    video.load = vi.fn();
+
+    wrapper.unmount();
+
+    const updates = wrapper.emitted('update:video-element')!;
+    expect(updates[updates.length - 1]).toEqual([null]);
+    expect(video.getAttribute('src')).toBeNull();
+    expect(video.load).toHaveBeenCalled();
+  });
+
+  it('does not emit media events once it is being unmounted', async () => {
+    const wrapper = mount(VideoPlayer, {
+      props: { ...defaultProps, src: 'test.mp4' },
+    });
+    const video = wrapper.find('video').element as HTMLVideoElement;
+    wrapper.unmount();
+
+    // Releasing the element queues events like these.
+    const events = [
+      'pause',
+      'play',
+      'playing',
+      'ended',
+      'timeupdate',
+      'error',
+      'waiting',
+      'canplay',
+      'loadedmetadata',
+    ];
+    for (const type of events) video.dispatchEvent(new Event(type));
+
+    for (const type of [...events, 'buffering']) {
+      expect(wrapper.emitted(type)).toBeFalsy();
+    }
+  });
+
+  it('does not report an HLS failure or autoplay after unmounting', async () => {
+    vi.useFakeTimers();
+    const wrapper = mount(VideoPlayer, {
+      props: { ...defaultProps, src: 'test.m3u8' },
+    });
+    await nextTick();
+    const video = wrapper.find('video').element as HTMLVideoElement;
+    video.play = vi.fn().mockResolvedValue(undefined);
+    const handler = (name: string) =>
+      mockHlsInstance.on.mock.calls.find((c: any[]) => c[0] === name)[1];
+    const onError = handler(Hls.Events.ERROR);
+    const onManifest = handler(Hls.Events.MANIFEST_PARSED);
+
+    onManifest(Hls.Events.MANIFEST_PARSED);
+    wrapper.unmount();
+    vi.runAllTimers();
+    onError('event', { fatal: true, type: 'otherError', details: 'late' });
+
+    expect(video.play).not.toHaveBeenCalled();
+    expect(wrapper.emitted('error')).toBeFalsy();
+    vi.useRealTimers();
+  });
+
+  it('tolerates play() implementations that return nothing', async () => {
+    const wrapper = mount(VideoPlayer, {
+      props: { ...defaultProps, src: 'test.mp4' },
+    });
+    const video = wrapper.find('video').element as HTMLVideoElement;
+    Object.defineProperty(video, 'paused', { value: true, configurable: true });
+    video.play = vi.fn().mockReturnValue(undefined);
+    expect(() => (wrapper.vm as any).togglePlay()).not.toThrow();
+    expect(video.play).toHaveBeenCalled();
+  });
+
+  it('ignores an AbortError from a toggled play()', async () => {
+    const wrapper = mount(VideoPlayer, {
+      props: { ...defaultProps, src: 'test.mp4' },
+    });
+    const video = wrapper.find('video').element as HTMLVideoElement;
+    Object.defineProperty(video, 'paused', { value: true, configurable: true });
+    video.play = vi
+      .fn()
+      .mockRejectedValue(Object.assign(new Error(), { name: 'AbortError' }));
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    (wrapper.vm as any).togglePlay();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(errorSpy).not.toHaveBeenCalled();
+    errorSpy.mockRestore();
   });
 
   it('handles HLS fatal media error', async () => {

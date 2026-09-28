@@ -91,15 +91,22 @@ describe('Progress Bars', () => {
       mediaUrl: ref('http://media/video.mp4'),
       isLoading: ref(false),
       error: ref(null),
+      currentLoadRequestId: ref(0),
       loadMedia: vi.fn(),
+      cancelPendingLoad: vi.fn(),
       isVideoSupported: ref(true),
     });
 
     (useTranscoder as Mock).mockReturnValue({
       isTranscodingMode: ref(false),
       isTranscodingLoading: ref(false),
+      isBuffering: ref(false),
+      transcodedDuration: ref(0),
       transcodingProgress: ref(0),
       resetTranscoderState: vi.fn(),
+      stopTranscodingProgressPoll: vi.fn(),
+      handlePlaybackStarted: vi.fn(),
+      setBuffering: vi.fn(),
     });
   });
 

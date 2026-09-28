@@ -46,7 +46,9 @@ describe('media-utils MIME and Drive Path tests', () => {
       ['file.png', 'image/png'],
       ['file.gif', 'image/gif'],
       ['file.webp', 'image/webp'],
-      ['file.svg', 'image/svg'], // Implementation returns image/svg, not image/svg+xml
+      // Browsers only render SVG served with its registered type.
+      ['file.svg', 'image/svg+xml'],
+      ['file.SVG', 'image/svg+xml'],
 
       // Videos
       ['file.mp4', 'video/mp4'],
@@ -55,6 +57,8 @@ describe('media-utils MIME and Drive Path tests', () => {
       ['file.mov', 'video/quicktime'],
       ['file.avi', 'video/x-msvideo'],
       ['file.mkv', 'video/x-matroska'],
+      ['file.wmv', 'video/x-ms-wmv'],
+      ['file.flv', 'video/x-flv'],
 
       // Case insensitivity
       ['file.JPG', 'image/jpeg'],

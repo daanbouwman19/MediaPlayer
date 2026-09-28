@@ -11,6 +11,7 @@ import {
   isValidDirectory,
   listDrives,
   clearDrivesCache,
+  resolveMediaSourceDirectory,
 } from '../../src/core/media/file-system';
 import fs from 'fs/promises';
 import path from 'path';
@@ -106,10 +107,23 @@ describe('file-system', () => {
       consoleSpy.mockRestore();
     });
 
-    it('returns drives if path is ROOT', async () => {
+    it('returns drives if path is ROOT and browsing is unconfined', async () => {
+      delete process.env.ALLOWED_FS_ROOTS;
       vi.spyOn(os, 'platform').mockReturnValue('linux');
       const result = await listDirectory('ROOT');
       expect(result[0].path).toBe('/');
+    });
+
+    it('returns the allowed roots if path is ROOT and browsing is confined', async () => {
+      vi.mocked(fs.stat).mockResolvedValue({ isDirectory: () => true } as any);
+      const result = await listDirectory('ROOT');
+      expect(result).toEqual([
+        {
+          name: path.resolve('/test'),
+          path: path.resolve('/test'),
+          isDirectory: true,
+        },
+      ]);
     });
 
     it('blocks access to directories outside configured roots', async () => {
@@ -196,11 +210,13 @@ describe('file-system', () => {
       // `..foo` resolves to `/test/..foo` which starts with `/test/` — allowed.
       // This covers the `startsWith`-with-separator correctness: `/test/..foo`
       // begins with `/test/` so it is correctly identified as a descendant.
-      const mockDirents = [{ name: 'file.txt', isDirectory: () => false }];
-      vi.mocked(fs.readdir).mockResolvedValue(mockDirents as any);
-      const result = await listDirectory('/test/..foo');
-      expect(result).toHaveLength(1);
-      expect(result[0].name).toBe('file.txt');
+      // (listDirectory itself refuses to list it, like any hidden folder, so
+      // the root check is exercised through isValidDirectory.)
+      vi.mocked(fs.stat).mockResolvedValue({ isDirectory: () => true } as any);
+      expect(await isValidDirectory('/test/..foo')).toBe(true);
+      await expect(listDirectory('/test/..foo')).rejects.toThrow(
+        'Access denied',
+      );
     });
 
     it('blocks directories that attempt parent traversal', async () => {
@@ -299,6 +315,76 @@ describe('file-system', () => {
   // [SECURITY] In web-server mode, with no explicit ALLOWED_FS_ROOTS, directory
   // browsing must be confined to the user's home directory instead of exposing
   // every drive / the filesystem root.
+  describe('resolveMediaSourceDirectory confinement', () => {
+    let originalAllowedRoots: string | undefined;
+    const root = path.resolve('/media-root');
+
+    beforeEach(() => {
+      originalAllowedRoots = process.env.ALLOWED_FS_ROOTS;
+      process.env.ALLOWED_FS_ROOTS = root;
+      vi.mocked(fs.realpath).mockImplementation((p) =>
+        Promise.resolve(p as string),
+      );
+    });
+
+    afterEach(() => {
+      if (originalAllowedRoots === undefined)
+        delete process.env.ALLOWED_FS_ROOTS;
+      else process.env.ALLOWED_FS_ROOTS = originalAllowedRoots;
+    });
+
+    it('returns the canonical folder inside an allowed root', async () => {
+      vi.mocked(fs.stat).mockResolvedValue({ isDirectory: () => true } as any);
+      await expect(
+        resolveMediaSourceDirectory(path.join(root, 'Movies')),
+      ).resolves.toBe(path.join(root, 'Movies'));
+    });
+
+    it('denies a folder outside the roots without resolving it (400 before when missing)', async () => {
+      const outside = path.resolve('/elsewhere/missing');
+      vi.mocked(fs.realpath).mockClear();
+      vi.mocked(fs.realpath).mockImplementation((p) =>
+        p === outside
+          ? Promise.reject(
+              Object.assign(new Error('ENOENT'), { code: 'ENOENT' }),
+            )
+          : Promise.resolve(p as string),
+      );
+      await expect(resolveMediaSourceDirectory(outside)).rejects.toMatchObject({
+        statusCode: 403,
+      });
+      // Its existence is never probed.
+      expect(fs.realpath).not.toHaveBeenCalledWith(outside);
+    });
+
+    it('reports a missing folder inside the roots as 400', async () => {
+      const missing = path.join(root, 'missing');
+      vi.mocked(fs.realpath).mockImplementation((p) =>
+        p === missing
+          ? Promise.reject(
+              Object.assign(new Error('ENOENT'), { code: 'ENOENT' }),
+            )
+          : Promise.resolve(p as string),
+      );
+      await expect(resolveMediaSourceDirectory(missing)).rejects.toMatchObject({
+        statusCode: 400,
+        message: 'Directory does not exist',
+      });
+    });
+
+    it('denies a symlink inside a root that points outside it', async () => {
+      const link = path.join(root, 'link');
+      vi.mocked(fs.realpath).mockImplementation((p) =>
+        Promise.resolve(
+          p === link ? path.resolve('/elsewhere') : (p as string),
+        ),
+      );
+      await expect(resolveMediaSourceDirectory(link)).rejects.toMatchObject({
+        statusCode: 403,
+      });
+    });
+  });
+
   describe('web-mode filesystem confinement', () => {
     let originalAllowedRoots: string | undefined;
     let originalWebMode: string | undefined;

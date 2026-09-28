@@ -1,7 +1,8 @@
 import { parentPort, type MessagePort } from 'worker_threads';
 import type { Credentials } from 'google-auth-library';
 import { performFullMediaScan } from './media-scanner.ts';
-import { initializeManualCredentials } from '../../main/google-auth.ts';
+import { registerDriveBackend } from './drive-backend.ts';
+import { isDrivePath } from './media-utils.ts';
 
 if (!parentPort) {
   throw new Error('This module must be run as a worker thread');
@@ -15,7 +16,6 @@ interface ScanRequest {
   payload?: {
     directories?: string[];
     tokens?: Credentials | null;
-    previousPaths?: string[];
   };
 }
 
@@ -30,15 +30,21 @@ export async function handleScanMessage(message: unknown): Promise<void> {
 
   if (type !== 'START_SCAN') return;
   try {
-    const { directories = [], tokens, previousPaths } = payload ?? {};
+    const { directories = [], tokens } = payload ?? {};
 
-    if (tokens) {
-      initializeManualCredentials(tokens);
+    // This worker thread is its own composition root. The Google client (and
+    // googleapis) is only loaded when a Drive source is actually being
+    // scanned; purely local scans never pay for it.
+    if (directories.some(isDrivePath)) {
+      const { googleDriveBackend } =
+        await import('../../infrastructure/google-drive-backend.ts');
+      registerDriveBackend(googleDriveBackend);
+      if (tokens) {
+        googleDriveBackend.setCredentials(tokens);
+      }
     }
 
-    const knownPaths = new Set(previousPaths ?? []);
-
-    const albums = await performFullMediaScan(directories, knownPaths);
+    const albums = await performFullMediaScan(directories);
     port.postMessage({
       id,
       result: { success: true, data: albums },

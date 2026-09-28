@@ -13,6 +13,7 @@ import {
   isRestrictedPath,
   isSensitiveDirectory,
   clearAuthCache,
+  validateInput,
 } from '../../src/core/auth/security';
 import path from 'path';
 import fs from 'fs/promises';
@@ -286,18 +287,11 @@ describe('authorizeFilePath Security', () => {
     expect(resultSsh.isAllowed).toBe(false);
     expect(resultSsh.message).toBe('Access to sensitive file denied');
 
-    // System & User Data
-    const resultAppData = await authorizeFilePath(
-      'AppData/Local/Google/Chrome/User Data/Default/Login Data',
-    );
-    expect(resultAppData.isAllowed).toBe(false);
-    expect(resultAppData.message).toBe('Access to sensitive file denied');
-
-    const resultLibrary = await authorizeFilePath(
-      'Library/Keychains/login.keychain',
-    );
-    expect(resultLibrary.isAllowed).toBe(false);
-    expect(resultLibrary.message).toBe('Access to sensitive file denied');
+    // System & User Data. (<profile>\AppData and ~/Library are blocked by
+    // location, see security-locations.test.ts; a media folder that is merely
+    // named "Library" is not sensitive.)
+    const resultLibraryFolder = await authorizeFilePath('Library/Films/a.mp4');
+    expect(resultLibraryFolder.isAllowed).toBe(true);
 
     const resultNtUser = await authorizeFilePath('NTUSER.DAT');
     expect(resultNtUser.isAllowed).toBe(false);
@@ -348,6 +342,24 @@ describe('authorizeFilePath Security', () => {
     clearAuthCache();
     await authorizeFilePath('/allowed/video.mp4');
     expect(database.getMediaDirectories).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('validateInput', () => {
+  it.each([
+    ['an array (repeated query parameter)', ['/allowed/a.mp4', '/etc/passwd']],
+    ['an object', { length: 1 }],
+    ['a number', 42],
+    ['undefined', undefined],
+  ])('rejects %s instead of a path string', (_label, value) => {
+    expect(validateInput(value)).toEqual({
+      isAllowed: false,
+      message: 'Invalid file path',
+    });
+  });
+
+  it('accepts a plain path string', () => {
+    expect(validateInput('/allowed/a.mp4')).toBeNull();
   });
 });
 

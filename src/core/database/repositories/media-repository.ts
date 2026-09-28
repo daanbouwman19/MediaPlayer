@@ -7,10 +7,12 @@ import {
   getAllMetadataAndStats,
   getAllMetadataVerification,
   getCachedAlbums,
-  getMediaDirectories,
+  readMediaDirectories,
+  repairDriveSourceName,
   getMetadata,
   getPendingMetadata,
   getSetting,
+  saveSetting,
   bulkUpsertMetadata,
   filterProcessingNeeded,
 } from '../database.ts';
@@ -19,10 +21,17 @@ import { IMediaRepository } from './media-repository.interface.ts';
 
 export class MediaRepository implements IMediaRepository {
   async getMediaDirectories() {
-    return getMediaDirectories();
+    // Scans must see read failures rather than an empty source list.
+    return readMediaDirectories();
+  }
+
+  async repairDriveSourceName(directoryPath: string, name: string) {
+    return repairDriveSourceName(directoryPath, name);
   }
 
   async cacheAlbums(albums: Album[]) {
+    // Rethrows so scans know whether the tree was stored before stamping it,
+    // and always invalidates the auth cache: membership authorizes gdrive://.
     return cacheAlbums(albums);
   }
 
@@ -60,5 +69,9 @@ export class MediaRepository implements IMediaRepository {
 
   async getSetting(key: string) {
     return getSetting(key);
+  }
+
+  async saveSetting(key: string, value: string) {
+    return saveSetting(key, value);
   }
 }

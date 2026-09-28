@@ -26,7 +26,7 @@
       >
       <button
         v-if="selectedHaveTranscode"
-        class="glass-button text-sm px-3 py-1.5 rounded text-red-400 hover:bg-red-400/10 transition-colors duration-200"
+        class="glass-button text-sm px-3 py-1.5 rounded text-danger hover:bg-danger/10 transition-colors duration-200"
         title="Remove pre-transcoded HLS for selected files"
         @click="handleClearTranscode"
       >
@@ -40,7 +40,7 @@
         Pre-transcode
       </button>
       <button
-        class="glass-button text-sm px-3 py-1.5 rounded text-muted"
+        class="glass-button text-sm px-3 py-1.5 rounded text-muted hover:text-color"
         title="Clear selection"
         @click="clearSelection"
       >
@@ -68,7 +68,7 @@
 
       <VirtualScroller
         v-else
-        :key="columnCount"
+        :key="`${columnCount}-${listGeneration}`"
         class="h-full custom-scrollbar"
         :items="chunkedItems"
         :item-size="rowHeight"
@@ -110,20 +110,12 @@ import { storeToRefs } from 'pinia';
  * Supports hover-to-preview for videos and click-to-play functionality.
  * Uses VirtualScroller for performance on large albums.
  */
-import {
-  ref,
-  onMounted,
-  onUnmounted,
-  computed,
-  watch,
-  reactive,
-  toRaw,
-} from 'vue';
+import { ref, onMounted, onUnmounted, computed, watch, reactive } from 'vue';
 import { useLibraryStore } from '@/composables/useLibraryStore';
-import { usePlayerStore } from '@/composables/usePlayerStore';
-import { usePlaylistStore } from '@/composables/usePlaylistStore';
 import { useUIStore } from '@/composables/useUIStore';
+import { useSlideshow } from '@/composables/useSlideshow';
 import { useTranscodeQueue } from '@/composables/useTranscodeQueue';
+import { isMediaFileVideo } from '@/utils/mediaUtils';
 import type { MediaFile } from '../../../core/media/types';
 import MediaGridItem from './MediaGridItem.vue';
 import VirtualScroller from '@/components/atoms/VirtualScroller.vue';
@@ -135,9 +127,8 @@ import {
 } from '../../../core/media/constants';
 
 const libraryStore = useLibraryStore();
-const playerStore = usePlayerStore();
-const playlistStore = usePlaylistStore();
 const uiStore = useUIStore();
+const slideshow = useSlideshow();
 
 const {
   imageExtensionsSet,
@@ -201,6 +192,9 @@ const gridStyle = computed(() => ({
 const failedImagePaths = reactive(new Set<string>());
 const selectedPaths = ref<Set<string>>(new Set());
 const lastClickedIndex = ref<number>(-1);
+// Bumped whenever a different list is loaded into the open grid; it keys the
+// scroller so that the new list starts at the top.
+const listGeneration = ref(0);
 const { jobStatusMap, startPolling, stopPolling, addJobs, cancelJob } =
   useTranscodeQueue();
 
@@ -266,6 +260,15 @@ watch(scrollerContainer, () => {
   setupResizeObserver();
 });
 
+// The grid stays mounted when another album or playlist is opened into it.
+// The selection, the shift-click anchor and the scroll position belong to the
+// previous list.
+watch(allMediaFiles, () => {
+  selectedPaths.value = new Set();
+  lastClickedIndex.value = -1;
+  listGeneration.value++;
+});
+
 onUnmounted(() => {
   if (resizeObserver) {
     resizeObserver.disconnect();
@@ -319,19 +322,25 @@ const handleItemClick = async (
   selectedPaths.value = new Set();
   lastClickedIndex.value = index;
 
-  const mediaList = toRaw(allMediaFiles.value).slice();
-  playlistStore.setQueue(mediaList.slice(index + 1));
-  playlistStore.playNext(item);
-
-  uiStore.viewMode = 'player';
-  playerStore.isSlideshowActive = true;
-  playerStore.isTimerRunning = false;
+  await slideshow.playFromList(allMediaFiles.value, index);
 };
 
 const handlePreTranscode = async () => {
-  const paths = [...selectedPaths.value];
+  // Only videos can be transcoded; skip any images in a mixed selection.
+  const selected = selectedPaths.value;
+  const paths: string[] = [];
+  for (const item of allMediaFiles.value) {
+    if (
+      selected.has(item.path) &&
+      isMediaFileVideo(item, videoExtensionsSet.value)
+    ) {
+      paths.push(item.path);
+    }
+  }
   selectedPaths.value = new Set();
-  await addJobs(paths);
+  if (paths.length > 0) {
+    await addJobs(paths);
+  }
 };
 
 const handleClearTranscode = async () => {

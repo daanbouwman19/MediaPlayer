@@ -1,9 +1,6 @@
 import { IpcMainInvokeEvent } from 'electron';
 import { IPC_CHANNELS } from '../../shared/ipc-channels';
-import {
-  validatePathAccess,
-  filterAuthorizedPaths,
-} from '../utils/security-utils';
+import { validatePathAccess } from '../utils/security-utils';
 import {
   generateFileUrl,
   getVideoDuration,
@@ -12,8 +9,8 @@ import {
   getDriveFileMetadata,
   listDriveDirectory,
   getDriveParent,
-} from '../google-drive-service';
-import { getDriveCacheManager } from '../drive-cache-manager';
+} from '../../infrastructure/google-drive-service';
+import { getDriveCacheManager } from '../../infrastructure/drive-cache-manager';
 import {
   recordMediaView,
   getMediaViewCounts,
@@ -23,6 +20,7 @@ import {
 } from '../../core/database/database';
 import { TranscodeQueueManager } from '../../core/media/transcode-queue-manager';
 import { MediaService } from '../../core/media/media-service';
+import { filterAuthorizedLibraryPaths } from '../../core/media/utils/authorized-paths';
 import { isDrivePath, getDriveId } from '../../core/media/media-utils';
 import { MediaAnalyzer } from '../../core/media/analysis/media-analyzer';
 import { HlsManager } from '../../core/media/hls-manager';
@@ -33,6 +31,13 @@ import { getFFmpegStaticPath } from '../../infrastructure/ffmpeg-static-path';
 
 async function getFFmpegPath(): Promise<string | null> {
   return getFFmpegStaticPath();
+}
+
+/** In-flight heatmap requests per window and file, for CANCEL_HEATMAP. */
+const pendingHeatmapRequests = new Map<string, Set<AbortController>>();
+
+function heatmapRequestKey(event: IpcMainInvokeEvent, filePath: string) {
+  return `${event.sender.id}\0${filePath}`;
 }
 
 export function registerMediaHandlers(mediaService: MediaService) {
@@ -67,7 +72,8 @@ export function registerMediaHandlers(mediaService: MediaService) {
   handleIpc(
     IPC_CHANNELS.GET_MEDIA_VIEW_COUNTS,
     async (_event: IpcMainInvokeEvent, filePaths: string[]) => {
-      const allowedPaths = await filterAuthorizedPaths(filePaths);
+      // Rows are keyed by the library's spelling, not the resolved real path.
+      const allowedPaths = await filterAuthorizedLibraryPaths(filePaths);
       return getMediaViewCounts(allowedPaths);
     },
   );
@@ -76,6 +82,9 @@ export function registerMediaHandlers(mediaService: MediaService) {
     IPC_CHANNELS.GET_VIDEO_METADATA,
     async (_event: IpcMainInvokeEvent, filePath: string) => {
       try {
+        // [SECURITY] Drive IDs must belong to the library, like local paths.
+        await validatePathAccess(filePath);
+
         if (isDrivePath(filePath)) {
           const fileId = getDriveId(filePath);
           const meta = await getDriveFileMetadata(fileId);
@@ -86,8 +95,6 @@ export function registerMediaHandlers(mediaService: MediaService) {
           }
           throw new Error('Duration not available');
         }
-
-        await validatePathAccess(filePath);
 
         const ffmpegPath = await getFFmpegPath();
         if (!ffmpegPath) {
@@ -125,14 +132,15 @@ export function registerMediaHandlers(mediaService: MediaService) {
         return;
       }
 
-      // [SECURITY] Filter out unauthorized paths to prevent arbitrary file access
-      const allowedPaths = await filterAuthorizedPaths(filePaths);
+      // [SECURITY] Filter out unauthorized paths to prevent arbitrary file access.
+      // Keeps the library's spelling so metadata lands on the scanned rows.
+      const allowedPaths = await filterAuthorizedLibraryPaths(filePaths);
 
-      mediaService
-        .extractAndSaveMetadata(allowedPaths, ffmpegPath, {
-          forceCheck: true,
-        })
-        .catch((err) => console.error('State extraction failed', err));
+      // Joins the single background extraction job instead of running
+      // another one alongside it.
+      mediaService.queueMetadataExtraction(allowedPaths, ffmpegPath, {
+        forceCheck: true,
+      });
     },
   );
 
@@ -161,14 +169,45 @@ export function registerMediaHandlers(mediaService: MediaService) {
 
   handleIpc(
     IPC_CHANNELS.GET_HEATMAP,
-    async (_event, filePath: string, points?: number) => {
+    async (event, filePath: string, points?: number) => {
+      // Tracked so CANCEL_HEATMAP from the same window can leave the analysis.
+      const key = heatmapRequestKey(event, filePath);
+      const controller = new AbortController();
+      const requests =
+        pendingHeatmapRequests.get(key) ?? new Set<AbortController>();
+      requests.add(controller);
+      pendingHeatmapRequests.set(key, requests);
       try {
         await validatePathAccess(filePath);
-        return MediaAnalyzer.getInstance().generateHeatmap(filePath, points);
+        return await MediaAnalyzer.getInstance().generateHeatmap(
+          filePath,
+          points,
+          { signal: controller.signal },
+        );
       } catch (err) {
-        console.error('[MediaController] Error getting heatmap:', err);
+        if (!controller.signal.aborted) {
+          console.error('[MediaController] Error getting heatmap:', err);
+        }
         throw err;
+      } finally {
+        requests.delete(controller);
+        if (
+          requests.size === 0 &&
+          pendingHeatmapRequests.get(key) === requests
+        ) {
+          pendingHeatmapRequests.delete(key);
+        }
       }
+    },
+  );
+
+  handleIpc(
+    IPC_CHANNELS.CANCEL_HEATMAP,
+    (event: IpcMainInvokeEvent, filePath: string) => {
+      const requests = pendingHeatmapRequests.get(
+        heatmapRequestKey(event, filePath),
+      );
+      for (const controller of requests ?? []) controller.abort();
     },
   );
 
@@ -237,6 +276,8 @@ export function registerMediaHandlers(mediaService: MediaService) {
     IPC_CHANNELS.DRIVE_CACHE_TRIGGER,
     async (_event: IpcMainInvokeEvent, fileId: string) => {
       try {
+        // [SECURITY] Only cache Drive files that are part of the library.
+        await validatePathAccess(`gdrive://${fileId}`);
         const cacheManager = getDriveCacheManager();
         await cacheManager.triggerDownload(fileId);
       } catch (err) {

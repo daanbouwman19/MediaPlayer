@@ -3,7 +3,6 @@
  */
 import { Router } from 'express';
 import path from 'path';
-import fs from 'fs/promises';
 import { AppError } from '../../core/media/errors.ts';
 import {
   ALL_SUPPORTED_EXTENSIONS,
@@ -21,18 +20,24 @@ import {
   setDirectoryActiveState,
   updateSmartPlaylist,
 } from '../../core/database/database.ts';
-import { listDirectory } from '../../core/media/file-system.ts';
 import {
-  isRestrictedPath,
-  isSensitiveDirectory,
-  validateInput,
-} from '../../core/auth/security.ts';
+  getParentDirectory,
+  isRootDirectoryRequest,
+  listDirectory,
+  resolveMediaSourceDirectory,
+  ROOT_DIRECTORY,
+} from '../../core/media/file-system.ts';
+import {
+  describeSourceOverlap,
+  findActiveSourceOverlap,
+} from '../../core/media/utils/source-paths.ts';
+import { validateInput } from '../../core/auth/security.ts';
 import { getQueryParam } from '../../core/network/http-utils.ts';
 import {
-  getDriveClient,
+  getDriveFolderInfo,
   getDriveParent,
   listDriveDirectory,
-} from '../../main/google-drive-service.ts';
+} from '../../infrastructure/google-drive-service.ts';
 import type { RateLimiters } from '../middleware/rate-limiters.ts';
 import { asyncHandler } from '../middleware/async-handler.ts';
 import { createRateLimiter } from '../../core/network/rate-limiter.ts';
@@ -168,29 +173,17 @@ export function createSystemRoutes(limiters: RateLimiters) {
 
       validateMediaDirectoryPath(dirPath);
 
-      if (isSensitiveDirectory(dirPath)) {
-        console.warn(
-          `[Security] Blocked attempt to add sensitive directory: ${dirPath}`,
-        );
-        return res.status(403).json({
-          error: 'Access restricted for sensitive system directories',
-        });
-      }
+      // Canonicalises the folder and applies the same confinement as the
+      // /api/fs/* browser (allowed roots, sensitive locations): 400 / 403.
+      const resolvedPath = await resolveMediaSourceDirectory(dirPath);
 
-      let resolvedPath: string;
-      try {
-        resolvedPath = await fs.realpath(dirPath);
-      } catch {
-        throw new AppError(400, 'Directory does not exist');
-      }
-
-      if (isSensitiveDirectory(resolvedPath)) {
-        console.warn(
-          `[Security] Blocked attempt to add sensitive directory (resolved): ${resolvedPath}`,
-        );
-        return res.status(403).json({
-          error: 'Access restricted for sensitive system directories',
-        });
+      // Nested sources would index the overlap twice.
+      const overlap = findActiveSourceOverlap(
+        resolvedPath,
+        await getMediaDirectories(),
+      );
+      if (overlap) {
+        throw new AppError(409, describeSourceOverlap(resolvedPath, overlap));
       }
 
       await addMediaDirectory(resolvedPath);
@@ -264,16 +257,14 @@ export function createSystemRoutes(limiters: RateLimiters) {
         throw new AppError(400, inputResult.message || 'Invalid path');
       }
 
-      const normalizedDirPath = path.resolve(dirPath);
-
-      if (isRestrictedPath(normalizedDirPath)) {
-        console.warn(
-          `[Security] Blocked attempt to list restricted directory: ${normalizedDirPath}`,
-        );
-        throw new AppError(403, 'Access denied');
-      }
-
-      const contents = await listDirectory(normalizedDirPath);
+      // The 'ROOT' sentinel must reach listDirectory unresolved (it lists the
+      // allowed roots); anything else is resolved before the restriction and
+      // allowed-root checks, which throw AppError(403).
+      const contents = await listDirectory(
+        isRootDirectoryRequest(dirPath)
+          ? ROOT_DIRECTORY
+          : path.resolve(dirPath),
+      );
       res.json(contents);
     }),
   );
@@ -291,10 +282,9 @@ export function createSystemRoutes(limiters: RateLimiters) {
         throw new AppError(400, inputResult.message || 'Invalid path');
       }
 
-      const parent = path.dirname(dirPath);
-      if (parent === dirPath) {
-        return res.json({ parent: null });
-      }
+      // null at a drive root or an allowed root: the picker then goes back to
+      // the root listing instead of to a directory it cannot list.
+      const parent = await getParentDirectory(dirPath);
       return res.json({ parent });
     }),
   );
@@ -320,16 +310,14 @@ export function createSystemRoutes(limiters: RateLimiters) {
         throw new AppError(400, 'Missing folderId');
       }
 
-      const drive = await getDriveClient();
-      const driveRes = await drive.files.get({
-        fileId: folderId,
-        fields: 'id, name',
+      const folder = await getDriveFolderInfo(folderId);
+      await addMediaDirectory({
+        path: `gdrive://${folder.id}`,
+        type: 'google_drive',
+        name: folder.name,
       });
-      const name = driveRes.data.name || 'Google Drive Folder';
 
-      await addMediaDirectory(`gdrive://${driveRes.data.id}`);
-
-      res.json({ success: true, name });
+      res.json({ success: true, name: folder.name });
     }),
   );
 

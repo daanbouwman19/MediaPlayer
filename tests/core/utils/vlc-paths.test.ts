@@ -9,6 +9,13 @@ import {
 import { getVlcPath } from '../../../src/infrastructure/vlc-paths';
 import fs from 'fs';
 
+// No VLC registry entry (registry lookups: see vlc-paths.windows.test.ts).
+vi.mock('child_process', () => ({
+  execFile: vi.fn((_file, _args, _options, callback) =>
+    callback(new Error('not found'), '', ''),
+  ),
+}));
+
 type Platform = NodeJS.Platform;
 
 interface TestCase {

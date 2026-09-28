@@ -50,9 +50,11 @@ describe('hls-handler', () => {
       status: vi.fn().mockReturnThis(),
       send: vi.fn(),
       set: vi.fn(),
-      sendFile: vi.fn((_path: string, cb: (err?: any) => void) => {
-        if (cb) cb();
-      }),
+      sendFile: vi.fn(
+        (_path: string, _options: unknown, cb: (err?: any) => void) => {
+          if (cb) cb();
+        },
+      ),
       on: vi.fn(),
       headersSent: false,
     };
@@ -75,6 +77,24 @@ describe('hls-handler', () => {
       expect(res.send).toHaveBeenCalledWith(expect.stringContaining('#EXTM3U'));
       expect(res.send).toHaveBeenCalledWith(
         expect.stringContaining('playlist.m3u8?file=%2Fpath%2Fto%2Fvideo.mp4'),
+      );
+    });
+
+    it('tells players to start at the beginning of the live playlist (F56)', async () => {
+      mockValidateFileAccess.mockResolvedValue({
+        success: true,
+        path: '/resolved/video.mp4',
+      });
+      mockHandleAccessCheck.mockReturnValue(false);
+
+      await serveHlsMaster(req, res, '/path/to/video.mp4');
+
+      const master = res.send.mock.calls[0][0] as string;
+      const lines = master.split('\n');
+      expect(lines).toContain('#EXT-X-START:TIME-OFFSET=0');
+      // Must precede the variant it applies to
+      expect(lines.indexOf('#EXT-X-START:TIME-OFFSET=0')).toBeLessThan(
+        lines.findIndex((l) => l.startsWith('#EXT-X-STREAM-INF')),
       );
     });
 
@@ -181,6 +201,121 @@ describe('hls-handler', () => {
       );
       consoleSpy.mockRestore();
     });
+
+    it('answers 503 with Retry-After when the transcode cap is reached (F22)', async () => {
+      mockValidateFileAccess.mockResolvedValue({
+        success: true,
+        path: '/resolved/video.mp4',
+      });
+      mockHandleAccessCheck.mockReturnValue(false);
+      const mockHlsManager = {
+        ensureSession: vi
+          .fn()
+          .mockRejectedValue(
+            Object.assign(new Error('Server too busy'), { code: 'HLS_BUSY' }),
+          ),
+        acquireSession: vi.fn(),
+        releaseSession: vi.fn(),
+      };
+      // @ts-expect-error - Mocking static method
+      HlsManager.getInstance.mockReturnValue(mockHlsManager);
+      const consoleSpy = vi
+        .spyOn(console, 'error')
+        .mockImplementation(() => {});
+
+      await serveHlsPlaylist(req, res, '/path/to/video.mp4');
+
+      expect(res.status).toHaveBeenCalledWith(503);
+      expect(res.set).toHaveBeenCalledWith('Retry-After', '10');
+      expect(res.send).toHaveBeenCalledWith(
+        'Server too busy. Please try again later.',
+      );
+      expect(consoleSpy).not.toHaveBeenCalled();
+      consoleSpy.mockRestore();
+    });
+
+    it('does not answer twice when the busy error comes after headers were sent', async () => {
+      mockValidateFileAccess.mockResolvedValue({
+        success: true,
+        path: '/resolved/video.mp4',
+      });
+      mockHandleAccessCheck.mockReturnValue(false);
+      res.headersSent = true;
+      // @ts-expect-error - Mocking static method
+      HlsManager.getInstance.mockReturnValue({
+        ensureSession: vi.fn().mockRejectedValue({ code: 'HLS_BUSY' }),
+        acquireSession: vi.fn(),
+        releaseSession: vi.fn(),
+      });
+
+      await serveHlsPlaylist(req, res, '/path/to/video.mp4');
+
+      expect(res.status).not.toHaveBeenCalled();
+    });
+
+    it('releases a consumer acquired after the client already gave up (F112)', async () => {
+      mockValidateFileAccess.mockResolvedValue({
+        success: true,
+        path: '/resolved/video.mp4',
+      });
+      mockHandleAccessCheck.mockReturnValue(false);
+      let onClose!: () => void;
+      res.on = vi.fn((event: string, cb: () => void) => {
+        if (event === 'close') onClose = cb;
+      });
+      const mockHlsManager = {
+        // The client aborts while ffmpeg is still starting
+        ensureSession: vi.fn(async () => {
+          onClose();
+          return '/tmp/hls/mock-session-id/playlist.m3u8';
+        }),
+        getSessionDir: vi.fn().mockReturnValue('/tmp/hls/mock-session-id'),
+        touchSession: vi.fn(),
+        acquireSession: vi.fn(),
+        releaseSession: vi.fn(),
+      };
+      // @ts-expect-error - Mocking static method
+      HlsManager.getInstance.mockReturnValue(mockHlsManager);
+
+      await serveHlsPlaylist(req, res, '/path/to/video.mp4');
+
+      // Acquired and released exactly once, so the idle timer can run
+      expect(mockHlsManager.acquireSession).toHaveBeenCalledTimes(1);
+      expect(mockHlsManager.releaseSession).toHaveBeenCalledTimes(1);
+      expect(res.send).not.toHaveBeenCalled();
+      // A later 'close' does not release again
+      onClose();
+      expect(mockHlsManager.releaseSession).toHaveBeenCalledTimes(1);
+    });
+
+    it('releases the consumer when the response closes normally', async () => {
+      mockValidateFileAccess.mockResolvedValue({
+        success: true,
+        path: '/resolved/video.mp4',
+      });
+      mockHandleAccessCheck.mockReturnValue(false);
+      let onClose!: () => void;
+      res.on = vi.fn((event: string, cb: () => void) => {
+        if (event === 'close') onClose = cb;
+      });
+      const mockHlsManager = {
+        ensureSession: vi.fn().mockResolvedValue(undefined),
+        getSessionDir: vi.fn().mockReturnValue('/tmp/hls/mock-session-id'),
+        touchSession: vi.fn(),
+        acquireSession: vi.fn(),
+        releaseSession: vi.fn(),
+      };
+      // @ts-expect-error - Mocking static method
+      HlsManager.getInstance.mockReturnValue(mockHlsManager);
+      vi.mocked(fs.readFile).mockResolvedValue('#EXTM3U\nseg-000.ts');
+
+      await serveHlsPlaylist(req, res, '/path/to/video.mp4');
+      expect(mockHlsManager.releaseSession).not.toHaveBeenCalled();
+
+      onClose();
+      onClose();
+      expect(mockHlsManager.releaseSession).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('serveHlsSegment', () => {
@@ -205,6 +340,7 @@ describe('hls-handler', () => {
 
       expect(res.sendFile).toHaveBeenCalledWith(
         path.join('/tmp/hls/mock-session-id', 'seg-001.ts'),
+        { dotfiles: 'allow' },
         expect.any(Function),
       );
     });
@@ -285,7 +421,7 @@ describe('hls-handler', () => {
 
       // Mock res.sendFile to fail
       res.sendFile.mockImplementation(
-        (_path: string, cb: (err?: any) => void) => {
+        (_path: string, _options: unknown, cb: (err?: any) => void) => {
           if (cb) cb(new Error('File not found'));
         },
       );

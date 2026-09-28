@@ -15,6 +15,7 @@ import { useLibraryStore } from '../../../../src/renderer/composables/useLibrary
 import { usePlayerStore } from '../../../../src/renderer/composables/usePlayerStore';
 import { useUIStore } from '../../../../src/renderer/composables/useUIStore';
 import { useTheme } from '../../../../src/renderer/composables/useTheme';
+import { useToast } from '../../../../src/renderer/composables/useToast';
 
 // --- New Mocking Strategy ---
 import { api } from '../../../../src/renderer/api/index';
@@ -156,10 +157,12 @@ describe('AlbumsList.vue', () => {
   });
 
   it('calls startSlideshow then toggleSlideshowTimer when the global start button is clicked and no slideshow is active', async () => {
+    mocks.mockStartSlideshow.mockResolvedValue(true);
     const wrapper = mount(AlbumsList);
     await wrapper.vm.$nextTick();
     const startButton = wrapper.find('[data-testid="timer-button"]');
     await startButton.trigger('click');
+    await flushPromises();
     expect(mocks.mockStartSlideshow).toHaveBeenCalled();
     expect(mocks.mockToggleSlideshowTimer).toHaveBeenCalled();
   });
@@ -182,11 +185,13 @@ describe('AlbumsList.vue', () => {
   });
 
   it('handles the albumClick event from AlbumTree', async () => {
+    mocks.mockStartIndividualAlbumSlideshow.mockResolvedValue(true);
+    useToast().toasts.value = [];
     const wrapper = mount(AlbumsList);
     const albumTree = wrapper.findComponent({ name: 'AlbumTree' });
 
     albumTree.vm.$emit('albumClick', defaultMockAlbums[0]);
-    await wrapper.vm.$nextTick();
+    await flushPromises();
 
     expect(mocks.mockStartIndividualAlbumSlideshow).toHaveBeenCalled();
     const expectedTextures = collectTexturesRecursive(defaultMockAlbums[0]);
@@ -196,6 +201,49 @@ describe('AlbumsList.vue', () => {
         textures: expectedTextures,
       }),
     );
+    expect(useToast().toasts.value).toHaveLength(0);
+  });
+
+  it('leaves the current session alone and says why when an album click plays nothing', async () => {
+    // A Recently Played session is running and the filter excludes every
+    // item of the clicked album.
+    mocks.mockStartIndividualAlbumSlideshow.mockResolvedValue(false);
+    useUIStore().isHistoryMode = true;
+    useUIStore().mediaFilter = 'Videos';
+    useToast().toasts.value = [];
+    const wrapper = mount(AlbumsList);
+    const albumTree = wrapper.findComponent({ name: 'AlbumTree' });
+
+    albumTree.vm.$emit('albumClick', defaultMockAlbums[0]);
+    await flushPromises();
+
+    expect(mocks.mockStartIndividualAlbumSlideshow).toHaveBeenCalled();
+    // The history session keeps not recording views.
+    expect(useUIStore().isHistoryMode).toBe(true);
+    expect(useToast().toasts.value.at(-1)).toMatchObject({
+      type: 'info',
+      message: 'No items in this album match the current media filter.',
+    });
+  });
+
+  it('says the album is empty when it has no media at all', async () => {
+    mocks.mockStartIndividualAlbumSlideshow.mockResolvedValue(false);
+    useToast().toasts.value = [];
+    const wrapper = mount(AlbumsList);
+    const albumTree = wrapper.findComponent({ name: 'AlbumTree' });
+
+    albumTree.vm.$emit('albumClick', {
+      id: 'Empty',
+      name: 'Empty',
+      textures: [],
+      children: [],
+    });
+    await flushPromises();
+
+    expect(useToast().toasts.value.at(-1)).toMatchObject({
+      type: 'info',
+      message: 'This album has no media.',
+    });
   });
 
   it('selects all children when a partially selected parent is toggled', async () => {
@@ -243,9 +291,11 @@ describe('AlbumsList.vue', () => {
   });
 
   it('toggles slideshow timer when timer button is clicked', async () => {
+    mocks.mockStartSlideshow.mockResolvedValue(true);
     const wrapper = mount(AlbumsList);
     const timerButton = wrapper.find('.timer-button');
     await timerButton.trigger('click');
+    await flushPromises();
     expect(mocks.mockToggleSlideshowTimer).toHaveBeenCalled();
   });
 
@@ -320,6 +370,8 @@ describe('AlbumsList.vue', () => {
       expect(useUIStore().gridMediaFiles).toHaveLength(1);
       expect(useUIStore().gridMediaFiles[0].path).toBe('/file1.jpg');
       expect(useUIStore().viewMode).toBe('grid');
+      // The hidden player must not keep advancing behind the grid.
+      expect(usePlayerStore().stopSlideshow).toHaveBeenCalled();
     });
 
     it('deletes playlist upon confirmation', async () => {
@@ -367,13 +419,17 @@ describe('AlbumsList.vue', () => {
       );
 
       useLibraryStore().historyMedia = [{ path: '/history.jpg' }] as any;
+      (useLibraryStore().fetchHistory as Mock).mockResolvedValue(true);
 
       await historyItem.trigger('click');
-      await wrapper.vm.$nextTick();
+      await flushPromises();
 
       expect(useLibraryStore().fetchHistory).toHaveBeenCalledWith(100);
       expect(useUIStore().gridMediaFiles).toHaveLength(1);
       expect(useUIStore().viewMode).toBe('grid');
+      expect(useUIStore().isHistoryMode).toBe(true);
+      // The hidden player must not keep advancing behind the grid.
+      expect(usePlayerStore().stopSlideshow).toHaveBeenCalled();
     });
 
     it('handles history slideshow click', async () => {
@@ -383,9 +439,10 @@ describe('AlbumsList.vue', () => {
       );
 
       useLibraryStore().historyMedia = [{ path: '/history.jpg' }] as any;
+      (useLibraryStore().fetchHistory as Mock).mockResolvedValue(true);
 
       await historyBtn.trigger('click');
-      await wrapper.vm.$nextTick();
+      await flushPromises();
 
       expect(useLibraryStore().fetchHistory).toHaveBeenCalledWith(100);
       expect(mocks.mockStartHistorySlideshow).toHaveBeenCalledWith([
@@ -393,23 +450,43 @@ describe('AlbumsList.vue', () => {
       ]);
     });
 
-    it('logs error if no history found', async () => {
-      const consoleSpy = vi
-        .spyOn(console, 'error')
-        .mockImplementation(() => {});
+    it('tells the user when there is no history yet', async () => {
       const wrapper = mount(AlbumsList);
       const historyBtn = wrapper.find(
         'button[aria-label="Recently Played Slideshow"]',
       );
 
       useLibraryStore().historyMedia = [];
+      (useLibraryStore().fetchHistory as Mock).mockResolvedValue(true);
 
       await historyBtn.trigger('click');
+      await flushPromises();
 
-      expect(consoleSpy).toHaveBeenCalledWith(
-        'Error starting history slideshow',
-        expect.any(Error),
+      expect(mocks.mockStartHistorySlideshow).not.toHaveBeenCalled();
+      expect(useToast().toasts.value.at(-1)).toMatchObject({
+        type: 'info',
+        message: expect.stringContaining('Nothing played yet'),
+      });
+    });
+
+    it('does not replay stale history when loading it fails', async () => {
+      const wrapper = mount(AlbumsList);
+      const historyBtn = wrapper.find(
+        'button[aria-label="Recently Played Slideshow"]',
       );
+
+      // Left over from an earlier, successful load.
+      useLibraryStore().historyMedia = [{ path: '/stale.jpg' }] as any;
+      (useLibraryStore().fetchHistory as Mock).mockResolvedValue(false);
+
+      await historyBtn.trigger('click');
+      await flushPromises();
+
+      expect(mocks.mockStartHistorySlideshow).not.toHaveBeenCalled();
+      expect(useToast().toasts.value.at(-1)).toMatchObject({
+        type: 'error',
+        message: 'Failed to load Recently Played.',
+      });
     });
   });
 

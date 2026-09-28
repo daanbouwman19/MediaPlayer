@@ -3,6 +3,7 @@ import {
   it,
   expect,
   afterEach,
+  afterAll,
   vi,
   beforeEach,
   Mock,
@@ -11,11 +12,14 @@ import http from 'http';
 import fs from 'fs';
 import path from 'path';
 import EventEmitter from 'events';
+import os from 'os';
 import {
   startLocalServer,
   stopLocalServer,
   getServerPort,
   getMimeType,
+  getServerAccessToken,
+  ACCESS_TOKEN_HEADER,
 } from '../../src/main/local-server';
 import { clearAuthCache } from '../../src/core/auth/security';
 import { createTestMediaService } from '../utils/test-factory';
@@ -29,13 +33,19 @@ vi.mock('../../src/core/database/database', () => ({
 
 import { getMediaDirectories } from '../../src/core/database/database';
 
-// Helper to promisify callback-based functions
-const startServer = () => {
+// Serve from an OS temp dir: Express refuses files below dot-directories,
+// which a checkout path such as .../.claude/worktrees/... contains.
+const testRoot = fs.realpathSync(
+  fs.mkdtempSync(path.join(os.tmpdir(), 'mediaplayer-local-server-')),
+);
+
+const startServer = async () => {
   const { service } = createTestMediaService();
-  return new Promise<void>((resolve) => {
-    void startLocalServer('/tmp', service, () => resolve());
-  });
+  await startLocalServer('/tmp', service);
 };
+
+// The renderer's session adds this header to every request (F69).
+const auth = { [ACCESS_TOKEN_HEADER]: getServerAccessToken() };
 
 const stopServer = () =>
   new Promise<void>((resolve) => {
@@ -43,12 +53,15 @@ const stopServer = () =>
   });
 
 describe('Local Server', () => {
+  afterAll(() => {
+    fs.rmSync(testRoot, { recursive: true, force: true });
+  });
+
   beforeEach(() => {
     clearAuthCache();
-    // Mock getMediaDirectories to return the process's current working directory
-    // This allows tests to serve files from the test environment
+    // Serve files from the temporary test root
     (getMediaDirectories as unknown as Mock).mockResolvedValue([
-      { path: process.cwd() },
+      { path: testRoot },
     ]);
   });
 
@@ -99,34 +112,30 @@ describe('Local Server', () => {
       expect(port1).toBe(port2);
     });
 
-    it('should ignore start request if server is already running (callback)', async () => {
+    it('should ignore start request if server is already running', async () => {
       const { service } = createTestMediaService();
-      await new Promise<void>((resolve) => {
-        void startLocalServer('/tmp', service, () => {
-          const originalPort = getServerPort();
-          const consoleSpy = vi
-            .spyOn(console, 'warn')
-            .mockImplementation(() => {});
+      const originalPort = await startLocalServer('/tmp', service);
+      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-          void startLocalServer('/tmp', service, () => {
-            expect(getServerPort()).toBe(originalPort);
-            expect(consoleSpy).toHaveBeenCalledWith(
-              expect.stringContaining('Server already started'),
-            );
-            consoleSpy.mockRestore();
-            resolve();
-          });
-        });
-      });
+      await expect(startLocalServer('/tmp', service)).resolves.toBe(
+        originalPort,
+      );
+      expect(getServerPort()).toBe(originalPort);
+      expect(consoleSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Server already started'),
+      );
+      consoleSpy.mockRestore();
     });
 
-    it('should handle start without callback when running', async () => {
-      await startServer();
-      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    it('resolves a start request made while starting with the same port', async () => {
       const { service } = createTestMediaService();
-      void startLocalServer('/tmp', service); // No callback
-      expect(consoleSpy).toHaveBeenCalled();
-      consoleSpy.mockRestore();
+      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const [first, second] = await Promise.all([
+        startLocalServer('/tmp', service),
+        startLocalServer('/tmp', service),
+      ]);
+      expect(first).toBeGreaterThan(0);
+      expect(second).toBe(first);
     });
   });
 
@@ -189,7 +198,7 @@ describe('Local Server', () => {
 
     it('should serve a file successfully', async () => {
       // Create a test file
-      const testDir = path.join(process.cwd(), 'tests', 'temp');
+      const testDir = path.join(testRoot, 'tests', 'temp');
       if (!fs.existsSync(testDir)) {
         fs.mkdirSync(testDir, { recursive: true });
       }
@@ -205,6 +214,7 @@ describe('Local Server', () => {
       const response: any = await new Promise((resolve, reject) => {
         const req = http.get(
           `http://127.0.0.1:${port}/${encodeURIComponent(testFilePath)}`,
+          { headers: auth },
           (res) => {
             let data = '';
             res.on('data', (chunk) => (data += chunk));
@@ -232,6 +242,7 @@ describe('Local Server', () => {
       const response: any = await new Promise((resolve, reject) => {
         const req = http.get(
           `http://127.0.0.1:${port}/nonexistent-file.txt`,
+          { headers: auth },
           (res) => {
             let data = '';
             res.on('data', (chunk) => (data += chunk));
@@ -248,7 +259,7 @@ describe('Local Server', () => {
 
     it('should handle range requests', async () => {
       // Create a test file
-      const testDir = path.join(process.cwd(), 'tests', 'temp');
+      const testDir = path.join(testRoot, 'tests', 'temp');
       if (!fs.existsSync(testDir)) {
         fs.mkdirSync(testDir, { recursive: true });
       }
@@ -266,7 +277,7 @@ describe('Local Server', () => {
           hostname: '127.0.0.1',
           port,
           path: `/${encodeURIComponent(testFilePath)}`,
-          headers: { Range: 'bytes=0-9' },
+          headers: { ...auth, Range: 'bytes=0-9' },
         };
 
         const req = http.get(options, (res) => {
@@ -286,7 +297,7 @@ describe('Local Server', () => {
 
     it('should return 416 for invalid range', async () => {
       // Create a test file
-      const testDir = path.join(process.cwd(), 'tests', 'temp');
+      const testDir = path.join(testRoot, 'tests', 'temp');
       if (!fs.existsSync(testDir)) {
         fs.mkdirSync(testDir, { recursive: true });
       }
@@ -303,7 +314,7 @@ describe('Local Server', () => {
           hostname: '127.0.0.1',
           port,
           path: `/${encodeURIComponent(testFilePath)}`,
-          headers: { Range: 'bytes=1000-2000' },
+          headers: { ...auth, Range: 'bytes=1000-2000' },
         };
 
         const req = http.get(options, (res) => {
@@ -320,7 +331,7 @@ describe('Local Server', () => {
 
     it('should serve video files with correct MIME type', async () => {
       // Create a test video file
-      const testDir = path.join(process.cwd(), 'tests', 'temp');
+      const testDir = path.join(testRoot, 'tests', 'temp');
       if (!fs.existsSync(testDir)) {
         fs.mkdirSync(testDir, { recursive: true });
       }
@@ -333,6 +344,7 @@ describe('Local Server', () => {
       const response: any = await new Promise((resolve, reject) => {
         const req = http.get(
           `http://127.0.0.1:${port}/${encodeURIComponent(testFilePath)}`,
+          { headers: auth },
           (res) => {
             let data = '';
             res.on('data', (chunk) => (data += chunk));
@@ -362,13 +374,13 @@ describe('Local Server', () => {
 
     it('should return 403 for files outside allowed directories', async () => {
       // Mock getMediaDirectories to return a specific directory
-      const allowedDir = path.join(process.cwd(), 'tests', 'temp');
+      const allowedDir = path.join(testRoot, 'tests', 'temp');
       (getMediaDirectories as unknown as Mock).mockResolvedValue([
         { path: allowedDir },
       ]);
 
       // Create a file outside the allowed directory
-      const outsideDir = path.join(process.cwd(), 'tests', 'forbidden');
+      const outsideDir = path.join(testRoot, 'tests', 'forbidden');
       if (!fs.existsSync(outsideDir)) {
         fs.mkdirSync(outsideDir, { recursive: true });
       }
@@ -381,6 +393,7 @@ describe('Local Server', () => {
       const response: any = await new Promise((resolve, reject) => {
         const req = http.get(
           `http://127.0.0.1:${port}/${encodeURIComponent(testFilePath)}`,
+          { headers: auth },
           (res) => {
             let data = '';
             res.on('data', (chunk) => (data += chunk));
@@ -405,7 +418,7 @@ describe('Local Server', () => {
         new Error('Database error'),
       );
 
-      const testDir = path.join(process.cwd(), 'tests', 'temp');
+      const testDir = path.join(testRoot, 'tests', 'temp');
       if (!fs.existsSync(testDir)) {
         fs.mkdirSync(testDir, { recursive: true });
       }
@@ -418,6 +431,7 @@ describe('Local Server', () => {
       const response: any = await new Promise((resolve, reject) => {
         const req = http.get(
           `http://127.0.0.1:${port}/${encodeURIComponent(testFilePath)}`,
+          { headers: auth },
           (res) => {
             let data = '';
             res.on('data', (chunk) => (data += chunk));
@@ -432,7 +446,7 @@ describe('Local Server', () => {
 
       // Restore mock for subsequent tests
       (getMediaDirectories as unknown as Mock).mockResolvedValue([
-        { path: process.cwd() },
+        { path: testRoot },
       ]);
     });
   });
@@ -507,9 +521,7 @@ describe('Local Server', () => {
       vi.spyOn(http, 'createServer').mockReturnValue(mockServer);
 
       const { service } = createTestMediaService();
-      await new Promise<void>((resolve) => {
-        void startLocalServer('/tmp', service, () => resolve());
-      });
+      await startLocalServer('/tmp', service);
       await stopServer();
 
       expect(consoleErrorSpy).toHaveBeenCalledWith(

@@ -88,11 +88,22 @@ export const useLibraryStore = defineStore('library', () => {
     albumsSelectedForSlideshow.value = newSelection;
   };
 
-  const fetchHistory = async (limit = 50) => {
+  /**
+   * Loads the Recently Played list into `historyMedia`.
+   * @returns Whether it loaded. On failure `historyMedia` keeps its previous
+   *   (possibly stale) contents, so callers must not use it.
+   */
+  const fetchHistory = async (limit = 50): Promise<boolean> => {
     try {
       const items = await api.getRecentlyPlayed(limit);
+      const knownFiles = allMediaFilesMap.value;
       historyMedia.value = items.map((item) => {
-        const name = item.file_path.split(/[/\\]/).pop() || item.file_path;
+        // Prefer the scanned name: a Drive path (gdrive://<id>) has no file
+        // name in it, and the renderer tells images from videos by extension.
+        const name =
+          knownFiles.get(item.file_path)?.name ||
+          item.file_path.split(/[/\\]/).pop() ||
+          item.file_path;
         return {
           name,
           path: item.file_path,
@@ -105,8 +116,10 @@ export const useLibraryStore = defineStore('library', () => {
           playbackPosition: item.playback_position || 0,
         };
       });
+      return true;
     } catch (e) {
       console.error('Failed to fetch history:', e);
+      return false;
     }
   };
 

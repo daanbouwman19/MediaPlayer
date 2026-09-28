@@ -15,7 +15,7 @@ import '../../src/core/database/database-worker';
 import {
   initDatabase,
   closeDatabase,
-  upsertMetadata,
+  bulkUpsertMetadata,
   executeSmartPlaylist,
 } from '../../src/core/database/database-worker';
 
@@ -32,13 +32,19 @@ describe('executeSmartPlaylist - playback_position regression', () => {
 
   beforeEach(async () => {
     initDatabase(':memory:');
-    // A file that satisfies minRating:1 and carries a saved playback position.
-    await upsertMetadata({
-      filePath: ratedPath,
-      duration: 120,
-      rating: 3,
-      playbackPosition: RATED_POSITION,
-    });
+    // A library file that satisfies minRating:1 and carries a saved playback
+    // position (smart playlists only list library members).
+    await bulkUpsertMetadata(
+      [
+        {
+          filePath: ratedPath,
+          duration: 120,
+          rating: 3,
+          playbackPosition: RATED_POSITION,
+        },
+      ],
+      { markInLibrary: true },
+    );
   });
 
   afterEach(() => {

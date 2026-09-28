@@ -7,16 +7,27 @@ import {
   afterEach,
 } from 'vite-plus/test';
 import fs from 'fs';
+import os from 'os';
+import path from 'path';
 import crypto from 'crypto';
+
+// Key-file tests get their own directory, so a regenerated key or a backup
+// never lands in (or replaces) the working directory's master.key.
+let keyDir: string;
 
 // We need to reset modules to clear cachedKey
 beforeEach(() => {
   vi.resetModules();
   vi.unstubAllEnvs();
+  keyDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mp-enc-cov-'));
+  vi.stubEnv('MASTER_KEY', '');
+  vi.stubEnv('MASTER_KEY_DIR', keyDir);
 });
 
 afterEach(() => {
-  vi.clearAllMocks();
+  vi.restoreAllMocks();
+  vi.unstubAllEnvs();
+  fs.rmSync(keyDir, { recursive: true, force: true });
 });
 
 describe('Encryption Utils Coverage', () => {
@@ -40,11 +51,8 @@ describe('Encryption Utils Coverage', () => {
     const consoleWarnSpy = vi
       .spyOn(console, 'warn')
       .mockImplementation(() => {});
-    const writeSpy = vi.spyOn(fs, 'writeFileSync');
-
-    // Create a dummy file with invalid length
-    vi.spyOn(fs, 'existsSync').mockReturnValue(true);
-    vi.spyOn(fs, 'readFileSync').mockReturnValue('short-hex');
+    const keyPath = path.join(keyDir, 'master.key');
+    fs.writeFileSync(keyPath, 'short-hex');
 
     const { encrypt } = await import('../../src/core/auth/encryption');
     encrypt('test');
@@ -52,32 +60,39 @@ describe('Encryption Utils Coverage', () => {
     expect(consoleWarnSpy).toHaveBeenCalledWith(
       expect.stringContaining('Invalid key length'),
     );
-    // Should have generated a new key (check writeFileSync was called)
-    expect(writeSpy).toHaveBeenCalled();
+    // A new key was generated, and the unusable one kept as a backup.
+    expect(fs.readFileSync(keyPath, 'utf8')).toMatch(/^[0-9a-f]{64}$/);
+    const backups = fs
+      .readdirSync(keyDir)
+      .filter((f) => f.startsWith('master.key.invalid-'));
+    expect(backups).toHaveLength(1);
+    expect(fs.readFileSync(path.join(keyDir, backups[0]), 'utf8')).toBe(
+      'short-hex',
+    );
   });
 
-  it('should handle read error for master.key gracefully', async () => {
+  it('should not replace master.key when reading it fails', async () => {
     const consoleWarnSpy = vi
       .spyOn(console, 'warn')
       .mockImplementation(() => {});
-    const writeSpy = vi
-      .spyOn(fs, 'writeFileSync')
-      .mockImplementation(() => undefined);
+    const writeSpy = vi.spyOn(fs, 'writeFileSync');
 
-    vi.spyOn(fs, 'existsSync').mockReturnValue(true);
+    // e.g. an antivirus scanner briefly holding the file
     vi.spyOn(fs, 'readFileSync').mockImplementation(() => {
-      throw new Error('Read permission denied');
+      throw Object.assign(new Error('EBUSY: resource busy or locked'), {
+        code: 'EBUSY',
+      });
     });
 
     const { encrypt } = await import('../../src/core/auth/encryption');
-    encrypt('test');
+    expect(() => encrypt('test')).toThrow(/Failed to read encryption key/);
 
     expect(consoleWarnSpy).toHaveBeenCalledWith(
       expect.stringContaining('Failed to read'),
       expect.any(Error),
     );
-    // Should proceed to generate new key
-    expect(writeSpy).toHaveBeenCalled();
+    // The existing key must not be overwritten on a transient error.
+    expect(writeSpy).not.toHaveBeenCalled();
   });
 
   it('should throw if writing master.key fails', async () => {
@@ -85,7 +100,6 @@ describe('Encryption Utils Coverage', () => {
       .spyOn(console, 'error')
       .mockImplementation(() => {});
 
-    vi.spyOn(fs, 'existsSync').mockReturnValue(false);
     vi.spyOn(fs, 'writeFileSync').mockImplementation(() => {
       throw new Error('Write permission denied');
     });
@@ -128,15 +142,10 @@ describe('Encryption Utils Coverage', () => {
     const consoleWarnSpy = vi
       .spyOn(console, 'warn')
       .mockImplementation(() => {});
-    const writeSpy = vi
-      .spyOn(fs, 'writeFileSync')
-      .mockImplementation(() => undefined);
-
-    vi.spyOn(fs, 'existsSync').mockReturnValue(true);
-    // Mock reading the compromised key
-    vi.spyOn(fs, 'readFileSync').mockReturnValue(
-      '50c7a5ac267dc92161817ab092dcfc9dcd64ea5824d9b40b021c0f5e3f514563',
-    );
+    const compromisedKey =
+      '50c7a5ac267dc92161817ab092dcfc9dcd64ea5824d9b40b021c0f5e3f514563';
+    const keyPath = path.join(keyDir, 'master.key');
+    fs.writeFileSync(keyPath, compromisedKey);
 
     const { encrypt } = await import('../../src/core/auth/encryption');
     encrypt('test');
@@ -144,6 +153,22 @@ describe('Encryption Utils Coverage', () => {
     expect(consoleWarnSpy).toHaveBeenCalledWith(
       expect.stringContaining('Compromised master key detected'),
     );
-    expect(writeSpy).toHaveBeenCalled();
+    const newKey = fs.readFileSync(keyPath, 'utf8');
+    expect(newKey).toMatch(/^[0-9a-f]{64}$/);
+    expect(newKey).not.toBe(compromisedKey);
+    expect(
+      fs
+        .readdirSync(keyDir)
+        .some((f) => f.startsWith('master.key.compromised-')),
+    ).toBe(true);
+  });
+
+  it('should refuse a compromised MASTER_KEY from the environment', async () => {
+    vi.stubEnv(
+      'MASTER_KEY',
+      '50c7a5ac267dc92161817ab092dcfc9dcd64ea5824d9b40b021c0f5e3f514563',
+    );
+    const { encrypt } = await import('../../src/core/auth/encryption');
+    expect(() => encrypt('test')).toThrow(/known compromised key/);
   });
 });

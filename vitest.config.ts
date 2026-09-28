@@ -52,20 +52,23 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html', 'lcov'],
-      all: false,
+      // Every source file matched here is reported (and gated at 80% per
+      // file below), including files no test imports.
       include: [
         'src/main/**/*.{js,ts}',
         'src/renderer/**/*.{js,ts}',
         'src/renderer/**/*.vue',
         'src/core/**/*.{js,ts}',
         'src/server/**/*.{js,ts}',
+        'src/infrastructure/**/*.{js,ts}',
+        'src/shared/**/*.{js,ts}',
       ],
       exclude: [
         'src/main/main.ts',
         'src/preload/**',
         'src/renderer/renderer.ts',
         '**/*.{test,spec}.{js,ts}',
-        'src/renderer/components/icons/**',
+        'src/renderer/components/atoms/icons/**',
       ],
       reportsDirectory: './coverage',
       thresholds: {

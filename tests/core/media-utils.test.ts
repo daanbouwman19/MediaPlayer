@@ -15,6 +15,7 @@ import {
   normalizeFilePath,
 } from '../../src/core/media/media-utils';
 import path from 'path';
+import crypto from 'crypto';
 
 describe('media-utils unit tests', () => {
   beforeEach(() => {
@@ -51,10 +52,27 @@ describe('media-utils unit tests', () => {
       const result = getThumbnailCachePath(filePath, cacheDir);
 
       // Match path ending with /cache/<hash>.jpg, allowing either / or \ separator
-      expect(result).toMatch(/[\\/]cache[\\/][a-f0-9]+\.jpg$/);
+      expect(result).toMatch(/[\\/]cache[\\/][a-f0-9]{64}\.jpg$/);
+      expect(path.basename(result, '.jpg')).toBe(
+        crypto.createHash('sha256').update(filePath).digest('hex'),
+      );
 
       // Verify validation logic works with platform specific check
       expect(result.startsWith(path.join(cacheDir))).toBe(true);
+    });
+
+    it('getThumbnailCachePath gives each file version its own entry', () => {
+      const legacy = getThumbnailCachePath('/v/Trip.mp4', '/cache');
+      const v1 = getThumbnailCachePath('/v/Trip.mp4', '/cache', '10-1000');
+      const v2 = getThumbnailCachePath('/v/Trip.mp4', '/cache', '12-2000');
+
+      expect(v1).not.toBe(v2);
+      expect(v1).not.toBe(legacy);
+      expect(getThumbnailCachePath('/v/Trip.mp4', '/cache', '10-1000')).toBe(
+        v1,
+      );
+      // Without an identity the legacy path-only key is kept.
+      expect(getThumbnailCachePath('/v/Trip.mp4', '/cache', null)).toBe(legacy);
     });
   });
 

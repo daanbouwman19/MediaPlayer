@@ -19,11 +19,12 @@ import {
   MAX_PATH_LENGTH,
 } from '../../src/core/media/constants';
 import fs from 'fs/promises';
+import { AppError } from '../../src/core/media/errors';
 import {
-  getDriveClient,
+  getDriveFolderInfo,
   listDriveDirectory,
   getDriveParent,
-} from '../../src/main/google-drive-service';
+} from '../../src/infrastructure/google-drive-service';
 
 // --- Global Mocks ---
 
@@ -105,7 +106,7 @@ vi.mock('fs', () => {
 // Mock core modules
 vi.mock('../../src/core/database/database');
 vi.mock('../../src/core/media/file-system');
-vi.mock('../../src/main/drive-cache-manager');
+vi.mock('../../src/infrastructure/drive-cache-manager');
 vi.mock('../../src/core/media/utils/mime-types');
 
 // Mock security
@@ -174,14 +175,14 @@ vi.mock('../../src/core/media/media-handler', () => ({
 }));
 
 // Mock google-auth
-vi.mock('../../src/main/google-auth', () => ({
+vi.mock('../../src/infrastructure/google-auth', () => ({
   generateAuthUrl: vi.fn(),
   authenticateWithCode: vi.fn(),
 }));
 
 // Mock google-drive-service
-vi.mock('../../src/main/google-drive-service', () => ({
-  getDriveClient: vi.fn(),
+vi.mock('../../src/infrastructure/google-drive-service', () => ({
+  getDriveFolderInfo: vi.fn(),
   listDriveDirectory: vi.fn(),
   getDriveParent: vi.fn(),
 }));
@@ -353,7 +354,9 @@ describe('Server Combined Tests', () => {
     describe('POST /api/directories', () => {
       it('should add a directory', async () => {
         const dirPath = '/new/dir';
-        vi.mocked(fs.realpath).mockResolvedValue(dirPath);
+        vi.mocked(fileSystem.resolveMediaSourceDirectory).mockResolvedValue(
+          dirPath,
+        );
         const response = await request(app)
           .post('/api/directories')
           .send({ path: dirPath });
@@ -651,6 +654,13 @@ describe('Server Combined Tests', () => {
       const response = await request(app).get('/api/config/extensions');
       expect(response.headers['content-security-policy']).toBeDefined();
     });
+
+    it('allows blob: workers for the hls.js transmuxer', async () => {
+      const response = await request(app).get('/api/config/extensions');
+      expect(response.headers['content-security-policy']).toContain(
+        "worker-src 'self' blob:",
+      );
+    });
   });
 
   // --- Additional Coverage (Routes) ---
@@ -714,13 +724,10 @@ describe('Server Combined Tests', () => {
   // --- Drive Routes ---
   describe('Drive Routes', () => {
     beforeEach(() => {
-      vi.mocked(getDriveClient).mockResolvedValue({
-        files: {
-          get: vi
-            .fn()
-            .mockResolvedValue({ data: { id: 'f1', name: 'Folder' } }),
-        },
-      } as any);
+      vi.mocked(getDriveFolderInfo).mockResolvedValue({
+        id: 'f1',
+        name: 'Folder',
+      });
       vi.mocked(listDriveDirectory).mockResolvedValue([]);
       vi.mocked(getDriveParent).mockResolvedValue('parent-id');
     });
@@ -731,7 +738,26 @@ describe('Server Combined Tests', () => {
         .send({ folderId: 'xyz' });
       expect(res.status).toBe(200);
       expect(res.body).toEqual({ success: true, name: 'Folder' });
-      expect(database.addMediaDirectory).toHaveBeenCalledWith('gdrive://f1');
+      expect(getDriveFolderInfo).toHaveBeenCalledWith('xyz');
+      // Stored as a named Drive source, as in Electron mode, not as 'local'
+      // with the folder ID for a name.
+      expect(database.addMediaDirectory).toHaveBeenCalledWith({
+        path: 'gdrive://f1',
+        type: 'google_drive',
+        name: 'Folder',
+      });
+    });
+
+    it('POST /api/sources/google-drive rejects IDs that are not folders', async () => {
+      vi.mocked(getDriveFolderInfo).mockRejectedValue(
+        new AppError(400, 'Not a Google Drive folder'),
+      );
+      const res = await request(app)
+        .post('/api/sources/google-drive')
+        .send({ folderId: 'file-id' });
+      expect(res.status).toBe(400);
+      expect(res.body).toEqual({ error: 'Not a Google Drive folder' });
+      expect(database.addMediaDirectory).not.toHaveBeenCalled();
     });
 
     it('GET /api/drive/files should list files', async () => {
@@ -778,13 +804,16 @@ describe('Server Combined Tests', () => {
     });
 
     it('POST /api/media/metadata should upsert metadata', async () => {
-      const payload = { filePath: '/file.mp4', metadata: { title: 'T' } };
+      // Unknown fields (including a filePath override) are dropped.
+      const payload = {
+        filePath: '/file.mp4',
+        metadata: { title: 'T', rating: 4, filePath: 'gdrive://other' },
+      };
       const res = await request(app).post('/api/media/metadata').send(payload);
       expect(res.status).toBe(200);
-      expect(database.upsertMetadata).toHaveBeenCalledWith(
-        payload.filePath,
-        payload.metadata,
-      );
+      expect(database.upsertMetadata).toHaveBeenCalledWith(payload.filePath, {
+        rating: 4,
+      });
     });
 
     it('POST /api/media/metadata/batch should return metadata', async () => {

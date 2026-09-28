@@ -14,10 +14,12 @@ const mockElectron = vi.hoisted(() => ({
     getAppPath: vi.fn().mockReturnValue('/app/asar'),
     isPackaged: false,
   },
+  dialog: { showErrorBox: vi.fn() },
 }));
 
 vi.mock('electron', () => ({
   app: mockElectron.app,
+  dialog: mockElectron.dialog,
 }));
 
 // Mock core database to intercept calls and avoid side effects
@@ -56,6 +58,8 @@ describe('Main Process Database Initialization Paths', () => {
     expect(initCore).toHaveBeenCalledWith(
       expect.stringContaining('media_slideshow_stats.sqlite'),
       expect.stringMatching(/database-worker\.js$/),
+      undefined,
+      { onUnavailable: expect.any(Function) },
     );
   });
 
@@ -78,6 +82,8 @@ describe('Main Process Database Initialization Paths', () => {
     expect(initCore).toHaveBeenCalledWith(
       expect.stringContaining('media_slideshow_stats.sqlite'),
       expect.any(URL),
+      undefined,
+      { onUnavailable: expect.any(Function) },
     );
   });
 
@@ -100,6 +106,23 @@ describe('Main Process Database Initialization Paths', () => {
     expect(initCore).toHaveBeenCalledWith(
       expect.stringContaining('media_slideshow_stats.sqlite'),
       expect.stringContaining('database-worker.ts'),
+      undefined,
+      { onUnavailable: expect.any(Function) },
+    );
+  });
+
+  it('tells the user when the database worker cannot be restarted (F88)', async () => {
+    const { initDatabase } = await import('../../src/main/database');
+    const { initDatabase: initCore } =
+      await import('../../src/core/database/database');
+
+    await initDatabase();
+    const options = vi.mocked(initCore).mock.calls[0]?.[3];
+    options?.onUnavailable?.(new Error('database.js is unavailable: corrupt'));
+
+    expect(mockElectron.dialog.showErrorBox).toHaveBeenCalledWith(
+      'Media library unavailable',
+      expect.stringContaining('database.js is unavailable: corrupt'),
     );
   });
 });

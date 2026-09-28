@@ -36,6 +36,7 @@ vi.mock('../../../src/core/media/media-source');
 const mockLimiters = {
   readLimiter: (_req: any, _res: any, next: any) => next(),
   writeLimiter: (_req: any, _res: any, next: any) => next(),
+  telemetryLimiter: (_req: any, _res: any, next: any) => next(),
   fileLimiter: (_req: any, _res: any, next: any) => next(),
   streamLimiter: (_req: any, _res: any, next: any) => next(),
 };
@@ -279,6 +280,39 @@ describe('Media Routes Coverage', () => {
         .send({ paths: ['/a.mp4', '/b.mp4'] });
       expect(res.status).toBe(204);
       expect(mockQueueManager.enqueue).toHaveBeenCalledTimes(2);
+    });
+
+    it('POST /api/transcode/jobs queues the resolved path (F25)', async () => {
+      vi.mocked(security.authorizeFilePath).mockResolvedValue({
+        isAllowed: true,
+        realPath: '/real/a.mp4',
+      } as any);
+      const res = await request(app)
+        .post('/api/transcode/jobs')
+        .send({ paths: ['/link/a.mp4'] });
+      expect(res.status).toBe(204);
+      // Playback derives the HLS session id from the resolved path
+      expect(mockQueueManager.enqueue).toHaveBeenCalledWith('/real/a.mp4');
+    });
+
+    it('DELETE /api/transcode/jobs cancels the resolved path and removes legacy rows', async () => {
+      vi.mocked(security.authorizeFilePath).mockResolvedValue({
+        isAllowed: true,
+        realPath: '/real/a.mp4',
+      } as any);
+      const { deleteTranscodeJob } =
+        await import('../../../src/core/database/database');
+      vi.mocked(deleteTranscodeJob).mockClear();
+      mockQueueManager.cancel.mockClear();
+      const res = await request(app)
+        .delete('/api/transcode/jobs')
+        .send({ path: '/link/a.mp4' });
+      expect(res.status).toBe(204);
+      expect(mockQueueManager.cancel).toHaveBeenCalledWith('/real/a.mp4');
+      // A legacy job is queued and resumed under the unresolved path
+      expect(mockQueueManager.cancel).toHaveBeenCalledWith('/link/a.mp4');
+      expect(deleteTranscodeJob).toHaveBeenCalledWith('/real/a.mp4');
+      expect(deleteTranscodeJob).toHaveBeenCalledWith('/link/a.mp4');
     });
 
     it('POST /api/transcode/jobs returns 400 for missing paths', async () => {

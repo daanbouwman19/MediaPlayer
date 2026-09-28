@@ -2,7 +2,7 @@
   <div class="mb-4">
     <div class="flex items-center justify-between px-3 mb-2">
       <button
-        class="flex items-center gap-1.5 text-xs font-bold text-muted uppercase tracking-wider focus:outline-none hover:text-accent cursor-pointer"
+        class="flex items-center gap-1.5 text-xs font-bold text-muted uppercase tracking-wider rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-accent hover:text-accent cursor-pointer"
         aria-label="Toggle Queue Panel"
         @click="isOpen = !isOpen"
       >
@@ -16,7 +16,7 @@
 
       <button
         v-if="queue.length > 0"
-        class="text-xs text-muted hover:text-red-400 font-semibold focus:outline-none cursor-pointer"
+        class="text-xs text-muted hover:text-red-400 font-semibold rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-accent cursor-pointer"
         title="Clear entire queue"
         @click="clearPlaylist"
       >
@@ -29,7 +29,7 @@
         <ul class="space-y-1 px-1">
           <li
             v-for="(item, index) in displayedQueue"
-            :key="item.path + '-' + index"
+            :key="entryKeys[index]"
             class="group relative flex items-center justify-between px-3 py-2 rounded-lg bg-white/5 border border-white/5 cursor-grab active:cursor-grabbing hover:bg-white/10 hover:border-white/10 transition-all select-none"
             :class="{
               'opacity-50 border-dashed border-accent': draggedIndex === index,
@@ -43,11 +43,11 @@
                 draggedIndex < index,
             }"
             draggable="true"
-            @dragstart="handleDragStart($event, index)"
-            @dragover.prevent="handleDragOver(index)"
-            @dragenter.prevent="handleDragEnter(index)"
-            @dragleave="handleDragLeave(index)"
-            @drop="handleDrop($event, index)"
+            @dragstart="handleDragStart($event, item, index)"
+            @dragover.prevent="handleDragOver(item)"
+            @dragenter.prevent="handleDragEnter(item)"
+            @dragleave="handleDragLeave(item)"
+            @drop="handleDrop($event, item)"
             @dragend="handleDragEnd"
           >
             <!-- Left side: Drag handle + Thumbnail/Play indicator + Track info -->
@@ -71,9 +71,9 @@
 
               <!-- Play button / thumbnail -->
               <button
-                class="flex items-center gap-1.5 truncate text-sm text-color group-hover:text-accent text-left focus:outline-none cursor-pointer min-w-0 font-medium"
+                class="flex items-center gap-1.5 truncate text-sm text-color group-hover:text-accent text-left rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent cursor-pointer min-w-0 font-medium"
                 :aria-label="'Play track ' + item.name"
-                @click="playTrack(item, index)"
+                @click="playTrack(item)"
               >
                 <span class="truncate">{{ item.name }}</span>
               </button>
@@ -81,10 +81,10 @@
 
             <!-- Right side: Remove single item button -->
             <button
-              class="opacity-0 group-hover:opacity-100 focus:opacity-100 text-muted hover:text-red-400 p-0.5 rounded transition-opacity focus:outline-none cursor-pointer"
+              class="opacity-0 group-hover:opacity-100 focus:opacity-100 text-muted hover:text-red-400 p-0.5 rounded transition-opacity focus:outline-none focus-visible:ring-2 focus-visible:ring-accent cursor-pointer"
               title="Remove from queue"
               :aria-label="'Remove ' + item.name + ' from queue'"
-              @click.stop="removeFromQueue(index)"
+              @click.stop="removeFromQueue(item)"
             >
               <DeleteIcon class="w-3.5 h-3.5" />
             </button>
@@ -101,14 +101,14 @@
           </span>
           <div class="flex gap-2">
             <button
-              class="text-[11px] text-accent hover:underline font-bold focus:outline-none cursor-pointer"
+              class="text-[11px] text-accent hover:underline font-bold rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-accent cursor-pointer"
               @click="displayLimit += 100"
             >
               Show 100 more
             </button>
             <span class="text-muted text-[11px] select-none">|</span>
             <button
-              class="text-[11px] text-accent hover:underline font-bold focus:outline-none cursor-pointer"
+              class="text-[11px] text-accent hover:underline font-bold rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-accent cursor-pointer"
               @click="displayLimit = queue.length"
             >
               Show all
@@ -124,65 +124,94 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, shallowRef, computed, toRaw } from 'vue';
 import { storeToRefs } from 'pinia';
 import { usePlaylistStore } from '@/composables/usePlaylistStore';
+import { useSlideshow } from '@/composables/useSlideshow';
 import ArrowUpIcon from '@/components/atoms/icons/ArrowUpIcon.vue';
 import ListIcon from '@/components/atoms/icons/ListIcon.vue';
 import DeleteIcon from '@/components/atoms/icons/DeleteIcon.vue';
 import type { MediaFile } from '../../../../core/media/types';
 
 const playlistStore = usePlaylistStore();
+const slideshow = useSlideshow();
 const { queue } = storeToRefs(playlistStore);
 
 const isOpen = ref(true);
-const draggedIndex = ref<number | null>(null);
-const dragOverIndex = ref<number | null>(null);
 const displayLimit = ref(50);
 
 const displayedQueue = computed(() => queue.value.slice(0, displayLimit.value));
+
+// Keys follow the entry, not its position: when the slideshow advances,
+// playNext() shifts the queue, and index-based keys would re-create every row
+// (tearing down a drag in progress). Repeats of a path get a counter suffix.
+const entryKeys = computed(() => {
+  const seen = new Map<string, number>();
+  const keys: string[] = [];
+  for (const item of displayedQueue.value) {
+    const count = seen.get(item.path) ?? 0;
+    seen.set(item.path, count + 1);
+    keys.push(count === 0 ? item.path : `${item.path}#${count}`);
+  }
+  return keys;
+});
+
+/** The entry's current position in the queue, or null if it is gone. */
+const indexInQueue = (item: MediaFile | null): number | null => {
+  if (!item) return null;
+  const index = queue.value.indexOf(item);
+  return index === -1 ? null : index;
+};
+
+// The drag state holds the entries themselves and resolves their positions
+// when needed, because the queue can shift between dragstart and drop.
+const draggedItem = shallowRef<MediaFile | null>(null);
+const dragOverItem = shallowRef<MediaFile | null>(null);
+const draggedIndex = computed(() => indexInQueue(draggedItem.value));
+const dragOverIndex = computed(() => indexInQueue(dragOverItem.value));
 
 const clearPlaylist = () => {
   playlistStore.clearPlaylist();
 };
 
-const playTrack = (item: MediaFile, index: number) => {
-  // Play this track next by removing it from its queue position and putting it at the front
-  playlistStore.queue.splice(index, 1);
-  playlistStore.playNext(item);
+const playTrack = (item: MediaFile) => {
+  void slideshow.playQueuedItem(item);
 };
 
-const removeFromQueue = (index: number) => {
-  playlistStore.queue.splice(index, 1);
+const removeFromQueue = (item: MediaFile) => {
+  const index = indexInQueue(item);
+  if (index !== null) playlistStore.queue.splice(index, 1);
 };
 
 /* Drag and Drop event handlers */
-const handleDragStart = (event: DragEvent, index: number) => {
-  draggedIndex.value = index;
+const handleDragStart = (event: DragEvent, item: MediaFile, index: number) => {
+  draggedItem.value = item;
   if (event.dataTransfer) {
     event.dataTransfer.effectAllowed = 'move';
     event.dataTransfer.setData('text/plain', String(index));
   }
 };
 
-const handleDragOver = (index: number) => {
-  dragOverIndex.value = index;
+const handleDragOver = (item: MediaFile) => {
+  dragOverItem.value = item;
 };
 
-const handleDragEnter = (index: number) => {
-  dragOverIndex.value = index;
+const handleDragEnter = (item: MediaFile) => {
+  dragOverItem.value = item;
 };
 
-const handleDragLeave = (index: number) => {
-  if (dragOverIndex.value === index) {
-    dragOverIndex.value = null;
+const handleDragLeave = (item: MediaFile) => {
+  if (dragOverItem.value && toRaw(dragOverItem.value) === toRaw(item)) {
+    dragOverItem.value = null;
   }
 };
 
-const handleDrop = (event: DragEvent, index: number) => {
+const handleDrop = (event: DragEvent, target: MediaFile) => {
   event.preventDefault();
-  if (draggedIndex.value !== null && draggedIndex.value !== index) {
-    playlistStore.reorderQueue(draggedIndex.value, index);
+  const from = draggedIndex.value;
+  const to = indexInQueue(target);
+  if (from !== null && to !== null && from !== to) {
+    playlistStore.reorderQueue(from, to);
   }
   resetDragState();
 };
@@ -192,8 +221,8 @@ const handleDragEnd = () => {
 };
 
 const resetDragState = () => {
-  draggedIndex.value = null;
-  dragOverIndex.value = null;
+  draggedItem.value = null;
+  dragOverItem.value = null;
 };
 </script>
 

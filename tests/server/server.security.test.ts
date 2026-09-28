@@ -55,7 +55,7 @@ vi.mock('../../src/core/media/media-handler', () => ({
   serveThumbnail: vi.fn(),
   serveStaticFile: vi.fn(),
 }));
-vi.mock('../../src/main/google-auth');
+vi.mock('../../src/infrastructure/google-auth');
 
 describe('Server Security', () => {
   let app: any;
@@ -99,7 +99,8 @@ describe('Server Security', () => {
         process.platform === 'win32'
           ? 'C:\\Users\\User\\Videos'
           : '/home/user/Videos';
-      vi.mocked(fs.stat).mockResolvedValue({} as any);
+      vi.mocked(fs.stat).mockResolvedValue({ isDirectory: () => true } as any);
+      vi.mocked(database.getMediaDirectories).mockResolvedValue([]);
 
       const response = await request(app)
         .post('/api/directories')

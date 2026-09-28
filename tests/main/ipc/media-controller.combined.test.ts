@@ -6,10 +6,7 @@ import {
   generateFileUrl,
   getVideoDuration,
 } from '../../../src/core/media/media-handler';
-import {
-  validatePathAccess,
-  filterAuthorizedPaths,
-} from '../../../src/main/utils/security-utils';
+import { validatePathAccess } from '../../../src/main/utils/security-utils';
 import {
   recordMediaView,
   getMediaViewCounts,
@@ -21,8 +18,9 @@ import {
   getDriveFileMetadata,
   listDriveDirectory,
   getDriveParent,
-} from '../../../src/main/google-drive-service';
+} from '../../../src/infrastructure/google-drive-service';
 import { MediaService } from '../../../src/core/media/media-service';
+import { filterAuthorizedLibraryPaths } from '../../../src/core/media/utils/authorized-paths';
 import { createTestMediaService } from '../../utils/test-factory';
 import { generateSessionId } from '../../../src/core/media/hls-handler';
 
@@ -43,7 +41,10 @@ vi.mock('../../../src/core/media/media-handler', () => ({
 
 vi.mock('../../../src/main/utils/security-utils', () => ({
   validatePathAccess: vi.fn(),
-  filterAuthorizedPaths: vi.fn(),
+}));
+
+vi.mock('../../../src/core/media/utils/authorized-paths', () => ({
+  filterAuthorizedLibraryPaths: vi.fn(),
 }));
 
 vi.mock('../../../src/core/database/database', () => ({
@@ -67,7 +68,7 @@ vi.mock('../../../src/core/media/transcode-queue-manager', () => ({
   },
 }));
 
-vi.mock('../../../src/main/google-drive-service', () => ({
+vi.mock('../../../src/infrastructure/google-drive-service', () => ({
   getDriveFileMetadata: vi.fn(),
   listDriveDirectory: vi.fn(),
   getDriveParent: vi.fn(),
@@ -80,7 +81,7 @@ const mockDriveCacheManager = {
   triggerDownload: vi.fn(),
 };
 
-vi.mock('../../../src/main/drive-cache-manager', () => ({
+vi.mock('../../../src/infrastructure/drive-cache-manager', () => ({
   getDriveCacheManager: vi.fn(() => mockDriveCacheManager),
 }));
 
@@ -170,12 +171,12 @@ describe('Media Controller Combined', () => {
     describe('GET_MEDIA_VIEW_COUNTS', () => {
       it('filters paths and gets counts', async () => {
         const handler = getHandler(IPC_CHANNELS.GET_MEDIA_VIEW_COUNTS);
-        (filterAuthorizedPaths as Mock).mockResolvedValue(['/path/1']);
+        (filterAuthorizedLibraryPaths as Mock).mockResolvedValue(['/path/1']);
         (getMediaViewCounts as Mock).mockResolvedValue({ '/path/1': 10 });
 
         const result = await handler({}, ['/path/1', '/path/2']);
 
-        expect(filterAuthorizedPaths).toHaveBeenCalledWith([
+        expect(filterAuthorizedLibraryPaths).toHaveBeenCalledWith([
           '/path/1',
           '/path/2',
         ]);
@@ -193,8 +194,22 @@ describe('Media Controller Combined', () => {
 
         const result = await handler({}, 'gdrive://123');
 
+        expect(validatePathAccess).toHaveBeenCalledWith('gdrive://123');
         expect(getDriveFileMetadata).toHaveBeenCalledWith('123');
         expect(result).toEqual({ duration: 2 });
+      });
+
+      it('refuses Drive files outside the library (F70)', async () => {
+        const handler = getHandler(IPC_CHANNELS.GET_VIDEO_METADATA);
+        (validatePathAccess as Mock).mockRejectedValueOnce(
+          new Error('Access denied'),
+        );
+        vi.spyOn(console, 'error').mockImplementation(() => {});
+
+        await expect(handler({}, 'gdrive://foreign')).rejects.toThrow(
+          'Access denied',
+        );
+        expect(getDriveFileMetadata).not.toHaveBeenCalled();
       });
 
       it('throws if gdrive duration missing', async () => {
@@ -255,23 +270,26 @@ describe('Media Controller Combined', () => {
     });
 
     describe('MEDIA_EXTRACT_METADATA', () => {
-      it('extracts metadata', async () => {
+      it('queues the paths on the single background extraction job', async () => {
         const handler = getHandler(IPC_CHANNELS.MEDIA_EXTRACT_METADATA);
-        (filterAuthorizedPaths as Mock).mockResolvedValue(['/path']);
-        vi.spyOn(service, 'extractAndSaveMetadata').mockResolvedValue(
-          undefined,
-        );
+        (filterAuthorizedLibraryPaths as Mock).mockResolvedValue(['/path']);
+        const queue = vi
+          .spyOn(service, 'queueMetadataExtraction')
+          .mockReturnValue(undefined);
+        const extract = vi.spyOn(service, 'extractAndSaveMetadata');
+
         await handler({}, ['/path']);
-        expect(service.extractAndSaveMetadata).toHaveBeenCalledWith(
-          ['/path'],
-          '/mock/ffmpeg',
-          { forceCheck: true },
-        );
+
+        expect(queue).toHaveBeenCalledWith(['/path'], '/mock/ffmpeg', {
+          forceCheck: true,
+        });
+        // It never starts an extraction job of its own.
+        expect(extract).not.toHaveBeenCalled();
       });
 
       it('logs error on extraction failure', async () => {
         const handler = getHandler(IPC_CHANNELS.MEDIA_EXTRACT_METADATA);
-        (filterAuthorizedPaths as Mock).mockResolvedValue(['/path']);
+        (filterAuthorizedLibraryPaths as Mock).mockResolvedValue(['/path']);
         vi.spyOn(service, 'extractAndSaveMetadata').mockRejectedValue(
           new Error('Extract Fail'),
         );
@@ -280,12 +298,17 @@ describe('Media Controller Combined', () => {
           .mockImplementation(() => {});
 
         await handler({}, ['/path']);
-        await new Promise((r) => setTimeout(r, 10));
 
-        expect(service.extractAndSaveMetadata).toHaveBeenCalled();
-        expect(consoleSpy).toHaveBeenCalledWith(
-          'State extraction failed',
-          expect.any(Error),
+        await vi.waitFor(() =>
+          expect(consoleSpy).toHaveBeenCalledWith(
+            '[media-service] Background metadata extraction failed:',
+            expect.any(Error),
+          ),
+        );
+        expect(service.extractAndSaveMetadata).toHaveBeenCalledWith(
+          ['/path'],
+          '/mock/ffmpeg',
+          { forceCheck: true },
         );
         consoleSpy.mockRestore();
       });
@@ -353,6 +376,96 @@ describe('Media Controller Combined', () => {
       });
     });
 
+    describe('GET_HEATMAP / CANCEL_HEATMAP', () => {
+      const windowA = { sender: { id: 1 } };
+      const windowB = { sender: { id: 2 } };
+
+      const mockAnalyzer = async () => {
+        const signals: AbortSignal[] = [];
+        const analyzer = {
+          generateHeatmap: vi.fn(
+            (
+              _path: string,
+              _points: number,
+              options: { signal: AbortSignal },
+            ) => {
+              signals.push(options.signal);
+              return new Promise((resolve, reject) => {
+                options.signal.addEventListener('abort', () =>
+                  reject(new Error('aborted')),
+                );
+                setTimeout(() => resolve({ points: 1 }), 50);
+              });
+            },
+          ),
+        };
+        const AnalyzerModule =
+          await import('../../../src/core/media/analysis/media-analyzer');
+        vi.spyOn(AnalyzerModule.MediaAnalyzer, 'getInstance').mockReturnValue(
+          analyzer as any,
+        );
+        return { analyzer, signals };
+      };
+
+      beforeEach(() => {
+        vi.spyOn(console, 'error').mockImplementation(() => {});
+      });
+
+      it('validates the path and passes a cancellation signal', async () => {
+        const { analyzer } = await mockAnalyzer();
+        (validatePathAccess as Mock).mockResolvedValue('/safe/video.mp4');
+
+        const result = await getHandler(IPC_CHANNELS.GET_HEATMAP)(
+          windowA,
+          '/safe/video.mp4',
+          100,
+        );
+
+        expect(result).toEqual({ points: 1 });
+        expect(validatePathAccess).toHaveBeenCalledWith('/safe/video.mp4');
+        expect(analyzer.generateHeatmap).toHaveBeenCalledWith(
+          '/safe/video.mp4',
+          100,
+          { signal: expect.any(AbortSignal) },
+        );
+      });
+
+      it("cancels only the calling window's requests for that file", async () => {
+        const { signals } = await mockAnalyzer();
+        (validatePathAccess as Mock).mockResolvedValue('/v.mp4');
+        const getHeatmap = getHandler(IPC_CHANNELS.GET_HEATMAP);
+        const cancel = getHandler(IPC_CHANNELS.CANCEL_HEATMAP);
+
+        const a1 = getHeatmap(windowA, '/v.mp4', 100);
+        const a2 = getHeatmap(windowA, '/v.mp4', 100);
+        const b = getHeatmap(windowB, '/v.mp4', 100);
+        const other = getHeatmap(windowA, '/other.mp4', 100);
+        await vi.waitFor(() => expect(signals).toHaveLength(4));
+
+        cancel(windowA, '/v.mp4');
+
+        await expect(a1).rejects.toThrow('aborted');
+        await expect(a2).rejects.toThrow('aborted');
+        await expect(b).resolves.toEqual({ points: 1 });
+        await expect(other).resolves.toEqual({ points: 1 });
+
+        // Finished requests are forgotten; cancelling again is a no-op.
+        expect(() => cancel(windowA, '/v.mp4')).not.toThrow();
+      });
+
+      it('rejects when access is denied', async () => {
+        const { analyzer } = await mockAnalyzer();
+        (validatePathAccess as Mock).mockRejectedValue(
+          new Error('Access denied'),
+        );
+
+        await expect(
+          getHandler(IPC_CHANNELS.GET_HEATMAP)(windowA, '/secret.mp4'),
+        ).rejects.toThrow('Access denied');
+        expect(analyzer.generateHeatmap).not.toHaveBeenCalled();
+      });
+    });
+
     // --- From media-controller.recently-played.test.ts ---
     describe('GET_RECENTLY_PLAYED', () => {
       it('should register GET_RECENTLY_PLAYED handler', () => {
@@ -377,15 +490,15 @@ describe('Media Controller Combined', () => {
         const inputPaths = ['/authorized/path.mp4', '/unauthorized/path.mp4'];
         const authorizedPaths = ['/authorized/path.mp4'];
 
-        (filterAuthorizedPaths as Mock).mockResolvedValue(authorizedPaths);
-        vi.spyOn(service, 'extractAndSaveMetadata').mockResolvedValue(
-          undefined,
+        (filterAuthorizedLibraryPaths as Mock).mockResolvedValue(
+          authorizedPaths,
         );
+        vi.spyOn(service, 'queueMetadataExtraction').mockReturnValue(undefined);
 
         await handler({}, inputPaths);
 
-        expect(filterAuthorizedPaths).toHaveBeenCalledWith(inputPaths);
-        expect(service.extractAndSaveMetadata).toHaveBeenCalledWith(
+        expect(filterAuthorizedLibraryPaths).toHaveBeenCalledWith(inputPaths);
+        expect(service.queueMetadataExtraction).toHaveBeenCalledWith(
           authorizedPaths,
           '/mock/ffmpeg',
           { forceCheck: true },
@@ -430,17 +543,33 @@ describe('Media Controller Combined', () => {
 
       it('DRIVE_CACHE_TRIGGER triggers a cache download', async () => {
         const handler = getHandler(IPC_CHANNELS.DRIVE_CACHE_TRIGGER);
+        (validatePathAccess as Mock).mockResolvedValue('gdrive://file123');
         mockDriveCacheManager.triggerDownload.mockResolvedValue(undefined);
 
         await handler({}, 'file123');
 
+        expect(validatePathAccess).toHaveBeenCalledWith('gdrive://file123');
         expect(mockDriveCacheManager.triggerDownload).toHaveBeenCalledWith(
           'file123',
         );
       });
 
+      it('DRIVE_CACHE_TRIGGER refuses Drive files outside the library (F70)', async () => {
+        const handler = getHandler(IPC_CHANNELS.DRIVE_CACHE_TRIGGER);
+        (validatePathAccess as Mock).mockRejectedValueOnce(
+          new Error('Access denied'),
+        );
+        vi.spyOn(console, 'error').mockImplementation(() => {});
+
+        await expect(handler({}, 'any-drive-id')).rejects.toThrow(
+          'Access denied',
+        );
+        expect(mockDriveCacheManager.triggerDownload).not.toHaveBeenCalled();
+      });
+
       it('DRIVE_CACHE_TRIGGER handles error and throws', async () => {
         const handler = getHandler(IPC_CHANNELS.DRIVE_CACHE_TRIGGER);
+        (validatePathAccess as Mock).mockResolvedValue('gdrive://file123');
         mockDriveCacheManager.triggerDownload.mockRejectedValue(
           new Error('Trigger failed'),
         );

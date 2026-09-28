@@ -1,7 +1,10 @@
 import fs from 'fs';
-
+import path from 'path';
 import { Readable } from 'stream';
-import { getDriveFileMetadata } from '../../main/google-drive-service.ts';
+import {
+  getDriveFileMetadataCached,
+  parseDriveFileSize,
+} from './drive-backend.ts';
 import { getDriveStreamWithCache } from './drive-stream.ts';
 import { authorizeFilePath } from '../auth/security.ts';
 import type { AuthorizationResult } from '../auth/security.ts';
@@ -83,32 +86,34 @@ export class LocalMediaSource implements IMediaSource {
   }
 }
 
+/**
+ * A file-name extension that is safe to append to the proxy URL as a format
+ * hint for ffmpeg. A '?' or '#' in the suffix would cut off the token.
+ */
+const SAFE_URL_EXTENSION = /^\.[a-z0-9]{1,5}$/;
+
 export class DriveMediaSource implements IMediaSource {
   private fileId: string;
-  private metadataPromise:
-    | Promise<import('googleapis').drive_v3.Schema$File>
-    | undefined;
 
   constructor(filePath: string) {
     this.fileId = getDriveId(filePath);
   }
 
-  private ensureMetadata(): Promise<import('googleapis').drive_v3.Schema$File> {
-    if (!this.metadataPromise) {
-      this.metadataPromise = getDriveFileMetadata(this.fileId);
-    }
-    return this.metadataPromise;
+  /**
+   * Metadata comes from the shared TTL cache: a source is created for every
+   * request, so a per-instance cache still cost a Drive API call per seek.
+   */
+  private ensureMetadata() {
+    return getDriveFileMetadataCached(this.fileId);
   }
 
   async getFFmpegInput(): Promise<string> {
     let ext = '';
     try {
       const meta = await this.ensureMetadata();
-      if (meta.name) {
-        const lastDot = meta.name.lastIndexOf('.');
-        if (lastDot !== -1) {
-          ext = meta.name.substring(lastDot); // includes dot
-        }
+      const nameExt = path.posix.extname(meta.name ?? '').toLowerCase();
+      if (SAFE_URL_EXTENSION.test(nameExt)) {
+        ext = nameExt; // includes dot
       }
     } catch (e) {
       console.warn('Failed to resolve extension for Drive file input', e);
@@ -137,8 +142,7 @@ export class DriveMediaSource implements IMediaSource {
   }
 
   async getSize(): Promise<number> {
-    const meta = await this.ensureMetadata();
-    return Number(meta.size);
+    return parseDriveFileSize(await this.ensureMetadata());
   }
 }
 

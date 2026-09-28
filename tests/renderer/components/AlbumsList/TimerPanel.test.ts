@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vite-plus/test';
-import { mount } from '@vue/test-utils';
+import { mount, flushPromises } from '@vue/test-utils';
 import { setActivePinia } from 'pinia';
 import { createTestingPinia } from '@pinia/testing';
 import TimerPanel from '@/features/library/AlbumsList/TimerPanel.vue';
 import { usePlayerStore } from '../../../../src/renderer/composables/usePlayerStore';
+import { useToast } from '../../../../src/renderer/composables/useToast';
 
 const mockToggleSlideshowTimer = vi.fn();
 const mockStartSlideshow = vi.fn();
@@ -52,11 +53,48 @@ describe('TimerPanel', () => {
 
   it('starts slideshow and toggles timer correctly when slideshow is not active', async () => {
     usePlayerStore().isSlideshowActive = false;
+    mockStartSlideshow.mockResolvedValue(true);
     const wrapper = mount(TimerPanel);
     const playBtn = wrapper.find('[data-testid="timer-button"]');
     await playBtn.trigger('click');
+    await flushPromises();
     expect(mockStartSlideshow).toHaveBeenCalled();
     expect(mockToggleSlideshowTimer).toHaveBeenCalled();
+  });
+
+  it('does not start the timer when there is nothing to play', async () => {
+    usePlayerStore().isSlideshowActive = false;
+    mockStartSlideshow.mockResolvedValue(false);
+    const wrapper = mount(TimerPanel);
+    await wrapper.find('[data-testid="timer-button"]').trigger('click');
+    await flushPromises();
+    expect(mockStartSlideshow).toHaveBeenCalled();
+    expect(mockToggleSlideshowTimer).not.toHaveBeenCalled();
+    expect(useToast().toasts.value.at(-1)?.message).toContain(
+      'Nothing to play',
+    );
+  });
+
+  it('animates the progress bar of a countdown that was already running on mount', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1000);
+    usePlayerStore().timerStartTime = 0;
+    usePlayerStore().timerEndTime = 4000;
+
+    const wrapper = mount(TimerPanel);
+    vi.advanceTimersToNextFrame();
+    await wrapper.vm.$nextTick();
+
+    // A quarter of the countdown has elapsed, so the bar is about 75% full
+    // (not frozen at 100%).
+    const bar = wrapper.find('[data-testid="slideshow-progress"] > div');
+    const width = parseFloat(
+      /width:\s*([\d.]+)%/.exec(bar.attributes('style') ?? '')?.[1] ?? '',
+    );
+    expect(width).toBeGreaterThan(70);
+    expect(width).toBeLessThanOrEqual(75);
+    wrapper.unmount();
+    vi.useRealTimers();
   });
 
   it('calls startSlideshow on shuffle click', async () => {

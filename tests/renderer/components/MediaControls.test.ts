@@ -107,6 +107,12 @@ describe('MediaControls.vue', () => {
     countInfo: '1 / 10',
   };
 
+  const videoProps = {
+    ...defaultProps,
+    currentMediaItem: { name: 'clip.mp4', path: '/clip.mp4', rating: 3 },
+    isImage: false,
+  };
+
   it('should emit previous when back button clicked', async () => {
     const wrapper = mount(MediaControls, { props: defaultProps });
     await wrapper
@@ -135,6 +141,19 @@ describe('MediaControls.vue', () => {
     });
     await wrapper.find('.vlc-button').trigger('click');
     expect(wrapper.emitted('open-in-vlc')).toBeTruthy();
+  });
+
+  it('gives the VR toggle exactly one text colour per state', async () => {
+    const wrapper = mount(MediaControls, {
+      props: { ...defaultProps, isImage: false, isVrMode: false },
+    });
+    const vrButton = () => wrapper.find('button[aria-label="Toggle VR Mode"]');
+    expect(vrButton().classes()).toContain('text-white');
+    expect(vrButton().classes()).not.toContain('text-button-text');
+
+    await wrapper.setProps({ isVrMode: true });
+    expect(vrButton().classes()).toContain('text-button-text');
+    expect(vrButton().classes()).not.toContain('text-white');
   });
 
   it('should emit set-rating when star clicked', async () => {
@@ -228,7 +247,7 @@ describe('MediaControls.vue', () => {
 
     vi.mocked(api.getHeatmap).mockImplementation(() => new Promise(() => {}));
 
-    const wrapper = mount(MediaControls, { props: defaultProps });
+    const wrapper = mount(MediaControls, { props: videoProps });
 
     await vi.advanceTimersByTimeAsync(1100);
     await wrapper.vm.$nextTick();
@@ -242,34 +261,38 @@ describe('MediaControls.vue', () => {
     vi.useRealTimers();
   });
 
-  it('fetches heatmap and metadata after debounce', async () => {
+  it('fetches the heatmap after debounce', async () => {
     vi.useFakeTimers();
     vi.mocked(api.getHeatmap).mockResolvedValue({
       audio: [0.5],
       motion: [0.5],
       points: 1,
     } as any);
-    vi.mocked(api.getMetadata).mockResolvedValue({
-      '/test.jpg': {
-        watchedSegments: JSON.stringify([{ start: 0, end: 10 }]),
-      } as any,
-    });
     vi.mocked(api.getHeatmapProgress).mockResolvedValue(50);
 
-    const wrapper = mount(MediaControls, { props: defaultProps });
+    mount(MediaControls, { props: videoProps });
 
     await vi.advanceTimersByTimeAsync(1100);
 
-    expect(api.getHeatmap).toHaveBeenCalledWith('/test.jpg', 100);
-    expect(api.getMetadata).toHaveBeenCalledWith(['/test.jpg']);
-
-    await vi.advanceTimersByTimeAsync(2100);
-
-    expect((wrapper.vm as any).watchedSegments).toEqual([
-      { start: 0, end: 10 },
-    ]);
+    expect(api.getHeatmap).toHaveBeenCalledWith('/clip.mp4', 100, {
+      signal: expect.any(AbortSignal),
+    });
+    // Watched segments are owned (loaded and saved) by MediaDisplay.
+    expect(api.getMetadata).not.toHaveBeenCalled();
 
     vi.useRealTimers();
+  });
+
+  it('draws the watched segments it is given', async () => {
+    const watchedSegments = [{ start: 0, end: 10 }];
+    const wrapper = mount(MediaControls, {
+      props: { ...defaultProps, isImage: false, watchedSegments },
+    });
+    const progressBar = wrapper.findComponent('.progress-bar-mock') as any;
+    expect(progressBar.props('watchedSegments')).toEqual(watchedSegments);
+
+    await wrapper.setProps({ watchedSegments: [] });
+    expect(progressBar.props('watchedSegments')).toEqual([]);
   });
 
   it('cleans up observers and timers on unmount', () => {
@@ -297,11 +320,11 @@ describe('MediaControls.vue', () => {
     const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     vi.mocked(api.getHeatmap).mockRejectedValue(new Error('Fetch failed'));
 
-    mount(MediaControls, { props: defaultProps });
+    mount(MediaControls, { props: videoProps });
     await vi.advanceTimersByTimeAsync(1100);
 
     expect(consoleSpy).toHaveBeenCalledWith(
-      'Failed to fetch heatmap/metadata',
+      '[MediaControls] Failed to fetch heatmap',
       expect.any(Error),
     );
     vi.useRealTimers();

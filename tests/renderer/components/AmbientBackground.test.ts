@@ -222,6 +222,124 @@ describe('AmbientBackground.vue', () => {
     wrapper.unmount();
   });
 
+  it('does not build a data URL for videos (frames come from the player)', async () => {
+    usePlaylistStore().currentItem = { path: '/test/video.mp4' } as any;
+    usePlayerStore().mainVideoElement = {
+      paused: false,
+      ended: false,
+    } as HTMLVideoElement;
+
+    const wrapper = mount(AmbientBackground);
+    await flushPromises();
+    vi.advanceTimersByTime(50);
+
+    expect(api.loadFileAsDataURL).not.toHaveBeenCalled();
+    const ctx = (
+      wrapper.find('canvas').element as HTMLCanvasElement
+    ).getContext('2d');
+    expect(ctx?.drawImage).toHaveBeenCalled();
+    wrapper.unmount();
+  });
+
+  it('does not reallocate the canvas on every video frame', async () => {
+    const originalWidth = window.innerWidth;
+    Object.defineProperty(window, 'innerWidth', {
+      value: 1366,
+      configurable: true,
+    });
+    usePlaylistStore().currentItem = { path: '/test/video.mp4' } as any;
+    usePlayerStore().mainVideoElement = {
+      paused: false,
+      ended: false,
+    } as HTMLVideoElement;
+
+    const wrapper = mount(AmbientBackground);
+    const canvas = wrapper.find('canvas').element as HTMLCanvasElement;
+    let width = 0;
+    let widthWrites = 0;
+    Object.defineProperty(canvas, 'width', {
+      configurable: true,
+      get: () => width,
+      set: (value: number) => {
+        widthWrites++;
+        width = Math.floor(value);
+      },
+    });
+    await flushPromises();
+
+    vi.advanceTimersByTime(500); // many animation frames
+    expect(width).toBe(136);
+    expect(widthWrites).toBe(1);
+
+    wrapper.unmount();
+    Object.defineProperty(window, 'innerWidth', {
+      value: originalWidth,
+      configurable: true,
+    });
+  });
+
+  it('ignores a late result for the previous item', async () => {
+    const originalImage = window.Image;
+    const loadedSrcs: string[] = [];
+    window.Image = class FakeImage {
+      onload: (() => void) | null = null;
+      set src(value: string) {
+        loadedSrcs.push(value);
+        setTimeout(() => this.onload?.(), 10);
+      }
+    } as any;
+
+    let resolveA!: (value: any) => void;
+    vi.mocked(api.loadFileAsDataURL).mockImplementation((path: string) =>
+      path === '/test/a.jpg'
+        ? new Promise((resolve) => (resolveA = resolve))
+        : Promise.resolve({ type: 'data-url', url: 'data:b' }),
+    );
+
+    usePlaylistStore().currentItem = { path: '/test/a.jpg' } as any;
+    const wrapper = mount(AmbientBackground);
+    await flushPromises();
+
+    usePlaylistStore().currentItem = { path: '/test/b.jpg' } as any;
+    await flushPromises();
+    resolveA({ type: 'data-url', url: 'data:a' });
+    await flushPromises();
+    vi.advanceTimersByTime(20);
+
+    expect(loadedSrcs).toEqual(['data:b']);
+    expect((wrapper.vm as any).mediaUrl).toBe('data:b');
+
+    window.Image = originalImage;
+    wrapper.unmount();
+  });
+
+  it('does not draw an image that finished loading after the item changed', async () => {
+    const originalImage = window.Image;
+    const images: { onload: (() => void) | null }[] = [];
+    window.Image = class FakeImage {
+      onload: (() => void) | null = null;
+      constructor() {
+        images.push(this);
+      }
+      set src(_value: string) {}
+    } as any;
+
+    usePlaylistStore().currentItem = { path: '/test/a.jpg' } as any;
+    const wrapper = mount(AmbientBackground);
+    await flushPromises();
+    const ctx = (
+      wrapper.find('canvas').element as HTMLCanvasElement
+    ).getContext('2d');
+
+    usePlaylistStore().currentItem = { path: '/test/video.mp4' } as any;
+    await flushPromises();
+    images[0].onload?.();
+
+    expect(ctx?.drawImage).not.toHaveBeenCalled();
+    window.Image = originalImage;
+    wrapper.unmount();
+  });
+
   it('handles no media', async () => {
     usePlaylistStore().currentItem = null;
     await flushPromises();

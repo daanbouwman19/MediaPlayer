@@ -9,8 +9,6 @@ describe('TranscodingStatus.vue', () => {
         isLoading: false,
         isTranscodingLoading: false,
         isBuffering: false,
-        transcodedDuration: 0,
-        currentTranscodeStartTime: 0,
         progress: null,
       },
     });
@@ -23,8 +21,6 @@ describe('TranscodingStatus.vue', () => {
         isLoading: true,
         isTranscodingLoading: false,
         isBuffering: false,
-        transcodedDuration: 0,
-        currentTranscodeStartTime: 0,
         progress: null,
       },
     });
@@ -37,13 +33,24 @@ describe('TranscodingStatus.vue', () => {
         isLoading: false,
         isTranscodingLoading: true,
         isBuffering: false,
-        transcodedDuration: 100,
-        currentTranscodeStartTime: 25,
         progress: 25,
       },
     });
     expect(wrapper.text()).toContain('Transcoding...');
     expect(wrapper.text()).toContain('25%');
+  });
+
+  it('renders transcoding state without a percentage before the first status', () => {
+    const wrapper = mount(TranscodingStatus, {
+      props: {
+        isLoading: false,
+        isTranscodingLoading: true,
+        isBuffering: false,
+        progress: null,
+      },
+    });
+    expect(wrapper.text()).toContain('Transcoding...');
+    expect(wrapper.text()).not.toContain('%');
   });
 
   it('renders buffering state', () => {
@@ -52,8 +59,6 @@ describe('TranscodingStatus.vue', () => {
         isLoading: false,
         isTranscodingLoading: false,
         isBuffering: true,
-        transcodedDuration: 0,
-        currentTranscodeStartTime: 0,
         progress: null,
       },
     });

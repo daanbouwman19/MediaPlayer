@@ -1,5 +1,6 @@
 <template>
   <div
+    ref="dialogRef"
     class="fixed inset-0 bg-black/90 flex items-center justify-center z-3000 backdrop-blur-xl"
     role="dialog"
     aria-modal="true"
@@ -25,17 +26,21 @@
           <label for="lock-screen-password" class="sr-only">Password</label>
           <input
             id="lock-screen-password"
+            ref="passwordInput"
             v-model="password"
             type="password"
             autocomplete="current-password"
             placeholder="Password"
             class="w-full bg-white/5 border border-white/10 rounded-xl px-5 py-4 text-white focus:outline-none focus:ring-2 focus:ring-accent focus:bg-white/10 transition-all text-lg placeholder:text-white/20"
             :disabled="isUnlocking"
-            autofocus
           />
         </div>
 
-        <p v-if="error" class="text-red-400 text-sm font-medium animate-pulse">
+        <p
+          v-if="error"
+          class="text-red-400 text-sm font-medium animate-pulse"
+          role="alert"
+        >
           {{ error }}
         </p>
 
@@ -53,10 +58,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { nextTick, ref } from 'vue';
 import LockIcon from '@/components/atoms/icons/LockIcon.vue';
 import { useAuthStore } from '@/composables/useAuthStore';
 import { useLibraryStore } from '@/composables/useLibraryStore';
+import { useFocusTrap } from '@/composables/useFocusTrap';
 
 const authStore = useAuthStore();
 const libraryStore = useLibraryStore();
@@ -65,6 +71,10 @@ const password = ref('');
 const isUnlocking = ref(false);
 const error = ref('');
 
+const dialogRef = ref<HTMLElement | null>(null);
+const passwordInput = ref<HTMLInputElement | null>(null);
+useFocusTrap(dialogRef, true, { initialFocus: passwordInput });
+
 const handleUnlock = async () => {
   if (!password.value) return;
 
@@ -72,19 +82,35 @@ const handleUnlock = async () => {
   isUnlocking.value = true;
 
   try {
-    const success = await authStore.unlock(password.value);
-    if (success) {
-      // Reload initial data after successful unlock
-      await libraryStore.loadInitialData();
-    } else {
-      error.value = 'Invalid password. Please try again.';
-      password.value = '';
+    const result = await authStore.unlock(password.value);
+    switch (result) {
+      case 'ok':
+        // Reload initial data after successful unlock
+        await libraryStore.loadInitialData();
+        return;
+      case 'invalid':
+        error.value = 'Invalid password. Please try again.';
+        password.value = '';
+        break;
+      case 'rateLimited':
+        // Keep the password: it may be right, the server just didn't check it.
+        error.value =
+          'Too many attempts. Please wait a few minutes before trying again.';
+        break;
+      case 'error':
+        // Network or server failure: the password was not checked either.
+        error.value = 'Could not verify the password. Please try again.';
+        break;
     }
   } catch {
     error.value = 'An error occurred. Please try again.';
   } finally {
     isUnlocking.value = false;
   }
+
+  // The input was disabled while unlocking, which drops its focus.
+  await nextTick();
+  passwordInput.value?.focus();
 };
 </script>
 

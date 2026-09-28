@@ -67,16 +67,16 @@ vi.mock('fs/promises', () => ({
 }));
 
 // Mock drive-cache-manager to avoid init issues
-vi.mock('../../src/main/drive-cache-manager', () => ({
+vi.mock('../../src/infrastructure/drive-cache-manager', () => ({
   initializeDriveCacheManager: vi.fn(),
 }));
 
-vi.mock('../../src/main/google-auth', () => ({
+vi.mock('../../src/infrastructure/google-auth', () => ({
   generateAuthUrl: vi.fn(),
   authenticateWithCode: vi.fn(),
 }));
 
-vi.mock('../../src/main/google-drive-service', () => ({
+vi.mock('../../src/infrastructure/google-drive-service', () => ({
   getDriveClient: vi.fn(),
   listDriveDirectory: vi.fn(),
   getDriveParent: vi.fn(),

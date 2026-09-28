@@ -16,6 +16,10 @@ import { createMediaSource } from '../../src/core/media/media-source';
 import fs from 'fs';
 import { createTestMediaService } from '../utils/test-factory';
 import { MediaService } from '../../src/core/media/media-service';
+import {
+  registerDriveBackend,
+  resetDriveBackend,
+} from '../../src/core/media/drive-backend';
 
 // --- Mocks ---
 
@@ -62,7 +66,7 @@ import {
   resetTranscodeConcurrency,
 } from '../../src/core/media/media-handler';
 
-vi.mock('../../src/main/google-drive-service', () => ({
+vi.mock('../../src/infrastructure/google-drive-service', () => ({
   getDriveFileMetadata: mockGetDriveFileMetadata,
   getDriveFileThumbnail: mockGetDriveFileThumbnail,
   getDriveFileStream: vi.fn(),
@@ -230,6 +234,11 @@ describe('MediaHandler Combined Tests', () => {
     // Reset all persistent mocks prevents cross-test state pollution
     mockSpawn.mockReset();
     mockGetDriveFileMetadata.mockReset();
+    // The Drive provider reads metadata through the shared (cached) backend.
+    resetDriveBackend();
+    registerDriveBackend({
+      getFileMetadata: (id: string) => mockGetDriveFileMetadata(id),
+    } as any);
     mockGetDriveFileThumbnail.mockReset();
     mockAuthorizeFilePath.mockReset();
     mockGetThumbnailCachePath.mockReset();
@@ -354,6 +363,11 @@ describe('MediaHandler Combined Tests', () => {
       ),
       setHeader: vi.fn(),
       getHeader: vi.fn(),
+      removeHeader: vi.fn(),
+      removeListener: vi.fn(),
+      append: vi.fn(),
+      destroy: vi.fn(),
+      destroyed: false,
     };
 
     // Default mock behavior
@@ -372,6 +386,16 @@ describe('MediaHandler Combined Tests', () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
+
+  /** Fires the 'close' listeners registered on the mocked response. */
+  const emitResponseClose = () => {
+    for (const [event, listener] of [
+      ...res.on.mock.calls,
+      ...res.once.mock.calls,
+    ]) {
+      if (event === 'close') listener();
+    }
+  };
 
   // --- From media-handler.test.ts ---
   describe('getVideoDuration', () => {
@@ -491,6 +515,7 @@ describe('MediaHandler Combined Tests', () => {
       expect(mockSpawn).toHaveBeenCalledWith(
         ffmpegPath,
         expect.arrayContaining(['-i', sourceInput, '-f', 'mp4', 'pipe:1']),
+        expect.objectContaining({ windowsHide: true }),
       );
       expect(res.set).toHaveBeenCalledWith(
         expect.objectContaining({ 'Content-Type': 'video/mp4' }),
@@ -525,10 +550,11 @@ describe('MediaHandler Combined Tests', () => {
       expect(mockSpawn).toHaveBeenCalledWith(
         ffmpegPath,
         expect.arrayContaining(['-ss', startTime, '-i', sourceInput]),
+        expect.anything(),
       );
     });
 
-    it('kills ffmpeg process when request closes', async () => {
+    it('kills ffmpeg process when the response closes', async () => {
       const sourceInput = '/path/to/video.mp4';
       const ffmpegPath = '/usr/bin/ffmpeg';
 
@@ -550,11 +576,8 @@ describe('MediaHandler Combined Tests', () => {
         undefined,
       );
 
-      // Simulate request close
-      const closeCalls = req.on.mock.calls.filter((c: any) => c[0] === 'close');
-      const closeHandler = closeCalls[closeCalls.length - 1][1];
-
-      closeHandler();
+      // Simulate the client going away
+      emitResponseClose();
 
       expect(mockProcess.kill).toHaveBeenCalledWith('SIGKILL');
     });
@@ -783,8 +806,20 @@ describe('MediaHandler Combined Tests', () => {
       expect(res.send).toHaveBeenCalledWith('Requested range not satisfiable.');
     });
 
-    it('returns 416 if start >= totalSize', async () => {
+    it('returns an empty 200 for a zero-byte file without a Range header', async () => {
       req.headers.range = '';
+
+      vi.mocked(mockMediaSource.getSize).mockResolvedValue(0);
+      await serveRawStream(req, res, mockMediaSource);
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.status).not.toHaveBeenCalledWith(416);
+      expect(res.set).toHaveBeenCalledWith('Content-Length', '0');
+      expect(res.end).toHaveBeenCalled();
+      expect(mockMediaSource.getStream).not.toHaveBeenCalled();
+    });
+
+    it('returns 416 for a Range request on a zero-byte file', async () => {
+      req.headers.range = 'bytes=0-';
 
       vi.mocked(mockMediaSource.getSize).mockResolvedValue(0);
       await serveRawStream(req, res, mockMediaSource);
@@ -814,7 +849,10 @@ describe('MediaHandler Combined Tests', () => {
       await new Promise((r) => setTimeout(r, 0));
 
       mockStream.emit('error', new Error('Pipe broken'));
-      expect(res.status).toHaveBeenCalledWith(500);
+      expect(res.statusCode).toBe(500);
+      // The 500 must not keep declaring the file's length and range.
+      expect(res.removeHeader).toHaveBeenCalledWith('Content-Length');
+      expect(res.removeHeader).toHaveBeenCalledWith('Content-Range');
       expect(res.end).toHaveBeenCalled();
       expect(consoleSpy).toHaveBeenCalledWith(
         '[RawStream] Stream error:',
@@ -896,8 +934,11 @@ describe('MediaHandler Combined Tests', () => {
       });
 
       await serveStaticFile(req, res, testPath);
-      // For local files, it uses sendFile optimization if not drive path
-      expect(res.sendFile).toHaveBeenCalledWith(testPath);
+      // For local files, it uses sendFile optimization if not drive path.
+      // dotfiles must be allowed or paths under e.g. ~/.config 404.
+      expect(res.sendFile).toHaveBeenCalledWith(testPath, {
+        dotfiles: 'allow',
+      });
     });
 
     it('handles access denied', async () => {
@@ -930,7 +971,9 @@ describe('MediaHandler Combined Tests', () => {
       });
 
       await handleStreamRequest(req, res, 'ffmpeg');
-      expect(res.sendFile).toHaveBeenCalledWith(path.resolve(testFile));
+      expect(res.sendFile).toHaveBeenCalledWith(path.resolve(testFile), {
+        dotfiles: 'allow',
+      });
     });
 
     it('handles local file access denied', async () => {
@@ -1010,8 +1053,13 @@ describe('MediaHandler Combined Tests', () => {
     });
   });
 
-  it('cleans up stream on request close', async () => {
-    const mockStream = { pipe: vi.fn(), on: vi.fn(), destroy: vi.fn() };
+  it('cleans up stream when the response closes', async () => {
+    const mockStream = {
+      pipe: vi.fn(),
+      on: vi.fn(),
+      once: vi.fn(),
+      destroy: vi.fn(),
+    };
     const mockSource = {
       getStream: vi.fn().mockResolvedValue({ stream: mockStream, length: 100 }),
       getSize: vi.fn().mockResolvedValue(100),
@@ -1022,11 +1070,35 @@ describe('MediaHandler Combined Tests', () => {
     await serveRawStream(req, res, mockSource as any);
 
     // Trigger close
-    req.emit('close');
+    emitResponseClose();
     expect(mockStream.destroy).toHaveBeenCalled();
   });
 
-  it('cleans up transcoded process on request close', async () => {
+  it('destroys the stream when the client left before it was opened', async () => {
+    const mockStream = {
+      pipe: vi.fn(),
+      on: vi.fn(),
+      once: vi.fn(),
+      destroy: vi.fn(),
+    };
+    const mockSource = {
+      getStream: vi.fn().mockImplementation(async () => {
+        // The client aborts while the stream lookup is still pending.
+        res.destroyed = true;
+        return { stream: mockStream, length: 100 };
+      }),
+      getSize: vi.fn().mockResolvedValue(100),
+      getMimeType: vi.fn().mockResolvedValue('video/mp4'),
+      getFFmpegInput: vi.fn(),
+    };
+
+    await serveRawStream(req, res, mockSource as any);
+
+    expect(mockStream.destroy).toHaveBeenCalled();
+    expect(mockStream.pipe).not.toHaveBeenCalled();
+  });
+
+  it('cleans up transcoded process when the response closes', async () => {
     const mockProc = {
       stdout: new PassThrough(),
       stderr: new PassThrough(),
@@ -1051,7 +1123,7 @@ describe('MediaHandler Combined Tests', () => {
     );
 
     // Trigger close
-    req.emit('close');
+    emitResponseClose();
     expect(mockProc.kill).toHaveBeenCalledWith('SIGKILL');
   });
 
@@ -1384,6 +1456,7 @@ describe('MediaHandler Combined Tests', () => {
         set: vi.fn().mockReturnThis(),
         end: vi.fn(),
         on: vi.fn(),
+        off: vi.fn(),
       };
       res.sendFile = vi.fn((_path: string, optOrCb: any, cb?: () => void) => {
         const callback = typeof optOrCb === 'function' ? optOrCb : cb;
@@ -1462,6 +1535,7 @@ describe('MediaHandler Combined Tests', () => {
       expect(mockSpawn).toHaveBeenCalledWith(
         'ffmpeg',
         expect.arrayContaining(['-ss', validInput]),
+        expect.anything(),
       );
     });
 

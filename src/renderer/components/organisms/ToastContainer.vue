@@ -73,7 +73,7 @@
           </div>
           <p class="text-sm font-medium">{{ toast.message }}</p>
           <button
-            class="ml-auto text-current opacity-50 hover:opacity-100 focus:outline-none"
+            class="ml-auto rounded text-current opacity-50 hover:opacity-100 focus:outline-none focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-current"
             aria-label="Close"
             @click="remove(toast.id)"
           >

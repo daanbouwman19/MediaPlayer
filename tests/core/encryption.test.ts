@@ -7,6 +7,9 @@ import {
   afterEach,
 } from 'vite-plus/test';
 import crypto from 'crypto';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 
 describe('Encryption Utils', () => {
   beforeEach(() => {
@@ -73,5 +76,67 @@ describe('Encryption Utils', () => {
     for (const t of texts) {
       expect(decrypt(encrypt(t))).toBe(t);
     }
+  });
+});
+
+describe('Encryption key file', () => {
+  let dir: string;
+  let keyPath: string;
+
+  const loadEncryption = async () => {
+    vi.resetModules();
+    return import('../../src/core/auth/encryption.ts');
+  };
+
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mediaplayer-enc-'));
+    keyPath = path.join(dir, 'master.key');
+    vi.stubEnv('MASTER_KEY_DIR', dir);
+    vi.stubEnv('MASTER_KEY', '');
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllEnvs();
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('creates master.key when encrypting and reads it back on the next run', async () => {
+    const stored = (await loadEncryption()).encrypt('token');
+    expect(fs.existsSync(keyPath)).toBe(true);
+
+    expect((await loadEncryption()).decrypt(stored)).toBe('token');
+  });
+
+  it('does not create a key when decrypting without one', async () => {
+    vi.stubEnv('MASTER_KEY', crypto.randomBytes(32).toString('hex'));
+    const stored = (await loadEncryption()).encrypt('token');
+    vi.stubEnv('MASTER_KEY', '');
+
+    const { decrypt } = await loadEncryption();
+
+    expect(decrypt(stored)).toBeNull();
+    expect(fs.existsSync(keyPath)).toBe(false);
+    expect(console.warn).toHaveBeenCalledWith(
+      expect.stringContaining('No master key available'),
+    );
+  });
+
+  it.each([
+    [
+      'compromised',
+      '50c7a5ac267dc92161817ab092dcfc9dcd64ea5824d9b40b021c0f5e3f514563',
+    ],
+    ['malformed', 'short-hex'],
+  ])('does not decrypt with or replace a %s key file', async (_, contents) => {
+    vi.stubEnv('MASTER_KEY', crypto.randomBytes(32).toString('hex'));
+    const stored = (await loadEncryption()).encrypt('token');
+    vi.stubEnv('MASTER_KEY', '');
+    fs.writeFileSync(keyPath, contents);
+
+    expect((await loadEncryption()).decrypt(stored)).toBeNull();
+    expect(fs.readFileSync(keyPath, 'utf8')).toBe(contents);
   });
 });

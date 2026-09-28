@@ -204,4 +204,81 @@ describe('ElectronAdapter', () => {
     await adapter.cancelTranscodeJob('/a.mp4');
     expect(mockElectronAPI.cancelTranscodeJob).toHaveBeenCalledWith('/a.mp4');
   });
+
+  describe('getHeatmap', () => {
+    const heatmap = { audio: [-90], motion: [1], points: 1 };
+    const bridge = {
+      getHeatmap: vi.fn(),
+      cancelHeatmap: vi.fn(),
+    };
+
+    beforeEach(() => {
+      bridge.getHeatmap.mockReset();
+      bridge.cancelHeatmap.mockReset().mockResolvedValue({
+        success: true,
+        data: undefined,
+      });
+    });
+
+    it('returns the heatmap without a signal', async () => {
+      bridge.getHeatmap.mockResolvedValue({ success: true, data: heatmap });
+      const adapter = new ElectronAdapter(bridge as any);
+      await expect(adapter.getHeatmap('/v.mp4', 1)).resolves.toEqual(heatmap);
+      expect(bridge.getHeatmap).toHaveBeenCalledWith('/v.mp4', 1);
+    });
+
+    it('returns the heatmap when the signal never aborts', async () => {
+      bridge.getHeatmap.mockResolvedValue({ success: true, data: heatmap });
+      const adapter = new ElectronAdapter(bridge as any);
+      const controller = new AbortController();
+      await expect(
+        adapter.getHeatmap('/v.mp4', 1, { signal: controller.signal }),
+      ).resolves.toEqual(heatmap);
+      controller.abort();
+      expect(bridge.cancelHeatmap).not.toHaveBeenCalled();
+    });
+
+    it('tells the main process and stops waiting when aborted', async () => {
+      let answer!: (value: unknown) => void;
+      bridge.getHeatmap.mockReturnValue(
+        new Promise((resolve) => {
+          answer = resolve;
+        }),
+      );
+      const adapter = new ElectronAdapter(bridge as any);
+      const controller = new AbortController();
+      const pending = adapter.getHeatmap('/v.mp4', 100, {
+        signal: controller.signal,
+      });
+
+      controller.abort();
+      await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+      expect(bridge.cancelHeatmap).toHaveBeenCalledWith('/v.mp4');
+
+      // The abandoned IPC reply is ignored.
+      answer({ success: false, error: 'aborted' });
+    });
+
+    it('rejects an already aborted signal', async () => {
+      bridge.getHeatmap.mockResolvedValue({ success: true, data: heatmap });
+      const adapter = new ElectronAdapter(bridge as any);
+      const controller = new AbortController();
+      controller.abort();
+      await expect(
+        adapter.getHeatmap('/v.mp4', 100, { signal: controller.signal }),
+      ).rejects.toMatchObject({ name: 'AbortError' });
+    });
+
+    it('surfaces the busy error message from the main process', async () => {
+      const { isHeatmapBusyError, HEATMAP_BUSY_MESSAGE } =
+        await import('../../../src/core/media/analysis/heatmap-errors');
+      bridge.getHeatmap.mockResolvedValue({
+        success: false,
+        error: HEATMAP_BUSY_MESSAGE,
+      });
+      const adapter = new ElectronAdapter(bridge as any);
+      const error = await adapter.getHeatmap('/v.mp4').catch((e) => e);
+      expect(isHeatmapBusyError(error)).toBe(true);
+    });
+  });
 });

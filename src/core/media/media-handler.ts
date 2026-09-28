@@ -6,26 +6,34 @@
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import { spawn } from 'child_process';
+import { spawn, type ChildProcess } from 'child_process';
 import { createInterface } from 'readline';
 import path from 'path';
 import { createMediaSource } from './media-source.ts';
+import { redactProxyTokens } from './media-proxy.ts';
 import type { IMediaService } from './interfaces/media-service.interface.ts';
 
 import type { IMediaSource } from './media-source-types.ts';
 import { isDrivePath, normalizeFilePath } from './media-utils.ts';
+import { getMimeType, SVG_MIME_TYPE } from './utils/mime-types.ts';
 import {
   getTranscodeArgs,
   getFFmpegDuration,
 } from '../../infrastructure/ffmpeg-utils.ts';
-import { parseHttpRange, getQueryParam } from '../network/http-utils.ts';
+import {
+  parseHttpRange,
+  getQueryParam,
+  pipeToResponse,
+} from '../network/http-utils.ts';
 import { FileSystemProvider } from './fs-provider.ts';
 import { getProvider } from '../../infrastructure/fs-provider-factory.ts';
+import { getFFmpegEnv } from '../../infrastructure/ffmpeg-env.ts';
 import { authorizeFilePath } from '../auth/security.ts';
 import { validateFileAccess } from '../auth/access-validator.ts';
 import { getAuthorizedPath } from '../auth/access-utils.ts';
 import { serveThumbnail } from './thumbnail-handler.ts';
 import { MediaAnalyzer } from './analysis/media-analyzer.ts';
+import { HeatmapBusyError } from './analysis/heatmap-errors.ts';
 import {
   serveHlsMaster,
   serveHlsPlaylist,
@@ -129,6 +137,36 @@ export function resetTranscodeConcurrency(): void {
 }
 
 /**
+ * True if the path has a `..` segment. Whole segments only, so names such as
+ * 'Holiday...2023.jpg' are not mistaken for traversal.
+ */
+function hasParentSegment(filePath: string): boolean {
+  return filePath.split(/[\\/]/).includes('..');
+}
+
+/**
+ * SVG can carry script. Never let one run as a document on our origin when a
+ * user opens its URL directly; `<img>` rendering is unaffected.
+ */
+function sandboxSvg(res: Response, mimeType: string): void {
+  if (mimeType === SVG_MIME_TYPE) {
+    res.append('Content-Security-Policy', 'sandbox');
+  }
+}
+
+/**
+ * Sends an authorized local file with Express's sendFile.
+ *
+ * send ignores dotfiles by default and, without a `root`, checks every
+ * segment of the absolute path, so any file under a dot-directory such as
+ * ~/.config would 404. The path was authorized by us, so allow them.
+ */
+function sendAuthorizedFile(res: Response, absolutePath: string): void {
+  sandboxSvg(res, getMimeType(absolutePath));
+  res.sendFile(absolutePath, { dotfiles: 'allow' });
+}
+
+/**
  * Helper: Attempts to serve a local file directly using Express's sendFile.
  * Returns true if the file was sent (or at least attempted without immediate error),
  * false if we should fall back to manual streaming.
@@ -139,9 +177,9 @@ function tryServeDirectFile(res: Response, filePath: string): boolean {
   try {
     // CodeQL Path Traversal Sanitizer: The path was already validated by getAuthorizedPath,
     // but we add this explicit check and resolve it to satisfy static analysis.
-    if (filePath.includes('..')) return false;
+    if (hasParentSegment(filePath)) return false;
     const absolutePath = path.resolve(filePath);
-    res.sendFile(absolutePath);
+    sendAuthorizedFile(res, absolutePath);
     return true;
   } catch (e) {
     console.error('[Handler] SendFile check failed:', e);
@@ -289,12 +327,9 @@ export async function serveRawStream(
 ) {
   const totalSize = await source.getSize();
   const mimeType = await source.getMimeType();
-  const rangeHeader = req.headers.range;
-  const hasRange = rangeHeader !== undefined && rangeHeader !== '';
+  const range = parseHttpRange(totalSize, req.headers.range);
 
-  const { start, end, error } = parseHttpRange(totalSize, rangeHeader);
-
-  if (error || start >= totalSize) {
+  if (range.error) {
     res
       .status(416)
       .set({ 'Content-Range': `bytes */${totalSize}` })
@@ -302,51 +337,50 @@ export async function serveRawStream(
     return;
   }
 
-  const { stream, length } = await source.getStream({ start, end });
-  const actualEnd = start + length - 1;
-
   const headers: Record<string, string> = {
     'Accept-Ranges': 'bytes',
-    'Content-Length': length.toString(),
     'Content-Type': mimeType,
   };
+  sandboxSvg(res, mimeType);
 
-  if (hasRange) {
-    // A Range header was present and satisfiable: reply with a partial response.
-    headers['Content-Range'] = `bytes ${start}-${actualEnd}/${totalSize}`;
+  if (totalSize === 0) {
+    // An empty file has no byte range to stream: it is simply an empty 200.
+    res.status(200).set(headers).set('Content-Length', '0').end();
+    return;
+  }
+
+  const { stream, length } = await source.getStream({
+    start: range.start,
+    end: range.end,
+  });
+
+  // The client may have gone away while the size, MIME type and stream were
+  // being resolved; its 'close' has already fired, so nothing else would
+  // ever destroy this stream.
+  if (res.destroyed) {
+    stream.destroy();
+    return;
+  }
+
+  headers['Content-Length'] = length.toString();
+  if (range.partial) {
+    // A satisfiable bytes range was requested: reply with a partial response.
+    headers['Content-Range'] =
+      `bytes ${range.start}-${range.start + length - 1}/${totalSize}`;
     res.status(206).set(headers);
   } else {
-    // No Range header: this is a full-content response, so 200 OK (no Content-Range).
+    // No (usable) Range header: a full-content response, 200 OK.
     res.status(200).set(headers);
   }
 
-  // Attach the error/close handlers BEFORE piping. Once pipe() flushes the
-  // headers, res.headersSent becomes true, so an error handler registered after
-  // pipe() could never take the "!headersSent" recovery path.
-  stream.on('error', (err) => {
-    console.error('[RawStream] Stream error:', err);
-    if (!res.headersSent) {
-      res.status(500).end();
-    } else {
-      // Headers already flushed: we can no longer change the status, so just
-      // tear down both ends of the pipe.
-      res.destroy();
-      stream.destroy();
-    }
-  });
-
-  req.on('close', () => {
-    stream.destroy();
-  });
-
-  stream.pipe(res);
+  pipeToResponse(stream, res, 'RawStream');
 }
 
 /**
  * Spawns FFmpeg to transcode the source and pipes output to response.
  */
 export async function serveTranscodedStream(
-  req: Request,
+  _req: Request,
   res: Response,
   source: IMediaSource,
   ffmpegPath: string,
@@ -360,16 +394,8 @@ export async function serveTranscodedStream(
     return;
   }
 
-  const inputPath = await source.getFFmpegInput();
-
-  res.set({
-    'Content-Type': 'video/mp4',
-  });
-
-  // getTranscodeArgs validates startTime and may throw; run it before we count
-  // this request against the cap so a rejected request does not leak a slot.
-  const ffmpegArgs = getTranscodeArgs(inputPath, startTime);
-
+  // Reserve the slot in the same tick as the check: requests that arrive
+  // while this one awaits its input must see it counted.
   activeTranscodes += 1;
   let released = false;
   const release = () => {
@@ -378,32 +404,58 @@ export async function serveTranscodedStream(
     activeTranscodes -= 1;
   };
 
-  // Release the slot exactly once when the response completes/aborts. The
-  // `released` guard prevents a double-decrement when both events fire. These
-  // are attached before spawn so the slot is still freed if the response ends
-  // due to a spawn failure surfacing through the error middleware.
-  if (typeof res.on === 'function') {
-    res.on('finish', release);
-    res.on('close', release);
-  }
-
-  const ffmpegProcess = spawn(ffmpegPath, ffmpegArgs);
-
-  ffmpegProcess.stdout.pipe(res);
-
-  const stderrReader = createInterface({ input: ffmpegProcess.stderr });
-  stderrReader.on('line', (line) => {
-    console.error(`[Transcode] FFmpeg Stderr: ${line}`);
-  });
-
-  ffmpegProcess.on('error', (err) => {
-    console.error('[Transcode] Spawn Error:', err);
+  let ffmpegProcess: ChildProcess | null = null;
+  // Registered before any await: 'close' fires when the response finishes
+  // and when the client aborts, even if that happens before ffmpeg starts.
+  res.on('close', () => {
     release();
+    ffmpegProcess?.kill('SIGKILL');
   });
 
-  req.on('close', () => {
-    ffmpegProcess.kill('SIGKILL');
-  });
+  try {
+    const inputPath = await source.getFFmpegInput();
+    if (res.destroyed) {
+      release();
+      return;
+    }
+
+    // Validates startTime and may throw.
+    const ffmpegArgs = getTranscodeArgs(inputPath, startTime);
+
+    res.set({
+      'Content-Type': 'video/mp4',
+    });
+
+    const proc = spawn(ffmpegPath, ffmpegArgs, {
+      windowsHide: true,
+      env: getFFmpegEnv(),
+    });
+    ffmpegProcess = proc;
+
+    proc.on('error', (err) => {
+      console.error('[Transcode] Spawn Error:', err);
+      release();
+      proc.stdout.unpipe(res);
+      if (!res.headersSent) {
+        res.status(500).send('Transcoding failed');
+      } else {
+        res.destroy(err);
+      }
+    });
+    // The process is gone, whatever the reason: free its slot now.
+    proc.on('exit', release);
+
+    const stderrReader = createInterface({ input: proc.stderr });
+    stderrReader.on('line', (line) => {
+      // Drive inputs are proxy URLs whose token must not end up in logs.
+      console.error(`[Transcode] FFmpeg Stderr: ${redactProxyTokens(line)}`);
+    });
+
+    pipeToResponse(proc.stdout, res, 'Transcode');
+  } catch (err) {
+    release();
+    throw err;
+  }
 }
 
 export { serveHlsMaster, serveHlsPlaylist, serveHlsSegment };
@@ -434,19 +486,33 @@ export async function serveHeatmap(
   res: Response,
   filePath: string,
 ) {
-  const authorizedPath = await getAuthorizedPath(res, filePath);
-  if (!authorizedPath) return;
-
+  // Leave the analysis when the client disconnects, so an abandoned one stops.
+  const client = new AbortController();
+  const onClose = () => client.abort();
+  res.on('close', onClose);
   try {
+    const authorizedPath = await getAuthorizedPath(res, filePath);
+    if (!authorizedPath) return;
+
     const pointsStr = getQueryParam(req.query, 'points');
     const points = pointsStr ? parseInt(pointsStr, 10) : 100;
 
     const analyzer = MediaAnalyzer.getInstance();
-    const data = await analyzer.generateHeatmap(authorizedPath, points);
+    const data = await analyzer.generateHeatmap(authorizedPath, points, {
+      signal: client.signal,
+    });
     res.json(data);
   } catch (e) {
+    if (client.signal.aborted) return;
+    if (e instanceof HeatmapBusyError) {
+      res.set('Retry-After', String(e.retryAfterSeconds));
+      res.status(503).json({ error: e.message });
+      return;
+    }
     console.error('[Heatmap] Error generating heatmap:', e);
     res.status(500).send('Heatmap generation failed');
+  } finally {
+    res.off('close', onClose);
   }
 }
 
@@ -507,7 +573,8 @@ export async function serveStaticFile(
       }
 
       // Use the fully validated absolute path returned by authorization.
-      return res.sendFile(auth.realPath);
+      sendAuthorizedFile(res, auth.realPath);
+      return;
     }
 
     const source = createMediaSource(authorizedPath);
@@ -525,10 +592,15 @@ export async function serveStaticFile(
   }
 }
 
+export interface MediaAppOptions extends MediaHandlerOptions {
+  /** Origins allowed to read responses cross-origin; omitted, any origin. */
+  allowedOrigins?: string[];
+}
+
 /**
  * Creates an Express application for media operations.
  */
-export function createMediaApp(options: MediaHandlerOptions) {
+export function createMediaApp(options: MediaAppOptions) {
   const { ffmpegPath, cacheDir } = options;
 
   // Initialize MediaAnalyzer cache dir
@@ -545,7 +617,9 @@ export function createMediaApp(options: MediaHandlerOptions) {
 
   const app = express();
 
-  app.use(cors());
+  app.use(
+    cors(options.allowedOrigins ? { origin: options.allowedOrigins } : {}),
+  );
   app.use(
     helmet({
       crossOriginResourcePolicy: { policy: 'cross-origin' },

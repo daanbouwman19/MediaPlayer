@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vite-plus/test';
 import { setActivePinia, createPinia } from 'pinia';
 import { useAuthStore } from '@/composables/useAuthStore';
+import { HttpError } from '@/api/http-error';
 
 const { mockGetLockStatus, mockUnlock } = vi.hoisted(() => ({
   mockGetLockStatus: vi.fn(),
@@ -95,32 +96,48 @@ describe('useAuthStore', () => {
 
     const result = await store.unlock('correct-pwd');
 
-    expect(result).toBe(true);
+    expect(result).toBe('ok');
     expect(store.isLocked).toBe(false);
     expect(mockUnlock).toHaveBeenCalledWith('correct-pwd');
   });
 
-  it('unlock failure returns false and keeps isLocked true', async () => {
+  it('unlock with a rejected password returns "invalid" and keeps isLocked true', async () => {
     store.isLocked = true;
     mockUnlock.mockResolvedValueOnce(false);
 
     const result = await store.unlock('wrong-pwd');
 
-    expect(result).toBe(false);
+    expect(result).toBe('invalid');
     expect(store.isLocked).toBe(true);
     expect(mockUnlock).toHaveBeenCalledWith('wrong-pwd');
   });
 
-  it('unlock handles errors gracefully and returns false', async () => {
+  it('unlock reports HTTP 429 as "rateLimited", not as a wrong password', async () => {
     store.isLocked = true;
-    mockUnlock.mockRejectedValueOnce(new Error('Network error'));
+    mockUnlock.mockRejectedValueOnce(
+      new HttpError(429, 'Too many auth attempts. Please try again later.'),
+    );
+
+    const result = await store.unlock('maybe-right');
+
+    expect(result).toBe('rateLimited');
+    expect(store.isLocked).toBe(true);
+  });
+
+  it.each([
+    ['a server error', new HttpError(500, 'Internal server error')],
+    ['a network failure', new TypeError('Failed to fetch')],
+  ])('unlock reports %s as "error"', async (_label, failure) => {
+    store.isLocked = true;
+    mockUnlock.mockRejectedValueOnce(failure);
 
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    const result = await store.unlock('wrong-pwd');
+    const result = await store.unlock('maybe-right');
 
-    expect(result).toBe(false);
+    expect(result).toBe('error');
     expect(store.isLocked).toBe(true);
+    expect(consoleSpy).toHaveBeenCalledWith('Unlock failed:', failure);
 
     consoleSpy.mockRestore();
   });

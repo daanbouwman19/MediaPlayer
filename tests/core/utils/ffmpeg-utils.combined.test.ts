@@ -162,6 +162,18 @@ describe('FFmpeg Utils Combined Tests', () => {
       expect(args).toContain('-frames:v');
       expect(args).toContain('1');
     });
+
+    it('seeks before the input and downscales the frame', () => {
+      const args = getThumbnailArgs('/in.mp4', '/out.jpg', 0.5);
+      expect(args.indexOf('-ss')).toBeLessThan(args.indexOf('-i'));
+      expect(args[args.indexOf('-ss') + 1]).toBe('0.5');
+      expect(args[args.indexOf('-vf') + 1]).toBe("scale='min(640,iw)':-2");
+      expect(args[args.length - 1]).toBe('/out.jpg');
+    });
+
+    it('does not seek for images and very short clips', () => {
+      expect(getThumbnailArgs('/in.png', '/out.jpg', 0)).not.toContain('-ss');
+    });
   });
 
   describe('parseFFmpegDuration', () => {
@@ -250,11 +262,33 @@ describe('FFmpeg Utils Combined Tests', () => {
 
       // Simulate data on stderr
       mockProcess.stderr.emit('data', Buffer.from('test output'));
-      // Simulate exit
-      mockProcess.emit('exit', 0, null);
+      // Simulate the process closing (exit + stdio drained)
+      mockProcess.emit('close', 0, null);
 
       const result = await promise;
       expect(result).toEqual({ code: 0, stdout: '', stderr: 'test output' });
+    });
+
+    it('kills the process when the signal aborts', async () => {
+      const mockProcess = createMockProcess();
+      mockSpawn.mockReturnValue(mockProcess);
+      const controller = new AbortController();
+
+      const promise = runFFmpeg('ffmpeg', [], 1000, controller.signal);
+      controller.abort();
+      expect(mockProcess.kill).toHaveBeenCalledWith('SIGKILL');
+
+      mockProcess.emit('close', null, 'SIGKILL');
+      await expect(promise).resolves.toMatchObject({ code: null });
+    });
+
+    it('does not spawn for an already aborted signal', async () => {
+      const controller = new AbortController();
+      controller.abort();
+      await expect(
+        runFFmpeg('ffmpeg', [], 1000, controller.signal),
+      ).rejects.toMatchObject({ name: 'AbortError' });
+      expect(mockSpawn).not.toHaveBeenCalled();
     });
   });
 
@@ -269,7 +303,7 @@ describe('FFmpeg Utils Combined Tests', () => {
         'data',
         Buffer.from('Duration: 00:01:01.50, start:'),
       );
-      mockProcess.emit('exit', 0, null);
+      mockProcess.emit('close', 0, null);
 
       const duration = await promise;
       expect(duration).toBeCloseTo(61.5);
@@ -282,7 +316,7 @@ describe('FFmpeg Utils Combined Tests', () => {
       const promise = getFFmpegDuration('/path/to/video.mp4', 'ffmpeg');
 
       mockProcess.stderr.emit('data', Buffer.from('Invalid input'));
-      mockProcess.emit('exit', 0, null);
+      mockProcess.emit('close', 0, null);
 
       await expect(promise).rejects.toThrow('Could not determine duration');
     });
@@ -321,7 +355,7 @@ describe('FFmpeg Utils Combined Tests', () => {
         'data',
         Buffer.from('Stream #0:0: Video: h264\nStream #0:1: Audio: aac'),
       );
-      mockProcess.emit('exit', 0, null);
+      mockProcess.emit('close', 0, null);
 
       const streams = await promise;
       expect(streams).toEqual({
@@ -339,7 +373,7 @@ describe('FFmpeg Utils Combined Tests', () => {
       const promise = getFFmpegStreams(INPUT_PATH, 'ffmpeg');
 
       mockProcess.stderr.emit('data', Buffer.from('Stream #0:0: Audio: aac'));
-      mockProcess.emit('exit', 0, null);
+      mockProcess.emit('close', 0, null);
 
       const streams = await promise;
       expect(streams).toEqual({
@@ -357,7 +391,7 @@ describe('FFmpeg Utils Combined Tests', () => {
       const promise = getFFmpegStreams(INPUT_PATH, 'ffmpeg');
 
       mockProcess.stderr.emit('data', Buffer.from('Stream #0:0: Video: h264'));
-      mockProcess.emit('exit', 0, null);
+      mockProcess.emit('close', 0, null);
 
       const streams = await promise;
       expect(streams).toEqual({
@@ -375,7 +409,7 @@ describe('FFmpeg Utils Combined Tests', () => {
       const promise = getFFmpegStreams(INPUT_PATH, 'ffmpeg');
 
       mockProcess.stderr.emit('data', Buffer.from('Invalid output'));
-      mockProcess.emit('exit', 0, null);
+      mockProcess.emit('close', 0, null);
 
       const streams = await promise;
       expect(streams).toEqual({ hasVideo: false, hasAudio: false });

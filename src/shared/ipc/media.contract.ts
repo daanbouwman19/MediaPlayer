@@ -14,6 +14,7 @@ export const MEDIA_IPC_CHANNELS = {
   GET_ALBUMS_WITH_VIEW_COUNTS: 'get-albums-with-view-counts',
   GET_HEATMAP: 'get-heatmap',
   GET_HEATMAP_PROGRESS: 'get-heatmap-progress',
+  CANCEL_HEATMAP: 'cancel-heatmap',
   GET_HLS_STATUS: 'get-hls-status',
   DB_GET_RECENTLY_PLAYED: 'db:get-recently-played',
   MEDIA_EXTRACT_METADATA: 'media:extract-metadata',
@@ -27,6 +28,28 @@ export const MEDIA_IPC_CHANNELS = {
   TRANSCODE_JOB_LIST: 'transcode-job:list',
   TRANSCODE_JOB_CANCEL: 'transcode-job:cancel',
 } as const;
+
+/** Where a Drive file stands in the local offline cache. */
+export type DriveCacheState = 'ready' | 'syncing' | 'cloud';
+
+export interface DriveCacheStatus {
+  status: DriveCacheState;
+  progress: number;
+}
+
+/**
+ * Pushed on DRIVE_CACHE_PROGRESS while a Drive file downloads into the
+ * offline cache (throttled per file), followed by one terminal event:
+ * 'ready' once the file is complete, or 'error' when the download failed.
+ */
+export interface DriveCacheProgressEvent {
+  fileId: string;
+  status: 'syncing' | 'ready' | 'error';
+  progress: number;
+  downloadedBytes: number;
+  totalSize: number;
+  error?: string;
+}
 
 export interface MediaIpcContract {
   [MEDIA_IPC_CHANNELS.LOAD_FILE_AS_DATA_URL]: {
@@ -61,6 +84,10 @@ export interface MediaIpcContract {
     payload: [string];
     response: number | null;
   };
+  [MEDIA_IPC_CHANNELS.CANCEL_HEATMAP]: {
+    payload: [string];
+    response: void;
+  };
   [MEDIA_IPC_CHANNELS.GET_HLS_STATUS]: {
     payload: [string];
     response: { currentTime: number; duration: number; percent: number } | null;
@@ -87,7 +114,7 @@ export interface MediaIpcContract {
   };
   [MEDIA_IPC_CHANNELS.DRIVE_CACHE_STATUS]: {
     payload: [string];
-    response: { status: 'ready' | 'syncing' | 'cloud'; progress: number };
+    response: DriveCacheStatus;
   };
   [MEDIA_IPC_CHANNELS.DRIVE_CACHE_TRIGGER]: {
     payload: [string];

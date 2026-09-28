@@ -1,4 +1,4 @@
-import { mount } from '@vue/test-utils';
+import { mount, flushPromises } from '@vue/test-utils';
 import { describe, it, expect } from 'vite-plus/test';
 import KeyboardShortcutsModal from '../../src/renderer/components/organisms/KeyboardShortcutsModal.vue';
 
@@ -119,5 +119,30 @@ describe('KeyboardShortcutsModal', () => {
 
     await window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
     expect(wrapper.emitted('close')).toBeFalsy();
+  });
+
+  it('moves focus into the dialog when opened and back to the opener on close', async () => {
+    const trigger = document.createElement('button');
+    trigger.textContent = 'Keyboard Shortcuts';
+    document.body.appendChild(trigger);
+    trigger.focus();
+
+    const wrapper = mount(KeyboardShortcutsModal, {
+      props: { isOpen: false },
+      attachTo: document.body,
+      global: { stubs: { CloseIcon: true } },
+    });
+    await wrapper.setProps({ isOpen: true });
+    await flushPromises();
+
+    const dialog = wrapper.find('div[role="dialog"]').element;
+    expect(dialog.contains(document.activeElement)).toBe(true);
+
+    await wrapper.setProps({ isOpen: false });
+    await flushPromises();
+    expect(document.activeElement).toBe(trigger);
+
+    wrapper.unmount();
+    trigger.remove();
   });
 });

@@ -47,12 +47,6 @@ vi.mock('../../src/core/media/media-source.ts', () => ({
 
 vi.mock('../../src/infrastructure/ffmpeg-utils.ts', () => ({
   getHlsTranscodeArgs: vi.fn().mockReturnValue(['-f', 'hls', 'playlist.m3u8']),
-  detectFFmpegCapabilities: vi.fn().mockResolvedValue({
-    nvenc: false,
-    videotoolbox: false,
-    vaapi: false,
-  }),
-  getHardwareCodec: vi.fn().mockReturnValue(null),
   getFFmpegStreams: vi.fn().mockResolvedValue({
     hasVideo: true,
     hasAudio: true,

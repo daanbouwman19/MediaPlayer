@@ -50,10 +50,23 @@ RUN mkdir -p /app/cache /app/data && chown -R appuser:nodejs /app/cache /app/dat
 # Expose the application port
 EXPOSE 3000
 
-ENV NODE_ENV=production
+# Everything the server writes lives in /app/data (mount a volume there) or
+# /app/cache; /app itself is read-only for appuser:
+# - the database, and master.key next to it (MASTER_KEY_DIR defaults to its dir)
+# - the self-signed TLS certificate, generated on first start
+# HOST=0.0.0.0 is required for the published port to reach the server inside
+# the container; restrict who can reach it where the port is published.
+ENV NODE_ENV=production \
+    HOST=0.0.0.0 \
+    PORT=3000 \
+    DB_FILE_PATH=/app/data/media-library.db \
+    CERT_DIR=/app/data/certs
 
 # Switch to the non-root user
 USER appuser
 
-# Define command
+# Exec form, so node itself receives `docker stop`'s SIGTERM. Run the container
+# with an init process as PID 1 (`docker run --init`, or `init: true` as in
+# docker-compose.yml): it forwards signals to node and reaps exited child
+# processes such as ffmpeg.
 CMD ["node", "dist/server/index.js"]

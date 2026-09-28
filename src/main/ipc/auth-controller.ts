@@ -5,9 +5,10 @@ import {
   authenticateWithCode,
   checkGoogleDriveAuth,
   getPendingAuthState,
-} from '../google-auth';
+} from '../../infrastructure/google-auth';
 import { startAuthServer } from '../auth-server';
-import { getDriveClient } from '../google-drive-service';
+import { getDriveFolderInfo } from '../../infrastructure/google-drive-service';
+import { getGoogleRedirectUri } from '../../infrastructure/google-secrets';
 import { addMediaDirectory } from '../../core/database/database';
 import { handleIpc } from '../utils/ipc-helper';
 
@@ -18,11 +19,11 @@ export function registerAuthHandlers() {
 
   handleIpc(IPC_CHANNELS.AUTH_GOOGLE_DRIVE_START, async () => {
     const url = generateAuthUrl();
-    // Pass a getter (not the current value) so a restarted auth flow
-    // validates against the freshest state on the long-lived server.
-    startAuthServer(3000, getPendingAuthState).catch((err) =>
-      console.error('Failed to start auth server', err),
-    );
+    // Listen where the redirect URI points before sending the user to Google;
+    // a failure reaches the renderer instead of a dead redirect later. Pass a
+    // getter (not the current value) so a restarted auth flow validates
+    // against the freshest state if the server is reused.
+    await startAuthServer(getGoogleRedirectUri(), getPendingAuthState);
     return url;
   });
 
@@ -37,17 +38,13 @@ export function registerAuthHandlers() {
   handleIpc(
     IPC_CHANNELS.ADD_GOOGLE_DRIVE_SOURCE,
     async (_event: IpcMainInvokeEvent, folderId: string) => {
-      const drive = await getDriveClient();
-      const res = await drive.files.get({
-        fileId: folderId,
-        fields: 'id, name',
-      });
+      const folder = await getDriveFolderInfo(folderId);
       await addMediaDirectory({
-        path: `gdrive://${res.data.id}`,
+        path: `gdrive://${folder.id}`,
         type: 'google_drive',
-        name: res.data.name || 'Google Drive Folder',
+        name: folder.name,
       });
-      return { name: res.data.name || undefined };
+      return { name: folder.name };
     },
   );
 }

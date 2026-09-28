@@ -89,6 +89,8 @@ describe('Coverage Fix - HandleAccessCheck Integration', () => {
       json: vi.fn().mockReturnThis(),
       set: vi.fn().mockReturnThis(),
       sendFile: vi.fn(),
+      on: vi.fn(),
+      off: vi.fn(),
       headersSent: false,
     };
   });

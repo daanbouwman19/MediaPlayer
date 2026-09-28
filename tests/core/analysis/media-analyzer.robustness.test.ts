@@ -1,116 +1,89 @@
-import { describe, it, expect, vi, beforeEach } from 'vite-plus/test';
-import { MediaAnalyzer } from '../../../src/core/media/analysis/media-analyzer';
-import fs from 'fs/promises';
+import {
+  describe,
+  it,
+  expect,
+  vi,
+  beforeEach,
+  afterEach,
+} from 'vite-plus/test';
 import { EventEmitter } from 'events';
-import { spawn } from 'child_process';
-import { PassThrough } from 'stream';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+import { MediaAnalyzer } from '../../../src/core/media/analysis/media-analyzer';
 
-// Mock dependencies
-const { mockFs } = vi.hoisted(() => {
-  return {
-    mockFs: {
-      readFile: vi.fn(),
-      writeFile: vi.fn(),
-      mkdir: vi.fn(),
-      access: vi.fn(),
-      stat: vi.fn(),
-    },
-  };
-});
-
-vi.mock('fs/promises', () => ({
-  default: mockFs,
-  readFile: mockFs.readFile,
-  writeFile: mockFs.writeFile,
-  mkdir: mockFs.mkdir,
-  access: mockFs.access,
-  stat: mockFs.stat,
+const { mockSpawn, mockGetStreams } = vi.hoisted(() => ({
+  mockSpawn: vi.fn(),
+  mockGetStreams: vi.fn(),
 }));
 
-vi.mock('child_process', () => {
-  const spawn = vi.fn();
-  return {
-    spawn,
-    default: { spawn },
-  };
-});
-
+vi.mock('child_process', () => ({
+  spawn: mockSpawn,
+  default: { spawn: mockSpawn },
+}));
 vi.mock('ffmpeg-static', () => ({ default: '/usr/bin/ffmpeg' }));
-vi.mock('crypto', () => ({
-  default: {
-    createHash: () => ({
-      update: () => ({
-        digest: () => 'mockhash',
-      }),
-    }),
-  },
-}));
-
-// Mock using the exact same strings as the source imports
-// PLUS the strings as the test imports
 vi.mock('../../../src/infrastructure/ffmpeg-utils', () => ({
-  getFFmpegStreams: vi.fn(),
-  runFFmpeg: vi.fn(),
+  getFFmpegStreams: mockGetStreams,
+  getInputSafetyArgs: () => ['-protocol_whitelist', 'file'],
 }));
-vi.mock('../../../src/infrastructure/ffmpeg-utils.ts', () => ({
-  getFFmpegStreams: vi.fn(),
-  runFFmpeg: vi.fn(),
-}));
-
 vi.mock('../../../src/core/media/media-source', () => ({
-  createMediaSource: vi.fn(),
+  createMediaSource: (filePath: string) => ({
+    getFFmpegInput: async () => filePath,
+  }),
 }));
-vi.mock('../../../src/core/media/media-source.ts', () => ({
-  createMediaSource: vi.fn(),
+vi.mock('../../../src/core/media/file-identity', () => ({
+  getFileIdentity: async () => '1-1',
 }));
 
-import { getFFmpegStreams } from '../../../src/infrastructure/ffmpeg-utils';
-import { createMediaSource } from '../../../src/core/media/media-source';
+function createFakeProcess(args: string[]) {
+  const proc = new EventEmitter() as any;
+  proc.args = args;
+  proc.stdout = new EventEmitter();
+  proc.stderr = new EventEmitter();
+  proc.kill = vi.fn();
+  return proc;
+}
 
 describe('MediaAnalyzer Robustness', () => {
   let analyzer: MediaAnalyzer;
+  let cacheDir: string;
+  let proc: any;
+
+  const waitForSpawn = () =>
+    vi.waitFor(() => expect(mockSpawn).toHaveBeenCalled());
 
   beforeEach(() => {
-    vi.resetAllMocks();
+    vi.clearAllMocks();
     MediaAnalyzer.resetInstance();
+    cacheDir = fs.mkdtempSync(path.join(os.tmpdir(), 'heatmap-robust-'));
     analyzer = MediaAnalyzer.getInstance();
-    analyzer.setCacheDir('/tmp/cache');
+    analyzer.setCacheDir(cacheDir);
     process.env.DISABLE_HEATMAPS = 'false';
-    (fs.readFile as any).mockRejectedValue(new Error('ENOENT')); // Cache miss
-    vi.mocked(createMediaSource).mockImplementation((path: string) => ({
-      getFFmpegInput: vi.fn().mockResolvedValue(path),
-      getStream: vi.fn(),
-      getMimeType: vi.fn(),
-      getSize: vi.fn(),
-      getType: () => 'local',
-    }));
+    mockSpawn.mockImplementation((_cmd: string, args: string[]) => {
+      proc = createFakeProcess(args);
+      return proc;
+    });
   });
 
-  const setupMockSpawn = () => {
-    const mockProcess = new EventEmitter() as any;
-    mockProcess.stdout = new PassThrough();
-    mockProcess.stderr = new PassThrough();
-    mockProcess.kill = vi.fn();
-    (spawn as any).mockReturnValue(mockProcess);
-    return mockProcess;
-  };
+  afterEach(() => {
+    MediaAnalyzer.resetInstance();
+    fs.rmSync(cacheDir, { recursive: true, force: true });
+  });
 
   it('should handle missing audio stream gracefully', async () => {
-    vi.mocked(getFFmpegStreams).mockResolvedValue({
-      hasVideo: true,
-      hasAudio: false,
-    });
+    mockGetStreams.mockResolvedValue({ hasVideo: true, hasAudio: false });
 
-    const mockProcess = setupMockSpawn();
     const promise = analyzer.generateHeatmap('video_only.mp4', 1);
+    await waitForSpawn();
+    expect(proc.args).not.toContain('[a]');
 
-    await new Promise((resolve) => setTimeout(resolve, 50));
-
-    mockProcess.stdout.write('lavfi.signalstats.YDIF=10\n');
-    mockProcess.stdout.end();
-
-    await new Promise((resolve) => setTimeout(resolve, 50));
-    mockProcess.emit('close', 0);
+    proc.stdout.emit(
+      'data',
+      Buffer.from(
+        'frame:0 pts:0 pts_time:0\nlavfi.signalstats.YDIF=0\nframe:1 pts:1 pts_time:1\nlavfi.signalstats.YDIF=10\n',
+      ),
+    );
+    proc.emit('close', 0);
 
     const result = await promise;
     expect(result.points).toBe(1);
@@ -119,21 +92,19 @@ describe('MediaAnalyzer Robustness', () => {
   });
 
   it('should handle missing video stream gracefully', async () => {
-    vi.mocked(getFFmpegStreams).mockResolvedValue({
-      hasVideo: false,
-      hasAudio: true,
-    });
+    mockGetStreams.mockResolvedValue({ hasVideo: false, hasAudio: true });
 
-    const mockProcess = setupMockSpawn();
     const promise = analyzer.generateHeatmap('audio_only.mp3', 1);
+    await waitForSpawn();
+    expect(proc.args).not.toContain('[v]');
 
-    await new Promise((resolve) => setTimeout(resolve, 50));
-
-    mockProcess.stdout.write('lavfi.astats.Overall.RMS_level=-20\n');
-    mockProcess.stdout.end();
-
-    await new Promise((resolve) => setTimeout(resolve, 50));
-    mockProcess.emit('close', 0);
+    proc.stderr.emit(
+      'data',
+      Buffer.from(
+        '[Parsed_ametadata_2 @ 0x1] lavfi.astats.Overall.RMS_level=-20\n',
+      ),
+    );
+    proc.emit('close', 0);
 
     const result = await promise;
     expect(result.points).toBe(1);
@@ -142,34 +113,36 @@ describe('MediaAnalyzer Robustness', () => {
   });
 
   it('should fail if BOTH streams are missing', async () => {
-    vi.mocked(getFFmpegStreams).mockResolvedValue({
-      hasVideo: false,
-      hasAudio: false,
-    });
+    mockGetStreams.mockResolvedValue({ hasVideo: false, hasAudio: false });
 
-    const promise = analyzer.generateHeatmap('empty.file', 10);
-    await expect(promise).rejects.toThrow('No video or audio streams found');
+    await expect(analyzer.generateHeatmap('empty.file', 10)).rejects.toThrow(
+      'No video or audio streams found',
+    );
+    expect(mockSpawn).not.toHaveBeenCalled();
   });
 
-  it('should handle partial output lines correctly', async () => {
-    vi.mocked(getFFmpegStreams).mockResolvedValue({
-      hasVideo: true,
-      hasAudio: true,
-    });
-    const mockProcess = setupMockSpawn();
-    const promise = analyzer.generateHeatmap('partial.mp4', 1);
+  it('should ignore unparsable metadata values', async () => {
+    mockGetStreams.mockResolvedValue({ hasVideo: true, hasAudio: true });
 
-    await new Promise((resolve) => setTimeout(resolve, 50));
-
-    mockProcess.stdout.write('lavfi.signalstats.YDIF=10\n');
-    mockProcess.stdout.end();
-
-    await new Promise((resolve) => setTimeout(resolve, 50));
-    mockProcess.emit('close', 0);
+    const promise = analyzer.generateHeatmap('garbled.mp4', 1);
+    await waitForSpawn();
+    proc.stdout.emit(
+      'data',
+      Buffer.from(
+        'lavfi.signalstats.YDIF=5\nframe:0 pts:0 pts_time:0\nlavfi.signalstats.YDIF=nan\nframe:1 pts:1 pts_time:1\nlavfi.signalstats.YDIF=7\n',
+      ),
+    );
+    proc.stderr.emit(
+      'data',
+      Buffer.from(
+        '[x] lavfi.astats.Overall.RMS_level=nan\n[x] lavfi.astats.Overall.RMS_level=-inf\n[x] lavfi.astats.Overall.RMS_level=-150\n',
+      ),
+    );
+    proc.emit('close', 0);
 
     const result = await promise;
-    expect(result.points).toBe(1);
-    expect(result.motion[0]).toBe(10);
-    expect(result.audio[0]).toBe(-90);
+    expect(result.motion).toEqual([0]);
+    expect(result.audio).toEqual([-90]);
+    expect(result.audio.every(Number.isFinite)).toBe(true);
   });
 });

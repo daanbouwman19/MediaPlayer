@@ -27,6 +27,7 @@ import {
   getMediaViewCounts,
   addMediaDirectory,
   getMediaDirectories,
+  readMediaDirectories,
   removeMediaDirectory,
   setDirectoryActiveState,
   cacheAlbums,
@@ -328,6 +329,8 @@ describe('database.ts coverage', () => {
   });
 
   it('getMediaViewCounts handles empty list', async () => {
+    // initDatabase re-checks the stored directories; ignore that traffic.
+    mocks.WorkerClientInstance.sendMessage.mockClear();
     const result = await getMediaViewCounts([]);
     expect(result).toEqual({});
     expect(mocks.WorkerClientInstance.sendMessage).not.toHaveBeenCalled();
@@ -374,6 +377,22 @@ describe('database.ts coverage', () => {
     expect(result).toEqual([]);
   });
 
+  it('readMediaDirectories reads fresh rows and propagates failures', async () => {
+    mocks.WorkerClientInstance.sendMessage
+      .mockResolvedValueOnce([{ path: '/a' }])
+      .mockResolvedValueOnce(null);
+    await expect(readMediaDirectories()).resolves.toEqual([{ path: '/a' }]);
+    await expect(readMediaDirectories()).resolves.toEqual([]);
+
+    // Unlike getMediaDirectories, a failure is not turned into "no sources".
+    mocks.WorkerClientInstance.sendMessage.mockRejectedValueOnce(
+      new Error('Worker not initialized'),
+    );
+    await expect(readMediaDirectories()).rejects.toThrow(
+      'Worker not initialized',
+    );
+  });
+
   it('removeMediaDirectory sends correct message', async () => {
     await removeMediaDirectory('/path');
     expect(mocks.WorkerClientInstance.sendMessage).toHaveBeenCalledWith(
@@ -408,23 +427,27 @@ describe('database.ts coverage', () => {
 
   // A directory change can flip a path's authorization decision, so the auth
   // cache must be invalidated on every mutation (not just the media-directory
-  // cache).
+  // cache): before the write is posted and again once it is done, so nothing
+  // cached while it was in flight survives.
   it('addMediaDirectory invalidates the auth cache', async () => {
     const spy = vi.spyOn(security, 'clearAuthCache');
+    spy.mockClear();
     await addMediaDirectory('/path');
-    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy).toHaveBeenCalledTimes(2);
   });
 
   it('removeMediaDirectory invalidates the auth cache', async () => {
     const spy = vi.spyOn(security, 'clearAuthCache');
+    spy.mockClear();
     await removeMediaDirectory('/path');
-    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy).toHaveBeenCalledTimes(2);
   });
 
   it('setDirectoryActiveState invalidates the auth cache', async () => {
     const spy = vi.spyOn(security, 'clearAuthCache');
+    spy.mockClear();
     await setDirectoryActiveState('/path', true);
-    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy).toHaveBeenCalledTimes(2);
   });
 
   it('cacheAlbums sends correct message', async () => {
@@ -435,12 +458,16 @@ describe('database.ts coverage', () => {
     );
   });
 
-  it('cacheAlbums handles error', async () => {
+  it('cacheAlbums rethrows errors and still invalidates the auth cache', async () => {
+    const spy = vi.spyOn(security, 'clearAuthCache');
+    spy.mockClear();
     mocks.WorkerClientInstance.sendMessage.mockRejectedValueOnce(
       new Error('Fail'),
     );
-    await cacheAlbums([]);
-    // logs error
+    // A scan whose library membership could not be stored must not be
+    // presented as the library.
+    await expect(cacheAlbums([])).rejects.toThrow('Fail');
+    expect(spy).toHaveBeenCalledTimes(1);
   });
 
   it('getCachedAlbums sends correct message', async () => {

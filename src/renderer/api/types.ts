@@ -8,6 +8,10 @@ import type {
   TranscodeJob,
 } from '../../core/media/types';
 import type { FileSystemEntry } from '../../core/media/file-system';
+import type {
+  DriveCacheProgressEvent,
+  DriveCacheStatus,
+} from '../../shared/ipc/media.contract';
 
 export interface LoadResult {
   type: 'data-url' | 'http-url' | 'error';
@@ -55,7 +59,15 @@ export interface IMediaBackend {
     filePath: string,
   ): Promise<{ currentTime: number; duration: number; percent: number } | null>;
   getVideoMetadata(filePath: string): Promise<{ duration: number }>;
-  getHeatmap(filePath: string, points?: number): Promise<HeatmapData>;
+  /**
+   * Aborting `options.signal` rejects the call and tells the backend this
+   * viewer no longer needs the analysis.
+   */
+  getHeatmap(
+    filePath: string,
+    points?: number,
+    options?: { signal?: AbortSignal },
+  ): Promise<HeatmapData>;
   getHeatmapProgress(filePath: string): Promise<number | null>; // Returns 0-100 or null if no job
   openInVlc(filePath: string): Promise<{ success: boolean; message?: string }>;
 
@@ -96,4 +108,16 @@ export interface IMediaBackend {
   addGoogleDriveSource(folderId: string): Promise<{ name?: string }>;
   listGoogleDriveDirectory(folderId: string): Promise<FileSystemEntry[]>;
   getGoogleDriveParent(folderId: string): Promise<string | null>;
+
+  // Google Drive offline cache. Only the desktop app keeps one; the web
+  // adapter reports it unsupported so the UI can hide the controls.
+  readonly supportsDriveOfflineCache: boolean;
+  getDriveCacheStatus(fileId: string): Promise<DriveCacheStatus>;
+  /** Resolves once the download runs; rejects with the reason it can't. */
+  triggerDriveCache(fileId: string): Promise<void>;
+  /** Subscribes to cache events for one Drive file; returns the unsubscriber. */
+  onDriveCacheProgress(
+    fileId: string,
+    callback: (event: DriveCacheProgressEvent) => void,
+  ): () => void;
 }

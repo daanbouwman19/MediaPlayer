@@ -12,10 +12,14 @@ import {
   authenticateWithCode,
   checkGoogleDriveAuth,
   getPendingAuthState,
-} from '../../main/google-auth.ts';
+} from '../../infrastructure/google-auth.ts';
 import { getGoogleAuthSuccessPage } from '../auth-views.ts';
 import type { RateLimiters } from '../middleware/rate-limiters.ts';
 import { asyncHandler } from '../middleware/async-handler.ts';
+import {
+  isSessionUnlocked,
+  markSessionUnlocked,
+} from '../middleware/global-password.ts';
 
 export function createAuthRoutes(limiters: RateLimiters) {
   const router = Router();
@@ -25,23 +29,25 @@ export function createAuthRoutes(limiters: RateLimiters) {
    */
   router.get(
     '/api/auth/lock-status',
+    limiters.readLimiter,
     asyncHandler(async (req, res) => {
       const globalPassword = process.env.GLOBAL_PASSWORD;
-      const isLocked = !!globalPassword;
-
-      let isAuthenticated = false;
-      if (isLocked) {
-        if (req.session?.isAuthenticated) {
-          isAuthenticated = true;
-        }
-      }
 
       res.json({
-        enabled: isLocked,
-        isAuthenticated: !isLocked || isAuthenticated,
+        enabled: !!globalPassword,
+        isAuthenticated:
+          !globalPassword || isSessionUnlocked(req, globalPassword),
       });
     }),
   );
+
+  /**
+   * Lock the app again by clearing the session.
+   */
+  router.post('/api/auth/lock', limiters.readLimiter, (req, res) => {
+    req.session = null;
+    res.json({ success: true });
+  });
 
   /**
    * Unlock the app with the global password.
@@ -84,9 +90,9 @@ export function createAuthRoutes(limiters: RateLimiters) {
           ]);
 
           if (crypto.timingSafeEqual(inputHash, targetHash)) {
-            if (req.session) {
-              req.session.isAuthenticated = true;
-            }
+            // Bound to the current password and time, so rotating
+            // GLOBAL_PASSWORD or waiting out the max age ends the session.
+            markSessionUnlocked(req, globalPassword);
             return res.json({ success: true });
           }
         } catch (err) {
@@ -106,6 +112,7 @@ export function createAuthRoutes(limiters: RateLimiters) {
 
   router.get(
     '/api/auth/google-drive/status',
+    limiters.readLimiter,
     asyncHandler(async (_req, res) => {
       const isAuthenticated = await checkGoogleDriveAuth();
       res.json({ isAuthenticated });

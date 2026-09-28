@@ -17,9 +17,14 @@ import { initDatabase } from '../core/database/database.ts';
 import {
   HLS_CACHE_DIR_NAME,
   HEATMAP_CACHE_DIR_NAME,
+  RATE_LIMIT_API_MAX_REQUESTS,
+  RATE_LIMIT_API_WINDOW_MS,
 } from '../core/media/constants.ts';
+import { createRateLimiter } from '../core/network/rate-limiter.ts';
 import { registerSensitiveFile } from '../core/auth/security.ts';
-import { initializeDriveCacheManager } from '../main/drive-cache-manager.ts';
+import { initializeDriveCacheManager } from '../infrastructure/drive-cache-manager.ts';
+import { registerDriveBackend } from '../core/media/drive-backend.ts';
+import { googleDriveBackend } from '../infrastructure/google-drive-backend.ts';
 import { HlsManager } from '../core/media/hls-manager.ts';
 import { TranscodeQueueManager } from '../core/media/transcode-queue-manager.ts';
 import { MediaAnalyzer } from '../core/media/analysis/media-analyzer.ts';
@@ -27,9 +32,14 @@ import { MediaHandler } from '../core/media/media-handler.ts';
 import { WorkerFactory } from '../core/database/worker-factory.ts';
 import { createRateLimiters } from './middleware/rate-limiters.ts';
 import { basicAuthMiddleware } from './middleware/basic-auth.ts';
-import { globalPasswordMiddleware } from './middleware/global-password.ts';
+import {
+  createEphemeralSessionSecret,
+  globalPasswordMiddleware,
+  SESSION_MAX_AGE_MS,
+  setSessionFingerprintKey,
+} from './middleware/global-password.ts';
 import { noCacheMiddleware } from './middleware/no-cache.ts';
-import { errorHandler } from './middleware/error-handler.ts';
+import { csrfErrorHandler, errorHandler } from './middleware/error-handler.ts';
 import { createAlbumRoutes } from './routes/album.routes.ts';
 import { createMediaRoutes } from './routes/media.routes.ts';
 import { createAuthRoutes } from './routes/auth.routes.ts';
@@ -50,12 +60,29 @@ registerSensitiveFile(path.basename(DB_PATH));
 registerSensitiveFile(path.basename(DB_PATH) + '-wal');
 registerSensitiveFile(path.basename(DB_PATH) + '-shm');
 
+// Give src/core its Google Drive implementation (see core/media/drive-backend).
+registerDriveBackend(googleDriveBackend);
+
 const CACHE_ROOT = path.join(process.cwd(), 'cache');
 const CACHE_DIR = path.join(CACHE_ROOT, 'thumbnails');
 const HLS_CACHE_DIR = path.join(CACHE_ROOT, HLS_CACHE_DIR_NAME);
 const DRIVE_CACHE_DIR = path.join(CACHE_ROOT, 'drive');
 
-export async function createApp(mediaService: MediaService) {
+export interface CreateAppOptions {
+  /**
+   * CSRF protection (lusca). Defaults to on, except under NODE_ENV=test so
+   * unit tests can call the API without tokens; tests of the real middleware
+   * stack pass `true`.
+   */
+  csrf?: boolean;
+  /** Built web client served in production. Defaults to dist/client. */
+  clientDistPath?: string;
+}
+
+export async function createApp(
+  mediaService: MediaService,
+  options: CreateAppOptions = {},
+) {
   const isDev = process.env.NODE_ENV !== 'production';
   const app = express();
 
@@ -82,6 +109,8 @@ export async function createApp(mediaService: MediaService) {
           fontSrc: ["'self'", 'https://fonts.gstatic.com'],
           imgSrc: ["'self'", 'data:', 'blob:'],
           mediaSrc: ["'self'", 'blob:'],
+          // hls.js runs its transmuxer in a worker created from a blob: URL.
+          workerSrc: ["'self'", 'blob:'],
           connectSrc: ["'self'"],
         },
       },
@@ -107,7 +136,6 @@ export async function createApp(mediaService: MediaService) {
     credentials: true,
   };
   app.use(cors(corsOptions));
-  app.use(express.json({ limit: '10mb' }));
 
   app.get('/favicon.ico', (_req, res) => res.status(204).end());
 
@@ -119,31 +147,46 @@ export async function createApp(mediaService: MediaService) {
     process.exit(1);
   }
 
+  const sessionKey = sessionSecret || createEphemeralSessionSecret();
+  setSessionFingerprintKey(sessionKey);
+
   app.use(
     cookieSession({
       name: 'session',
-      keys: [sessionSecret || 'media-player-dev-secret-do-not-use-in-prod'],
-      maxAge: 24 * 60 * 60 * 1000, // 24 hours
+      keys: [sessionKey],
+      maxAge: SESSION_MAX_AGE_MS,
       secure: true,
       httpOnly: true,
       sameSite: 'lax',
     }),
   );
 
-  if (process.env.NODE_ENV !== 'test') {
-    app.use(lusca.csrf({ angular: true })); // Sets XSRF-TOKEN cookie and expects X-XSRF-TOKEN header
+  if (options.csrf ?? process.env.NODE_ENV !== 'test') {
+    // Sets the XSRF-TOKEN cookie and expects it back in the X-XSRF-TOKEN header.
+    app.use(lusca.csrf({ angular: true }));
+    // Answers lusca's rejection (an error after setting 403) as JSON.
+    app.use(csrfErrorHandler);
   }
+
+  // Per-client ceiling for the whole API, in front of the per-route budgets.
+  app.use(
+    '/api',
+    createRateLimiter(
+      RATE_LIMIT_API_WINDOW_MS,
+      RATE_LIMIT_API_MAX_REQUESTS,
+      'Too many requests. Please slow down.',
+    ),
+  );
 
   const limiters = createRateLimiters();
 
-  const sysUser = process.env.SYSTEM_USER;
-  const sysSecret = process.env.SYSTEM_PASSWORD;
-  if (sysUser && sysSecret) {
-    app.use(limiters.basicAuthLimiter);
-  }
-
+  // Counts only rejected credentials towards its lockout.
   app.use(basicAuthMiddleware);
   app.use(globalPasswordMiddleware);
+
+  // Parsed only after authentication, so locked-out or unauthenticated
+  // clients cannot make the server buffer and parse large bodies.
+  app.use(express.json({ limit: '1mb' }));
 
   // Apply no-cache middleware to API routes to prevent sensitive data leakage
   app.use('/api', noCacheMiddleware);
@@ -205,8 +248,14 @@ export async function createApp(mediaService: MediaService) {
   app.use(createAuthRoutes(limiters));
   app.use(createSystemRoutes(limiters));
 
+  // Unknown API endpoints get a JSON 404 instead of the SPA's index.html.
+  app.use('/api', (_req, res) => {
+    res.status(404).json({ error: 'Not found' });
+  });
+
   if (!isDev) {
-    const clientDistPath = path.join(__dirname, '../client');
+    const clientDistPath =
+      options.clientDistPath ?? path.join(__dirname, '../client');
 
     app.use(
       '/assets',
@@ -219,7 +268,9 @@ export async function createApp(mediaService: MediaService) {
     app.use(express.static(clientDistPath));
 
     app.get(/.*/, limiters.readLimiter, (_req, res) => {
-      res.sendFile(path.join(clientDistPath, 'index.html'));
+      // With `root`, only the relative path is checked for dotfile segments,
+      // so installs below a dot-directory (e.g. ~/.local/...) still work.
+      res.sendFile('index.html', { root: clientDistPath });
     });
   }
 

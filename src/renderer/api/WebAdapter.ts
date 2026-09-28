@@ -9,18 +9,33 @@ import type {
   TranscodeJob,
 } from '../../core/media/types';
 import type { FileSystemEntry } from '../../core/media/file-system';
+import type { DriveCacheStatus } from '../../shared/ipc/media.contract';
+import { HttpError } from './http-error';
 
 export class WebAdapter implements IMediaBackend {
+  // The server streams Drive files through its own cache, but there is no
+  // per-user offline copy to manage from the browser.
+  readonly supportsDriveOfflineCache = false;
+
   async getLockStatus(): Promise<AuthStatus> {
     return this.request<AuthStatus>('/api/auth/lock-status');
   }
 
   async unlock(password: string): Promise<boolean> {
-    const res = await this.request<{ success: boolean }>('/api/auth/unlock', {
-      method: 'POST',
-      body: JSON.stringify({ password }),
-    });
-    return res.success;
+    try {
+      const res = await this.request<{ success: boolean }>('/api/auth/unlock', {
+        method: 'POST',
+        body: JSON.stringify({ password }),
+      });
+      return res.success;
+    } catch (error) {
+      // 401 is the server's answer to a wrong password. Anything else (429
+      // rate limiting, 5xx, network failure) is not, so let it propagate.
+      if (error instanceof HttpError && error.status === 401) {
+        return false;
+      }
+      throw error;
+    }
   }
 
   private async request<T>(
@@ -70,7 +85,8 @@ export class WebAdapter implements IMediaBackend {
       } catch {
         // Ignore JSON parse error for error response
       }
-      throw new Error(
+      throw new HttpError(
+        res.status,
         errorMessage || `Request failed with status ${res.status}`,
       );
     }
@@ -222,9 +238,16 @@ export class WebAdapter implements IMediaBackend {
     throw new Error('Failed to get video metadata');
   }
 
-  async getHeatmap(filePath: string, points = 100): Promise<HeatmapData> {
+  async getHeatmap(
+    filePath: string,
+    points = 100,
+    options: { signal?: AbortSignal } = {},
+  ): Promise<HeatmapData> {
+    // Aborting the fetch closes the request, which the server treats as the
+    // viewer leaving the analysis.
     return this.request<HeatmapData>(
       `/api/video/heatmap?file=${encodeURIComponent(filePath)}&points=${points}`,
+      options.signal ? { signal: options.signal } : undefined,
     );
   }
 
@@ -326,13 +349,13 @@ export class WebAdapter implements IMediaBackend {
     });
   }
   async updateWatchedSegments(
-    _filePath: string,
-    _segmentsJson: string,
+    filePath: string,
+    segmentsJson: string,
   ): Promise<void> {
-    void _filePath;
-    void _segmentsJson;
-    // Web version doesn't support persistent watch history yet
-    return;
+    await this.request<void>('/api/media/watched-segments', {
+      method: 'POST',
+      body: JSON.stringify({ filePath, segmentsJson }),
+    });
   }
 
   async updatePlaybackPosition(
@@ -418,6 +441,18 @@ export class WebAdapter implements IMediaBackend {
     } catch {
       return null;
     }
+  }
+
+  async getDriveCacheStatus(): Promise<DriveCacheStatus> {
+    return { status: 'cloud', progress: 0 };
+  }
+
+  async triggerDriveCache(): Promise<void> {
+    throw new Error('Offline caching is not supported in the web version.');
+  }
+
+  onDriveCacheProgress(): () => void {
+    return () => {};
   }
 
   async addTranscodeJobs(paths: string[]): Promise<void> {

@@ -5,6 +5,9 @@ import {
 } from '../constants.ts';
 import { isDrivePath } from '../media-utils.ts';
 
+export const SVG_MIME_TYPE = 'image/svg+xml';
+
+// Extensions whose MIME type is not simply `image/<ext>` or `video/<ext>`.
 const KNOWN_MIME_TYPES: Record<string, string> = {
   mp4: 'video/mp4',
   webm: 'video/webm',
@@ -12,8 +15,12 @@ const KNOWN_MIME_TYPES: Record<string, string> = {
   mov: 'video/quicktime',
   avi: 'video/x-msvideo',
   mkv: 'video/x-matroska',
+  wmv: 'video/x-ms-wmv',
+  flv: 'video/x-flv',
   jpg: 'image/jpeg',
   jpeg: 'image/jpeg',
+  // Browsers never sniff SVG: served as anything else it renders as broken.
+  svg: SVG_MIME_TYPE,
 };
 
 export function getMimeType(filePath: string): string {

@@ -45,11 +45,23 @@ export async function serveHlsMaster(
   const fileQuery = getQueryParam(req.query, 'file');
   const encodedFile = encodeURIComponent(fileQuery || '');
 
+  // EXT-X-START: the media playlist stays "live" (no ENDLIST) while ffmpeg
+  // runs, and players would otherwise start near its end instead of at 0.
   res.set('Content-Type', 'application/vnd.apple.mpegurl');
   res.send(`#EXTM3U
 #EXT-X-VERSION:3
+#EXT-X-START:TIME-OFFSET=0
 #EXT-X-STREAM-INF:BANDWIDTH=${HLS_BANDWIDTH},RESOLUTION=${HLS_RESOLUTION}
 playlist.m3u8?file=${encodedFile}`);
+}
+
+/** True for the HlsBusyError thrown when the transcode cap is reached. */
+function isBusyError(err: unknown): boolean {
+  return (
+    typeof err === 'object' &&
+    err !== null &&
+    (err as { code?: unknown }).code === 'HLS_BUSY'
+  );
 }
 
 /**
@@ -66,18 +78,29 @@ export async function serveHlsPlaylist(
   const sessionId = await generateSessionId(authorizedPath);
   const hlsManager = HlsManager.getInstance();
   let acquired = false;
+  let closed = false;
   const release = () => {
     if (acquired) {
       acquired = false;
       hlsManager.releaseSession(sessionId);
     }
   };
-  res.on('close', release);
+  res.on('close', () => {
+    closed = true;
+    release();
+  });
 
   try {
     await hlsManager.ensureSession(sessionId, authorizedPath);
     hlsManager.acquireSession(sessionId);
     acquired = true;
+    if (closed) {
+      // The client gave up while ffmpeg was starting (the session did not
+      // exist yet when 'close' fired). Release now so the idle timer is
+      // armed; a leaked consumer would keep ffmpeg running for minutes.
+      release();
+      return;
+    }
 
     const sessionDir = hlsManager.getSessionDir(sessionId);
     if (!sessionDir) throw new Error('Session dir not found');
@@ -103,9 +126,17 @@ export async function serveHlsPlaylist(
     // Keep session alive
     hlsManager.touchSession(sessionId);
   } catch (err) {
-    console.error('[HLS] Playlist error:', err);
-    if (!res.headersSent) {
-      res.status(500).send('HLS Generation failed');
+    if (isBusyError(err)) {
+      // Temporary: the player may retry once a transcode slot frees up.
+      if (!res.headersSent) {
+        res.set('Retry-After', '10');
+        res.status(503).send('Server too busy. Please try again later.');
+      }
+    } else {
+      console.error('[HLS] Playlist error:', err);
+      if (!res.headersSent) {
+        res.status(500).send('HLS Generation failed');
+      }
     }
     release();
   }
@@ -154,7 +185,10 @@ export async function serveHlsSegment(
 
   try {
     await new Promise<void>((resolve, reject) => {
-      res.sendFile(segmentPath, (err) => {
+      // dotfiles: 'allow' because Express 5 (send 1.x) otherwise 404s any
+      // absolute path with a dot-directory in it, such as the Linux cache
+      // under ~/.config. The path is built here from a validated name.
+      res.sendFile(segmentPath, { dotfiles: 'allow' }, (err) => {
         if (err) {
           return reject(err);
         }

@@ -168,14 +168,14 @@ describe('WorkerClient Coverage', () => {
       await vi.advanceTimersByTimeAsync(60);
       expect(initSpy).toHaveBeenCalledTimes(1);
 
-      // Crash 2 (after re-init)
+      // Crash 2 (after re-init; the delay doubles to 100ms)
       (client as any).worker.emit('exit', 1);
-      await vi.advanceTimersByTimeAsync(60);
+      await vi.advanceTimersByTimeAsync(110);
       expect(initSpy).toHaveBeenCalledTimes(2);
 
       // Crash 3 (should NOT restart)
       (client as any).worker.emit('exit', 1);
-      await vi.advanceTimersByTimeAsync(60);
+      await vi.advanceTimersByTimeAsync(1000);
       expect(initSpy).toHaveBeenCalledTimes(2);
     });
   });

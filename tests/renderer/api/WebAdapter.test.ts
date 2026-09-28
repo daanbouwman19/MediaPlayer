@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vite-plus/test';
 import { WebAdapter } from '../../../src/renderer/api/WebAdapter';
+import { HttpError } from '../../../src/renderer/api/http-error';
 import { runBackendContractTests } from './backend.contract';
 
 const fetchMock = vi.fn();
@@ -311,6 +312,57 @@ describe('WebAdapter', () => {
       expect(res).toBe(true);
     });
 
+    it('unlock returns false when the server rejects the password (401)', async () => {
+      const reloadSpy = vi.fn();
+      Object.defineProperty(window, 'location', {
+        value: { reload: reloadSpy },
+        writable: true,
+      });
+      fetchMock.mockResolvedValue({
+        ok: false,
+        status: 401,
+        statusText: 'Unauthorized',
+        json: () => Promise.resolve({ error: 'Invalid password' }),
+      });
+      const adapter = new WebAdapter();
+      await expect(adapter.unlock('wrong')).resolves.toBe(false);
+      expect(reloadSpy).not.toHaveBeenCalled();
+    });
+
+    it('unlock rethrows rate limiting (429) with its status instead of reporting a wrong password', async () => {
+      fetchMock.mockResolvedValue({
+        ok: false,
+        status: 429,
+        statusText: 'Too Many Requests',
+        json: () =>
+          Promise.resolve({
+            error: 'Too many auth attempts. Please try again later.',
+          }),
+      });
+      const adapter = new WebAdapter();
+      const error: unknown = await adapter.unlock('pwd').catch((e) => e);
+      expect(error).toBeInstanceOf(HttpError);
+      expect((error as HttpError).status).toBe(429);
+      expect((error as HttpError).message).toBe(
+        'Too many auth attempts. Please try again later.',
+      );
+    });
+
+    it('request errors carry the HTTP status code', async () => {
+      fetchMock.mockResolvedValue({
+        ok: false,
+        status: 503,
+        statusText: 'Service Unavailable',
+        json: () => Promise.reject(new Error('not json')),
+      });
+      const adapter = new WebAdapter();
+      const error: unknown = await adapter
+        .addMediaDirectory('/path')
+        .catch((e) => e);
+      expect(error).toBeInstanceOf(HttpError);
+      expect((error as HttpError).status).toBe(503);
+    });
+
     it('getHeatmapProgress catches and returns null on error', async () => {
       fetchMock.mockRejectedValue(new Error('Network error'));
       const adapter = new WebAdapter();
@@ -344,10 +396,38 @@ describe('WebAdapter', () => {
       expect(JSON.parse(options.body)).toEqual({ criteria: '{"minRating":4}' });
     });
 
-    it('updateWatchedSegments acts as empty void', async () => {
+    it('updateWatchedSegments posts the segments to the server', async () => {
+      fetchMock.mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: { get: () => 'text/plain' },
+      });
       const adapter = new WebAdapter();
-      const res = await adapter.updateWatchedSegments('/path', '{}');
+      const segmentsJson = JSON.stringify([{ start: 0, end: 5 }]);
+
+      const res = await adapter.updateWatchedSegments('/path', segmentsJson);
+
       expect(res).toBeUndefined();
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/media/watched-segments',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ filePath: '/path', segmentsJson }),
+        }),
+      );
+    });
+
+    it('updateWatchedSegments surfaces server rejections', async () => {
+      fetchMock.mockResolvedValue({
+        ok: false,
+        status: 400,
+        statusText: 'Bad Request',
+        json: () => Promise.resolve({ error: 'Too many watched segments' }),
+      });
+      const adapter = new WebAdapter();
+      await expect(
+        adapter.updateWatchedSegments('/path', '[]'),
+      ).rejects.toThrow('Too many watched segments');
     });
 
     it('getLockStatus makes correct request', async () => {
@@ -375,6 +455,34 @@ describe('WebAdapter', () => {
       const res = await adapter.getHeatmap('/file', 50);
       expect(res).toEqual({ data: [1, 2, 3] });
       expect(fetchMock.mock.calls[0][0]).toContain('points=50');
+    });
+
+    it('getHeatmap passes the abort signal to fetch', async () => {
+      fetchMock.mockResolvedValue({
+        ok: true,
+        headers: { get: () => 'application/json' },
+        json: () => Promise.resolve({ points: 1 }),
+      });
+      const controller = new AbortController();
+      const adapter = new WebAdapter();
+      await adapter.getHeatmap('/file', 100, { signal: controller.signal });
+      expect(fetchMock.mock.calls[0][1]).toMatchObject({
+        signal: controller.signal,
+      });
+    });
+
+    it('getHeatmap reports a busy server as a busy error', async () => {
+      const { isHeatmapBusyError, HEATMAP_BUSY_MESSAGE } =
+        await import('../../../src/core/media/analysis/heatmap-errors');
+      fetchMock.mockResolvedValue({
+        ok: false,
+        status: 503,
+        statusText: 'Service Unavailable',
+        json: () => Promise.resolve({ error: HEATMAP_BUSY_MESSAGE }),
+      });
+      const adapter = new WebAdapter();
+      const error = await adapter.getHeatmap('/file').catch((e) => e);
+      expect(isHeatmapBusyError(error)).toBe(true);
     });
 
     it('reindexMediaLibrary performs POST request', async () => {

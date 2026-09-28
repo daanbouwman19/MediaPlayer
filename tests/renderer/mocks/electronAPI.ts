@@ -56,6 +56,7 @@ export const createMockElectronAPI = (): ElectronAPI => ({
   onDriveCacheProgress: vi.fn().mockReturnValue(() => {}),
   getHeatmap: vi.fn().mockResolvedValue({ audio: [], motion: [], points: 0 }),
   getHeatmapProgress: vi.fn().mockResolvedValue({ success: true, data: 50 }),
+  cancelHeatmap: vi.fn().mockResolvedValue({ success: true, data: undefined }),
   getHlsStatus: vi.fn().mockResolvedValue({
     currentTime: 0,
     duration: 100,

@@ -51,7 +51,7 @@ describe('useLibraryStore - Recently Played', () => {
 
     (api.getRecentlyPlayed as any).mockResolvedValue(mockItems);
 
-    await store.fetchHistory(10);
+    await expect(store.fetchHistory(10)).resolves.toBe(true);
 
     expect(api.getRecentlyPlayed).toHaveBeenCalledWith(10);
     expect(store.historyMedia).toHaveLength(2);
@@ -121,13 +121,47 @@ describe('useLibraryStore - Recently Played', () => {
     );
   });
 
+  it('fetchHistory takes Drive file names from the scanned library', async () => {
+    store.allAlbums = [
+      {
+        id: 'gdrive-root',
+        name: 'Holiday',
+        textures: [{ name: 'IMG_1.jpg', path: 'gdrive://abc123' }],
+        children: [],
+      },
+    ];
+    const row = (file_path: string): MediaLibraryItem => ({
+      file_path,
+      file_path_hash: file_path,
+      view_count: 1,
+      last_viewed: '2023-01-01T12:00:00.000Z',
+      rating: 0,
+      duration: null,
+      size: null,
+      created_at: null,
+    });
+    (api.getRecentlyPlayed as any).mockResolvedValue([
+      row('gdrive://abc123'),
+      row('gdrive://removed'),
+    ]);
+
+    await store.fetchHistory();
+
+    // A bare Drive ID has no extension, so the item would render as a video.
+    expect(store.historyMedia[0].name).toBe('IMG_1.jpg');
+    expect(store.historyMedia[0].path).toBe('gdrive://abc123');
+    // Not in the library any more: the ID is all there is.
+    expect(store.historyMedia[1].name).toBe('removed');
+  });
+
   it('fetchHistory should handle API errors gracefully', async () => {
     (api.getRecentlyPlayed as any).mockRejectedValue(
       new Error('Network error'),
     );
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    await store.fetchHistory();
+    // Callers are told, so they don't reuse stale history.
+    await expect(store.fetchHistory()).resolves.toBe(false);
 
     expect(store.historyMedia).toHaveLength(0);
     expect(consoleSpy).toHaveBeenCalled();

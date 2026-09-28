@@ -41,6 +41,7 @@ const { MockMediaHandler } = vi.hoisted(() => {
 
 vi.mock('../../src/core/database/database', () => ({
   getAllMetadataAndStats: vi.fn(),
+  getMediaDirectories: vi.fn().mockResolvedValue([]),
   getMediaViewCounts: vi.fn(),
   getMetadata: vi.fn(),
   getRecentlyPlayed: vi.fn(),
@@ -90,7 +91,7 @@ const createTestApp = (ffmpegPath: string | null): TestAppResult => {
         writeLimiter: createLimiter(),
         fileLimiter: createLimiter(),
         authLimiter: createLimiter(),
-        basicAuthLimiter: createLimiter(),
+        telemetryLimiter: createLimiter(),
         streamLimiter: createLimiter(),
       },
       mediaHandler: handler as any,
@@ -214,7 +215,6 @@ describe('Media routes additional coverage', () => {
   });
 
   it('POST /api/media/views returns counts on success', async () => {
-    vi.mocked(security.filterAuthorizedPaths).mockResolvedValue(['/file.mp4']);
     vi.mocked(database.getMediaViewCounts).mockResolvedValue({
       '/file.mp4': 5,
     });
@@ -224,6 +224,43 @@ describe('Media routes additional coverage', () => {
       .send({ filePaths: ['/file.mp4'] });
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ '/file.mp4': 5 });
+  });
+
+  describe('batch reads keep the library spelling (rows are keyed by it)', () => {
+    beforeEach(() => {
+      // A symlinked source: the path resolves to a different real path.
+      vi.mocked(security.authorizeFilePath).mockImplementation(async (p) =>
+        p === '/secret.mp4'
+          ? { isAllowed: false, message: 'Denied' }
+          : { isAllowed: true, realPath: `/real${p}` },
+      );
+    });
+
+    it('POST /api/media/views', async () => {
+      vi.mocked(database.getMediaViewCounts).mockResolvedValue({});
+      const { app } = createTestApp('ffmpeg');
+
+      await request(app)
+        .post('/api/media/views')
+        .send({ filePaths: ['/library/a.mp4', '/secret.mp4'] })
+        .expect(200);
+
+      expect(database.getMediaViewCounts).toHaveBeenCalledWith([
+        '/library/a.mp4',
+      ]);
+    });
+
+    it('POST /api/media/metadata/batch', async () => {
+      vi.mocked(database.getMetadata).mockResolvedValue({});
+      const { app } = createTestApp('ffmpeg');
+
+      await request(app)
+        .post('/api/media/metadata/batch')
+        .send({ filePaths: ['/library/a.mp4', '/secret.mp4'] })
+        .expect(200);
+
+      expect(database.getMetadata).toHaveBeenCalledWith(['/library/a.mp4']);
+    });
   });
 
   it('POST /api/media/rate returns 400 for invalid rating', async () => {

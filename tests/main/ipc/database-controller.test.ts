@@ -2,10 +2,8 @@ import { describe, it, expect, vi, beforeEach, Mock } from 'vite-plus/test';
 import { registerDatabaseHandlers } from '../../../src/main/ipc/database-controller';
 import { IPC_CHANNELS } from '../../../src/shared/ipc-channels';
 import { handleIpc } from '../../../src/main/utils/ipc-helper';
-import {
-  validatePathAccess,
-  filterAuthorizedPaths,
-} from '../../../src/main/utils/security-utils';
+import { validatePathAccess } from '../../../src/main/utils/security-utils';
+import { filterAuthorizedLibraryPaths } from '../../../src/core/media/utils/authorized-paths';
 import {
   upsertMetadata,
   getMetadata,
@@ -25,7 +23,10 @@ vi.mock('../../../src/main/utils/ipc-helper', () => ({
 
 vi.mock('../../../src/main/utils/security-utils', () => ({
   validatePathAccess: vi.fn(),
-  filterAuthorizedPaths: vi.fn(),
+}));
+
+vi.mock('../../../src/core/media/utils/authorized-paths', () => ({
+  filterAuthorizedLibraryPaths: vi.fn(),
 }));
 
 vi.mock('../../../src/core/database/database', () => ({
@@ -71,17 +72,33 @@ describe('database-controller', () => {
       validator({ filePath: '/path' });
       expect(validatePathAccess).toHaveBeenCalledWith('/path');
     });
+
+    it('rejects metadata fields with the wrong type (F13)', () => {
+      const call = (handleIpc as Mock).mock.calls.find(
+        (c) => c[0] === IPC_CHANNELS.DB_UPSERT_METADATA,
+      )!;
+      const [, validateMetadata] = call[2].validators;
+      expect(() =>
+        validateMetadata({ filePath: '/p', metadata: { rating: 3 } }),
+      ).not.toThrow();
+      expect(() =>
+        validateMetadata({ filePath: '/p', metadata: { rating: 'x' } }),
+      ).toThrow('Invalid metadata field: rating');
+      expect(() =>
+        validateMetadata({ filePath: '/p', metadata: null }),
+      ).toThrow('Metadata must be an object');
+    });
   });
 
   describe('DB_GET_METADATA', () => {
-    it('gets metadata for authorized paths', async () => {
+    it('gets metadata for authorized paths, keyed by the library spelling', async () => {
       const handler = getHandler(IPC_CHANNELS.DB_GET_METADATA);
-      (filterAuthorizedPaths as Mock).mockResolvedValue(['/path']);
+      (filterAuthorizedLibraryPaths as Mock).mockResolvedValue(['/path']);
       (getMetadata as Mock).mockResolvedValue([{ duration: 10 }]);
 
       const result = await handler({}, ['/path']);
 
-      expect(filterAuthorizedPaths).toHaveBeenCalledWith(['/path']);
+      expect(filterAuthorizedLibraryPaths).toHaveBeenCalledWith(['/path']);
       expect(getMetadata).toHaveBeenCalledWith(['/path']);
       expect(result).toEqual([{ duration: 10 }]);
     });
@@ -178,6 +195,37 @@ describe('database-controller', () => {
       const validator = call[2].validators[0];
       validator({ filePath: '/path/to/video.mp4' });
       expect(validatePathAccess).toHaveBeenCalledWith('/path/to/video.mp4');
+    });
+
+    it('applies the same segment limits as the web route', () => {
+      const call = (handleIpc as Mock).mock.calls.find(
+        (c) => c[0] === IPC_CHANNELS.DB_UPDATE_WATCHED_SEGMENTS,
+      )!;
+      const [, validateSegments] = call[2].validators;
+      expect(() =>
+        validateSegments({ filePath: '/v.mp4', segmentsJson: '[]' }),
+      ).not.toThrow();
+      expect(() =>
+        validateSegments({ filePath: '/v.mp4', segmentsJson: '{bad' }),
+      ).toThrow('valid JSON');
+      expect(() =>
+        validateSegments({
+          filePath: '/v.mp4',
+          segmentsJson: JSON.stringify(
+            Array.from({ length: 5001 }, (_, i) => ({ start: i, end: i })),
+          ),
+        }),
+      ).toThrow('Too many watched segments');
+    });
+
+    it('rejects a non-string path before checking access', async () => {
+      const call = (handleIpc as Mock).mock.calls.find(
+        (c) => c[0] === IPC_CHANNELS.DB_UPDATE_WATCHED_SEGMENTS,
+      )!;
+      await expect(call[2].validators[0]({ filePath: 42 })).rejects.toThrow(
+        'Invalid file path',
+      );
+      expect(validatePathAccess).not.toHaveBeenCalled();
     });
   });
 

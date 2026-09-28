@@ -1,69 +1,182 @@
+/**
+ * @file Loopback server that receives Google's OAuth redirect and shows the
+ * authorization code for the user to paste into the app.
+ *
+ * It listens on the loopback address and port of the configured redirect URI
+ * only while a sign-in is pending: it closes once a code has been shown, or
+ * after AUTH_SERVER_TIMEOUT_MS, and the next sign-in starts it again.
+ */
 import http from 'http';
 
-let authServer: http.Server | null = null;
+/** How long the callback server waits for Google's redirect. */
+export const AUTH_SERVER_TIMEOUT_MS = 10 * 60 * 1000;
 
-export function startAuthServer(
-  port: number = 3000,
+export interface CallbackEndpoint {
+  /** Address to bind (always loopback). */
+  host: string;
+  port: number;
+  pathname: string;
+}
+
+// Loopback host names a redirect URI may use, and the address to bind for each.
+const LOOPBACK_BIND_ADDRESSES = new Map([
+  ['localhost', '127.0.0.1'],
+  ['127.0.0.1', '127.0.0.1'],
+  ['[::1]', '::1'],
+]);
+
+let authServer: http.Server | null = null;
+let authServerReady: Promise<void> | null = null;
+let shutdownTimer: ReturnType<typeof setTimeout> | null = null;
+
+/**
+ * Derives where to listen from the OAuth redirect URI, so the server always
+ * matches the address Google redirects the browser to.
+ */
+export function getCallbackEndpoint(redirectUri: string): CallbackEndpoint {
+  let url: URL;
+  try {
+    url = new URL(redirectUri);
+  } catch {
+    throw new Error(`Invalid Google redirect URI: ${redirectUri}`);
+  }
+  const host = LOOPBACK_BIND_ADDRESSES.get(url.hostname);
+  if (url.protocol !== 'http:' || !host) {
+    throw new Error(
+      `The Google redirect URI must be an http://localhost address, got: ${redirectUri}`,
+    );
+  }
+  return {
+    host,
+    port: url.port ? Number(url.port) : 80,
+    pathname: url.pathname,
+  };
+}
+
+function closeServer(server: http.Server): void {
+  if (authServer === server) {
+    authServer = null;
+    authServerReady = null;
+    if (shutdownTimer) {
+      clearTimeout(shutdownTimer);
+      shutdownTimer = null;
+    }
+  }
+  if (server.listening) {
+    server.close();
+  }
+}
+
+function scheduleShutdown(server: http.Server, timeoutMs: number): void {
+  if (shutdownTimer) clearTimeout(shutdownTimer);
+  shutdownTimer = setTimeout(() => {
+    console.log('[AuthServer] No OAuth callback received in time; closing.');
+    closeServer(server);
+  }, timeoutMs);
+  shutdownTimer.unref();
+}
+
+function handleCallbackRequest(
+  server: http.Server,
+  endpoint: CallbackEndpoint,
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
   getExpectedState?: () => string | null,
-): Promise<void> {
-  return new Promise((resolve) => {
-    if (authServer) {
-      console.log('[AuthServer] Server already running.');
-      resolve();
+): void {
+  // [SECURITY] Absolute-form targets such as "http://[" pass the HTTP parser
+  // but make URL throw; an uncaught throw here would crash the main process.
+  let url: URL;
+  try {
+    url = new URL(req.url ?? '/', 'http://localhost');
+  } catch {
+    res.writeHead(400, { 'Content-Type': 'text/plain' });
+    res.end('Bad Request');
+    return;
+  }
+
+  if (url.pathname !== endpoint.pathname) {
+    res.writeHead(404);
+    res.end('Not Found');
+    return;
+  }
+
+  const code = url.searchParams.get('code');
+  const state = url.searchParams.get('state');
+
+  if (getExpectedState) {
+    const expected = getExpectedState();
+    if (!expected || state !== expected) {
+      res.writeHead(400, { 'Content-Type': 'text/plain' });
+      res.end('Invalid state parameter');
       return;
     }
+  }
 
-    authServer = http.createServer((req, res) => {
-      const url = new URL(req.url || '', `http://localhost:${port}`);
-      if (url.pathname === '/auth/google/callback') {
-        const code = url.searchParams.get('code');
-        const state = url.searchParams.get('state');
+  if (!code) {
+    res.writeHead(400, { 'Content-Type': 'text/plain' });
+    res.end('Missing code parameter');
+    return;
+  }
 
-        if (getExpectedState) {
-          const expected = getExpectedState();
-          if (!expected || state !== expected) {
-            res.writeHead(400, { 'Content-Type': 'text/plain' });
-            res.end('Invalid state parameter');
-            return;
-          }
-        }
+  res.writeHead(200, { 'Content-Type': 'text/html' });
+  // The code is on screen now, so stop listening; a new sign-in restarts us.
+  res.end(getSuccessHtml(escapeHtml(code)), () => closeServer(server));
+}
 
-        if (code) {
-          const safeCode = escapeHtml(code);
-          const html = getSuccessHtml(safeCode);
-          res.writeHead(200, { 'Content-Type': 'text/html' });
-          res.end(html);
-        } else {
-          res.writeHead(400, { 'Content-Type': 'text/plain' });
-          res.end('Missing code parameter');
-        }
+/**
+ * Starts listening for the OAuth callback on the redirect URI's loopback
+ * port. Rejects (and can simply be retried) if the port cannot be bound.
+ * Calling it while a sign-in is pending reuses the server and restarts the
+ * timeout.
+ */
+export async function startAuthServer(
+  redirectUri: string,
+  getExpectedState?: () => string | null,
+  timeoutMs: number = AUTH_SERVER_TIMEOUT_MS,
+): Promise<void> {
+  const endpoint = getCallbackEndpoint(redirectUri);
 
-        // Optional: Close server after successful retrieval?
-        // Let's keep it open for a bit or until app close to avoid premature shutdown if user refreshes.
-      } else {
-        res.writeHead(404);
-        res.end('Not Found');
+  if (authServer && authServerReady) {
+    scheduleShutdown(authServer, timeoutMs);
+    return authServerReady;
+  }
+
+  const server = http.createServer((req, res) =>
+    handleCallbackRequest(server, endpoint, req, res, getExpectedState),
+  );
+  authServer = server;
+
+  const ready = new Promise<void>((resolve, reject) => {
+    let listening = false;
+    server.on('error', (err: NodeJS.ErrnoException) => {
+      console.error('[AuthServer] Error:', err);
+      closeServer(server);
+      if (!listening) {
+        reject(
+          new Error(
+            `Could not listen for the Google sign-in callback on ${endpoint.host}:${endpoint.port} (${err.code ?? err.message}). ` +
+              'Close the program using that port or set GOOGLE_REDIRECT_URI to a free localhost port.',
+          ),
+        );
       }
     });
 
-    authServer.on('error', (err) => {
-      console.error('[AuthServer] Error:', err);
-      // If port is in use, we just log it. The user might have the web server running.
-      // We resolve anyway so main process doesn't hang.
-      resolve();
-    });
-
-    authServer.listen(port, () => {
-      console.log(`[AuthServer] Listening on port ${port} for OAuth callback`);
+    server.listen(endpoint.port, endpoint.host, () => {
+      listening = true;
+      console.log(
+        `[AuthServer] Listening on ${endpoint.host}:${endpoint.port} for the OAuth callback`,
+      );
       resolve();
     });
   });
+  authServerReady = ready;
+  scheduleShutdown(server, timeoutMs);
+  return ready;
 }
 
-export function stopAuthServer() {
+export function stopAuthServer(): void {
   if (authServer) {
-    authServer.close();
-    authServer = null;
+    closeServer(authServer);
   }
 }
 

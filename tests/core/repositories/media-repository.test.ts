@@ -3,7 +3,9 @@ import { MediaRepository } from '../../../src/core/database/repositories/media-r
 import * as database from '../../../src/core/database/database';
 
 vi.mock('../../../src/core/database/database', () => ({
-  getMediaDirectories: vi.fn(),
+  readMediaDirectories: vi.fn(),
+  repairDriveSourceName: vi.fn(),
+  saveSetting: vi.fn(),
   cacheAlbums: vi.fn(),
   getCachedAlbums: vi.fn(),
   getAllMetadata: vi.fn(),
@@ -19,14 +21,39 @@ vi.mock('../../../src/core/database/database', () => ({
 describe('MediaRepository', () => {
   const repo = new MediaRepository();
 
-  it('delegates getMediaDirectories to database', async () => {
+  it('reads media directories strictly (failures propagate)', async () => {
     await repo.getMediaDirectories();
-    expect(database.getMediaDirectories).toHaveBeenCalled();
+    expect(database.readMediaDirectories).toHaveBeenCalled();
+
+    vi.mocked(database.readMediaDirectories).mockRejectedValueOnce(
+      new Error('Worker not initialized'),
+    );
+    await expect(repo.getMediaDirectories()).rejects.toThrow(
+      'Worker not initialized',
+    );
   });
 
-  it('delegates cacheAlbums to database', async () => {
+  it('delegates repairDriveSourceName to database', async () => {
+    await repo.repairDriveSourceName('gdrive://abc', 'Holidays');
+    expect(database.repairDriveSourceName).toHaveBeenCalledWith(
+      'gdrive://abc',
+      'Holidays',
+    );
+  });
+
+  it('delegates saveSetting to database', async () => {
+    await repo.saveSetting('key', 'value');
+    expect(database.saveSetting).toHaveBeenCalledWith('key', 'value');
+  });
+
+  it('caches albums strictly (failures propagate)', async () => {
     await repo.cacheAlbums([]);
     expect(database.cacheAlbums).toHaveBeenCalledWith([]);
+
+    vi.mocked(database.cacheAlbums).mockRejectedValueOnce(
+      new Error('Operation timed out'),
+    );
+    await expect(repo.cacheAlbums([])).rejects.toThrow('Operation timed out');
   });
 
   it('delegates getCachedAlbums to database', async () => {

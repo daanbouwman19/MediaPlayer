@@ -111,7 +111,9 @@ describe('Palette Accessibility Improvements', () => {
       mediaUrl: ref('test.mp4'),
       error: ref(null),
       isVideoSupported: ref(true),
+      currentLoadRequestId: ref(0),
       loadMedia: vi.fn(),
+      cancelPendingLoad: vi.fn(),
     });
 
     vi.clearAllMocks();

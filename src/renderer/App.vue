@@ -134,6 +134,11 @@ import { useUIStore } from './composables/useUIStore';
 import { useAuthStore } from './composables/useAuthStore';
 import { useSlideshow } from './composables/useSlideshow';
 import { useTheme } from './composables/useTheme';
+import {
+  isActivatableTarget,
+  isModalOpen,
+  shouldIgnoreGlobalShortcut,
+} from './utils/keyboardUtils';
 import { CONTROLS_HIDE_TIMEOUT_MS } from '../core/media/constants';
 
 const libraryStore = useLibraryStore();
@@ -196,17 +201,18 @@ const handleMouseLeave = () => {
  * @param event - The keyboard event object.
  */
 const handleKeydown = (event: KeyboardEvent) => {
-  if (
-    event.target instanceof HTMLInputElement ||
-    event.target instanceof HTMLTextAreaElement ||
-    (event.target as HTMLElement).isContentEditable
-  ) {
-    return;
-  }
+  // Typing into fields and Ctrl/Cmd/Alt chords (Ctrl+Z, Cmd+X...) are
+  // never app shortcuts.
+  if (shouldIgnoreGlobalShortcut(event)) return;
+
+  const key = event.key.toLowerCase();
+  // While a dialog is open only '?' still works, to close the shortcuts
+  // overlay it opened.
+  if (isModalOpen() && !(key === '?' && isShortcutsModalOpen.value)) return;
 
   // Handle navigation (Z = Previous, X = Next)
   // We allow this globally as Z/X are unlikely to conflict with standard typing unless focused on input (handled above)
-  switch (event.key.toLowerCase()) {
+  switch (key) {
     case 'z':
       event.preventDefault();
       navigateMedia(-1); // Navigate to the previous media item
@@ -216,9 +222,10 @@ const handleKeydown = (event: KeyboardEvent) => {
       navigateMedia(1); // Navigate to the next media item
       break;
     case ' ':
-      // In grid view, spacebar toggles the slideshow timer.
+      // In grid view, spacebar toggles the slideshow timer, unless a focused
+      // button, tile or checkbox is being activated with it.
       // In player view, this is handled by the MediaDisplay component.
-      if (viewMode.value === 'grid') {
+      if (viewMode.value === 'grid' && !isActivatableTarget(event.target)) {
         event.preventDefault();
         toggleSlideshowTimer();
       }

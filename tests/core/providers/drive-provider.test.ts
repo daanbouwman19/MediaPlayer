@@ -1,20 +1,24 @@
 import { describe, it, expect, vi, beforeEach, Mock } from 'vite-plus/test';
 import { GoogleDriveProvider } from '../../../src/infrastructure/providers/drive-provider';
 import { getDriveStreamWithCache } from '../../../src/core/media/drive-stream';
+import { getDriveFileMetadataCached } from '../../../src/core/media/drive-backend';
 import {
   listDriveDirectory,
-  getDriveFileMetadata,
   getDriveParent,
   getDriveFileThumbnail,
-} from '../../../src/main/google-drive-service';
+} from '../../../src/infrastructure/google-drive-service';
+
+vi.mock('../../../src/core/media/drive-backend', () => ({
+  getDriveFileMetadataCached: vi.fn(),
+}));
 
 vi.mock('../../../src/core/media/drive-stream', () => ({
   getDriveStreamWithCache: vi.fn(),
 }));
 
-vi.mock('../../../src/main/google-drive-service', () => ({
+vi.mock('../../../src/infrastructure/google-drive-service', () => ({
   listDriveDirectory: vi.fn(),
-  getDriveFileMetadata: vi.fn(),
+
   getDriveParent: vi.fn(),
   getDriveFileThumbnail: vi.fn(),
 }));
@@ -60,11 +64,11 @@ describe('GoogleDriveProvider', () => {
         createdTime: '2021-01-01T00:00:00Z',
         videoMediaMetadata: { durationMillis: '2000' },
       };
-      (getDriveFileMetadata as Mock).mockResolvedValue(apiMeta);
+      (getDriveFileMetadataCached as Mock).mockResolvedValue(apiMeta);
 
       const res = await provider.getMetadata('gdrive://fileid');
 
-      expect(getDriveFileMetadata).toHaveBeenCalledWith('fileid');
+      expect(getDriveFileMetadataCached).toHaveBeenCalledWith('fileid');
       expect(res).toEqual({
         size: 1024,
         mimeType: 'video/mp4',
@@ -75,7 +79,7 @@ describe('GoogleDriveProvider', () => {
 
     it('handles missing duration/time', async () => {
       const apiMeta = {};
-      (getDriveFileMetadata as Mock).mockResolvedValue(apiMeta);
+      (getDriveFileMetadataCached as Mock).mockResolvedValue(apiMeta);
       const res = await provider.getMetadata('gdrive://fileid');
       expect(res).toEqual({
         size: 0,
