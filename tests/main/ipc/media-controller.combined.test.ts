@@ -194,8 +194,22 @@ describe('Media Controller Combined', () => {
 
         const result = await handler({}, 'gdrive://123');
 
+        expect(validatePathAccess).toHaveBeenCalledWith('gdrive://123');
         expect(getDriveFileMetadata).toHaveBeenCalledWith('123');
         expect(result).toEqual({ duration: 2 });
+      });
+
+      it('refuses Drive files outside the library (F70)', async () => {
+        const handler = getHandler(IPC_CHANNELS.GET_VIDEO_METADATA);
+        (validatePathAccess as Mock).mockRejectedValueOnce(
+          new Error('Access denied'),
+        );
+        vi.spyOn(console, 'error').mockImplementation(() => {});
+
+        await expect(handler({}, 'gdrive://foreign')).rejects.toThrow(
+          'Access denied',
+        );
+        expect(getDriveFileMetadata).not.toHaveBeenCalled();
       });
 
       it('throws if gdrive duration missing', async () => {
@@ -529,17 +543,33 @@ describe('Media Controller Combined', () => {
 
       it('DRIVE_CACHE_TRIGGER triggers a cache download', async () => {
         const handler = getHandler(IPC_CHANNELS.DRIVE_CACHE_TRIGGER);
+        (validatePathAccess as Mock).mockResolvedValue('gdrive://file123');
         mockDriveCacheManager.triggerDownload.mockResolvedValue(undefined);
 
         await handler({}, 'file123');
 
+        expect(validatePathAccess).toHaveBeenCalledWith('gdrive://file123');
         expect(mockDriveCacheManager.triggerDownload).toHaveBeenCalledWith(
           'file123',
         );
       });
 
+      it('DRIVE_CACHE_TRIGGER refuses Drive files outside the library (F70)', async () => {
+        const handler = getHandler(IPC_CHANNELS.DRIVE_CACHE_TRIGGER);
+        (validatePathAccess as Mock).mockRejectedValueOnce(
+          new Error('Access denied'),
+        );
+        vi.spyOn(console, 'error').mockImplementation(() => {});
+
+        await expect(handler({}, 'any-drive-id')).rejects.toThrow(
+          'Access denied',
+        );
+        expect(mockDriveCacheManager.triggerDownload).not.toHaveBeenCalled();
+      });
+
       it('DRIVE_CACHE_TRIGGER handles error and throws', async () => {
         const handler = getHandler(IPC_CHANNELS.DRIVE_CACHE_TRIGGER);
+        (validatePathAccess as Mock).mockResolvedValue('gdrive://file123');
         mockDriveCacheManager.triggerDownload.mockRejectedValue(
           new Error('Trigger failed'),
         );

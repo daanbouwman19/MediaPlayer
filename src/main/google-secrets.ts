@@ -8,6 +8,7 @@ export function getGoogleClientSecret(): string {
   return process.env.GOOGLE_CLIENT_SECRET || '';
 }
 
+// The Electron OAuth callback server listens on this URI's host and port.
 export function getGoogleRedirectUri(): string {
   return (
     process.env.GOOGLE_REDIRECT_URI ||

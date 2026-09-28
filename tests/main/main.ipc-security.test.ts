@@ -179,14 +179,41 @@ describe('main.js IPC Security', () => {
     expect(db.recordMediaView).toHaveBeenCalledWith(authorizedPath);
   });
 
-  it('should allow record-media-view for gdrive file', async () => {
+  it('should allow record-media-view for a gdrive file in the library', async () => {
     const gdrivePath = 'gdrive://12345';
+    const security = await import('../../src/core/auth/security');
+    (security.authorizeFilePath as unknown as Mock).mockResolvedValue({
+      isAllowed: true,
+      realPath: gdrivePath,
+    });
     const db = await import('../../src/core/database/database');
     const handler = handlers['record-media-view'];
 
     await handler(null, gdrivePath);
+    expect(security.authorizeFilePath).toHaveBeenCalledWith(gdrivePath);
     expect(db.recordMediaView).toHaveBeenCalledWith(gdrivePath);
   });
+
+  // F70: gdrive:// paths used to skip validation entirely, so a renderer
+  // could whitelist any Drive ID through an upsert.
+  it.each([
+    ['record-media-view', 'gdrive://not-in-library'],
+    [
+      'db:upsert-metadata',
+      { filePath: 'gdrive://not-in-library', metadata: {} },
+    ],
+    ['db:set-rating', { filePath: 'gdrive://not-in-library', rating: 5 }],
+  ])(
+    'should deny %s for a gdrive file outside the library',
+    async (channel, payload) => {
+      const db = await import('../../src/core/database/database');
+      const result = await handlers[channel](null, payload);
+      expect(result).toEqual({ success: false, error: 'Access denied' });
+      expect(db.recordMediaView).not.toHaveBeenCalled();
+      expect(db.upsertMetadata).not.toHaveBeenCalled();
+      expect(db.setRating).not.toHaveBeenCalled();
+    },
+  );
 
   it('should filter unauthorized paths in get-media-view-counts', async () => {
     const paths = ['/media/allowed.mp4', '/etc/passwd', 'gdrive://123'];

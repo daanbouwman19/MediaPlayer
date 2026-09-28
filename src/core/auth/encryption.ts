@@ -93,11 +93,18 @@ function persistNewKey(
   }
 }
 
+type KeyLookup =
+  | { key: Buffer }
+  | { key: null; keyPath: string; replacedReason: string | undefined };
+
 /**
- * Retrieves or generates the encryption key.
+ * Looks up the encryption key without ever creating one: the key installed
+ * with setMasterKey, the MASTER_KEY variable, or a usable master.key file.
+ * When none of them supplies a key, reports where a new key would go and
+ * why an existing key file would have to be replaced.
  */
-function getEncryptionKey(): Buffer {
-  if (cachedKey) return cachedKey;
+function lookupEncryptionKey(): KeyLookup {
+  if (cachedKey) return { key: cachedKey };
 
   // 1. Check environment variable
   if (process.env.MASTER_KEY) {
@@ -113,7 +120,7 @@ function getEncryptionKey(): Buffer {
       );
     }
     cachedKey = key;
-    return key;
+    return { key };
   }
 
   // 2. Check key file
@@ -147,7 +154,7 @@ function getEncryptionKey(): Buffer {
       const key = Buffer.from(keyHex, 'hex');
       if (key.length === KEY_LENGTH) {
         cachedKey = key;
-        return key;
+        return { key };
       }
       console.warn(
         `[Encryption] Invalid key length in ${MASTER_KEY_FILE}. Regenerating.`,
@@ -155,15 +162,47 @@ function getEncryptionKey(): Buffer {
       replacedReason = 'invalid';
     }
   }
+  return { key: null, keyPath, replacedReason };
+}
+
+/**
+ * Returns the usable encryption key, or null when there is none. Never
+ * creates or replaces a key file.
+ */
+function findEncryptionKey(): Buffer | null {
+  return lookupEncryptionKey().key;
+}
+
+/**
+ * Returns the encryption key, generating and persisting a new master.key
+ * when there is no usable one. Only encrypt() may create a key: the Electron
+ * main process treats a plain master.key as newer than its OS-protected copy,
+ * so a key must never exist unless something was encrypted with it.
+ */
+function getOrCreateEncryptionKey(): Buffer {
+  const found = lookupEncryptionKey();
+  if (found.key) return found.key;
 
   // 3. Generate new key
   const newKey = crypto.randomBytes(KEY_LENGTH);
-  if (!persistNewKey(keyPath, newKey, replacedReason)) {
+  if (!persistNewKey(found.keyPath, newKey, found.replacedReason)) {
     // Another process created the key file first: use that key.
-    return getEncryptionKey();
+    return getOrCreateEncryptionKey();
   }
   cachedKey = newKey;
   return newKey;
+}
+
+/**
+ * Installs a master key supplied by the host, e.g. one the Electron main
+ * process keeps protected by the OS keychain. It takes precedence over the
+ * MASTER_KEY variable and the plain master.key file.
+ */
+export function setMasterKey(key: Buffer): void {
+  if (key.length !== KEY_LENGTH) {
+    throw new Error(`Invalid master key length. Expected ${KEY_LENGTH} bytes.`);
+  }
+  cachedKey = Buffer.from(key);
 }
 
 /**
@@ -171,7 +210,7 @@ function getEncryptionKey(): Buffer {
  * format: iv:authTag:ciphertext (hex encoded)
  */
 export function encrypt(text: string): string {
-  const key = getEncryptionKey();
+  const key = getOrCreateEncryptionKey();
   const iv = crypto.randomBytes(IV_LENGTH);
   const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
 
@@ -187,7 +226,8 @@ export function encrypt(text: string): string {
 /**
  * Decrypts a string using AES-256-GCM.
  * Handles legacy plain text gracefully by returning it as-is if format doesn't match.
- * Returns null if decryption fails for a string that looks like encrypted data.
+ * Returns null if decryption fails for a string that looks like encrypted data,
+ * including when no key exists yet (decrypting never creates one).
  */
 export function decrypt(text: string): string | null {
   if (!text) return text;
@@ -217,7 +257,11 @@ export function decrypt(text: string): string | null {
   }
 
   try {
-    const key = getEncryptionKey();
+    const key = findEncryptionKey();
+    if (!key) {
+      console.warn('[Encryption] No master key available; cannot decrypt.');
+      return null;
+    }
     const iv = Buffer.from(ivHex, 'hex');
     const authTag = Buffer.from(authTagHex, 'hex');
     const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);

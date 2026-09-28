@@ -1,6 +1,6 @@
 import { spawn } from 'child_process';
-import { MediaRoutes } from '../core/media/routes.ts';
 import { isDrivePath } from '../core/media/media-utils.ts';
+import { createMediaSource } from '../core/media/media-source.ts';
 import { getVlcPath } from './vlc-paths.ts';
 import { authorizeFilePath } from '../core/auth/security.ts';
 
@@ -9,24 +9,25 @@ import { authorizeFilePath } from '../core/auth/security.ts';
  */
 export async function openMediaInVlc(
   filePath: string,
-  serverPort: number,
 ): Promise<{ success: boolean; message?: string }> {
-  let fileArg = filePath;
+  // [SECURITY] Only library files (local or Drive) may be handed to VLC.
+  const auth = await authorizeFilePath(filePath);
+  if (!auth.isAllowed) {
+    return { success: false, message: auth.message || 'Access denied' };
+  }
 
+  let fileArg = filePath;
   if (isDrivePath(filePath)) {
-    if (serverPort > 0) {
-      fileArg = `http://localhost:${serverPort}${MediaRoutes.STREAM}?file=${encodeURIComponent(filePath)}`;
-    } else {
+    // VLC cannot open gdrive:// paths. Like FFmpeg, it gets a URL on the
+    // token-protected internal Drive proxy.
+    try {
+      fileArg = await createMediaSource(filePath).getFFmpegInput();
+    } catch (error: unknown) {
+      console.error('[vlc-player] Failed to prepare Drive stream:', error);
       return {
         success: false,
-        message: 'Local server is not running to stream files.',
+        message: 'Could not prepare the Google Drive file for VLC.',
       };
-    }
-  } else {
-    // Local file auth check
-    const auth = await authorizeFilePath(filePath);
-    if (!auth.isAllowed) {
-      return { success: false, message: auth.message || 'Access denied' };
     }
   }
 
@@ -35,8 +36,7 @@ export async function openMediaInVlc(
   if (!vlcPath) {
     return {
       success: false,
-      message:
-        'VLC Media Player not found. Please ensure it is installed in the default location.',
+      message: 'VLC Media Player not found. Please make sure VLC is installed.',
     };
   }
 

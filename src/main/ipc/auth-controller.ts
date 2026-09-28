@@ -8,6 +8,7 @@ import {
 } from '../google-auth';
 import { startAuthServer } from '../auth-server';
 import { getDriveFolderInfo } from '../google-drive-service';
+import { getGoogleRedirectUri } from '../google-secrets';
 import { addMediaDirectory } from '../../core/database/database';
 import { handleIpc } from '../utils/ipc-helper';
 
@@ -18,11 +19,11 @@ export function registerAuthHandlers() {
 
   handleIpc(IPC_CHANNELS.AUTH_GOOGLE_DRIVE_START, async () => {
     const url = generateAuthUrl();
-    // Pass a getter (not the current value) so a restarted auth flow
-    // validates against the freshest state on the long-lived server.
-    startAuthServer(3000, getPendingAuthState).catch((err) =>
-      console.error('Failed to start auth server', err),
-    );
+    // Listen where the redirect URI points before sending the user to Google;
+    // a failure reaches the renderer instead of a dead redirect later. Pass a
+    // getter (not the current value) so a restarted auth flow validates
+    // against the freshest state if the server is reused.
+    await startAuthServer(getGoogleRedirectUri(), getPendingAuthState);
     return url;
   });
 

@@ -110,7 +110,7 @@ export function registerSystemHandlers() {
   handleIpc(
     IPC_CHANNELS.OPEN_IN_VLC,
     async (_event: IpcMainInvokeEvent, filePath: string) => {
-      return openMediaInVlc(filePath, getServerPort());
+      return openMediaInVlc(filePath);
     },
   );
 

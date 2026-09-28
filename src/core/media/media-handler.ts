@@ -588,10 +588,15 @@ export async function serveStaticFile(
   }
 }
 
+export interface MediaAppOptions extends MediaHandlerOptions {
+  /** Origins allowed to read responses cross-origin; omitted, any origin. */
+  allowedOrigins?: string[];
+}
+
 /**
  * Creates an Express application for media operations.
  */
-export function createMediaApp(options: MediaHandlerOptions) {
+export function createMediaApp(options: MediaAppOptions) {
   const { ffmpegPath, cacheDir } = options;
 
   // Initialize MediaAnalyzer cache dir
@@ -608,7 +613,9 @@ export function createMediaApp(options: MediaHandlerOptions) {
 
   const app = express();
 
-  app.use(cors());
+  app.use(
+    cors(options.allowedOrigins ? { origin: options.allowedOrigins } : {}),
+  );
   app.use(
     helmet({
       crossOriginResourcePolicy: { policy: 'cross-origin' },

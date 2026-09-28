@@ -242,11 +242,10 @@ describe('system-controller', () => {
   describe('OPEN_IN_VLC', () => {
     it('calls openMediaInVlc', async () => {
       const handler = getHandler(IPC_CHANNELS.OPEN_IN_VLC);
-      (getServerPort as Mock).mockReturnValue(3000);
 
       await handler({}, '/path/to/media.mp4');
 
-      expect(openMediaInVlc).toHaveBeenCalledWith('/path/to/media.mp4', 3000);
+      expect(openMediaInVlc).toHaveBeenCalledWith('/path/to/media.mp4');
     });
   });
 

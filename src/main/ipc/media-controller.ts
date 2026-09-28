@@ -82,6 +82,9 @@ export function registerMediaHandlers(mediaService: MediaService) {
     IPC_CHANNELS.GET_VIDEO_METADATA,
     async (_event: IpcMainInvokeEvent, filePath: string) => {
       try {
+        // [SECURITY] Drive IDs must belong to the library, like local paths.
+        await validatePathAccess(filePath);
+
         if (isDrivePath(filePath)) {
           const fileId = getDriveId(filePath);
           const meta = await getDriveFileMetadata(fileId);
@@ -92,8 +95,6 @@ export function registerMediaHandlers(mediaService: MediaService) {
           }
           throw new Error('Duration not available');
         }
-
-        await validatePathAccess(filePath);
 
         const ffmpegPath = await getFFmpegPath();
         if (!ffmpegPath) {
@@ -275,6 +276,8 @@ export function registerMediaHandlers(mediaService: MediaService) {
     IPC_CHANNELS.DRIVE_CACHE_TRIGGER,
     async (_event: IpcMainInvokeEvent, fileId: string) => {
       try {
+        // [SECURITY] Only cache Drive files that are part of the library.
+        await validatePathAccess(`gdrive://${fileId}`);
         const cacheManager = getDriveCacheManager();
         await cacheManager.triggerDownload(fileId);
       } catch (err) {

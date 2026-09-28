@@ -18,6 +18,7 @@ const { appListeners, mockApp, mockShutdownTranscoding, mockCloseDatabase } =
           appListeners.set(event, listener);
         }),
         quit: vi.fn(),
+        requestSingleInstanceLock: vi.fn(() => true),
         getPath: vi.fn(() => '/user-data'),
         commandLine: { appendSwitch: vi.fn() },
       },
@@ -30,6 +31,9 @@ vi.mock('dotenv', () => ({ default: { config: vi.fn() } }));
 vi.mock('electron', () => ({
   app: mockApp,
   BrowserWindow: Object.assign(vi.fn(), { getAllWindows: vi.fn(() => []) }),
+  dialog: { showErrorBox: vi.fn() },
+  safeStorage: {},
+  session: { defaultSession: {} },
 }));
 vi.mock('electron-log/main.js', () => ({
   default: {
@@ -51,6 +55,7 @@ vi.mock('../../src/main/local-server', () => ({
   startLocalServer: vi.fn(),
   stopLocalServer: vi.fn(),
   getServerPort: vi.fn(() => 0),
+  authorizeSessionRequests: vi.fn(),
 }));
 vi.mock('../../src/main/auth-server', () => ({ stopAuthServer: vi.fn() }));
 vi.mock('../../src/main/drive-cache-manager', () => ({
@@ -159,5 +164,16 @@ describe('main process before-quit (F26)', () => {
     expect(event.preventDefault).toHaveBeenCalledTimes(1);
     expect(mockCloseDatabase).not.toHaveBeenCalled();
     expect(mockApp.quit).toHaveBeenCalledTimes(1);
+  });
+
+  it('registers no quit cleanup in a second instance', async () => {
+    vi.resetModules();
+    appListeners.clear();
+    mockApp.requestSingleInstanceLock.mockReturnValueOnce(false);
+    await import('../../src/main/main');
+
+    expect(mockApp.quit).toHaveBeenCalledTimes(1);
+    expect(appListeners.has('before-quit')).toBe(false);
+    expect(appListeners.has('will-quit')).toBe(false);
   });
 });

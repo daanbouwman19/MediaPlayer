@@ -7,6 +7,7 @@
  */
 import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
 import { IPC_CHANNELS } from '../shared/ipc-channels';
+import { installDropGuard } from './drop-guard';
 import type {
   Album,
   MediaDirectory,
@@ -294,3 +295,5 @@ const api: ElectronAPI = {
 };
 
 contextBridge.exposeInMainWorld('electronAPI', api);
+
+installDropGuard(window);
