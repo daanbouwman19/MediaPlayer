@@ -21,6 +21,7 @@ import {
   isInSensitiveLocation,
   isRestrictedPath,
   isSensitiveDirectory,
+  validatePathAgainstDir,
 } from '../../src/core/auth/security';
 
 vi.mock('fs/promises', () => {
@@ -89,7 +90,7 @@ describe('isInSensitiveLocation', () => {
     });
   });
 
-  it('never matches on Linux, which has no such folders', () => {
+  it('does not match ordinary Linux home folders', () => {
     setPlatform('linux');
     expect(isInSensitiveLocation('/home/alice/Library')).toBe(false);
     expect(isInSensitiveLocation('/home/alice/AppData')).toBe(false);
@@ -179,5 +180,133 @@ describe('authorizeFilePath below a home-folder source', () => {
   it('allows media in an ordinary folder named Library', async () => {
     const result = await authorizeFilePath(mediaFile, dirs);
     expect(result.isAllowed).toBe(true);
+  });
+});
+
+describe("profiles outside this machine's own profile roots", () => {
+  describe('another Windows install on D:', () => {
+    beforeEach(() => {
+      setPlatform('win32');
+      vi.spyOn(os, 'homedir').mockReturnValue('C:\\Users\\alice');
+      vi.stubEnv('SystemDrive', 'C:');
+      vi.stubEnv('PUBLIC', 'C:\\Users\\Public');
+    });
+
+    it.each([
+      ['D:\\Users\\bob\\AppData\\Local', true],
+      ['d:\\USERS\\bob\\appdata', true],
+      ['E:\\Backup\\Users\\bob\\AppData\\Roaming', true],
+      ['D:\\Users\\bob', false],
+      ['D:\\Users\\bob\\Videos', false],
+      ['D:\\Library\\Films', false],
+      // A macOS profile Library is not special on Windows.
+      ['D:\\Users\\bob\\Library', false],
+    ])('isInSensitiveLocation(%s) -> %s', (p, expected) => {
+      expect(isInSensitiveLocation(p)).toBe(expected);
+    });
+
+    it('blocks listing and adding D:\\Users\\bob\\AppData', () => {
+      expect(isRestrictedPath('D:\\Users\\bob\\AppData\\Local')).toBe(true);
+      expect(isSensitiveDirectory('D:\\Users\\bob\\AppData')).toBe(true);
+      expect(isRestrictedPath('D:\\Users\\bob')).toBe(false);
+    });
+
+    it('skips D:\\Users\\bob\\AppData when scanning', () => {
+      expect(isIgnoredDirectory('AppData', 'D:\\Users\\bob\\AppData')).toBe(
+        true,
+      );
+      expect(isIgnoredDirectory('Videos', 'D:\\Users\\bob\\Videos')).toBe(
+        false,
+      );
+    });
+  });
+
+  describe('a Windows disk mounted on Linux', () => {
+    beforeEach(() => {
+      setPlatform('linux');
+      vi.spyOn(os, 'homedir').mockReturnValue('/app');
+    });
+
+    it.each([
+      ['/mnt/c/Users/bob/AppData/Local', true],
+      ['/mnt/c/users/bob/appdata', true],
+      ['/media/win/Users/bob/AppData/Roaming/Mozilla', true],
+      ['/mnt/c/Users/bob', false],
+      ['/mnt/c/Users/bob/Videos', false],
+      ['/mnt/library/movies', false],
+      ['/home/alice/AppData', false],
+    ])('isInSensitiveLocation(%s) -> %s', (p, expected) => {
+      expect(isInSensitiveLocation(p)).toBe(expected);
+    });
+
+    it('keeps /mnt/library/movies usable', () => {
+      expect(isRestrictedPath('/mnt/library/movies')).toBe(false);
+      expect(isSensitiveDirectory('/mnt/library/movies')).toBe(false);
+    });
+
+    it('blocks listing and adding /mnt/c/Users/bob/AppData', () => {
+      expect(isRestrictedPath('/mnt/c/Users/bob/AppData/Local')).toBe(true);
+      expect(isSensitiveDirectory('/mnt/c/Users/bob/AppData')).toBe(true);
+    });
+
+    it('skips /mnt/c/Users/bob/AppData when scanning', () => {
+      expect(isIgnoredDirectory('AppData', '/mnt/c/Users/bob/AppData')).toBe(
+        true,
+      );
+      expect(isIgnoredDirectory('Videos', '/mnt/c/Users/bob/Videos')).toBe(
+        false,
+      );
+    });
+
+    describe('validatePathAgainstDir with a source of /mnt/c', () => {
+      // Resolve with the host's path module, as validatePathAgainstDir does.
+      const source = path.resolve('/mnt/c');
+      const inSource = (...parts: string[]) => path.join(source, ...parts);
+
+      beforeEach(() => {
+        vi.mocked(fs.realpath).mockImplementation(async (p) =>
+          path.resolve(String(p)),
+        );
+      });
+
+      it('denies browser data below the source', async () => {
+        const result = await validatePathAgainstDir(
+          '/mnt/c',
+          inSource(
+            'Users',
+            'bob',
+            'AppData',
+            'Local',
+            'Google',
+            'Chrome',
+            'User Data',
+            'Default',
+            'Login Data',
+          ),
+        );
+        expect(result).toEqual({
+          isAllowed: false,
+          message: 'Access to sensitive file denied',
+        });
+      });
+
+      it('allows media elsewhere in the profile', async () => {
+        const file = inSource('Users', 'bob', 'Videos', 'clip.mp4');
+        const result = await validatePathAgainstDir('/mnt/c', file);
+        expect(result).toEqual({ isAllowed: true, realPath: file });
+      });
+    });
+  });
+
+  it('matches Users/<name>/Library by shape on macOS', () => {
+    setPlatform('darwin');
+    vi.spyOn(os, 'homedir').mockReturnValue('/Users/alice');
+    expect(
+      isInSensitiveLocation('/Volumes/OldMac/Users/bob/Library/Keychains'),
+    ).toBe(true);
+    expect(isInSensitiveLocation('/Volumes/Win/Users/bob/AppData/Local')).toBe(
+      true,
+    );
+    expect(isInSensitiveLocation('/Volumes/Media/Library/Films')).toBe(false);
   });
 });

@@ -497,7 +497,11 @@ function getProfileRoots(p: typeof path): string[] {
  * on Windows (browser profiles, saved passwords, tokens) or <home>/Library and
  * /Library on macOS (keychains, mail). These are matched by location rather
  * than by folder name, so an ordinary media folder that happens to be called
- * "Library" or "AppData" (e.g. D:\Library\Films) stays usable.
+ * "Library" or "AppData" (e.g. D:\Library\Films) stays usable. Besides this
+ * machine's own profile folders, any Users/<name>/AppData path (and on macOS
+ * Users/<name>/Library) matches on every platform and drive, which covers a
+ * second Windows install (D:\Users\bob\AppData) or a Windows disk mounted on
+ * Linux (/mnt/c/Users/bob/AppData).
  * @param targetPath - Absolute path to check.
  */
 export function isInSensitiveLocation(targetPath: string): boolean {
@@ -512,31 +516,58 @@ export function createSensitiveLocationMatcher(): (
   targetPath: string,
 ) => boolean {
   const platform = process.platform;
-  if (platform !== 'win32' && platform !== 'darwin') {
-    return () => false;
-  }
-  const p = platform === 'win32' ? path.win32 : path.posix;
-  const profileRoots = getProfileRoots(p);
-  const userDataFolder = platform === 'win32' ? 'appdata' : 'library';
+  const isWindows = platform === 'win32';
+  const isMac = platform === 'darwin';
+  const p = isWindows ? path.win32 : path.posix;
+  // Fixed locations of this machine's own profiles.
+  const profileRoots = isWindows || isMac ? getProfileRoots(p) : [];
+  const localUserDataFolder = isWindows ? 'appdata' : 'library';
+  // Any "Users/<name>/<data folder>" is matched by shape as well, so the
+  // profiles of another Windows install (D:\Users\bob\AppData) or of a
+  // Windows disk mounted on Linux (/mnt/c/Users/bob/AppData) are covered too.
+  const shapeUserDataFolders = isMac ? ['appdata', 'library'] : ['appdata'];
 
   return (targetPath) => {
     if (!targetPath) return false;
-    // NTFS and the default APFS volume are case-insensitive.
+    // NTFS and the default APFS volume are case-insensitive; the shape match
+    // is case-insensitive everywhere, as a mounted Windows disk is too.
     const target = p.resolve(targetPath).toLowerCase();
+
+    if (hasUserDataFolderShape(target, shapeUserDataFolders)) return true;
 
     for (const profilesRoot of profileRoots) {
       const rel = p.relative(profilesRoot, target);
       if (!rel || rel === '..' || rel.startsWith('..' + p.sep)) continue;
       if (p.isAbsolute(rel)) continue;
       // <profiles root>/<user>/<user data folder>[/...]
-      if (rel.split(p.sep)[1] === userDataFolder) return true;
+      if (rel.split(p.sep)[1] === localUserDataFolder) return true;
     }
 
-    return (
-      platform === 'darwin' &&
-      (target === '/library' || target.startsWith('/library/'))
-    );
+    return isMac && (target === '/library' || target.startsWith('/library/'));
   };
+}
+
+/**
+ * Checks a lower-cased path for a ".../users/<name>/<data folder>[/...]"
+ * sequence of segments, on any drive or mount point.
+ */
+function hasUserDataFolderShape(
+  lowerPath: string,
+  dataFolders: readonly string[],
+): boolean {
+  const segments = lowerPath.split(/[\\/]+/);
+  for (let i = 0; i + 2 < segments.length; i++) {
+    const folder = segments[i + 2];
+    if (
+      segments[i] === 'users' &&
+      segments[i + 1] &&
+      folder !== undefined &&
+      dataFolders.includes(folder)
+    ) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /**

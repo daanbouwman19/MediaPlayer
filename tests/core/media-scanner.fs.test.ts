@@ -13,7 +13,10 @@ import fs from 'fs/promises';
 import os from 'os';
 import path from 'path';
 import { performFullMediaScan } from '../../src/core/media/media-scanner';
-import { validatePathAgainstDir } from '../../src/core/auth/security';
+import {
+  isInSensitiveLocation,
+  validatePathAgainstDir,
+} from '../../src/core/auth/security';
 import {
   registerDriveBackend,
   resetDriveBackend,
@@ -49,16 +52,14 @@ describe('media scanner (real filesystem)', () => {
     vi.clearAllMocks();
     registerDriveBackend(fakeDriveBackend);
     // os.tmpdir() lies inside <profile>\AppData on Windows, which both the
-    // scanner and authorization refuse as a sensitive location. Point the
-    // profile roots elsewhere so the temp tree behaves like a media folder.
-    if (process.platform === 'win32') {
-      vi.spyOn(os, 'homedir').mockReturnValue('Z:\\NoProfiles\\user');
-      vi.stubEnv('SystemDrive', 'Z:');
-      vi.stubEnv('PUBLIC', 'Z:\\NoProfiles\\Public');
-    }
-    root = await fs.realpath(
-      await fs.mkdtemp(path.join(os.tmpdir(), 'scanner-')),
-    );
+    // scanner and authorization refuse as a sensitive location (any
+    // Users\<name>\AppData path is). Use the git-ignored tests/temp folder
+    // instead so the tree behaves like an ordinary media folder.
+    const base = isInSensitiveLocation(os.tmpdir())
+      ? path.resolve(__dirname, '..', 'temp')
+      : os.tmpdir();
+    await fs.mkdir(base, { recursive: true });
+    root = await fs.realpath(await fs.mkdtemp(path.join(base, 'scanner-')));
   });
 
   afterEach(async () => {
