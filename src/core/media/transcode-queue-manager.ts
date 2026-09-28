@@ -164,7 +164,15 @@ export class TranscodeQueueManager {
       }
       // Keep the finished output on disk so playback (also after a restart)
       // reuses it instead of transcoding again.
-      await hls.retainSession(sessionId, filePath);
+      // retainSession awaits a source probe; shutdown (or a cancel) can evict
+      // the session meanwhile, deleting its output. Never record 'done' then.
+      const kept = await hls.retainSession(sessionId, filePath);
+      if (this.isAborted(filePath)) return;
+      if (!kept) {
+        throw new Error(
+          'Transcoded output was removed before it could be kept',
+        );
+      }
       await updateTranscodeJobStatus(filePath, 'done', null);
     } catch (err) {
       if (this.isAborted(filePath)) return;

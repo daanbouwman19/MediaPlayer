@@ -54,7 +54,10 @@ vi.mock('../../src/infrastructure/ffmpeg-utils.ts', () => ({
 vi.mock('ffmpeg-static', () => ({ default: '/usr/bin/ffmpeg' }));
 
 import { HlsManager } from '../../src/core/media/hls-manager.ts';
-import { TranscodeQueueManager } from '../../src/core/media/transcode-queue-manager.ts';
+import {
+  TranscodeQueueManager,
+  shutdownTranscoding,
+} from '../../src/core/media/transcode-queue-manager.ts';
 import { generateSessionId } from '../../src/core/media/hls-handler.ts';
 
 type MockProc = EventEmitter & {
@@ -229,5 +232,76 @@ describe('TranscodeQueueManager with the real HlsManager', () => {
       path.join(CACHE_DIR, id, '.retained'),
       JSON.stringify({ size: 777, mtimeMs: 42 }),
     );
+  });
+
+  function holdSourceStat(filePath: string): () => void {
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    fsMock.stat.mockImplementation(async (p: string) => {
+      if (p === filePath) await held;
+      return { size: 100, mtimeMs: 42, isDirectory: () => true };
+    });
+    return release;
+  }
+
+  it('does not record a job done when shutdown removes its output during retain (F25)', async () => {
+    const releaseStat = holdSourceStat('/shut.mkv');
+    const queue = TranscodeQueueManager.getInstance();
+    await queue.enqueue('/shut.mkv');
+    await vi.waitFor(() => expect(procs).toHaveLength(1));
+
+    procs[0]!.emit('close', 0, null);
+    await vi.waitFor(() =>
+      expect(fsMock.stat).toHaveBeenCalledWith('/shut.mkv'),
+    );
+    await shutdownTranscoding();
+    releaseStat();
+
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(fsMock.writeFile).not.toHaveBeenCalledWith(
+      expect.stringContaining('.retained'),
+      expect.anything(),
+    );
+    expect(db.updateTranscodeJobStatus).not.toHaveBeenCalledWith(
+      '/shut.mkv',
+      'done',
+      null,
+    );
+    expect(db.updateTranscodeJobStatus).not.toHaveBeenCalledWith(
+      '/shut.mkv',
+      'failed',
+      expect.anything(),
+    );
+  });
+
+  it('marks a job failed when its output is removed before it is kept (F25)', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const releaseStat = holdSourceStat('/gone.mkv');
+    const queue = TranscodeQueueManager.getInstance();
+    const id = await generateSessionId('/gone.mkv');
+    await queue.enqueue('/gone.mkv');
+    await vi.waitFor(() => expect(procs).toHaveLength(1));
+
+    procs[0]!.emit('close', 0, null);
+    await vi.waitFor(() =>
+      expect(fsMock.stat).toHaveBeenCalledWith('/gone.mkv'),
+    );
+    // Removed by something other than the queue (not a cancel or shutdown)
+    await HlsManager.getInstance().stopSession(id);
+    releaseStat();
+
+    await vi.waitFor(() =>
+      expect(db.updateTranscodeJobStatus).toHaveBeenCalledWith(
+        '/gone.mkv',
+        'failed',
+        'Transcoded output was removed before it could be kept',
+      ),
+    );
+    expect(db.updateTranscodeJobStatus).not.toHaveBeenCalledWith(
+      '/gone.mkv',
+      'done',
+      null,
+    );
+    error.mockRestore();
   });
 });
