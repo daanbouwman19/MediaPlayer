@@ -100,13 +100,13 @@ Dependency install scripts are approved in the `allowScripts` field of `package.
 **Desktop Dev Mode**:
 
 ```bash
-npm run dev
+npm run electron:dev
 ```
 
 **Web Server Dev Mode**:
 
 ```bash
-npm run dev:all
+npm run web:dev
 ```
 
 ### Testing
@@ -132,10 +132,10 @@ Generated files are stored in `tests/fixtures/diversity`.
 To package the application for your OS:
 
 ```bash
-npm run package
+npm run electron:package
 ```
 
-The output will be in the `out/` directory.
+The output will be in the `release/` directory (`electron:package:win`, `:mac` and `:linux` target a single OS).
 
 ## Web Server
 

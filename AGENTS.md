@@ -7,7 +7,7 @@ Welcome to the Mediaplayer App project. This file provides critical context, gui
 - **Type**: Media Player Application
 - **Platform**: Cross-platform desktop (Electron) and Web UI.
 - **Frontend**: Vue 3, Vite, Tailwind CSS (v4), HTML5 Media APIs.
-- **Backend/Main Process**: Node.js, Express, better-sqlite3.
+- **Backend/Main Process**: Node.js, Express, built-in `node:sqlite` (WAL mode).
 - **Tooling**: Vite+ (`vp`): Vite, Vitest, Oxlint and Oxfmt; `vue-tsc` for type checking.
 - **Testing**: Vitest (Unit/Integration) and Playwright (E2E/Visual).
 
