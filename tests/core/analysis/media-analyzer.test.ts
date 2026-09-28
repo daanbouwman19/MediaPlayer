@@ -42,10 +42,22 @@ vi.mock('crypto', () => ({
 // PLUS the strings as the test imports
 vi.mock('../../../src/infrastructure/ffmpeg-utils', () => ({
   getFFmpegStreams: vi.fn(),
+  getInputSafetyArgs: () => [
+    '-protocol_whitelist',
+    'file',
+    '-format_whitelist',
+    'mov,mp4',
+  ],
   runFFmpeg: vi.fn(),
 }));
 vi.mock('../../../src/infrastructure/ffmpeg-utils.ts', () => ({
   getFFmpegStreams: vi.fn(),
+  getInputSafetyArgs: () => [
+    '-protocol_whitelist',
+    'file',
+    '-format_whitelist',
+    'mov,mp4',
+  ],
   runFFmpeg: vi.fn(),
 }));
 
@@ -127,6 +139,17 @@ describe('MediaAnalyzer', () => {
     const result = await promise;
 
     expect(spawn).toHaveBeenCalled();
+    // The input is restricted to safe protocols and demuxers (F79)
+    const args = vi.mocked(spawn).mock.calls[0]![1] as string[];
+    const inputAt = args.indexOf('-i');
+    expect(args.slice(inputAt - 4, inputAt + 2)).toEqual([
+      '-protocol_whitelist',
+      'file',
+      '-format_whitelist',
+      'mov,mp4',
+      '-i',
+      'test.mp4',
+    ]);
     expect(result.points).toBe(1);
     expect(result.motion[0]).toBe(10.5);
     expect(result.audio[0]).toBe(-20);

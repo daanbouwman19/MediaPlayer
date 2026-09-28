@@ -7,6 +7,7 @@ import fs from 'fs/promises';
 import { fileURLToPath } from 'url';
 import selfsigned from 'selfsigned';
 import { createApp } from './app.ts';
+import { installServerLifecycle } from './lifecycle.ts';
 import {
   DEFAULT_SERVER_HOST,
   DEFAULT_SERVER_PORT,
@@ -91,6 +92,7 @@ export async function bootstrap() {
 
   const server = https.createServer(credentials, app);
   server.setTimeout(30000);
+  installServerLifecycle(server);
 
   server.listen(port, host, () => {
     console.log(`Server running at https://${host}:${port}`);

@@ -466,7 +466,9 @@ export function createMediaRoutes({
         if (!auth.isAllowed) {
           return res.status(403).send(auth.message || 'Access denied');
         }
-        await manager.enqueue(p);
+        // Queue the resolved path, like Electron does: the HLS session id is
+        // derived from it, so playback finds the pre-transcoded output.
+        await manager.enqueue(auth.realPath ?? p);
       }
       return res.status(204).send();
     }),
@@ -491,8 +493,15 @@ export function createMediaRoutes({
       if (!auth.isAllowed) {
         return res.status(403).send(auth.message || 'Access denied');
       }
-      await TranscodeQueueManager.getInstance().cancel(filePath);
-      await deleteTranscodeJob(filePath);
+      const jobPath = auth.realPath ?? filePath;
+      await TranscodeQueueManager.getInstance().cancel(jobPath);
+      await deleteTranscodeJob(jobPath);
+      if (jobPath !== filePath) {
+        // Jobs queued by older versions are keyed (and resumed) by the
+        // unresolved path, so their queue entry and session use it too.
+        await TranscodeQueueManager.getInstance().cancel(filePath);
+        await deleteTranscodeJob(filePath);
+      }
       return res.status(204).send();
     }),
   );

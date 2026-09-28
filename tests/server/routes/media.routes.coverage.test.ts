@@ -282,6 +282,39 @@ describe('Media Routes Coverage', () => {
       expect(mockQueueManager.enqueue).toHaveBeenCalledTimes(2);
     });
 
+    it('POST /api/transcode/jobs queues the resolved path (F25)', async () => {
+      vi.mocked(security.authorizeFilePath).mockResolvedValue({
+        isAllowed: true,
+        realPath: '/real/a.mp4',
+      } as any);
+      const res = await request(app)
+        .post('/api/transcode/jobs')
+        .send({ paths: ['/link/a.mp4'] });
+      expect(res.status).toBe(204);
+      // Playback derives the HLS session id from the resolved path
+      expect(mockQueueManager.enqueue).toHaveBeenCalledWith('/real/a.mp4');
+    });
+
+    it('DELETE /api/transcode/jobs cancels the resolved path and removes legacy rows', async () => {
+      vi.mocked(security.authorizeFilePath).mockResolvedValue({
+        isAllowed: true,
+        realPath: '/real/a.mp4',
+      } as any);
+      const { deleteTranscodeJob } =
+        await import('../../../src/core/database/database');
+      vi.mocked(deleteTranscodeJob).mockClear();
+      mockQueueManager.cancel.mockClear();
+      const res = await request(app)
+        .delete('/api/transcode/jobs')
+        .send({ path: '/link/a.mp4' });
+      expect(res.status).toBe(204);
+      expect(mockQueueManager.cancel).toHaveBeenCalledWith('/real/a.mp4');
+      // A legacy job is queued and resumed under the unresolved path
+      expect(mockQueueManager.cancel).toHaveBeenCalledWith('/link/a.mp4');
+      expect(deleteTranscodeJob).toHaveBeenCalledWith('/real/a.mp4');
+      expect(deleteTranscodeJob).toHaveBeenCalledWith('/link/a.mp4');
+    });
+
     it('POST /api/transcode/jobs returns 400 for missing paths', async () => {
       const res = await request(app).post('/api/transcode/jobs').send({});
       expect(res.status).toBe(400);

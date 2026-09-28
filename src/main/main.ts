@@ -40,6 +40,7 @@ import { registerMediaHandlers } from './ipc/media-controller';
 import { registerDatabaseHandlers } from './ipc/database-controller';
 
 import { MediaService } from '../core/media/media-service';
+import { shutdownTranscoding } from '../core/media/transcode-queue-manager';
 import { MediaRepository } from '../core/database/repositories/media-repository';
 import { NodeFileSystem } from '../infrastructure/node-file-system';
 import { WorkerScannerService } from '../infrastructure/worker-scanner-service';
@@ -189,6 +190,21 @@ app.on('activate', () => {
       });
     }
   }
+});
+
+// Stop ffmpeg (non-detached children outlive the app on macOS/Linux) and
+// flush the database before quitting; will-quit cannot wait for either.
+let quitCleanupDone = false;
+app.on('before-quit', (event) => {
+  if (quitCleanupDone) return;
+  quitCleanupDone = true;
+  event.preventDefault();
+  void shutdownTranscoding()
+    .then(() => closeDatabase())
+    .catch((error: unknown) => {
+      log.error('[main.js] Cleanup before quit failed:', error);
+    })
+    .finally(() => app.quit());
 });
 
 app.on('will-quit', () => {

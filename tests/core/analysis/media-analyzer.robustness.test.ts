@@ -50,10 +50,12 @@ vi.mock('crypto', () => ({
 // PLUS the strings as the test imports
 vi.mock('../../../src/infrastructure/ffmpeg-utils', () => ({
   getFFmpegStreams: vi.fn(),
+  getInputSafetyArgs: () => ['-protocol_whitelist', 'file'],
   runFFmpeg: vi.fn(),
 }));
 vi.mock('../../../src/infrastructure/ffmpeg-utils.ts', () => ({
   getFFmpegStreams: vi.fn(),
+  getInputSafetyArgs: () => ['-protocol_whitelist', 'file'],
   runFFmpeg: vi.fn(),
 }));
 

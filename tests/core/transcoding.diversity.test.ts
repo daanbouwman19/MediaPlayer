@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vite-plus/test';
 import path from 'path';
 import fs from 'fs/promises';
-import { HlsManager } from '../../src/core/media/hls-manager.ts';
+import { HlsManager, HlsBusyError } from '../../src/core/media/hls-manager.ts';
 import { generateSessionId } from '../../src/core/media/hls-handler.ts';
 
 // Mock security to allow our test fixtures
@@ -71,23 +71,38 @@ describe('Transcoding Diversity Integration', () => {
     }, 30000); // 30s timeout per file
   }
 
-  it('should handle concurrent transcodes using PQueue', async () => {
+  it('caps parallel interactive transcodes and frees the slots when they finish', async () => {
     const filesToTranscode = testFiles.slice(0, 3);
     const sessionIds = await Promise.all(
       filesToTranscode.map((f) => generateSessionId(path.join(fixturesDir, f))),
     );
 
-    // Start all concurrently
-    await Promise.all(
+    // Start all concurrently: the cap is reserved before the first await, so
+    // parallel requests cannot all spawn ffmpeg.
+    const results = await Promise.allSettled(
       filesToTranscode.map((f, i) =>
         hlsManager.ensureSession(sessionIds[i], path.join(fixturesDir, f)),
       ),
     );
 
-    // Verify all are active
+    expect(results.map((r) => r.status)).toEqual([
+      'fulfilled',
+      'fulfilled',
+      'rejected',
+    ]);
+    const refused = results[2] as PromiseRejectedResult;
+    expect(refused.reason).toBeInstanceOf(HlsBusyError);
+
+    // Finished sessions no longer count against the cap.
+    await hlsManager.waitForSession(sessionIds[0]);
+    await hlsManager.waitForSession(sessionIds[1]);
+    await hlsManager.ensureSession(
+      sessionIds[2],
+      path.join(fixturesDir, filesToTranscode[2]),
+    );
+
     for (const sessionId of sessionIds) {
-      const progress = hlsManager.getSessionProgress(sessionId);
-      expect(progress).not.toBeNull();
+      expect(hlsManager.getSessionProgress(sessionId)).not.toBeNull();
       await hlsManager.stopSession(sessionId);
     }
   }, 60000);

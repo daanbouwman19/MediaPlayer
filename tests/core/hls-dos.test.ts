@@ -6,7 +6,7 @@ import {
   beforeEach,
   afterEach,
 } from 'vite-plus/test';
-import { HlsManager } from '../../src/core/media/hls-manager.ts';
+import { HlsManager, HlsBusyError } from '../../src/core/media/hls-manager.ts';
 import { MAX_CONCURRENT_TRANSCODES } from '../../src/core/media/constants.ts';
 import EventEmitter from 'events';
 
@@ -28,6 +28,9 @@ vi.mock('fs/promises', () => ({
     rm: mockFsRm,
     stat: mockFsStat,
     readdir: vi.fn().mockResolvedValue([]),
+    // Nothing retained on disk
+    access: vi.fn().mockRejectedValue(new Error('ENOENT')),
+    readFile: vi.fn().mockRejectedValue(new Error('ENOENT')),
   },
   mkdir: mockFsMkdir,
   rm: mockFsRm,
@@ -47,12 +50,6 @@ import { createMediaSource } from '../../src/core/media/media-source.ts';
 
 vi.mock('../../src/infrastructure/ffmpeg-utils.ts', () => ({
   getHlsTranscodeArgs: vi.fn().mockReturnValue(['-f', 'hls', 'playlist.m3u8']),
-  detectFFmpegCapabilities: vi.fn().mockResolvedValue({
-    nvenc: false,
-    videotoolbox: false,
-    vaapi: false,
-  }),
-  getHardwareCodec: vi.fn().mockReturnValue(null),
   getFFmpegStreams: vi.fn().mockResolvedValue({
     hasVideo: true,
     hasAudio: true,
@@ -153,5 +150,101 @@ describe('HlsManager DOS Protection', () => {
     // Clean up: timeout all waiting sessions
     await vi.advanceTimersByTimeAsync(30000);
     await Promise.all(promises);
+  });
+
+  describe('interactive transcode cap (F22)', () => {
+    const makeProcess = () => {
+      const proc = new EventEmitter() as any;
+      proc.stderr = new EventEmitter();
+      proc.killed = false;
+      proc.kill = vi.fn((signal: string) => {
+        proc.killed = true;
+        queueMicrotask(() => proc.emit('close', null, signal));
+        return true;
+      });
+      return proc;
+    };
+
+    beforeEach(() => {
+      mockSpawn.mockReset();
+      mockSpawn.mockImplementation(makeProcess);
+    });
+
+    async function start(id: string) {
+      const promise = hlsManager.ensureSession(id, `/path/${id}.mkv`);
+      promise.catch(() => {}); // awaited below
+      await vi.advanceTimersByTimeAsync(0);
+      return promise;
+    }
+
+    it('refuses parallel requests for different files beyond the cap', async () => {
+      const results = await Promise.allSettled(
+        Array.from({ length: 20 }, (_, i) =>
+          hlsManager.ensureSession(`parallel-${i}`, `/path/p-${i}.mkv`),
+        ),
+      );
+      await vi.advanceTimersByTimeAsync(0);
+
+      const refused = results.filter((r) => r.status === 'rejected');
+      expect(refused).toHaveLength(20 - MAX_CONCURRENT_TRANSCODES);
+      for (const r of refused) {
+        expect((r as PromiseRejectedResult).reason).toBeInstanceOf(
+          HlsBusyError,
+        );
+      }
+      expect(mockSpawn).toHaveBeenCalledTimes(MAX_CONCURRENT_TRANSCODES);
+    });
+
+    it('does not count stopped, failed or finished sessions', async () => {
+      await start('stopped');
+      await hlsManager.stopSession('stopped');
+      await start('failed');
+      mockSpawn.mock.results[1]!.value.emit('close', 1, null);
+      await start('finished');
+      mockSpawn.mock.results[2]!.value.emit('close', 0, null);
+      await vi.advanceTimersByTimeAsync(0);
+
+      await expect(start('a')).resolves.toBeDefined();
+      await expect(start('b')).resolves.toBeDefined();
+      await expect(start('c')).rejects.toBeInstanceOf(HlsBusyError);
+    });
+
+    it('does not count pinned background sessions', async () => {
+      hlsManager.pinSession('bg-1');
+      hlsManager.pinSession('bg-2');
+      await hlsManager.ensureSessionUnthrottled('bg-1', '/bg1.mkv');
+      await hlsManager.ensureSessionUnthrottled('bg-2', '/bg2.mkv');
+
+      await expect(start('a')).resolves.toBeDefined();
+      await expect(start('b')).resolves.toBeDefined();
+    });
+
+    it('evicts the least recently used idle session to make room', async () => {
+      await start('old');
+      await vi.advanceTimersByTimeAsync(5_000);
+      await start('newer');
+      // Neither is being fetched from, and 'old' has had no request for a while
+      await vi.advanceTimersByTimeAsync(15_000);
+
+      await expect(start('next')).resolves.toBeDefined();
+
+      const oldProc = mockSpawn.mock.results[0]!.value;
+      const newerProc = mockSpawn.mock.results[1]!.value;
+      expect(oldProc.kill).toHaveBeenCalledWith('SIGTERM');
+      expect(newerProc.kill).not.toHaveBeenCalled();
+      expect(hlsManager.getSessionProgress('old')).toBeNull();
+    });
+
+    it('never evicts a session that is serving a request or was just used', async () => {
+      await start('busy');
+      await start('recent');
+      hlsManager.acquireSession('busy');
+      await vi.advanceTimersByTimeAsync(20_000);
+      hlsManager.touchSession('recent');
+
+      await expect(start('next')).rejects.toBeInstanceOf(HlsBusyError);
+      expect(hlsManager.getSessionProgress('busy')).not.toBeNull();
+      expect(hlsManager.getSessionProgress('recent')).not.toBeNull();
+    });
   });
 });

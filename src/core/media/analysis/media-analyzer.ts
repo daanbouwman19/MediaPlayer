@@ -1,6 +1,9 @@
 import { spawn } from 'child_process';
 import { getFFmpegStaticPath } from '../../../infrastructure/ffmpeg-static-path';
-import { getFFmpegStreams } from '../../../infrastructure/ffmpeg-utils';
+import {
+  getFFmpegStreams,
+  getInputSafetyArgs,
+} from '../../../infrastructure/ffmpeg-utils';
 import { createMediaSource } from '../media-source.ts';
 import fs from 'fs/promises';
 import path from 'path';
@@ -124,6 +127,7 @@ export class MediaAnalyzer {
       throw new Error('No video or audio streams found');
 
     const args = [
+      ...getInputSafetyArgs(inputPath),
       '-i',
       inputPath,
       '-filter_complex',

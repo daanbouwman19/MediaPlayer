@@ -124,6 +124,7 @@ import { usePlayerStore } from '@/composables/usePlayerStore';
 import { usePlaylistStore } from '@/composables/usePlaylistStore';
 import { useUIStore } from '@/composables/useUIStore';
 import { useTranscodeQueue } from '@/composables/useTranscodeQueue';
+import { isMediaFileVideo } from '@/utils/mediaUtils';
 import type { MediaFile } from '../../../core/media/types';
 import MediaGridItem from './MediaGridItem.vue';
 import VirtualScroller from '@/components/atoms/VirtualScroller.vue';
@@ -329,9 +330,21 @@ const handleItemClick = async (
 };
 
 const handlePreTranscode = async () => {
-  const paths = [...selectedPaths.value];
+  // Only videos can be transcoded; skip any images in a mixed selection.
+  const selected = selectedPaths.value;
+  const paths: string[] = [];
+  for (const item of allMediaFiles.value) {
+    if (
+      selected.has(item.path) &&
+      isMediaFileVideo(item, videoExtensionsSet.value)
+    ) {
+      paths.push(item.path);
+    }
+  }
   selectedPaths.value = new Set();
-  await addJobs(paths);
+  if (paths.length > 0) {
+    await addJobs(paths);
+  }
 };
 
 const handleClearTranscode = async () => {

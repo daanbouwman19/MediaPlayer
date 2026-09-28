@@ -31,6 +31,11 @@ vi.mock('selfsigned', () => ({
   },
 }));
 
+// Signal handlers are covered in lifecycle.test.ts; keep them off this process.
+vi.mock('../../src/server/lifecycle.ts', () => ({
+  installServerLifecycle: vi.fn(),
+}));
+
 vi.mock('../../src/core/database/database', () => ({
   initDatabase: vi.fn(),
   getMediaDirectories: vi.fn().mockResolvedValue([]),

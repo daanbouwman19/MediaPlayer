@@ -7,53 +7,59 @@ import {
   afterEach,
 } from 'vite-plus/test';
 import EventEmitter from 'events';
+import path from 'path';
 
 // vi.hoisted ensures these are available inside vi.mock factory closures
-const { mockSpawn, mockFsMkdir, mockFsRm, mockFsStat, mockFsReaddir } =
-  vi.hoisted(() => ({
-    mockSpawn: vi.fn(),
-    mockFsMkdir: vi.fn(),
-    mockFsRm: vi.fn(),
-    mockFsStat: vi.fn(),
-    mockFsReaddir: vi.fn(),
-  }));
+const {
+  mockSpawn,
+  mockFsMkdir,
+  mockFsRm,
+  mockFsStat,
+  mockFsReaddir,
+  mockFsAccess,
+  mockFsReadFile,
+  mockFsWriteFile,
+} = vi.hoisted(() => ({
+  mockSpawn: vi.fn(),
+  mockFsMkdir: vi.fn(),
+  mockFsRm: vi.fn(),
+  mockFsStat: vi.fn(),
+  mockFsReaddir: vi.fn(),
+  mockFsAccess: vi.fn(),
+  mockFsReadFile: vi.fn(),
+  mockFsWriteFile: vi.fn(),
+}));
 
 vi.mock('child_process', () => ({
   spawn: mockSpawn,
   default: { spawn: mockSpawn },
 }));
 
-vi.mock('fs/promises', () => ({
-  default: {
+vi.mock('fs/promises', () => {
+  const fsMock = {
     mkdir: mockFsMkdir,
     rm: mockFsRm,
     readdir: mockFsReaddir,
     stat: mockFsStat,
-  },
-  mkdir: mockFsMkdir,
-  rm: mockFsRm,
-  readdir: mockFsReaddir,
-  stat: mockFsStat,
-}));
+    access: mockFsAccess,
+    readFile: mockFsReadFile,
+    writeFile: mockFsWriteFile,
+  };
+  return { default: fsMock, ...fsMock };
+});
 
 vi.mock('../../src/core/media/media-source.ts', () => ({
   createMediaSource: vi.fn().mockImplementation((filePath: string) => ({
     getFFmpegInput: vi.fn().mockResolvedValue(filePath),
     getStream: vi.fn(),
     getMimeType: vi.fn(),
-    getSize: vi.fn(),
+    getSize: vi.fn().mockResolvedValue(100),
     getType: () => 'local',
   })),
 }));
 
 vi.mock('../../src/infrastructure/ffmpeg-utils.ts', () => ({
   getHlsTranscodeArgs: vi.fn().mockReturnValue(['-f', 'hls', 'playlist.m3u8']),
-  detectFFmpegCapabilities: vi.fn().mockResolvedValue({
-    nvenc: false,
-    videotoolbox: false,
-    vaapi: false,
-  }),
-  getHardwareCodec: vi.fn().mockReturnValue(null),
   getFFmpegStreams: vi.fn().mockResolvedValue({
     hasVideo: true,
     hasAudio: true,
@@ -67,7 +73,11 @@ vi.mock('ffmpeg-static', () => ({
   default: '/usr/bin/ffmpeg',
 }));
 
-import { HlsManager } from '../../src/core/media/hls-manager.ts';
+import {
+  HlsManager,
+  HlsSessionStatus,
+  HlsBusyError,
+} from '../../src/core/media/hls-manager.ts';
 
 describe('HlsManager Coverage Boost', () => {
   const CACHE_DIR = '/tmp/hls-coverage';
@@ -75,16 +85,32 @@ describe('HlsManager Coverage Boost', () => {
 
   const createMockProcess = () => {
     const proc = new EventEmitter() as any;
-    proc.kill = vi.fn();
     proc.stderr = new EventEmitter();
-    proc.stdin = new EventEmitter();
-    proc.stdout = new EventEmitter();
     proc.killed = false;
+    proc.kill = vi.fn((signal: string) => {
+      proc.killed = true;
+      queueMicrotask(() => proc.emit('close', null, signal));
+      return true;
+    });
     return proc;
   };
 
+  async function start(id: string, unthrottled = false) {
+    const proc = createMockProcess();
+    mockSpawn.mockReturnValueOnce(proc);
+    const promise = unthrottled
+      ? hlsManager.ensureSessionUnthrottled(id, `/${id}.mkv`)
+      : hlsManager.ensureSession(id, `/${id}.mkv`);
+    promise.catch(() => {}); // awaited below
+    await vi.advanceTimersByTimeAsync(0);
+    await promise;
+    return proc;
+  }
+
   beforeEach(() => {
     vi.clearAllMocks();
+    // Also drops queued mockReturnValueOnce values left by a refused start
+    mockSpawn.mockReset();
     vi.useFakeTimers();
     HlsManager.resetInstance();
     hlsManager = HlsManager.getInstance();
@@ -92,6 +118,9 @@ describe('HlsManager Coverage Boost', () => {
 
     mockFsMkdir.mockResolvedValue(undefined);
     mockFsRm.mockResolvedValue(undefined);
+    mockFsWriteFile.mockResolvedValue(undefined);
+    mockFsAccess.mockRejectedValue(new Error('ENOENT'));
+    mockFsReadFile.mockRejectedValue(new Error('ENOENT'));
     mockFsStat.mockResolvedValue({ size: 100, isDirectory: () => true });
     mockFsReaddir.mockResolvedValue([]);
   });
@@ -108,83 +137,11 @@ describe('HlsManager Coverage Boost', () => {
     );
   });
 
-  it('parses fps and speed from stderr', async () => {
-    const sessionId = 'extra-parse-test';
-    const mockProcess = createMockProcess();
-    mockSpawn.mockReturnValue(mockProcess);
-
-    const promise = hlsManager.ensureSession(sessionId, '/test.mp4');
-    await vi.advanceTimersByTimeAsync(1);
-
-    mockProcess.stderr.emit(
-      'data',
-      'frame= 100 fps= 25 q=28.0 size= 1024kB time=00:00:10.00 bitrate= 838.9kbits/s speed=1.5x\n',
-    );
-
-    await vi.advanceTimersByTimeAsync(500);
-    await promise;
-
-    const progress = hlsManager.getSessionProgress(sessionId);
-    expect(progress?.fps).toBe(25);
-    expect(progress?.speed).toBe('1.5x');
-  });
-
-  it('handles multiple lines and partial lines in stderr', async () => {
-    const sessionId = 'buffer-test';
-    const mockProcess = createMockProcess();
-    mockSpawn.mockReturnValue(mockProcess);
-
-    const promise = hlsManager.ensureSession(sessionId, '/test.mp4');
-    await vi.advanceTimersByTimeAsync(1);
-
-    mockProcess.stderr.emit('data', 'Duration: 00:01:40.00\ntime=00:00:1');
-    mockProcess.stderr.emit(
-      'data',
-      "0.00\nfps=30\nOpening 'playlist.m3u8' for writing\n",
-    );
-
-    await vi.advanceTimersByTimeAsync(500);
-    await promise;
-
-    const progress = hlsManager.getSessionProgress(sessionId);
-    expect(progress?.duration).toBe(100);
-    expect(progress?.currentTime).toBe(10);
-    expect(progress?.fps).toBe(30);
-  });
-
-  it('handles SIGKILL timeout in stopSession', async () => {
-    const sessionId = 'kill-timeout-test';
-    const mockProcess = createMockProcess();
-    mockSpawn.mockReturnValue(mockProcess);
-
-    const promise = hlsManager.ensureSession(sessionId, '/test.mp4');
-    await vi.advanceTimersByTimeAsync(500);
-    mockProcess.stderr.emit('data', "Opening 'playlist.m3u8' for writing\n");
-    await promise;
-
-    await hlsManager.stopSession(sessionId);
-    expect(mockProcess.kill).toHaveBeenCalledWith('SIGTERM');
-
-    // Advance time to trigger SIGKILL timeout
-    await vi.advanceTimersByTimeAsync(2001);
-    expect(mockProcess.kill).toHaveBeenCalledWith('SIGKILL');
-  });
-
-  it('handles process already killed during SIGKILL timeout', async () => {
-    const sessionId = 'kill-already-dead';
-    const mockProcess = createMockProcess();
-    mockSpawn.mockReturnValue(mockProcess);
-
-    const promise = hlsManager.ensureSession(sessionId, '/test.mp4');
-    await vi.advanceTimersByTimeAsync(500);
-    mockProcess.stderr.emit('data', "Opening 'playlist.m3u8' for writing\n");
-    await promise;
-
-    await hlsManager.stopSession(sessionId);
-    mockProcess.killed = true;
-
-    await vi.advanceTimersByTimeAsync(2001);
-    expect(mockProcess.kill).not.toHaveBeenCalledWith('SIGKILL');
+  it('ensureSessionUnthrottled throws if cacheDir not set', async () => {
+    (hlsManager as any).cacheDir = null;
+    await expect(
+      hlsManager.ensureSessionUnthrottled('id', '/v.mp4'),
+    ).rejects.toThrow('HlsManager: cacheDir not set');
   });
 
   it('getSessionDir returns null if cacheDir not set', () => {
@@ -192,48 +149,63 @@ describe('HlsManager Coverage Boost', () => {
     expect(hlsManager.getSessionDir('test')).toBeNull();
   });
 
+  it('init without a cache dir does nothing', async () => {
+    (hlsManager as any).cacheDir = null;
+    await hlsManager.init();
+    expect(mockFsReaddir).not.toHaveBeenCalled();
+  });
+
   it('getSessionProgress returns null if session not found', () => {
     expect(hlsManager.getSessionProgress('non-existent')).toBeNull();
   });
 
-  it('touchSession does nothing if session not found', () => {
+  it('touch/acquire/release do nothing if session not found', () => {
     expect(() => hlsManager.touchSession('non-existent')).not.toThrow();
+    expect(() => hlsManager.acquireSession('non-existent')).not.toThrow();
+    expect(() => hlsManager.releaseSession('non-existent')).not.toThrow();
   });
 
-  it('stopSession does nothing if session not found', async () => {
-    await expect(hlsManager.stopSession('non-existent')).resolves.not.toThrow();
+  it('touchSession refreshes lastAccess so the sweep keeps the session', async () => {
+    const proc = await start('touched');
+    await vi.advanceTimersByTimeAsync(4 * 60 * 1000);
+    hlsManager.touchSession('touched');
+    await vi.advanceTimersByTimeAsync(2 * 60 * 1000);
+    expect(proc.kill).not.toHaveBeenCalled();
   });
 
-  it('cleanupOrphanedSessions handles mixed files and directories', async () => {
-    mockFsReaddir.mockResolvedValue([
-      'session-1',
-      'session-2',
-      'not-a-session',
-      'session-file',
-    ]);
-
-    mockFsStat.mockImplementation(async (p: string) => {
-      if (p.endsWith('session-1')) return { isDirectory: () => true };
-      if (p.endsWith('session-2')) return { isDirectory: () => true };
-      if (p.endsWith('session-file')) return { isDirectory: () => false };
-      return { isDirectory: () => true };
-    });
-
-    await hlsManager.init(CACHE_DIR);
-
-    expect(mockFsRm).toHaveBeenCalledTimes(3);
-    expect(mockFsRm).toHaveBeenCalledWith(
-      expect.stringContaining('session-1'),
-      expect.anything(),
+  it('stopSession without a cache dir or session does nothing', async () => {
+    (hlsManager as any).cacheDir = null;
+    await expect(hlsManager.stopSession('non-existent')).resolves.toBe(
+      undefined,
     );
-    expect(mockFsRm).toHaveBeenCalledWith(
-      expect.stringContaining('session-2'),
-      expect.anything(),
+    expect(mockFsRm).not.toHaveBeenCalled();
+  });
+
+  it('stopSession logs a failed directory removal', async () => {
+    await start('stop-rm-error');
+    mockFsRm.mockRejectedValueOnce(new Error('Permission denied'));
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await hlsManager.stopSession('stop-rm-error');
+
+    expect(consoleSpy).toHaveBeenCalledWith(
+      `[HLS] Failed to clean up ${path.join(CACHE_DIR, 'stop-rm-error')}:`,
+      expect.any(Error),
     );
-    expect(mockFsRm).not.toHaveBeenCalledWith(
-      expect.stringContaining('session-file'),
-      expect.anything(),
+    consoleSpy.mockRestore();
+  });
+
+  it('stopSession logs a failed removal of an on-disk-only output', async () => {
+    mockFsRm.mockRejectedValueOnce(new Error('Permission denied'));
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await hlsManager.stopSession('disk-only');
+
+    expect(consoleSpy).toHaveBeenCalledWith(
+      `[HLS] Failed to clean up ${path.join(CACHE_DIR, 'disk-only')}:`,
+      expect.any(Error),
     );
+    consoleSpy.mockRestore();
   });
 
   it('cleanupOrphanedSessions handles errors during readdir', async () => {
@@ -249,252 +221,214 @@ describe('HlsManager Coverage Boost', () => {
     consoleSpy.mockRestore();
   });
 
-  it('waitForPlaylist handles playlist size 0', async () => {
-    const sessionId = 'size-0-test';
-    const mockProcess = createMockProcess();
-    mockSpawn.mockReturnValue(mockProcess);
+  it('cleanupOrphanedSessions is silent when the cache dir does not exist yet', async () => {
+    mockFsReaddir.mockRejectedValue(
+      Object.assign(new Error('ENOENT'), { code: 'ENOENT' }),
+    );
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
+    await hlsManager.init(CACHE_DIR);
+
+    expect(consoleSpy).not.toHaveBeenCalled();
+    consoleSpy.mockRestore();
+  });
+
+  it('cleanupOrphanedSessions skips directories of live sessions', async () => {
+    await start('live');
+    mockFsRm.mockClear();
+    mockFsReaddir.mockResolvedValue(['live']);
+
+    await hlsManager.init(CACHE_DIR);
+
+    expect(mockFsRm).not.toHaveBeenCalled();
+  });
+
+  it('a session started during the orphan cleanup waits for its directory delete', async () => {
+    const orphanDir = path.join(CACHE_DIR, 'orphan');
+    let finishRm!: () => void;
+    // Only the orphan cleanup's delete is held; the session's own rm is not.
+    mockFsRm.mockImplementationOnce(
+      (dir: string) =>
+        new Promise<void>((resolve) => {
+          expect(dir).toBe(orphanDir);
+          finishRm = resolve;
+        }),
+    );
+    mockFsReaddir.mockResolvedValue(['orphan']);
+
+    const initPromise = hlsManager.init(CACHE_DIR);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(mockFsRm).toHaveBeenCalledWith(orphanDir, {
+      recursive: true,
+      force: true,
+    });
+    mockFsRm.mockClear();
+    mockFsMkdir.mockClear();
+
+    const proc = createMockProcess();
+    mockSpawn.mockReturnValueOnce(proc);
+    const sessionPromise = hlsManager.ensureSession('orphan', '/orphan.mkv');
+    sessionPromise.catch(() => {});
+    await vi.advanceTimersByTimeAsync(0);
+
+    // Nothing may touch the directory while the orphan delete runs.
+    expect(mockFsRm).not.toHaveBeenCalled();
+    expect(mockFsMkdir).not.toHaveBeenCalled();
+    expect(mockSpawn).not.toHaveBeenCalled();
+
+    finishRm();
+    await vi.advanceTimersByTimeAsync(1000);
+    await sessionPromise;
+    await initPromise;
+
+    expect(mockFsMkdir).toHaveBeenCalled();
+    expect(mockSpawn).toHaveBeenCalledTimes(1);
+  });
+
+  it('waitForPlaylist handles playlist size 0', async () => {
+    const proc = createMockProcess();
+    mockSpawn.mockReturnValue(proc);
     mockFsStat
       .mockResolvedValueOnce({ size: 0 })
       .mockResolvedValueOnce({ size: 100 });
 
-    const promise = hlsManager.ensureSession(sessionId, '/test.mp4');
+    const promise = hlsManager.ensureSession('size-0-test', '/test.mp4');
     await vi.advanceTimersByTimeAsync(1000);
     await promise;
 
     expect(mockFsStat).toHaveBeenCalledTimes(2);
   });
 
-  it('pinSession and unpinSession prevent/allow cleanup eviction', async () => {
-    const sessionId = 'pin-test';
-    (hlsManager as any).sessions.set(sessionId, {
-      id: sessionId,
-      process: null,
-      lastAccess: Date.now() - 999999,
-      outputDir: '/tmp/out/pin-test',
-      playlistPath: '/tmp/out/pin-test/playlist.m3u8',
-      status: 'complete',
-      progress: {},
-      killTimeout: null,
-    });
-
-    hlsManager.pinSession(sessionId);
-
-    // Cleanup should skip pinned session
-    await (hlsManager as any).cleanup();
-    expect((hlsManager as any).sessions.has(sessionId)).toBe(true);
-
-    // Unpin and cleanup should evict it
-    hlsManager.unpinSession(sessionId);
-    await (hlsManager as any).cleanup();
-    expect((hlsManager as any).sessions.has(sessionId)).toBe(false);
-  });
-
-  it('ensureSessionUnthrottled returns early for ACTIVE session', async () => {
-    const sessionId = 'unthrottled-active';
-    (hlsManager as any).sessions.set(sessionId, {
-      id: sessionId,
-      process: null,
-      lastAccess: Date.now(),
-      outputDir: '/tmp/out',
-      playlistPath: '/tmp/out/playlist.m3u8',
-      status: 'active',
-      progress: {},
-      killTimeout: null,
-    });
-
-    const result = await hlsManager.ensureSessionUnthrottled(
-      sessionId,
-      '/v.mp4',
-    );
-    expect(result).toBe('/tmp/out/playlist.m3u8');
-  });
-
-  it('ensureSessionUnthrottled returns early for COMPLETE session', async () => {
-    const sessionId = 'unthrottled-complete';
-    (hlsManager as any).sessions.set(sessionId, {
-      id: sessionId,
-      process: null,
-      lastAccess: Date.now(),
-      outputDir: '/tmp/out',
-      playlistPath: '/tmp/out/playlist.m3u8',
-      status: 'complete',
-      progress: {},
-      killTimeout: null,
-    });
-
-    const result = await hlsManager.ensureSessionUnthrottled(
-      sessionId,
-      '/v.mp4',
-    );
-    expect(result).toBe('/tmp/out/playlist.m3u8');
-  });
-
-  it('ensureSessionUnthrottled throws if cacheDir not set', async () => {
-    (hlsManager as any).cacheDir = null;
-    await expect(
-      hlsManager.ensureSessionUnthrottled('id', '/v.mp4'),
-    ).rejects.toThrow('HlsManager: cacheDir not set');
-  });
-
-  it('ensureSessionUnthrottled waits for pending session', async () => {
-    const sessionId = 'unthrottled-pending';
-    const mockProcess = createMockProcess();
-    mockSpawn.mockReturnValue(mockProcess);
-
-    // Start a pending session via ensureSession
-    const p1 = hlsManager.ensureSession(sessionId, '/v.mp4');
-    await vi.advanceTimersByTimeAsync(500);
-
-    // Call ensureSessionUnthrottled while pending
-    const p2 = hlsManager.ensureSessionUnthrottled(sessionId, '/v.mp4');
-    await vi.advanceTimersByTimeAsync(500);
-
-    // Resolve both
-    await Promise.all([p1, p2]);
-    expect((hlsManager as any).sessions.has(sessionId)).toBe(true);
-  });
-
-  it('ensureSessionUnthrottled starts new session when not pending or existing', async () => {
-    const sessionId = 'unthrottled-new';
-    const mockProcess = createMockProcess();
-    mockSpawn.mockReturnValue(mockProcess);
-
-    const promise = hlsManager.ensureSessionUnthrottled(sessionId, '/v.mp4');
-    await vi.advanceTimersByTimeAsync(500);
-    const result = await promise;
-
-    expect(result).toContain('playlist.m3u8');
-  });
-
-  it('FFmpeg exit with code 0 and pinned sets COMPLETE status', async () => {
-    const sessionId = 'pinned-exit';
-    const mockProcess = createMockProcess();
-    mockSpawn.mockReturnValue(mockProcess);
-
-    hlsManager.pinSession(sessionId);
-    const promise = hlsManager.ensureSession(sessionId, '/v.mp4');
-    await vi.advanceTimersByTimeAsync(500);
-
-    mockProcess.emit('exit', 0, null);
-    await promise;
-
-    const session = (hlsManager as any).sessions.get(sessionId);
-    expect(session.status).toBe('complete');
-  });
-
-  it('ensureSession throws when MAX_CONCURRENT_TRANSCODES is reached', async () => {
-    // Fill up sessions to max (assuming MAX_CONCURRENT_TRANSCODES = 10 from constants.ts)
-    for (let i = 0; i < 10; i++) {
-      (hlsManager as any).sessions.set(`dummy-${i}`, {
-        status: 'active',
-        playlistPath: '/dummy',
-        progress: {},
-      });
-    }
-    await expect(hlsManager.ensureSession('new-id', '/v.mp4')).rejects.toThrow(
-      'Server too busy. Please try again later.',
-    );
-  });
-
-  it('ensureSessionUnthrottled does NOT throw at the concurrency cap (BUG 6)', async () => {
-    // Fill sessions well past MAX_CONCURRENT_TRANSCODES.
-    for (let i = 0; i < 10; i++) {
-      (hlsManager as any).sessions.set(`dummy-${i}`, {
-        status: 'active',
-        playlistPath: '/dummy',
-        progress: {},
-      });
-    }
-
-    const mockProcess = createMockProcess();
-    mockSpawn.mockReturnValue(mockProcess);
-
-    // The unthrottled path bypasses the size-cap guard, so it must spawn a new
-    // session rather than rejecting with "Server too busy".
-    const promise = hlsManager.ensureSessionUnthrottled('new-id', '/v.mp4');
-    await vi.advanceTimersByTimeAsync(500);
-    const result = await promise;
-
-    expect(result).toContain('playlist.m3u8');
-    expect(mockSpawn).toHaveBeenCalledTimes(1);
-  });
-
-  it('ensureSessionUnthrottled reuses existing COMPLETE session', async () => {
-    const sessionId = 'unthrottled-complete-reuse';
-    (hlsManager as any).sessions.set(sessionId, {
-      status: 'complete',
-      playlistPath: '/tmp/out/playlist.m3u8',
-      progress: {},
-    });
-    const result = await hlsManager.ensureSessionUnthrottled(
-      sessionId,
-      '/v.mp4',
-    );
-    expect(result).toBe('/tmp/out/playlist.m3u8');
-  });
-
-  it('stopSession handles fs.rm error safely in catch block', async () => {
-    const sessionId = 'stop-rm-error';
-    const mockProcess = createMockProcess();
-    (hlsManager as any).sessions.set(sessionId, {
-      id: sessionId,
-      process: mockProcess,
-      lastAccess: Date.now(),
-      outputDir: '/tmp/error-out',
-      playlistPath: '/tmp/error-out/playlist.m3u8',
-      status: 'active',
-      progress: {},
-    });
-
-    mockFsRm.mockRejectedValueOnce(new Error('Permission denied'));
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-
-    await hlsManager.stopSession(sessionId);
-
-    expect(consoleSpy).toHaveBeenCalledWith(
-      '[HLS] Failed to clean up /tmp/error-out:',
-      expect.any(Error),
-    );
-    consoleSpy.mockRestore();
-  });
-
   it('waitForPlaylist rejects if FFmpeg exits normally but no playlist is found', async () => {
-    const sessionId = 'no-playlist-exit';
-    const mockProcess = createMockProcess();
-    mockSpawn.mockReturnValue(mockProcess);
-
+    const proc = createMockProcess();
+    mockSpawn.mockReturnValue(proc);
     mockFsStat.mockRejectedValue(new Error('ENOENT'));
 
-    const promise = hlsManager.ensureSession(sessionId, '/test.mp4');
-    await vi.advanceTimersByTimeAsync(500);
-
-    // Simulate FFmpeg exiting cleanly without creating the playlist
-    mockProcess.emit('exit', 0, null);
+    const promise = hlsManager.ensureSession('no-playlist-exit', '/test.mp4');
+    promise.catch(() => {});
+    await vi.advanceTimersByTimeAsync(10);
+    proc.emit('close', 0, null);
 
     await expect(promise).rejects.toThrow(
       'HLS session finished but playlist not found',
     );
   });
 
-  it('resetInstance cleans up active processes', () => {
-    const sessionId = 'reset-test';
-    const mockProcess = createMockProcess();
-    mockSpawn.mockReturnValue(mockProcess);
+  it('a process error after startup marks the session ERROR', async () => {
+    const proc = await start('late-error');
+    proc.emit('error', new Error('kill failed'));
 
-    (hlsManager as any).sessions.set(sessionId, {
-      id: sessionId,
-      process: mockProcess,
-      lastAccess: Date.now(),
-      outputDir: '/tmp/out',
-      playlistPath: '/tmp/out/playlist.m3u8',
-      status: 'active',
-      progress: {},
-      killTimeout: setTimeout(() => {}, 1000),
+    await expect(hlsManager.waitForSession('late-error')).resolves.toBe(
+      HlsSessionStatus.ERROR,
+    );
+  });
+
+  it('buffers partial stderr lines and keeps only the last error lines', async () => {
+    const proc = await start('buffer-test');
+    (hlsManager as any).sessions.get('buffer-test').progress.duration = 100;
+
+    proc.stderr.emit('data', 'frame=1 fps=30 time=00:00:1');
+    proc.stderr.emit('data', '0.00 speed=2x\r');
+    expect(hlsManager.getSessionProgress('buffer-test')).toMatchObject({
+      currentTime: 10,
+      percent: 10,
+      fps: 30,
+      speed: '2x',
     });
 
+    for (let i = 1; i <= 7; i++) {
+      proc.stderr.emit('data', `error line ${i}\n`);
+    }
+    proc.stderr.emit('data', '   \n');
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    proc.emit('close', 1, null);
+    await vi.advanceTimersByTimeAsync(0);
+    consoleSpy.mockRestore();
+
+    const session = (hlsManager as any).sessions.get('buffer-test');
+    expect(session.error.message).toBe(
+      'FFmpeg exited with code 1: error line 3 | error line 4 | error line 5 | error line 6 | error line 7',
+    );
+  });
+
+  it('ignores progress lines without a timestamp', async () => {
+    const proc = await start('na-time');
+    proc.stderr.emit('data', 'size=N/A time=N/A bitrate=N/A speed=N/A\n');
+    expect(hlsManager.getSessionProgress('na-time')?.currentTime).toBe(0);
+    expect((hlsManager as any).sessions.get('na-time').stderrTail).toEqual([]);
+  });
+
+  it('pinned sessions are exempt from the idle sweep until unpinned', async () => {
+    hlsManager.pinSession('pin-test');
+    const proc = await start('pin-test');
+
+    await vi.advanceTimersByTimeAsync(6 * 60 * 1000);
+    expect(proc.kill).not.toHaveBeenCalled();
+
+    hlsManager.unpinSession('pin-test');
+    await vi.advanceTimersByTimeAsync(61 * 1000);
+    expect(proc.kill).toHaveBeenCalledWith('SIGTERM');
+  });
+
+  it('ensureSessionUnthrottled waits for a pending session', async () => {
+    mockSpawn.mockReturnValue(createMockProcess());
+    const p1 = hlsManager.ensureSession('unthrottled-pending', '/v.mp4');
+    const p2 = hlsManager.ensureSessionUnthrottled(
+      'unthrottled-pending',
+      '/v.mp4',
+    );
+    await vi.advanceTimersByTimeAsync(500);
+
+    const [a, b] = await Promise.all([p1, p2]);
+    expect(a).toBe(b);
+    expect(mockSpawn).toHaveBeenCalledTimes(1);
+  });
+
+  it('ensureSessionUnthrottled does NOT throw at the concurrency cap (BUG 6)', async () => {
+    await start('i1');
+    await start('i2');
+    await expect(start('i3')).rejects.toBeInstanceOf(HlsBusyError);
+
+    await expect(start('background', true)).resolves.toBeDefined();
+  });
+
+  it('retainSession resets the flag when the marker cannot be written', async () => {
+    const proc = await start('retain-fail');
+    proc.emit('close', 0, null);
+    await vi.advanceTimersByTimeAsync(0);
+    mockFsWriteFile.mockRejectedValueOnce(new Error('ENOSPC'));
+
+    await expect(
+      hlsManager.retainSession('retain-fail', '/retain-fail.mkv'),
+    ).rejects.toThrow('ENOSPC');
+    expect((hlsManager as any).sessions.get('retain-fail').retained).toBe(
+      false,
+    );
+    expect((hlsManager as any).retainedIds.has('retain-fail')).toBe(false);
+    // A second call retains it
+    await expect(
+      hlsManager.retainSession('retain-fail', '/retain-fail.mkv'),
+    ).resolves.toBe(true);
+    await expect(
+      hlsManager.retainSession('retain-fail', '/retain-fail.mkv'),
+    ).resolves.toBe(true);
+    expect(mockFsWriteFile).toHaveBeenCalledTimes(2);
+    expect((hlsManager as any).retainedIds.has('retain-fail')).toBe(true);
+  });
+
+  it('resetInstance kills active processes', async () => {
+    const proc = await start('reset-test');
+    hlsManager.acquireSession('reset-test');
+    hlsManager.releaseSession('reset-test');
+
     HlsManager.resetInstance();
-    expect(mockProcess.kill).toHaveBeenCalledWith('SIGKILL');
+
+    expect(proc.kill).toHaveBeenCalledWith('SIGKILL');
+  });
+
+  it('resetInstance without an instance is a no-op', () => {
+    HlsManager.resetInstance();
+    expect(() => HlsManager.resetInstance()).not.toThrow();
   });
 
   it('waitForSession returns STOPPED if session does not exist', async () => {
@@ -502,32 +436,102 @@ describe('HlsManager Coverage Boost', () => {
     expect(status).toBe('stopped');
   });
 
-  it('waitForSession returns current status if already COMPLETE, ERROR, or STOPPED', async () => {
-    const statuses = ['complete', 'error', 'stopped'];
-    for (const status of statuses) {
-      (hlsManager as any).sessions.set(`test-${status}`, {
-        status: status,
-      });
-      const result = await hlsManager.waitForSession(`test-${status}`);
-      expect(result).toBe(status);
-    }
+  it('emits status events for observers', async () => {
+    const statuses: string[] = [];
+    hlsManager.on('status:observed', (s: string) => statuses.push(s));
+    const proc = await start('observed');
+    proc.emit('close', 0, null);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(statuses).toEqual(['active', 'complete']);
   });
 
-  it('waitForSession waits for status event if session is ACTIVE or STARTING', async () => {
-    const sessionId = 'wait-for-status';
-    (hlsManager as any).sessions.set(sessionId, {
-      status: 'active',
+  it('stopAll waits for processes that are still exiting', async () => {
+    const proc = createMockProcess();
+    proc.kill = vi.fn((signal: string) => {
+      proc.killed = true;
+      if (signal === 'SIGKILL') {
+        queueMicrotask(() => proc.emit('close', null, signal));
+      }
+      return true;
     });
+    mockSpawn.mockReturnValueOnce(proc);
+    const promise = hlsManager.ensureSession('lingering', '/l.mkv');
+    await vi.advanceTimersByTimeAsync(0);
+    await promise;
+    void hlsManager.stopSession('lingering');
 
-    const promise = hlsManager.waitForSession(sessionId);
+    let done = false;
+    const stopping = hlsManager.stopAll().then(() => (done = true));
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(done).toBe(false);
+    await vi.advanceTimersByTimeAsync(1100);
+    await stopping;
+    expect(proc.kill).toHaveBeenCalledWith('SIGKILL');
+  });
 
-    // Emit an intermediate status, should not resolve yet
-    (hlsManager as any).emit(`status:${sessionId}`, 'starting');
+  it('gives up waiting for an ffmpeg that ignores even SIGKILL', async () => {
+    const proc = createMockProcess();
+    proc.kill = vi.fn(() => {
+      proc.killed = true;
+      return true;
+    });
+    mockSpawn.mockReturnValueOnce(proc);
+    const promise = hlsManager.ensureSession('unkillable', '/u.mkv');
+    await vi.advanceTimersByTimeAsync(0);
+    await promise;
+    mockFsRm.mockClear();
 
-    // Emit final status
-    (hlsManager as any).emit(`status:${sessionId}`, 'complete');
+    const stopping = hlsManager.stopSession('unkillable');
+    await vi.advanceTimersByTimeAsync(5001);
+    await stopping;
 
-    const result = await promise;
-    expect(result).toBe('complete');
+    expect(mockFsRm).toHaveBeenCalledWith(
+      path.join(CACHE_DIR, 'unkillable'),
+      expect.anything(),
+    );
+  });
+
+  it('a kill that throws is ignored', async () => {
+    const proc = createMockProcess();
+    proc.kill = vi.fn(() => {
+      throw new Error('ESRCH');
+    });
+    mockSpawn.mockReturnValueOnce(proc);
+    const promise = hlsManager.ensureSession('gone', '/g.mkv');
+    await vi.advanceTimersByTimeAsync(0);
+    await promise;
+
+    const stopping = hlsManager.stopSession('gone');
+    await vi.advanceTimersByTimeAsync(5001);
+    await expect(stopping).resolves.toBeUndefined();
+  });
+
+  it('a non-Error startup failure is wrapped', async () => {
+    const { createMediaSource } =
+      await import('../../src/core/media/media-source.ts');
+    vi.mocked(createMediaSource).mockImplementationOnce(
+      () =>
+        ({
+          getFFmpegInput: vi.fn().mockRejectedValue('boom'),
+        }) as any,
+    );
+    await expect(hlsManager.ensureSession('odd', '/o.mkv')).rejects.toThrow(
+      'boom',
+    );
+  });
+
+  it('fails when ffmpeg is not available', async () => {
+    vi.resetModules();
+    vi.doMock('ffmpeg-static', () => ({ default: null }));
+    const mod = await import('../../src/core/media/hls-manager.ts');
+    const manager = mod.HlsManager.getInstance();
+    manager.setCacheDir(CACHE_DIR);
+
+    await expect(manager.ensureSession('nof', '/n.mkv')).rejects.toThrow(
+      'FFmpeg not found',
+    );
+    mod.HlsManager.resetInstance();
+    vi.doUnmock('ffmpeg-static');
   });
 });

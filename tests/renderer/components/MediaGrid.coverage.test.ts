@@ -551,7 +551,7 @@ describe('MediaGrid.vue Coverage', () => {
   });
 
   it('pre-transcode button calls addJobs and clears selection', async () => {
-    const item = { name: 'img.jpg', path: '/img.jpg', viewCount: 0 };
+    const item = { name: 'clip.mp4', path: '/clip.mp4', viewCount: 0 };
     useUIStore().gridMediaFiles = [item] as any;
     const wrapper = mountGrid();
     await flushPromises();
@@ -578,8 +578,73 @@ describe('MediaGrid.vue Coverage', () => {
       .trigger('click');
     await flushPromises();
 
-    expect(mockAddJobs).toHaveBeenCalledWith(['/img.jpg']);
+    expect(mockAddJobs).toHaveBeenCalledWith(['/clip.mp4']);
     // Selection should be cleared
+    expect(
+      wrapper.find('[title="Pre-transcode selected files"]').exists(),
+    ).toBe(false);
+  });
+
+  it('pre-transcode only queues the videos of a mixed selection', async () => {
+    useUIStore().gridMediaFiles = [
+      { name: 'photo.jpg', path: '/photo.jpg', viewCount: 0 },
+      { name: 'movie.mkv', path: '/movie.mkv', viewCount: 0 },
+      { name: 'shot.png', path: '/shot.png', viewCount: 0 },
+    ] as any;
+    const wrapper = mountGrid();
+    await flushPromises();
+
+    const calls = (ResizeObserverMock as any).mock.calls;
+    for (const call of calls) {
+      call[0]([
+        {
+          contentRect: { width: 1000, height: 800 },
+          contentBoxSize: [{ inlineSize: 1000 }],
+        },
+      ]);
+    }
+    await wrapper.vm.$nextTick();
+
+    for (const button of wrapper.findAll('button.grid-item')) {
+      await button.trigger('click', { ctrlKey: true });
+    }
+    expect(wrapper.text()).toContain('3 selected');
+
+    await wrapper
+      .find('[title="Pre-transcode selected files"]')
+      .trigger('click');
+    await flushPromises();
+
+    expect(mockAddJobs).toHaveBeenCalledTimes(1);
+    expect(mockAddJobs).toHaveBeenCalledWith(['/movie.mkv']);
+  });
+
+  it('pre-transcode with only images selected queues nothing', async () => {
+    useUIStore().gridMediaFiles = [
+      { name: 'photo.jpg', path: '/photo.jpg', viewCount: 0 },
+    ] as any;
+    const wrapper = mountGrid();
+    await flushPromises();
+
+    const calls = (ResizeObserverMock as any).mock.calls;
+    for (const call of calls) {
+      call[0]([
+        {
+          contentRect: { width: 1000, height: 800 },
+          contentBoxSize: [{ inlineSize: 1000 }],
+        },
+      ]);
+    }
+    await wrapper.vm.$nextTick();
+
+    await wrapper.find('button.grid-item').trigger('click', { ctrlKey: true });
+    await wrapper
+      .find('[title="Pre-transcode selected files"]')
+      .trigger('click');
+    await flushPromises();
+
+    expect(mockAddJobs).not.toHaveBeenCalled();
+    // The selection is still cleared.
     expect(
       wrapper.find('[title="Pre-transcode selected files"]').exists(),
     ).toBe(false);

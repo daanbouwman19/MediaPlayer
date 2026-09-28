@@ -59,6 +59,11 @@ vi.mock('../../src/server/app.ts', () => ({
   createApp: createAppMock,
 }));
 
+// Signal handlers are covered in lifecycle.test.ts; keep them off this process.
+vi.mock('../../src/server/lifecycle.ts', () => ({
+  installServerLifecycle: vi.fn(),
+}));
+
 describe('Server entry coverage', () => {
   beforeEach(() => {
     vi.clearAllMocks();

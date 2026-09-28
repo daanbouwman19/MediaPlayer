@@ -13,6 +13,73 @@ const FFMPEG_INPUT_OPTIONS = ['-analyzeduration', '100M', '-probesize', '100M'];
 const FFMPEG_COMMON_ARGS = ['-hide_banner', '-loglevel', 'error'];
 
 /**
+ * [SECURITY] Demuxers FFmpeg may pick for library media and thumbnails.
+ * Playlist and manifest demuxers (dash, hls, concat, ...) are left out on
+ * purpose: they open further URLs named inside the file, so a crafted "video"
+ * could make the host send requests to the LAN or cloud metadata endpoints.
+ * The dash demuxer opens those URLs without honouring -protocol_whitelist, so
+ * only this allow-list stops it.
+ */
+const FFMPEG_ALLOWED_DEMUXERS = [
+  // Video containers (misnamed files are probed by content, so be generous)
+  'mov',
+  'matroska',
+  'avi',
+  'asf',
+  'flv',
+  'ogg',
+  'mpegts',
+  'mpeg',
+  'mpegvideo',
+  'm4v',
+  'h264',
+  'hevc',
+  'rm',
+  'nut',
+  'mxf',
+  'dv',
+  'ivf',
+  'obu',
+  // Audio-only files
+  'mp3',
+  'aac',
+  'wav',
+  'w64',
+  'flac',
+  'aiff',
+  'ac3',
+  'eac3',
+  'caf',
+  // Images (thumbnail generation)
+  'image2',
+  'jpeg_pipe',
+  'png_pipe',
+  'apng',
+  'gif',
+  'gif_pipe',
+  'webp_pipe',
+  'bmp_pipe',
+  'tiff_pipe',
+  'svg_pipe',
+].join(',');
+
+/**
+ * [SECURITY] Input options that confine what FFmpeg may open while reading
+ * `input`. Local files may only use the file protocol; Drive media is read
+ * through the internal HTTP proxy (http://127.0.0.1), which needs http + tcp.
+ * Must be placed directly before the matching `-i`.
+ */
+export function getInputSafetyArgs(input: string): string[] {
+  const protocols = /^http:\/\//i.test(input) ? 'http,tcp' : 'file';
+  return [
+    '-protocol_whitelist',
+    protocols,
+    '-format_whitelist',
+    FFMPEG_ALLOWED_DEMUXERS,
+  ];
+}
+
+/**
  * Standard base codec arguments for H.264/AAC transcoding.
  * Used for both direct streaming (MP4) and HLS.
  */
@@ -28,48 +95,6 @@ const FFMPEG_BASE_CODEC_ARGS = [
   '-pix_fmt',
   'yuv420p',
 ];
-
-let cachedCapabilities: {
-  supportedVideoCodecs: string[];
-  hasNVENC: boolean;
-  hasVideoToolbox: boolean;
-  hasVAAPI: boolean;
-} | null = null;
-
-export async function detectFFmpegCapabilities(
-  ffmpegPath: string,
-): Promise<typeof cachedCapabilities> {
-  if (cachedCapabilities) return cachedCapabilities;
-
-  try {
-    const { stdout, stderr } = await runFFmpeg(ffmpegPath, ['-encoders']);
-    const output = stdout || stderr; // FFmpeg sometimes outputs to stderr even for -encoders
-    const supportedVideoCodecs = (
-      output.match(/[V.][.S][.X][.B][.A][.L]\s+(\w+)/g) || []
-    ).map((m) => m.split(/\s+/).pop() || '');
-
-    cachedCapabilities = {
-      supportedVideoCodecs,
-      hasNVENC: supportedVideoCodecs.includes('h264_nvenc'),
-      hasVideoToolbox: supportedVideoCodecs.includes('h264_videotoolbox'),
-      hasVAAPI: supportedVideoCodecs.includes('h264_vaapi'),
-    };
-    return cachedCapabilities;
-  } catch (err) {
-    console.error('[FFmpeg] Failed to detect capabilities:', err);
-    return null;
-  }
-}
-
-export function getHardwareCodec(
-  capabilities: typeof cachedCapabilities,
-): string {
-  if (!capabilities) return 'libx264';
-  if (capabilities.hasNVENC) return 'h264_nvenc';
-  if (capabilities.hasVideoToolbox) return 'h264_videotoolbox';
-  if (capabilities.hasVAAPI) return 'h264_vaapi';
-  return 'libx264';
-}
 
 export function isValidTimeFormat(time: string): boolean {
   // Allow simple seconds (e.g., "10", "10.5") or timestamps (e.g., "00:00:10", "00:10.5")
@@ -92,7 +117,7 @@ export function getTranscodeArgs(
   }
 
   args.push(...FFMPEG_INPUT_OPTIONS);
-  args.push('-i', inputPath);
+  args.push(...getInputSafetyArgs(inputPath), '-i', inputPath);
 
   // Output options specific to MP4 streaming
   args.push('-f', 'mp4');
@@ -112,6 +137,7 @@ export function getThumbnailArgs(
     '-y',
     '-ss',
     '1',
+    ...getInputSafetyArgs(filePath),
     '-i',
     filePath,
     '-frames:v',
@@ -141,7 +167,9 @@ export async function runFFmpeg(
   return new Promise((resolve, reject) => {
     let proc;
     try {
-      proc = spawn(command, args);
+      // windowsHide: a console-subsystem ffmpeg.exe started from the GUI app
+      // would otherwise flash its own console window.
+      proc = spawn(command, args, { windowsHide: true });
     } catch (err) {
       return reject(err instanceof Error ? err : new Error(String(err)));
     }
@@ -171,7 +199,9 @@ export async function runFFmpeg(
       }
     });
 
-    proc.on('exit', (code) => {
+    // 'close' (not 'exit'): stdout/stderr may still hold unread output when
+    // 'exit' fires, which would truncate the probe results parsed below.
+    proc.on('close', (code) => {
       if (!timedOut) {
         clearTimeout(timeout);
         resolve({ code, stdout, stderr });
@@ -197,7 +227,11 @@ export async function getFFmpegDuration(
   ffmpegPath: string,
 ): Promise<number> {
   try {
-    const { stderr } = await runFFmpeg(ffmpegPath, ['-i', filePath]);
+    const { stderr } = await runFFmpeg(ffmpegPath, [
+      ...getInputSafetyArgs(filePath),
+      '-i',
+      filePath,
+    ]);
     const duration = parseFFmpegDuration(stderr);
     if (duration !== null) {
       return duration;
@@ -219,8 +253,14 @@ export async function getFFmpegStreams(
   hasAudio: boolean;
   videoCodec?: string | undefined;
   audioCodec?: string | undefined;
+  /** Container duration in seconds, when FFmpeg reports one. */
+  duration?: number | undefined;
 }> {
-  const { stderr } = await runFFmpeg(ffmpegPath, ['-i', filePath]);
+  const { stderr } = await runFFmpeg(ffmpegPath, [
+    ...getInputSafetyArgs(filePath),
+    '-i',
+    filePath,
+  ]);
   // FFmpeg typically outputs stream info to stderr
   const hasVideo = /Stream #\d+:\d+(?:.*): Video:/.test(stderr);
   const hasAudio = /Stream #\d+:\d+(?:.*): Audio:/.test(stderr);
@@ -232,11 +272,14 @@ export async function getFFmpegStreams(
     /Stream #\d+:\d+(?:.*): Audio:\s*([a-zA-Z0-9_-]+)/,
   );
 
+  const duration = parseFFmpegDuration(stderr);
+
   return {
     hasVideo,
     hasAudio,
     videoCodec: videoMatch ? videoMatch[1] : undefined,
     audioCodec: audioMatch ? audioMatch[1] : undefined,
+    ...(duration !== null && duration > 0 ? { duration } : {}),
   };
 }
 
@@ -255,7 +298,6 @@ export function getHlsTranscodeArgs(
   outputPlaylistPath: string,
   segmentDuration: number,
   options: {
-    hwCodec?: string;
     copyVideo?: boolean;
     copyAudio?: boolean;
     preset?: string;
@@ -264,7 +306,6 @@ export function getHlsTranscodeArgs(
   } = {},
 ): string[] {
   const {
-    hwCodec = 'libx264',
     copyVideo = false,
     copyAudio = false,
     preset = FFMPEG_TRANSCODE_PRESET,
@@ -274,20 +315,30 @@ export function getHlsTranscodeArgs(
 
   const args = [
     ...FFMPEG_COMMON_ARGS,
+    // -loglevel error hides the progress line; -stats prints it anyway so
+    // HlsManager can report time/fps/speed while the transcode runs.
+    '-stats',
     ...FFMPEG_INPUT_OPTIONS,
+    ...getInputSafetyArgs(inputPath),
     '-i',
     inputPath,
     '-c:v',
-    copyVideo ? 'copy' : hwCodec,
+    copyVideo ? 'copy' : 'libx264',
     '-c:a',
     copyAudio ? 'copy' : 'aac',
   ];
 
   if (!copyVideo) {
-    args.push('-preset', preset, '-pix_fmt', 'yuv420p');
-    if (hwCodec === 'libx264') {
-      args.push('-crf', crf, '-threads', threads);
-    }
+    args.push(
+      '-preset',
+      preset,
+      '-pix_fmt',
+      'yuv420p',
+      '-crf',
+      crf,
+      '-threads',
+      threads,
+    );
   }
 
   args.push(
@@ -301,6 +352,10 @@ export function getHlsTranscodeArgs(
     segmentDuration.toString(),
     '-hls_list_size',
     '0',
+    // EVENT playlist: segments are only ever appended, so players start at the
+    // beginning, and ffmpeg writes #EXT-X-ENDLIST when the transcode finishes.
+    '-hls_playlist_type',
+    'event',
     '-hls_segment_filename',
     outputSegmentPath,
     outputPlaylistPath,
