@@ -21,10 +21,15 @@ export interface DriveByteRange {
 
 /** The local copy of a Drive file, which may still be downloading. */
 export interface DriveCachedFile {
-  /** Path of the cache file; it holds a prefix of the Drive file. */
+  /**
+   * Path of the cache file; it holds a prefix of the Drive file, encrypted,
+   * with the same length as the plaintext.
+   */
   path: string;
   /** Size of the Drive file the cache is downloading, in bytes. */
   totalSize: number;
+  /** Reads the inclusive byte range [start, end] of the file, decrypted. */
+  readRange(start: number, end: number): Readable;
 }
 
 export interface DriveBackend {

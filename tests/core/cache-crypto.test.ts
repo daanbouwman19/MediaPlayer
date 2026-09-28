@@ -93,7 +93,7 @@ describe('cache-crypto', () => {
       expect(() => ctrIvAt(Buffer.alloc(8), 1)).toThrow(/16 bytes/);
     });
 
-    it('decrypts any block-aligned range independently', async () => {
+    it('decrypts a range from any offset independently', async () => {
       const { createCtrCipher, createCtrIv } = await load(KEY_A);
       const iv = createCtrIv();
       expect(iv).toHaveLength(16);
@@ -102,7 +102,7 @@ describe('cache-crypto', () => {
       const cipherText = Buffer.concat([enc.update(plain), enc.final()]);
       expect(cipherText.equals(plain)).toBe(false);
 
-      for (const offset of [0, 16, 512, 992]) {
+      for (const offset of [0, 1, 15, 16, 17, 512, 999]) {
         const dec = createCtrCipher('drive', iv, offset);
         const part = Buffer.concat([
           dec.update(cipherText.subarray(offset)),
@@ -112,10 +112,23 @@ describe('cache-crypto', () => {
       }
     });
 
-    it('rejects an unaligned offset', async () => {
+    it('encrypts an appended part like one continuous pass', async () => {
       const { createCtrCipher, createCtrIv } = await load(KEY_A);
-      expect(() => createCtrCipher('drive', createCtrIv(), 17)).toThrow(
-        /block-aligned/,
+      const iv = createCtrIv();
+      const plain = crypto.randomBytes(100);
+      const whole = createCtrCipher('drive', iv).update(plain);
+      const head = createCtrCipher('drive', iv).update(plain.subarray(0, 37));
+      const tail = createCtrCipher('drive', iv, 37).update(plain.subarray(37));
+      expect(Buffer.concat([head, tail])).toEqual(whole);
+    });
+
+    it('rejects an invalid offset', async () => {
+      const { createCtrCipher, createCtrIv } = await load(KEY_A);
+      expect(() => createCtrCipher('drive', createCtrIv(), -1)).toThrow(
+        /non-negative/,
+      );
+      expect(() => createCtrCipher('drive', createCtrIv(), 1.5)).toThrow(
+        /non-negative/,
       );
     });
   });

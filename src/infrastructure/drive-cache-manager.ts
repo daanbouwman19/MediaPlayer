@@ -4,8 +4,15 @@ import path from 'path';
 import crypto from 'crypto';
 import { EventEmitter } from 'events';
 import { pipeline } from 'stream/promises';
-import type { Readable } from 'stream';
+import { pipeline as pipeStreams, type Readable } from 'stream';
 import type { drive_v3 } from 'googleapis';
+import {
+  CTR_BLOCK_SIZE,
+  createCtrCipher,
+  createCtrIv,
+  openBuffer,
+  sealBuffer,
+} from '../core/auth/cache-crypto.ts';
 import {
   getDriveFileMetadata,
   openDriveFileDownload,
@@ -24,7 +31,7 @@ const METADATA_TTL_MS = 5 * 60 * 1000;
 const METADATA_CACHE_PRUNE_SIZE = 500;
 /** Minimum gap between two progress events for the same file (~4/s). */
 const PROGRESS_INTERVAL_MS = 250;
-const MANIFEST_VERSION = 1;
+const MANIFEST_VERSION = 2;
 /**
  * How long a background download may go without receiving a byte before it
  * is treated as dead. A connection left half-open by a network drop (Wi-Fi
@@ -34,10 +41,13 @@ const MANIFEST_VERSION = 1;
 export const DRIVE_CACHE_STALL_TIMEOUT_MS = 60_000;
 
 // Every cache entry is a pair of files, `<fileId>.<rev>.data` holding the
-// bytes and `<fileId>.<rev>.json` describing them, where <rev> is a digest of
+// bytes and `<fileId>.<rev>.meta` describing them, where <rev> is a digest of
 // the Drive content revision. A new revision therefore never shares a file
-// with an old one.
-const ENTRY_FILE = /^([A-Za-z0-9_-]+)\.([0-9a-f]{16})\.(data|json)$/;
+// with an old one. Both are encrypted with the Drive cache key: the data
+// with AES-256-CTR (same length, readable from any offset), the manifest
+// sealed. `.json` manifests are from before encryption; those entries are
+// deleted.
+const ENTRY_FILE = /^([A-Za-z0-9_-]+)\.([0-9a-f]{16})\.(data|meta|json)$/;
 
 /** What the cache needs to know about a file on Drive. */
 interface DriveFileInfo {
@@ -51,11 +61,15 @@ interface CacheEntry extends DriveFileInfo {
   fileId: string;
   dataPath: string;
   manifestPath: string;
+  /** Initial CTR counter block of the data file. */
+  iv: Buffer;
 }
 
 interface CacheManifest extends DriveFileInfo {
   version: typeof MANIFEST_VERSION;
   fileId: string;
+  /** The data file's CTR IV, hex. */
+  iv: string;
 }
 
 interface ActiveDownload {
@@ -71,10 +85,39 @@ interface ActiveDownload {
 }
 
 export interface CachedDriveFile {
-  /** The cache file. It may be partial, or missing when the file isn't cached. */
+  /**
+   * The (encrypted) cache file. It may be partial, or missing when the file
+   * isn't cached.
+   */
   path: string;
   totalSize: number;
   mimeType: string;
+  /** Reads the inclusive byte range [start, end] of the cache file, decrypted. */
+  readRange(start: number, end: number): Readable;
+}
+
+/** A decrypting read stream over part of an encrypted data file. */
+function readDecrypted(
+  entry: CacheEntry,
+  start: number,
+  end: number,
+): Readable {
+  // pipeline passes errors on and destroys both streams when either ends
+  // early, e.g. when the consumer stops reading.
+  return pipeStreams(
+    fs.createReadStream(entry.dataPath, { start, end }),
+    createCtrCipher('drive', entry.iv, start),
+    () => undefined,
+  );
+}
+
+function cachedFile(entry: CacheEntry, info: DriveFileInfo): CachedDriveFile {
+  return {
+    path: entry.dataPath,
+    totalSize: info.size,
+    mimeType: info.mimeType,
+    readRange: (start, end) => readDecrypted(entry, start, end),
+  };
 }
 
 interface DriveCacheEvents {
@@ -115,16 +158,19 @@ function revisionDigest(revision: string): string {
     .slice(0, 16);
 }
 
-function parseManifest(raw: string): CacheManifest | null {
+/** Decrypts and validates a manifest; null when it is unusable. */
+function parseManifest(sealed: Buffer): CacheManifest | null {
+  const raw = openBuffer('drive', sealed);
+  if (!raw) return null;
   let value: unknown;
   try {
-    value = JSON.parse(raw);
+    value = JSON.parse(raw.toString('utf8'));
   } catch {
     return null;
   }
   if (typeof value !== 'object' || value === null) return null;
   const record = value as Record<string, unknown>;
-  const { version, fileId, revision, size, mimeType } = record;
+  const { version, fileId, revision, size, mimeType, iv } = record;
   if (
     version !== MANIFEST_VERSION ||
     typeof fileId !== 'string' ||
@@ -132,11 +178,13 @@ function parseManifest(raw: string): CacheManifest | null {
     typeof size !== 'number' ||
     !Number.isFinite(size) ||
     size < 0 ||
-    typeof mimeType !== 'string'
+    typeof mimeType !== 'string' ||
+    typeof iv !== 'string' ||
+    !new RegExp(`^[0-9a-f]{${CTR_BLOCK_SIZE * 2}}$`).test(iv)
   ) {
     return null;
   }
-  return { version, fileId, revision, size, mimeType };
+  return { version, fileId, revision, size, mimeType, iv };
 }
 
 /** True when a ranged response really continues the file at `offset`. */
@@ -352,12 +400,7 @@ class DriveCacheManager extends EventEmitter<DriveCacheEvents> {
       // Offline: serve whatever copy is on disk, but never resume it, since
       // its revision can't be checked.
       if (entry) {
-        const file = {
-          path: entry.dataPath,
-          totalSize: entry.size,
-          mimeType: entry.mimeType,
-        };
-        return { file, started: Promise.resolve() };
+        return { file: cachedFile(entry, entry), started: Promise.resolve() };
       }
       throw new Error(`Drive metadata for ${fileId} is unavailable`);
     }
@@ -371,12 +414,8 @@ class DriveCacheManager extends EventEmitter<DriveCacheEvents> {
       entry = undefined;
     }
 
-    const target = entry ?? this.entryFor(fileId, info);
-    const file: CachedDriveFile = {
-      path: target.dataPath,
-      totalSize: info.size,
-      mimeType: info.mimeType,
-    };
+    const target = entry ?? this.entryFor(fileId, info, createCtrIv());
+    const file = cachedFile(target, info);
 
     if (info.size > this.maxCacheBytes) {
       // Caching it would evict everything else and then the file itself.
@@ -530,9 +569,15 @@ class DriveCacheManager extends EventEmitter<DriveCacheEvents> {
     armStallTimer();
 
     try {
-      // pipeline destroys both streams when either fails, so a write error
+      // pipeline destroys every stream when one fails, so a write error
       // (disk full, file locked) can't leave the Drive response hanging open.
-      await pipeline(source, fileStream);
+      // The bytes are encrypted on the way; CTR continues a resumed file at
+      // its offset.
+      await pipeline(
+        source,
+        createCtrCipher('drive', entry.iv, offset),
+        fileStream,
+      );
     } catch (err) {
       if (failure.side === 'write') {
         // Nothing worth resuming from; free the space.
@@ -594,7 +639,11 @@ class DriveCacheManager extends EventEmitter<DriveCacheEvents> {
     this.emit('progress', event);
   }
 
-  private entryFor(fileId: string, info: DriveFileInfo): CacheEntry {
+  private entryFor(
+    fileId: string,
+    info: DriveFileInfo,
+    iv: Buffer,
+  ): CacheEntry {
     const stem = path.join(
       this.cacheDir,
       `${fileId}.${revisionDigest(info.revision)}`,
@@ -605,7 +654,8 @@ class DriveCacheManager extends EventEmitter<DriveCacheEvents> {
       mimeType: info.mimeType,
       revision: info.revision,
       dataPath: `${stem}.data`,
-      manifestPath: `${stem}.json`,
+      manifestPath: `${stem}.meta`,
+      iv,
     };
   }
 
@@ -616,8 +666,12 @@ class DriveCacheManager extends EventEmitter<DriveCacheEvents> {
       revision: entry.revision,
       size: entry.size,
       mimeType: entry.mimeType,
+      iv: entry.iv.toString('hex'),
     };
-    await fsPromises.writeFile(entry.manifestPath, JSON.stringify(manifest));
+    await fsPromises.writeFile(
+      entry.manifestPath,
+      sealBuffer('drive', Buffer.from(JSON.stringify(manifest))),
+    );
   }
 
   /** Forgets an entry and deletes its files, stopping its download first. */
@@ -769,8 +823,11 @@ class DriveCacheManager extends EventEmitter<DriveCacheEvents> {
       }
       const [, fileId = '', digest = '', kind] = match;
       if (kind === 'json') {
+        // From before encryption: its data file is plaintext.
+        stale.push(name);
+      } else if (kind === 'meta') {
         manifests.push({ name, fileId, digest });
-      } else if (!present.has(`${fileId}.${digest}.json`)) {
+      } else if (!present.has(`${fileId}.${digest}.meta`)) {
         stale.push(name); // Bytes without a manifest can't be validated.
       }
     }
@@ -779,8 +836,9 @@ class DriveCacheManager extends EventEmitter<DriveCacheEvents> {
       manifests.map(async ({ name, fileId, digest }) => {
         let manifest: CacheManifest | null = null;
         try {
+          // Also null when encrypted with another key.
           manifest = parseManifest(
-            await fsPromises.readFile(path.join(this.cacheDir, name), 'utf8'),
+            await fsPromises.readFile(path.join(this.cacheDir, name)),
           );
         } catch {
           // Unreadable: treated as corrupt below.
@@ -799,7 +857,10 @@ class DriveCacheManager extends EventEmitter<DriveCacheEvents> {
         stale.push(name, `${fileId}.${digest}.data`);
         continue;
       }
-      this.entries.set(fileId, this.entryFor(fileId, manifest));
+      this.entries.set(
+        fileId,
+        this.entryFor(fileId, manifest, Buffer.from(manifest.iv, 'hex')),
+      );
     }
 
     await Promise.all(

@@ -89,22 +89,26 @@ export function ctrIvAt(iv: Buffer, blockIndex: number): Buffer {
 }
 
 /**
- * A stream cipher for a CTR-encrypted file (AES-256-CTR). CTR has random
- * access: `offset` (a multiple of the block size) starts at that byte, so a
- * range can be decrypted without reading what precedes it. Encryption and
- * decryption are the same operation.
+ * A stream cipher for a CTR-encrypted file (AES-256-CTR), positioned at byte
+ * `offset`. CTR has random access, so a range can be encrypted (to append
+ * to a partial file) or decrypted without touching what precedes it.
+ * Encryption and decryption are the same operation.
  */
 export function createCtrCipher(
   label: CacheKeyLabel,
   iv: Buffer,
   offset = 0,
 ): crypto.Cipheriv {
-  if (offset % CTR_BLOCK_SIZE !== 0) {
-    throw new Error('CTR offset must be block-aligned');
+  if (!Number.isSafeInteger(offset) || offset < 0) {
+    throw new RangeError('CTR offset must be a non-negative integer');
   }
-  return crypto.createCipheriv(
+  const cipher = crypto.createCipheriv(
     CTR_ALGORITHM,
     getCacheKey(label),
-    ctrIvAt(iv, offset / CTR_BLOCK_SIZE),
+    ctrIvAt(iv, Math.floor(offset / CTR_BLOCK_SIZE)),
   );
+  // Skip to `offset` within its block; CTR output has the input's length.
+  const skip = offset % CTR_BLOCK_SIZE;
+  if (skip > 0) cipher.update(Buffer.alloc(skip));
+  return cipher;
 }
