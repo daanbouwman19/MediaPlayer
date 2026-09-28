@@ -12,6 +12,7 @@ import path from 'path';
 import { PassThrough, Writable } from 'stream';
 import {
   cleanupDriveCacheManager,
+  DRIVE_CACHE_STALL_TIMEOUT_MS,
   getDriveCacheManager,
   initializeDriveCacheManager,
 } from '../../../src/infrastructure/drive-cache-manager';
@@ -360,6 +361,65 @@ describe('DriveCacheManager', () => {
       await cacheFully(manager, 'file-1');
       expect(downloadMock).toHaveBeenLastCalledWith('file-1', 4);
       expect(fs.readFileSync(cached.path)).toEqual(content);
+    });
+
+    it('gives up on a download that stops delivering data and resumes it later', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      try {
+        const content = Buffer.from('0123456789');
+        putDriveFile('file-1', content);
+        const manager = createManager();
+        const { source, cached } = await startControlledDownload(
+          manager,
+          'file-1',
+        );
+        const failed = nextEvent(manager, 'file-1', 'error');
+
+        // Waits on real I/O without moving the fake clock, as vi.waitFor would.
+        const untilWritten = async (bytes: number) => {
+          while (fs.statSync(cached.path).size < bytes) {
+            await new Promise((resolve) => setImmediate(resolve));
+          }
+        };
+
+        vi.advanceTimersByTime(DRIVE_CACHE_STALL_TIMEOUT_MS / 2);
+        source.write(content.subarray(0, 4));
+        await untilWritten(4);
+        // Data keeps the download alive: each chunk re-arms the timer.
+        vi.advanceTimersByTime(DRIVE_CACHE_STALL_TIMEOUT_MS - 1);
+        expect(source.destroyed).toBe(false);
+        expect((await manager.getCacheStatus('file-1')).status).toBe('syncing');
+
+        // The half-open connection now never sends another byte.
+        vi.advanceTimersByTime(1);
+
+        expect((await failed).error).toMatch(/stalled/);
+        expect(source.destroyed).toBe(true);
+        expect(await manager.getCacheStatus('file-1')).toEqual({
+          status: 'cloud',
+          progress: 0.4,
+        });
+
+        const ready = nextEvent(manager, 'file-1', 'ready');
+        await manager.triggerDownload('file-1');
+        await ready;
+        expect(downloadMock).toHaveBeenLastCalledWith('file-1', 4);
+        expect(fs.readFileSync(cached.path)).toEqual(content);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('stops the stall timer once a download finishes', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      try {
+        putDriveFile('file-1', 'abc');
+        const manager = createManager();
+        await cacheFully(manager, 'file-1');
+        expect(vi.getTimerCount()).toBe(0);
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it('reports a download that ends early as an error', async () => {

@@ -25,6 +25,13 @@ const METADATA_CACHE_PRUNE_SIZE = 500;
 /** Minimum gap between two progress events for the same file (~4/s). */
 const PROGRESS_INTERVAL_MS = 250;
 const MANIFEST_VERSION = 1;
+/**
+ * How long a background download may go without receiving a byte before it
+ * is treated as dead. A connection left half-open by a network drop (Wi-Fi
+ * switch, sleep/resume, NAT timeout) never errors or ends by itself, so
+ * without this the file would show as syncing until the app restarts.
+ */
+export const DRIVE_CACHE_STALL_TIMEOUT_MS = 60_000;
 
 // Every cache entry is a pair of files, `<fileId>.<rev>.data` holding the
 // bytes and `<fileId>.<rev>.json` describing them, where <rev> is a digest of
@@ -502,10 +509,25 @@ class DriveCacheManager extends EventEmitter<DriveCacheEvents> {
     fileStream.once('error', () => {
       failure.side ??= 'write';
     });
+    let stallTimer: NodeJS.Timeout | null = null;
+    const armStallTimer = (): void => {
+      if (stallTimer) clearTimeout(stallTimer);
+      stallTimer = setTimeout(() => {
+        // Surfaces as a read failure, so the prefix is kept for a resume.
+        source.destroy(
+          new Error(
+            `Drive download of ${entry.fileId} stalled: no data for ${DRIVE_CACHE_STALL_TIMEOUT_MS / 1000} s`,
+          ),
+        );
+      }, DRIVE_CACHE_STALL_TIMEOUT_MS);
+      stallTimer.unref();
+    };
     source.on('data', (chunk: Buffer) => {
+      armStallTimer();
       download.downloadedBytes += chunk.length;
       this.reportProgress(download);
     });
+    armStallTimer();
 
     try {
       // pipeline destroys both streams when either fails, so a write error
@@ -517,6 +539,8 @@ class DriveCacheManager extends EventEmitter<DriveCacheEvents> {
         await this.discardEntry(entry);
       }
       throw err;
+    } finally {
+      if (stallTimer) clearTimeout(stallTimer);
     }
 
     const written = await statSize(entry.dataPath);
