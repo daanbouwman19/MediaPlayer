@@ -52,6 +52,7 @@ import {
   closeDatabase,
   getMediaDirectories,
   removeMediaDirectory,
+  repairDriveSourceName,
   setDirectoryActiveState,
   upsertMetadata,
   updateWatchedSegments,
@@ -138,6 +139,56 @@ describe('database facade', () => {
         ),
       );
       expect(await getMediaDirectories()).toEqual([dir('/kept')]);
+    });
+
+    it('F93: re-reads the sources after a legacy Drive source is renamed', async () => {
+      const legacy: MediaDirectory = {
+        id: 'x',
+        path: 'gdrive://abc',
+        type: 'google_drive',
+        name: 'abc',
+        isActive: true,
+      };
+      let stored = legacy;
+      mocks.instance.sendMessage.mockImplementation(
+        (type: string, payload?: { name: string }) => {
+          if (type === 'getMediaDirectories') return Promise.resolve([stored]);
+          if (type === 'repairDriveSourceName' && payload) {
+            stored = { ...stored, name: payload.name };
+            return Promise.resolve(true);
+          }
+          return Promise.resolve(undefined);
+        },
+      );
+      expect((await getMediaDirectories())[0]?.name).toBe('abc');
+
+      await repairDriveSourceName('gdrive://abc', 'Holidays');
+
+      expect(mocks.instance.sendMessage).toHaveBeenCalledWith(
+        'repairDriveSourceName',
+        { directoryPath: 'gdrive://abc', name: 'Holidays' },
+      );
+      expect((await getMediaDirectories())[0]?.name).toBe('Holidays');
+    });
+
+    it('F93: keeps the cached sources when no row was renamed', async () => {
+      mocks.instance.sendMessage.mockImplementation((type: string) =>
+        Promise.resolve(
+          type === 'getMediaDirectories' ? [dir('/media')] : false,
+        ),
+      );
+      await getMediaDirectories();
+      vi.mocked(clearAuthCache).mockClear();
+
+      await repairDriveSourceName('gdrive://abc', 'Holidays');
+
+      expect(clearAuthCache).not.toHaveBeenCalled();
+      await getMediaDirectories();
+      expect(
+        mocks.instance.sendMessage.mock.calls.filter(
+          ([type]) => type === 'getMediaDirectories',
+        ),
+      ).toHaveLength(1);
     });
 
     it('clears the auth cache before and after a directory write', async () => {

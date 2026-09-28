@@ -18,6 +18,14 @@ export class InMemoryMediaRepository implements IMediaRepository {
     return this.directories;
   }
 
+  async repairDriveSourceName(directoryPath: string, name: string) {
+    if (!directoryPath.startsWith('gdrive://')) return;
+    const id = directoryPath.slice('gdrive://'.length);
+    for (const dir of this.directories) {
+      if (dir.path === directoryPath && dir.name === id) dir.name = name;
+    }
+  }
+
   setMediaDirectories(directories: MediaDirectory[]) {
     this.directories = directories;
   }

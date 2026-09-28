@@ -48,6 +48,7 @@ function workerRepository(source: string): IMediaRepository {
     getMediaDirectories: async () => [
       { id: source, path: source, type: 'local', name: source, isActive: true },
     ],
+    repairDriveSourceName: async () => {},
     cacheAlbums: (albums) => unwrap(worker.cacheAlbums(CACHE_KEY, albums)),
     getCachedAlbums: () => unwrap(worker.getCachedAlbums(CACHE_KEY)),
     getAllMetadata: () => unwrap(worker.getAllMetadata()),

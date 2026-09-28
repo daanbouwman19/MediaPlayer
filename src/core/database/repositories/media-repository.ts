@@ -8,6 +8,7 @@ import {
   getAllMetadataVerification,
   getCachedAlbums,
   readMediaDirectories,
+  repairDriveSourceName,
   getMetadata,
   getPendingMetadata,
   getSetting,
@@ -22,6 +23,10 @@ export class MediaRepository implements IMediaRepository {
   async getMediaDirectories() {
     // Scans must see read failures rather than an empty source list.
     return readMediaDirectories();
+  }
+
+  async repairDriveSourceName(directoryPath: string, name: string) {
+    return repairDriveSourceName(directoryPath, name);
   }
 
   async cacheAlbums(albums: Album[]) {

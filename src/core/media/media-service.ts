@@ -17,7 +17,7 @@ import {
   METADATA_VERIFICATION_THRESHOLD,
   SUPPORTED_VIDEO_EXTENSIONS_SET,
 } from './constants.ts';
-import { isDrivePath } from './media-utils.ts';
+import { createDrivePath, isDrivePath } from './media-utils.ts';
 import type { MediaLibraryItem } from './types.ts';
 import { decrypt } from '../auth/encryption.ts';
 import { collapseNestedSources } from './utils/source-paths.ts';
@@ -70,6 +70,27 @@ function getActiveSourcePaths(directories: MediaDirectory[]): string[] {
     if (dir.isActive) active.push(dir.path);
   }
   return active;
+}
+
+/**
+ * Drive sources that older web-mode builds stored under their bare folder
+ * ID as name, paired with the folder name a scan found for them.
+ */
+function findLegacyDriveSourceNames(
+  directories: MediaDirectory[],
+  albums: Album[],
+): { path: string; name: string }[] {
+  const byPath = new Map(directories.map((dir) => [dir.path, dir]));
+  const renames: { path: string; name: string }[] = [];
+  for (const album of albums) {
+    // A Drive root album keeps the source's folder ID as its ID.
+    const sourcePath = createDrivePath(album.id);
+    const dir = byPath.get(sourcePath);
+    if (!dir || dir.name !== album.id) continue;
+    if (!album.name || album.name === album.id) continue;
+    renames.push({ path: sourcePath, name: album.name });
+  }
+  return renames;
 }
 
 /** An order-independent fingerprint of a set of source paths. */
@@ -259,7 +280,12 @@ export class MediaService implements IMediaService {
       return this.scanDiskForAlbumsAndCache(ffmpegPath);
     }
 
-    const promise = this.scanSources(activePaths, signature, ffmpegPath);
+    const promise = this.scanSources(
+      directories,
+      activePaths,
+      signature,
+      ffmpegPath,
+    );
     this.inFlightScan = { promise, signature };
     try {
       return await promise;
@@ -271,6 +297,7 @@ export class MediaService implements IMediaService {
   }
 
   private async scanSources(
+    directories: MediaDirectory[],
     activePaths: string[],
     signature: string,
     ffmpegPath?: string,
@@ -294,6 +321,7 @@ export class MediaService implements IMediaService {
     // previous library, rather than listing files that cannot play.
     await this.writeAlbumCache(albums);
     await this.stampAlbumCache(signature);
+    await this.repairLegacyDriveSourceNames(directories, albums);
 
     // Trigger metadata extraction in background if ffmpegPath is provided
     if (ffmpegPath && albums.length > 0) {
@@ -327,6 +355,30 @@ export class MediaService implements IMediaService {
         e,
       );
       throw e;
+    }
+  }
+
+  /**
+   * Names Drive sources that older web-mode builds stored under their bare
+   * folder ID after the folder they were scanned from. A failure only
+   * leaves the old name; the scan result stands.
+   */
+  private async repairLegacyDriveSourceNames(
+    directories: MediaDirectory[],
+    albums: Album[],
+  ): Promise<void> {
+    for (const { path: sourcePath, name } of findLegacyDriveSourceNames(
+      directories,
+      albums,
+    )) {
+      try {
+        await this.mediaRepo.repairDriveSourceName(sourcePath, name);
+      } catch (e) {
+        console.warn(
+          `[media-service] Failed to rename Drive source ${sourcePath}:`,
+          e,
+        );
+      }
     }
   }
 

@@ -4,6 +4,7 @@ import * as database from '../../../src/core/database/database';
 
 vi.mock('../../../src/core/database/database', () => ({
   readMediaDirectories: vi.fn(),
+  repairDriveSourceName: vi.fn(),
   saveSetting: vi.fn(),
   cacheAlbums: vi.fn(),
   getCachedAlbums: vi.fn(),
@@ -29,6 +30,14 @@ describe('MediaRepository', () => {
     );
     await expect(repo.getMediaDirectories()).rejects.toThrow(
       'Worker not initialized',
+    );
+  });
+
+  it('delegates repairDriveSourceName to database', async () => {
+    await repo.repairDriveSourceName('gdrive://abc', 'Holidays');
+    expect(database.repairDriveSourceName).toHaveBeenCalledWith(
+      'gdrive://abc',
+      'Holidays',
     );
   });
 

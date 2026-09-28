@@ -71,6 +71,7 @@ type StatementName =
   | 'recordView'
   | 'removeMediaDirectory'
   | 'renameMediaDirectory'
+  | 'repairDriveSourceName'
   | 'rewriteJobPathPrefix'
   | 'rewriteMetadataPathPrefix'
   | 'saveSetting'
@@ -609,6 +610,11 @@ export function initDatabase(dbPath: string): WorkerResult {
     );
     statements.renameMediaDirectory = db.prepare(
       'UPDATE media_directories SET path = ? WHERE path = ?',
+    );
+    // Only replaces the placeholder name (the bare Drive ID) older web-mode
+    // builds stored, never a name the source already has.
+    statements.repairDriveSourceName = db.prepare(
+      'UPDATE media_directories SET name = ? WHERE path = ? AND name = ?',
     );
     // Moves every path under one prefix to another (the prefix is bound
     // three times). length()/substr() count characters on both sides, so
@@ -1649,6 +1655,38 @@ export function getMediaDirectories(): WorkerResult {
 }
 
 /**
+ * Gives a Drive source stored by an older web-mode build, whose name is
+ * still its bare folder ID, the folder's real name. Sources with any other
+ * name (and local sources) are left alone.
+ * @param directoryPath - The source's gdrive://<id> path.
+ * @param name - The Drive folder's name.
+ * @returns The result; `data` is whether the row was renamed.
+ */
+export function repairDriveSourceName(
+  directoryPath: string,
+  name: string,
+): WorkerResult {
+  if (!db) return { success: false, error: 'Database not initialized' };
+  if (!isDrivePath(directoryPath) || !name) {
+    return { success: true, data: false };
+  }
+  try {
+    const { changes } = getStatement('repairDriveSourceName').run(
+      name,
+      directoryPath,
+      getDriveId(directoryPath),
+    );
+    return { success: true, data: Number(changes) > 0 };
+  } catch (error: unknown) {
+    console.error(
+      `[worker] Error renaming media directory ${directoryPath}:`,
+      error,
+    );
+    return { success: false, error: (error as Error).message };
+  }
+}
+
+/**
  * Removes a media directory path from the database, together with the
  * library membership of the files only it provided.
  * @param directoryPath - The path of the directory to remove.
@@ -1844,6 +1882,10 @@ type WorkerRequest = { id: number } & (
   | { type: 'getMediaDirectories'; payload?: undefined }
   | { type: 'removeMediaDirectory'; payload: { directoryPath: string } }
   | {
+      type: 'repairDriveSourceName';
+      payload: { directoryPath: string; name: string };
+    }
+  | {
       type: 'setDirectoryActiveState';
       payload: { directoryPath: string; isActive: boolean };
     }
@@ -1933,6 +1975,12 @@ if (parentPort) {
           break;
         case 'removeMediaDirectory':
           result = removeMediaDirectory(message.payload.directoryPath);
+          break;
+        case 'repairDriveSourceName':
+          result = repairDriveSourceName(
+            message.payload.directoryPath,
+            message.payload.name,
+          );
           break;
         case 'setDirectoryActiveState':
           result = setDirectoryActiveState(

@@ -460,6 +460,25 @@ async function removeMediaDirectory(directoryPath: string): Promise<void> {
 }
 
 /**
+ * Replaces the placeholder name (the bare folder ID) that older web-mode
+ * builds stored for a Drive source with the folder's real name. A source
+ * with any other name is left alone.
+ * @param directoryPath - The source's gdrive://<id> path.
+ * @param name - The Drive folder's name.
+ * @throws {Error} If the database operation fails.
+ */
+async function repairDriveSourceName(
+  directoryPath: string,
+  name: string,
+): Promise<void> {
+  const renamed = await getClient().sendMessage<boolean>(
+    'repairDriveSourceName',
+    { directoryPath, name },
+  );
+  if (renamed) invalidateDirectoryCaches();
+}
+
+/**
  * Updates the active state for a given media directory.
  * @param directoryPath - The path of the directory to update.
  * @param isActive - The new active state.
@@ -845,6 +864,7 @@ export {
   getMediaDirectories,
   readMediaDirectories,
   removeMediaDirectory,
+  repairDriveSourceName,
   setDirectoryActiveState,
   setOperationTimeout,
   upsertMetadata,
