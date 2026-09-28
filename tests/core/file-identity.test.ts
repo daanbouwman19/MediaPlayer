@@ -14,8 +14,8 @@ const { mockGetMetadata } = vi.hoisted(() => ({
   mockGetMetadata: vi.fn(),
 }));
 
-vi.mock('../../src/infrastructure/fs-provider-factory', () => ({
-  getProvider: () => ({ getMetadata: mockGetMetadata }),
+vi.mock('../../src/core/media/drive-backend', () => ({
+  getDriveFileMetadataCached: mockGetMetadata,
 }));
 
 import { getFileIdentity } from '../../src/core/media/file-identity';
@@ -56,17 +56,65 @@ describe('getFileIdentity', () => {
     expect(await getFileIdentity(path.join(dir, 'missing.mp4'))).toBeNull();
   });
 
-  it('uses the provider metadata for Drive files', async () => {
+  it('keys Drive files by their revision fields', async () => {
     mockGetMetadata.mockResolvedValue({
-      size: 1234,
-      mimeType: 'video/mp4',
-      lastModified: new Date(5000),
+      size: '1234',
+      createdTime: '2024-01-01T00:00:00Z',
+      modifiedTime: '2024-03-01T00:00:00Z',
+      md5Checksum: 'abc123',
+      headRevisionId: 'rev-1',
+    });
+    expect(await getFileIdentity('gdrive://abc')).toBe('rev-1-1234');
+    expect(mockGetMetadata).toHaveBeenCalledWith('abc');
+
+    mockGetMetadata.mockResolvedValue({
+      size: '1234',
+      md5Checksum: 'abc123',
+      modifiedTime: '2024-03-01T00:00:00Z',
+    });
+    expect(await getFileIdentity('gdrive://abc')).toBe('abc123-1234');
+
+    mockGetMetadata.mockResolvedValue({
+      size: '1234',
+      modifiedTime: '2024-03-01T00:00:00Z',
+    });
+    expect(await getFileIdentity('gdrive://abc')).toBe(
+      '2024-03-01T00:00:00Z-1234',
+    );
+  });
+
+  it('changes for a same-size Drive revision with the same createdTime', async () => {
+    const base = { size: '1234', createdTime: '2024-01-01T00:00:00Z' };
+    mockGetMetadata.mockResolvedValue({
+      ...base,
+      headRevisionId: 'rev-1',
+      modifiedTime: '2024-02-01T00:00:00Z',
+    });
+    const first = await getFileIdentity('gdrive://abc');
+
+    mockGetMetadata.mockResolvedValue({
+      ...base,
+      headRevisionId: 'rev-2',
+      modifiedTime: '2024-03-01T00:00:00Z',
+    });
+    const second = await getFileIdentity('gdrive://abc');
+
+    expect(first).not.toBeNull();
+    expect(second).not.toBe(first);
+  });
+
+  it('falls back to size and createdTime without revision fields', async () => {
+    mockGetMetadata.mockResolvedValue({
+      size: '1234',
+      createdTime: new Date(5000).toISOString(),
     });
     expect(await getFileIdentity('gdrive://abc')).toBe('1234-5000');
-    expect(mockGetMetadata).toHaveBeenCalledWith('gdrive://abc');
 
-    mockGetMetadata.mockResolvedValue({ size: 10, mimeType: 'video/mp4' });
+    mockGetMetadata.mockResolvedValue({ size: '10', createdTime: 'garbage' });
     expect(await getFileIdentity('gdrive://abc')).toBe('10-0');
+
+    mockGetMetadata.mockResolvedValue({});
+    expect(await getFileIdentity('gdrive://abc')).toBe('0-0');
   });
 
   it('returns null when Drive metadata is unavailable', async () => {
