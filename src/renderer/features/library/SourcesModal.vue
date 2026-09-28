@@ -488,7 +488,9 @@ import { storeToRefs } from 'pinia';
 import FileExplorer from './FileExplorer.vue';
 import CloseIcon from '@/components/atoms/icons/CloseIcon.vue';
 import { useEscapeKey } from '@/composables/useEscapeKey';
+import { useToast } from '@/composables/useToast';
 
+const toast = useToast();
 const libraryStore = useLibraryStore();
 const uiStore = useUIStore();
 const playerStore = usePlayerStore();
@@ -675,6 +677,13 @@ const handleFileExplorerSelect = async (path: string) => {
       }
     } catch (error) {
       console.error('Error adding media directory via explorer:', error);
+      // Both backends explain the rejection (missing, sensitive, outside the
+      // allowed folders); show it rather than failing silently.
+      const reason = error instanceof Error ? error.message : '';
+      toast.error(
+        reason ? `Could not add folder: ${reason}` : 'Could not add folder.',
+        6000,
+      );
     }
   }
 };

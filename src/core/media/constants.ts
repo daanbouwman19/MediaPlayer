@@ -149,8 +149,8 @@ const SENSITIVE_SUBDIRECTORIES = new Set([
   'server.crt',
   'server.cert',
   // System & User Data
-  'appdata', // Windows user data (Cookies, Passwords, etc.)
-  'library', // macOS user data (Keychains, Mail, etc.)
+  // (<profile>\AppData and ~/Library are blocked by location, not by name:
+  // see isInSensitiveLocation in security.ts.)
   'ntuser.dat', // Windows Registry Hive
   'ntuser.dat.log1',
   'ntuser.dat.log2',
@@ -282,6 +282,12 @@ const RATE_LIMIT_AUTH_MAX_REQUESTS = 20;
 const RATE_LIMIT_WRITE_WINDOW_MS = 60 * 1000;
 const RATE_LIMIT_WRITE_MAX_REQUESTS = 10;
 
+// Telemetry: view counts and playback position (600 req / 1 min). These are
+// recorded on every slide and every few seconds of playback, so they get their
+// own budget instead of exhausting the strict write limit.
+const RATE_LIMIT_TELEMETRY_WINDOW_MS = 60 * 1000;
+const RATE_LIMIT_TELEMETRY_MAX_REQUESTS = 600;
+
 // Read: For metadata/albums browsing (600 req / 1 min)
 const RATE_LIMIT_READ_WINDOW_MS = 60 * 1000;
 const RATE_LIMIT_READ_MAX_REQUESTS = 600;
@@ -377,6 +383,8 @@ export {
   RATE_LIMIT_AUTH_MAX_REQUESTS,
   RATE_LIMIT_WRITE_WINDOW_MS,
   RATE_LIMIT_WRITE_MAX_REQUESTS,
+  RATE_LIMIT_TELEMETRY_WINDOW_MS,
+  RATE_LIMIT_TELEMETRY_MAX_REQUESTS,
   RATE_LIMIT_READ_WINDOW_MS,
   RATE_LIMIT_READ_MAX_REQUESTS,
   RATE_LIMIT_FILE_WINDOW_MS,

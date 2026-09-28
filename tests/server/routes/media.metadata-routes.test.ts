@@ -28,6 +28,7 @@ const passThrough = (_req: unknown, _res: unknown, next: () => void) => next();
 const limiters = {
   readLimiter: vi.fn(passThrough),
   writeLimiter: vi.fn(passThrough),
+  telemetryLimiter: vi.fn(passThrough),
   fileLimiter: vi.fn(passThrough),
   streamLimiter: vi.fn(passThrough),
 };

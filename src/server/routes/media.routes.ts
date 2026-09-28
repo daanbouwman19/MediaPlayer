@@ -74,11 +74,19 @@ export function createMediaRoutes({
   ffmpegPath,
 }: MediaRoutesOptions) {
   const router = Router();
-  const { writeLimiter, readLimiter, fileLimiter, streamLimiter } = limiters;
+  const {
+    writeLimiter,
+    telemetryLimiter,
+    readLimiter,
+    fileLimiter,
+    streamLimiter,
+  } = limiters;
 
+  // View counts and playback position are recorded on every slide / every few
+  // seconds of playback: they use the telemetry budget, not the strict one.
   router.post(
     '/api/media/view',
-    writeLimiter,
+    telemetryLimiter,
     asyncHandler(async (req, res) => {
       const { filePath } = req.body as { filePath?: unknown };
       if (!filePath || typeof filePath !== 'string') {
@@ -148,7 +156,7 @@ export function createMediaRoutes({
 
   router.post(
     '/api/media/playback-position',
-    writeLimiter,
+    telemetryLimiter,
     asyncHandler(async (req, res) => {
       const { filePath, position } = req.body as {
         filePath?: unknown;

@@ -36,6 +36,7 @@ vi.mock('../../../src/core/media/media-source');
 const mockLimiters = {
   readLimiter: (_req: any, _res: any, next: any) => next(),
   writeLimiter: (_req: any, _res: any, next: any) => next(),
+  telemetryLimiter: (_req: any, _res: any, next: any) => next(),
   fileLimiter: (_req: any, _res: any, next: any) => next(),
   streamLimiter: (_req: any, _res: any, next: any) => next(),
 };

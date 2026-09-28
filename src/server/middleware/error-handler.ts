@@ -1,28 +1,87 @@
 /**
  * @file Express error handler middleware.
  */
-import type { ErrorRequestHandler } from 'express';
+import { STATUS_CODES } from 'http';
+import type { ErrorRequestHandler, Response } from 'express';
 import { AppError } from '../../core/media/errors.ts';
 
-export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
-  const errorWithStatus = err as {
-    status?: number;
-    statusCode?: number;
-    type?: string;
-  };
+interface HttpLikeError {
+  status?: unknown;
+  statusCode?: unknown;
+  type?: unknown;
+  expose?: unknown;
+  message?: unknown;
+}
 
-  if (
-    errorWithStatus.status === 413 ||
-    errorWithStatus.statusCode === 413 ||
-    errorWithStatus.type === 'entity.too.large'
-  ) {
-    return res.status(413).json({ error: 'Payload Too Large' });
+function isErrorStatus(value: unknown): value is number {
+  return (
+    typeof value === 'number' &&
+    Number.isInteger(value) &&
+    value >= 400 &&
+    value < 600
+  );
+}
+
+/**
+ * Picks the status for an error that is not an AppError: the status carried by
+ * http-errors style errors (body-parser: 400 for malformed JSON, 413; send:
+ * 404), or one a middleware set before failing (lusca's CSRF check sets 403
+ * and then passes a plain Error). Anything else is a 500.
+ *
+ * Only http-errors (recognisable by their boolean `expose`) describe the
+ * client's own request. Other errors can carry the status of an upstream
+ * response instead: a GaxiosError has the status Google answered with.
+ */
+function statusOf(err: HttpLikeError, res: Response): number {
+  if (typeof err.expose === 'boolean') {
+    if (isErrorStatus(err.status)) return err.status;
+    if (isErrorStatus(err.statusCode)) return err.statusCode;
+  }
+  if (err.type === 'entity.too.large') return 413;
+  if (isErrorStatus(res.statusCode)) return res.statusCode;
+  return 500;
+}
+
+function resolveStatus(err: HttpLikeError, res: Response): number {
+  const status = statusOf(err, res);
+  // The web client reads every 401 as the global-password lock and reloads
+  // the page, so only the auth middlewares (and AppErrors) may answer 401.
+  return status === 401 ? 500 : status;
+}
+
+export const errorHandler: ErrorRequestHandler = (err, _req, res, next) => {
+  // Headers already went out (e.g. a stream failed midway): let Express
+  // close the connection instead of trying to write a second response.
+  if (res.headersSent) {
+    next(err);
+    return;
   }
 
   if (err instanceof AppError) {
-    return res.status(err.statusCode).json({ error: err.message });
+    res.status(err.statusCode).json({ error: err.message });
+    return;
   }
 
-  console.error(err);
-  return res.status(500).json({ error: 'Internal Server Error' });
+  const error: HttpLikeError =
+    typeof err === 'object' && err !== null ? (err as HttpLikeError) : {};
+  const status = resolveStatus(error, res);
+
+  if (status >= 500) {
+    console.error(err);
+    res.status(status).json({ error: 'Internal Server Error' });
+    return;
+  }
+
+  if (status === 413) {
+    res.status(413).json({ error: 'Payload Too Large' });
+    return;
+  }
+
+  // Only messages meant for the client (http-errors marks those with expose)
+  // are echoed; other client errors get the generic status text.
+  const message =
+    error.expose === true && typeof error.message === 'string' && error.message
+      ? error.message
+      : (STATUS_CODES[status] ?? 'Bad Request');
+  res.status(status).json({ error: message });
 };

@@ -353,7 +353,9 @@ describe('Server Combined Tests', () => {
     describe('POST /api/directories', () => {
       it('should add a directory', async () => {
         const dirPath = '/new/dir';
-        vi.mocked(fs.realpath).mockResolvedValue(dirPath);
+        vi.mocked(fileSystem.resolveMediaSourceDirectory).mockResolvedValue(
+          dirPath,
+        );
         const response = await request(app)
           .post('/api/directories')
           .send({ path: dirPath });

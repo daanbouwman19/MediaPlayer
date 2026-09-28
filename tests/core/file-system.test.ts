@@ -106,10 +106,23 @@ describe('file-system', () => {
       consoleSpy.mockRestore();
     });
 
-    it('returns drives if path is ROOT', async () => {
+    it('returns drives if path is ROOT and browsing is unconfined', async () => {
+      delete process.env.ALLOWED_FS_ROOTS;
       vi.spyOn(os, 'platform').mockReturnValue('linux');
       const result = await listDirectory('ROOT');
       expect(result[0].path).toBe('/');
+    });
+
+    it('returns the allowed roots if path is ROOT and browsing is confined', async () => {
+      vi.mocked(fs.stat).mockResolvedValue({ isDirectory: () => true } as any);
+      const result = await listDirectory('ROOT');
+      expect(result).toEqual([
+        {
+          name: path.resolve('/test'),
+          path: path.resolve('/test'),
+          isDirectory: true,
+        },
+      ]);
     });
 
     it('blocks access to directories outside configured roots', async () => {
@@ -196,11 +209,13 @@ describe('file-system', () => {
       // `..foo` resolves to `/test/..foo` which starts with `/test/` — allowed.
       // This covers the `startsWith`-with-separator correctness: `/test/..foo`
       // begins with `/test/` so it is correctly identified as a descendant.
-      const mockDirents = [{ name: 'file.txt', isDirectory: () => false }];
-      vi.mocked(fs.readdir).mockResolvedValue(mockDirents as any);
-      const result = await listDirectory('/test/..foo');
-      expect(result).toHaveLength(1);
-      expect(result[0].name).toBe('file.txt');
+      // (listDirectory itself refuses to list it, like any hidden folder, so
+      // the root check is exercised through isValidDirectory.)
+      vi.mocked(fs.stat).mockResolvedValue({ isDirectory: () => true } as any);
+      expect(await isValidDirectory('/test/..foo')).toBe(true);
+      await expect(listDirectory('/test/..foo')).rejects.toThrow(
+        'Access denied',
+      );
     });
 
     it('blocks directories that attempt parent traversal', async () => {

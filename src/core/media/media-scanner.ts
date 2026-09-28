@@ -63,10 +63,10 @@ function processDirectoryEntries(
 
   for (const item of items) {
     if (item.isDirectory()) {
-      if (isIgnoredDirectory(item.name)) {
+      const fullPath = path.join(directoryPath, item.name);
+      if (isIgnoredDirectory(item.name, fullPath)) {
         continue;
       }
-      const fullPath = path.join(directoryPath, item.name);
       childrenPromises.push(scanDirectoryRecursive(fullPath, knownPaths));
     } else {
       const mediaFile = processFileItem(item, directoryPath, knownPaths);

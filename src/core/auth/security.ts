@@ -1,5 +1,6 @@
 import fs from 'fs/promises';
 import { realpathSync } from 'fs';
+import os from 'os';
 import path from 'path';
 import { getMediaDirectories, isFileInLibrary } from '../database/database.ts';
 import type { MediaDirectory } from '../media/types.ts';
@@ -368,7 +369,15 @@ export async function validatePathAgainstDir(
     // candidateRealPath is within allowedRootReal — compute the relative
     // segment for the sensitive-filename sub-check only.
     const relative = path.relative(allowedRootReal, candidateRealPath);
-    if (hasSensitiveSegments(relative)) {
+    // Like the segment check, the location check guards what lies *below*
+    // the media directory: <home>\AppData is denied when the home folder is a
+    // source, while a source that itself sits in such a folder (never
+    // accepted when adding one) keeps its previous behaviour.
+    if (
+      hasSensitiveSegments(relative) ||
+      (isInSensitiveLocation(candidateRealPath) &&
+        !isInSensitiveLocation(allowedRootReal))
+    ) {
       console.warn(
         `[Security] Access denied to sensitive file: ${candidateRealPath}`,
       );
@@ -465,6 +474,117 @@ const LINUX_RESTRICTED_PATHS = [
 ];
 
 /**
+ * Directories that hold user profiles (C:\Users, /Users). The per-user data
+ * folder inside each profile is sensitive, wherever the profiles live.
+ */
+function getProfileRoots(p: typeof path): string[] {
+  const roots = new Set<string>();
+  const add = (dir: string | undefined) => {
+    if (dir) roots.add(p.resolve(dir).toLowerCase());
+  };
+  add(p.dirname(os.homedir()));
+  if (process.platform === 'win32') {
+    add(`${process.env.SystemDrive || 'C:'}\\Users`);
+    if (process.env.PUBLIC) add(p.dirname(process.env.PUBLIC));
+  } else {
+    add('/Users');
+  }
+  return Array.from(roots);
+}
+
+/**
+ * Checks whether a path lies inside a per-user data folder: <profile>\AppData
+ * on Windows (browser profiles, saved passwords, tokens) or <home>/Library and
+ * /Library on macOS (keychains, mail). These are matched by location rather
+ * than by folder name, so an ordinary media folder that happens to be called
+ * "Library" or "AppData" (e.g. D:\Library\Films) stays usable.
+ * @param targetPath - Absolute path to check.
+ */
+export function isInSensitiveLocation(targetPath: string): boolean {
+  return createSensitiveLocationMatcher()(targetPath);
+}
+
+/**
+ * Returns an {@link isInSensitiveLocation} check with the profile locations
+ * resolved once, for checking many paths (e.g. every entry of a listing).
+ */
+export function createSensitiveLocationMatcher(): (
+  targetPath: string,
+) => boolean {
+  const platform = process.platform;
+  if (platform !== 'win32' && platform !== 'darwin') {
+    return () => false;
+  }
+  const p = platform === 'win32' ? path.win32 : path.posix;
+  const profileRoots = getProfileRoots(p);
+  const userDataFolder = platform === 'win32' ? 'appdata' : 'library';
+
+  return (targetPath) => {
+    if (!targetPath) return false;
+    // NTFS and the default APFS volume are case-insensitive.
+    const target = p.resolve(targetPath).toLowerCase();
+
+    for (const profilesRoot of profileRoots) {
+      const rel = p.relative(profilesRoot, target);
+      if (!rel || rel === '..' || rel.startsWith('..' + p.sep)) continue;
+      if (p.isAbsolute(rel)) continue;
+      // <profiles root>/<user>/<user data folder>[/...]
+      if (rel.split(p.sep)[1] === userDataFolder) return true;
+    }
+
+    return (
+      platform === 'darwin' &&
+      (target === '/library' || target.startsWith('/library/'))
+    );
+  };
+}
+
+/**
+ * Checks whether a path is a UNC path (\\server\share\... or \\?\...).
+ */
+export function isUncPath(p: string): boolean {
+  return p.startsWith('\\\\') || p.startsWith('//');
+}
+
+const LOOPBACK_HOSTS = new Set(['localhost', '::1', '--1.ipv6-literal.net']);
+
+/**
+ * Checks whether a UNC path points at a share that reaches this machine's own
+ * volumes: device or long-path namespaces (\\?\C:\, \\.\), administrative
+ * shares (\\host\C$) and loopback hosts. Those would bypass the drive-letter
+ * based restricted roots.
+ */
+function isRestrictedUncShare(uncPath: string): boolean {
+  const lower = uncPath.replace(/\//g, '\\').toLowerCase();
+  if (lower.startsWith('\\\\?\\') || lower.startsWith('\\\\.\\')) return true;
+  const [host = '', share = ''] = lower.slice(2).split('\\');
+  if (!host || !share || share.endsWith('$')) return true;
+  return (
+    LOOPBACK_HOSTS.has(host) ||
+    host.startsWith('127.') ||
+    host === os.hostname().toLowerCase()
+  );
+}
+
+/**
+ * A drive letter can be mapped to a network share (net use Z: \\nas\media).
+ * Paths on such a drive are allowed in their drive-letter form, unless the
+ * drive is mapped to a share that reaches the local system (for example
+ * \\localhost\C$), which would expose C:\Windows under another letter.
+ */
+function mapsToRestrictedNetworkShare(normalized: string): boolean {
+  if (!/^[a-z]:\\/i.test(normalized)) return false;
+  let target: string;
+  try {
+    // The native realpath expands mapped drives to their UNC target.
+    target = realpathSync.native(normalized);
+  } catch {
+    return false;
+  }
+  return isUncPath(target) && isRestrictedUncShare(target);
+}
+
+/**
  * Attempts to resolve the real path, handling symlinks and errors.
  */
 function resolvePath(dirPath: string, p: typeof path): string {
@@ -497,13 +617,20 @@ function checkRestrictedRoots(
     const normalizedLower = normalized.toLowerCase();
 
     // Block UNC paths to prevent bypass of drive-letter based restrictions
-    if (normalizedLower.startsWith('\\\\')) return true;
+    // (\\localhost\C$\Windows, \\?\C:\Windows). Folders on mapped network
+    // drives are handled in their drive-letter form instead.
+    if (isUncPath(normalizedLower)) return true;
 
-    return restrictedRoots.some(
-      (r) =>
-        normalizedLower === r.toLowerCase() ||
-        normalizedLower.startsWith(r.toLowerCase() + '\\'),
-    );
+    if (
+      restrictedRoots.some(
+        (r) =>
+          normalizedLower === r.toLowerCase() ||
+          normalizedLower.startsWith(r.toLowerCase() + '\\'),
+      )
+    ) {
+      return true;
+    }
+    return mapsToRestrictedNetworkShare(normalized);
   } else {
     // Linux: Strict check
     return restrictedRoots.some(
@@ -530,6 +657,11 @@ function checkPathRestrictions(
 
   // Check if any segment is a sensitive directory (e.g. .ssh)
   if (segments.some(isHiddenOrSensitive)) {
+    return true;
+  }
+
+  // Per-user data folders (<profile>\AppData, ~/Library) by location.
+  if (isInSensitiveLocation(normalized)) {
     return true;
   }
 
@@ -602,9 +734,15 @@ export function isSensitiveFilename(filename: string): boolean {
  * Checks if a directory should be ignored during scanning or listing.
  * Includes hidden directories (starting with .) and sensitive directories.
  * @param name - The name of the directory (not the full path).
+ * @param fullPath - The directory's full path, used to also skip per-user
+ *   data folders such as <profile>\AppData by location.
  * @returns True if the directory should be ignored.
  */
-export function isIgnoredDirectory(name: string): boolean {
+export function isIgnoredDirectory(name: string, fullPath?: string): boolean {
   if (!name) return true;
-  return name.startsWith('.') || isSensitiveFilename(name);
+  return (
+    name.startsWith('.') ||
+    isSensitiveFilename(name) ||
+    (fullPath !== undefined && isInSensitiveLocation(fullPath))
+  );
 }

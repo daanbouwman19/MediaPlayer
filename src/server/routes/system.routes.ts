@@ -3,7 +3,6 @@
  */
 import { Router } from 'express';
 import path from 'path';
-import fs from 'fs/promises';
 import { AppError } from '../../core/media/errors.ts';
 import {
   ALL_SUPPORTED_EXTENSIONS,
@@ -21,12 +20,14 @@ import {
   setDirectoryActiveState,
   updateSmartPlaylist,
 } from '../../core/database/database.ts';
-import { listDirectory } from '../../core/media/file-system.ts';
 import {
-  isRestrictedPath,
-  isSensitiveDirectory,
-  validateInput,
-} from '../../core/auth/security.ts';
+  getParentDirectory,
+  isRootDirectoryRequest,
+  listDirectory,
+  resolveMediaSourceDirectory,
+  ROOT_DIRECTORY,
+} from '../../core/media/file-system.ts';
+import { validateInput } from '../../core/auth/security.ts';
 import { getQueryParam } from '../../core/network/http-utils.ts';
 import {
   getDriveClient,
@@ -168,30 +169,9 @@ export function createSystemRoutes(limiters: RateLimiters) {
 
       validateMediaDirectoryPath(dirPath);
 
-      if (isSensitiveDirectory(dirPath)) {
-        console.warn(
-          `[Security] Blocked attempt to add sensitive directory: ${dirPath}`,
-        );
-        return res.status(403).json({
-          error: 'Access restricted for sensitive system directories',
-        });
-      }
-
-      let resolvedPath: string;
-      try {
-        resolvedPath = await fs.realpath(dirPath);
-      } catch {
-        throw new AppError(400, 'Directory does not exist');
-      }
-
-      if (isSensitiveDirectory(resolvedPath)) {
-        console.warn(
-          `[Security] Blocked attempt to add sensitive directory (resolved): ${resolvedPath}`,
-        );
-        return res.status(403).json({
-          error: 'Access restricted for sensitive system directories',
-        });
-      }
+      // Canonicalises the folder and applies the same confinement as the
+      // /api/fs/* browser (allowed roots, sensitive locations): 400 / 403.
+      const resolvedPath = await resolveMediaSourceDirectory(dirPath);
 
       await addMediaDirectory(resolvedPath);
       return res.json(resolvedPath);
@@ -264,16 +244,14 @@ export function createSystemRoutes(limiters: RateLimiters) {
         throw new AppError(400, inputResult.message || 'Invalid path');
       }
 
-      const normalizedDirPath = path.resolve(dirPath);
-
-      if (isRestrictedPath(normalizedDirPath)) {
-        console.warn(
-          `[Security] Blocked attempt to list restricted directory: ${normalizedDirPath}`,
-        );
-        throw new AppError(403, 'Access denied');
-      }
-
-      const contents = await listDirectory(normalizedDirPath);
+      // The 'ROOT' sentinel must reach listDirectory unresolved (it lists the
+      // allowed roots); anything else is resolved before the restriction and
+      // allowed-root checks, which throw AppError(403).
+      const contents = await listDirectory(
+        isRootDirectoryRequest(dirPath)
+          ? ROOT_DIRECTORY
+          : path.resolve(dirPath),
+      );
       res.json(contents);
     }),
   );
@@ -291,10 +269,9 @@ export function createSystemRoutes(limiters: RateLimiters) {
         throw new AppError(400, inputResult.message || 'Invalid path');
       }
 
-      const parent = path.dirname(dirPath);
-      if (parent === dirPath) {
-        return res.json({ parent: null });
-      }
+      // null at a drive root or an allowed root: the picker then goes back to
+      // the root listing instead of to a directory it cannot list.
+      const parent = await getParentDirectory(dirPath);
       return res.json({ parent });
     }),
   );

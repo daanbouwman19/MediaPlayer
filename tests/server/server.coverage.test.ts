@@ -15,6 +15,7 @@ import * as googleAuth from '../../src/main/google-auth';
 
 import * as mediaSource from '../../src/core/media/media-source';
 import * as fileSystem from '../../src/core/media/file-system';
+import { AppError } from '../../src/core/media/errors';
 
 // Auto-mock dependencies
 vi.mock('../../src/core/database/database');
@@ -313,18 +314,19 @@ describe('Server Coverage', () => {
 
   describe('File System Routes', () => {
     it('GET /api/fs/parent returns parent path', async () => {
+      vi.mocked(fileSystem.getParentDirectory).mockResolvedValueOnce('/a');
       const res = await request(app)
         .get('/api/fs/parent')
         .query({ path: '/a/b' });
       // Expect precise parent path
       expect(res.body).toEqual({ parent: '/a' });
+      expect(fileSystem.getParentDirectory).toHaveBeenCalledWith('/a/b');
     });
 
     it('GET /api/fs/parent returns null for root', async () => {
-      // Logic assumes parent === dirPath.
-      // On win32, path.dirname('C:\\') === 'C:\\'.
-      // On posix, path.dirname('/') === '/'.
+      // getParentDirectory returns null at a drive / allowed root.
       const root = process.platform === 'win32' ? 'C:\\' : '/';
+      vi.mocked(fileSystem.getParentDirectory).mockResolvedValueOnce(null);
       const res = await request(app)
         .get('/api/fs/parent')
         .query({ path: root });
@@ -528,16 +530,20 @@ describe('Server Coverage', () => {
     });
 
     it('POST /api/directories handles sensitive path', async () => {
-      vi.mocked(security.isSensitiveDirectory).mockReturnValueOnce(true);
+      vi.mocked(fileSystem.resolveMediaSourceDirectory).mockRejectedValueOnce(
+        new AppError(403, 'Access restricted for sensitive system directories'),
+      );
       const res = await request(app)
         .post('/api/directories')
         .send({ path: '/etc' });
       expect(res.status).toBe(403);
+      expect(database.addMediaDirectory).not.toHaveBeenCalled();
     });
 
     it('POST /api/directories handles non-existent directory', async () => {
-      // Mock realpath to fail
-      vi.mocked(mockFs.realpath).mockRejectedValue(new Error('ENOENT'));
+      vi.mocked(fileSystem.resolveMediaSourceDirectory).mockRejectedValueOnce(
+        new AppError(400, 'Directory does not exist'),
+      );
       const res = await request(app)
         .post('/api/directories')
         .send({ path: '/non/existent' });
@@ -545,7 +551,9 @@ describe('Server Coverage', () => {
     });
 
     it('GET /api/fs/ls handles restricted path', async () => {
-      vi.mocked(security.isRestrictedPath).mockReturnValueOnce(true);
+      vi.mocked(fileSystem.listDirectory).mockRejectedValueOnce(
+        new AppError(403, 'Access denied'),
+      );
       const res = await request(app).get('/api/fs/ls').query({ path: '/root' });
       expect(res.status).toBe(403);
     });

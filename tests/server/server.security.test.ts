@@ -99,7 +99,7 @@ describe('Server Security', () => {
         process.platform === 'win32'
           ? 'C:\\Users\\User\\Videos'
           : '/home/user/Videos';
-      vi.mocked(fs.stat).mockResolvedValue({} as any);
+      vi.mocked(fs.stat).mockResolvedValue({ isDirectory: () => true } as any);
 
       const response = await request(app)
         .post('/api/directories')

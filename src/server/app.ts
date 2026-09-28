@@ -27,7 +27,12 @@ import { MediaHandler } from '../core/media/media-handler.ts';
 import { WorkerFactory } from '../core/database/worker-factory.ts';
 import { createRateLimiters } from './middleware/rate-limiters.ts';
 import { basicAuthMiddleware } from './middleware/basic-auth.ts';
-import { globalPasswordMiddleware } from './middleware/global-password.ts';
+import {
+  createEphemeralSessionSecret,
+  globalPasswordMiddleware,
+  SESSION_MAX_AGE_MS,
+  setSessionFingerprintKey,
+} from './middleware/global-password.ts';
 import { noCacheMiddleware } from './middleware/no-cache.ts';
 import { errorHandler } from './middleware/error-handler.ts';
 import { createAlbumRoutes } from './routes/album.routes.ts';
@@ -107,7 +112,6 @@ export async function createApp(mediaService: MediaService) {
     credentials: true,
   };
   app.use(cors(corsOptions));
-  app.use(express.json({ limit: '10mb' }));
 
   app.get('/favicon.ico', (_req, res) => res.status(204).end());
 
@@ -119,11 +123,14 @@ export async function createApp(mediaService: MediaService) {
     process.exit(1);
   }
 
+  const sessionKey = sessionSecret || createEphemeralSessionSecret();
+  setSessionFingerprintKey(sessionKey);
+
   app.use(
     cookieSession({
       name: 'session',
-      keys: [sessionSecret || 'media-player-dev-secret-do-not-use-in-prod'],
-      maxAge: 24 * 60 * 60 * 1000, // 24 hours
+      keys: [sessionKey],
+      maxAge: SESSION_MAX_AGE_MS,
       secure: true,
       httpOnly: true,
       sameSite: 'lax',
@@ -136,14 +143,13 @@ export async function createApp(mediaService: MediaService) {
 
   const limiters = createRateLimiters();
 
-  const sysUser = process.env.SYSTEM_USER;
-  const sysSecret = process.env.SYSTEM_PASSWORD;
-  if (sysUser && sysSecret) {
-    app.use(limiters.basicAuthLimiter);
-  }
-
+  // Counts only rejected credentials towards its lockout.
   app.use(basicAuthMiddleware);
   app.use(globalPasswordMiddleware);
+
+  // Parsed only after authentication, so locked-out or unauthenticated
+  // clients cannot make the server buffer and parse large bodies.
+  app.use(express.json({ limit: '1mb' }));
 
   // Apply no-cache middleware to API routes to prevent sensitive data leakage
   app.use('/api', noCacheMiddleware);
@@ -204,6 +210,11 @@ export async function createApp(mediaService: MediaService) {
   );
   app.use(createAuthRoutes(limiters));
   app.use(createSystemRoutes(limiters));
+
+  // Unknown API endpoints get a JSON 404 instead of the SPA's index.html.
+  app.use('/api', (_req, res) => {
+    res.status(404).json({ error: 'Not found' });
+  });
 
   if (!isDev) {
     const clientDistPath = path.join(__dirname, '../client');

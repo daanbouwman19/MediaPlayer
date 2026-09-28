@@ -5,8 +5,6 @@ import {
   ipcMain,
   nativeTheme,
 } from 'electron';
-import fs from 'fs/promises';
-import path from 'path';
 import { IPC_CHANNELS } from '../../shared/ipc-channels';
 import {
   addMediaDirectory,
@@ -21,42 +19,24 @@ import {
 } from '../../core/media/constants';
 import { getServerPort } from '../local-server';
 import { openMediaInVlc } from '../../infrastructure/vlc-player';
-import { listDirectory } from '../../core/media/file-system';
-import { handleIpc } from '../utils/ipc-helper';
 import {
-  isSensitiveDirectory,
-  isRestrictedPath,
-} from '../../core/auth/security';
+  getParentDirectory,
+  listDirectory,
+  resolveMediaSourceDirectory,
+} from '../../core/media/file-system';
+import { handleIpc } from '../utils/ipc-helper';
 
 export function registerSystemHandlers() {
   handleIpc(
     IPC_CHANNELS.ADD_MEDIA_DIRECTORY,
     async (_event: IpcMainInvokeEvent, targetPath?: string) => {
-      if (targetPath) {
-        try {
-          // Resolve symlinks to prevent bypass of sensitive directory checks
-          let resolvedPath = targetPath;
-          try {
-            resolvedPath = await fs.realpath(targetPath);
-          } catch {
-            return null; // File likely doesn't exist
-          }
-
-          if (isSensitiveDirectory(resolvedPath)) {
-            console.warn(
-              `[Security] Blocked attempt to add sensitive directory: ${targetPath} (resolved to ${resolvedPath})`,
-            );
-            return null;
-          }
-
-          await addMediaDirectory({ path: resolvedPath, type: 'local' });
-          return resolvedPath;
-        } catch (e) {
-          console.error('Failed to add directory by path', e);
-          return null;
-        }
-      }
-      return null;
+      if (!targetPath) return null;
+      // Throws a descriptive error (shown by the renderer) when the folder is
+      // missing, sensitive or outside the allowed roots, instead of a silent
+      // null.
+      const resolvedPath = await resolveMediaSourceDirectory(targetPath);
+      await addMediaDirectory({ path: resolvedPath, type: 'local' });
+      return resolvedPath;
     },
   );
 
@@ -133,12 +113,8 @@ export function registerSystemHandlers() {
   handleIpc(
     IPC_CHANNELS.LIST_DIRECTORY,
     async (_event: IpcMainInvokeEvent, directoryPath: string) => {
-      if (isRestrictedPath(directoryPath)) {
-        console.warn(
-          `[Security] Blocked attempt to list restricted directory: ${directoryPath}`,
-        );
-        throw new Error('Access denied');
-      }
+      // listDirectory handles the 'ROOT' sentinel before any path check and
+      // applies the same restriction checks as the web route.
       return listDirectory(directoryPath);
     },
   );
@@ -146,10 +122,7 @@ export function registerSystemHandlers() {
   handleIpc(
     IPC_CHANNELS.GET_PARENT_DIRECTORY,
     async (_event: IpcMainInvokeEvent, targetPath: string) => {
-      if (!targetPath) return null;
-      const parent = path.dirname(targetPath);
-      if (parent === targetPath) return null;
-      return parent;
+      return getParentDirectory(targetPath);
     },
   );
 

@@ -43,7 +43,7 @@ vi.mock('../../src/main/drive-cache-manager', () => ({
 vi.mock('fs/promises', () => ({
   default: {
     mkdir: vi.fn().mockResolvedValue(undefined),
-    stat: vi.fn().mockResolvedValue({}),
+    stat: vi.fn().mockResolvedValue({ isDirectory: () => true }),
     realpath: vi.fn((p) => Promise.resolve(p)),
   },
 }));
@@ -67,7 +67,7 @@ describe('Server DoS Protection', () => {
   });
 
   it('should reject large JSON bodies', async () => {
-    // Create a large object string > 10MB
+    // Create a large object string (well over the 1mb JSON body limit)
     const largeString = 'a'.repeat(11 * 1024 * 1024);
 
     const response = await request(app)
@@ -75,8 +75,8 @@ describe('Server DoS Protection', () => {
       .set('Content-Type', 'application/json')
       .send({ filePaths: [largeString] });
 
-    // Express default is 100kb, but we expect to set it to 10mb.
-    // If we send 11MB, it should fail with 413 Payload Too Large.
+    // Express default is 100kb; the app allows up to 1mb.
+    // Anything larger must fail with 413 Payload Too Large.
     expect(response.status).toBe(413);
   });
 

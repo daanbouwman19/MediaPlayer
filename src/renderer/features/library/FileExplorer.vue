@@ -229,7 +229,14 @@ const isDriveRoot = (path: string) => {
   return /^[A-Z]:\\?$/i.test(path) || path === '/';
 };
 
+// Every load gets a sequence number; only the most recent one may update the
+// view, so a slow earlier response (e.g. Refresh during a double-click
+// navigation) cannot overwrite the listing, header or Up target.
+let loadSequence = 0;
+
 const loadDirectory = async (path: string) => {
+  const sequence = ++loadSequence;
+  const isStale = () => sequence !== loadSequence;
   isLoading.value = true;
   error.value = null;
 
@@ -237,73 +244,86 @@ const loadDirectory = async (path: string) => {
     console.log(
       `[FileExplorer] loadDirectory mode=${props.mode} path='${path}'`,
     );
+    let result: FileSystemEntry[];
+    let nextPath: string;
+    let nextParent: string | null;
+
     if (props.mode === 'google-drive') {
       const targetId = path || 'root';
-      const result = await api.listGoogleDriveDirectory(targetId);
+      result = await api.listGoogleDriveDirectory(targetId);
+      if (isStale()) return;
       console.log(
         `[FileExplorer] listGoogleDriveDirectory returned ${result.length} items`,
       );
-      entries.value = result;
-      currentPath.value = targetId;
+      nextPath = targetId;
 
       if (targetId === 'root') {
-        parentPath.value = null;
+        nextParent = null;
       } else {
         try {
           // Get parent
           const parent = await api.getGoogleDriveParent(targetId);
-          parentPath.value = parent || 'root';
+          nextParent = parent || 'root';
         } catch {
-          parentPath.value = 'root';
+          nextParent = 'root';
         }
       }
     } else {
       // Local Mode
       const targetPath = path || 'ROOT';
-      const result = await api.listDirectory(targetPath);
-      entries.value = result;
+      result = await api.listDirectory(targetPath);
+      if (isStale()) return;
 
       if (targetPath === 'ROOT') {
-        currentPath.value = 'My PC'; // Display name for root
-        parentPath.value = null;
+        nextPath = 'My PC'; // Display name for root
+        nextParent = null;
       } else {
-        currentPath.value = path;
+        nextPath = path;
         // Fetch parent path
         try {
           const parent = await api.getParentDirectory(path);
           // If parent is null, it means we can go up to ROOT
-          parentPath.value = parent !== null ? parent : 'ROOT';
+          nextParent = parent !== null ? parent : 'ROOT';
         } catch {
-          parentPath.value = 'ROOT';
+          nextParent = 'ROOT';
         }
       }
     }
+
+    if (isStale()) return;
+    // Listing, header and Up target always describe the same directory.
+    entries.value = result;
+    currentPath.value = nextPath;
+    parentPath.value = nextParent;
   } catch (err) {
+    if (isStale()) return;
     console.error('Failed to list directory:', err);
     error.value = 'Failed to load directory.';
   } finally {
-    isLoading.value = false;
+    if (!isStale()) {
+      isLoading.value = false;
+    }
   }
 };
 
 const navigateUp = () => {
   if (parentPath.value) {
     if (props.mode === 'local' && parentPath.value === 'ROOT') {
-      loadDirectory('');
+      void loadDirectory('');
     } else {
-      loadDirectory(parentPath.value);
+      void loadDirectory(parentPath.value);
     }
   }
 };
 
 const refresh = () => {
   if (props.mode === 'google-drive') {
-    loadDirectory(currentPath.value);
+    void loadDirectory(currentPath.value);
     return;
   }
   let path = currentPath.value;
   if (path === 'My PC') path = '';
-  loadDirectory(path);
+  void loadDirectory(path);
 };
 
 const handleEntryClick = (entry: FileSystemEntry) => {
@@ -316,7 +336,7 @@ const handleEntryClick = (entry: FileSystemEntry) => {
 
 const handleEntryDoubleClick = (entry: FileSystemEntry) => {
   if (entry.isDirectory) {
-    loadDirectory(entry.path);
+    void loadDirectory(entry.path);
     selectedPath.value = null; // Reset selection on nav
   }
 };

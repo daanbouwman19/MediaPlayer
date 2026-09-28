@@ -13,6 +13,86 @@ export const COMPROMISED_KEY_HASH =
 
 let cachedKey: Buffer | null = null;
 
+function isCompromisedKey(keyHex: string): boolean {
+  const hash = crypto
+    .createHash('sha256')
+    .update(keyHex.toLowerCase())
+    .digest('hex');
+  return hash === COMPROMISED_KEY_HASH;
+}
+
+function errorCode(err: unknown): string | undefined {
+  const code = (err as { code?: unknown } | null)?.code;
+  return typeof code === 'string' ? code : undefined;
+}
+
+/**
+ * Writes a new key file without ever leaving a partial file behind: the key
+ * goes to a private temp file first, which is then moved into place. A fresh
+ * key is linked in, which fails instead of overwriting a key file that
+ * appeared in the meantime; a replacement (after backing the old key up) is
+ * renamed over it.
+ * @returns false if another process created the key file first.
+ */
+function writeKeyFile(
+  keyPath: string,
+  keyHex: string,
+  replace: boolean,
+): boolean {
+  const tmpPath = `${keyPath}.${process.pid}.${crypto.randomBytes(4).toString('hex')}.tmp`;
+  fs.writeFileSync(tmpPath, keyHex, { mode: 0o600, flag: 'wx' });
+  try {
+    if (replace) {
+      fs.renameSync(tmpPath, keyPath);
+      return true;
+    }
+    try {
+      fs.linkSync(tmpPath, keyPath);
+    } catch (err) {
+      if (errorCode(err) === 'EEXIST') return false;
+      // The filesystem has no hard links (e.g. FAT): exclusive create.
+      fs.writeFileSync(keyPath, keyHex, { mode: 0o600, flag: 'wx' });
+    }
+    return true;
+  } finally {
+    fs.rmSync(tmpPath, { force: true });
+  }
+}
+
+/**
+ * Persists a newly generated key. When an unusable key file is replaced, the
+ * old file is kept as master.key.<reason>-<timestamp>.bak first.
+ */
+function persistNewKey(
+  keyPath: string,
+  newKey: Buffer,
+  replacedReason?: string,
+): boolean {
+  try {
+    if (replacedReason) {
+      const backupPath = `${keyPath}.${replacedReason}-${Date.now()}.bak`;
+      fs.copyFileSync(keyPath, backupPath, fs.constants.COPYFILE_EXCL);
+      console.warn(
+        `[Encryption] Previous master key backed up to ${backupPath}`,
+      );
+    }
+    const written = writeKeyFile(
+      keyPath,
+      newKey.toString('hex'),
+      replacedReason !== undefined,
+    );
+    if (written) {
+      console.log(`[Encryption] Generated new master key at ${keyPath}`);
+    }
+    return written;
+  } catch (err) {
+    console.error(`[Encryption] Failed to write ${MASTER_KEY_FILE}:`, err);
+    throw new Error(
+      `Failed to persist encryption key to ${MASTER_KEY_FILE}. Aborting to prevent data loss on restart.`,
+    );
+  }
+}
+
 /**
  * Retrieves or generates the encryption key.
  */
@@ -21,6 +101,11 @@ function getEncryptionKey(): Buffer {
 
   // 1. Check environment variable
   if (process.env.MASTER_KEY) {
+    if (isCompromisedKey(process.env.MASTER_KEY.trim())) {
+      throw new Error(
+        'MASTER_KEY is a known compromised key. Generate a new one (e.g. `openssl rand -hex 32`).',
+      );
+    }
     const key = Buffer.from(process.env.MASTER_KEY, 'hex');
     if (key.length !== KEY_LENGTH) {
       throw new Error(
@@ -34,45 +119,48 @@ function getEncryptionKey(): Buffer {
   // 2. Check key file
   const keyDir = process.env.MASTER_KEY_DIR || process.cwd();
   const keyPath = path.resolve(keyDir, MASTER_KEY_FILE);
-  if (fs.existsSync(keyPath)) {
-    try {
-      const keyHex = fs.readFileSync(keyPath, 'utf8').trim();
-      const currentKeyHash = crypto
-        .createHash('sha256')
-        .update(keyHex)
-        .digest('hex');
 
-      if (currentKeyHash === COMPROMISED_KEY_HASH) {
-        console.warn(
-          '[Encryption] Compromised master key detected. Rotating key for security.',
-        );
-        // Fall through to generation logic
-      } else {
-        const key = Buffer.from(keyHex, 'hex');
-        if (key.length !== KEY_LENGTH) {
-          console.warn(
-            `[Encryption] Invalid key length in ${MASTER_KEY_FILE}. Regenerating.`,
-          );
-        } else {
-          cachedKey = key;
-          return key;
-        }
-      }
-    } catch (err) {
+  let keyHex: string | null = null;
+  try {
+    keyHex = fs.readFileSync(keyPath, 'utf8').trim();
+  } catch (err) {
+    if (errorCode(err) !== 'ENOENT') {
+      // A transient failure (antivirus or backup tool holding a lock,
+      // permissions) must not replace the key: everything encrypted with it
+      // would become unreadable. Fail now; the next call retries.
       console.warn(`[Encryption] Failed to read ${MASTER_KEY_FILE}:`, err);
+      throw new Error(
+        `Failed to read encryption key from ${MASTER_KEY_FILE}. Not generating a new one to protect the existing key.`,
+        { cause: err },
+      );
+    }
+  }
+
+  let replacedReason: string | undefined;
+  if (keyHex !== null) {
+    if (isCompromisedKey(keyHex)) {
+      console.warn(
+        '[Encryption] Compromised master key detected. Rotating key for security.',
+      );
+      replacedReason = 'compromised';
+    } else {
+      const key = Buffer.from(keyHex, 'hex');
+      if (key.length === KEY_LENGTH) {
+        cachedKey = key;
+        return key;
+      }
+      console.warn(
+        `[Encryption] Invalid key length in ${MASTER_KEY_FILE}. Regenerating.`,
+      );
+      replacedReason = 'invalid';
     }
   }
 
   // 3. Generate new key
   const newKey = crypto.randomBytes(KEY_LENGTH);
-  try {
-    fs.writeFileSync(keyPath, newKey.toString('hex'), { mode: 0o600 });
-    console.log(`[Encryption] Generated new master key at ${keyPath}`);
-  } catch (err) {
-    console.error(`[Encryption] Failed to write ${MASTER_KEY_FILE}:`, err);
-    throw new Error(
-      `Failed to persist encryption key to ${MASTER_KEY_FILE}. Aborting to prevent data loss on restart.`,
-    );
+  if (!persistNewKey(keyPath, newKey, replacedReason)) {
+    // Another process created the key file first: use that key.
+    return getEncryptionKey();
   }
   cachedKey = newKey;
   return newKey;
