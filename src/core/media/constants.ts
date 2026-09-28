@@ -336,6 +336,13 @@ const HLS_SEGMENT_DURATION = 6;
 const HLS_CACHE_DIR_NAME = 'hls';
 
 /**
+ * HLS segments are encrypted with AES-128, so the output directory holds no
+ * playable video. The player fetches the key from this URI, relative to the
+ * playlist; it is the only non-segment name the segment route answers.
+ */
+const HLS_KEY_URI = 'enc.key';
+
+/**
  * Name of the directory within the cache for heatmaps.
  */
 const HEATMAP_CACHE_DIR_NAME = 'heatmaps';
@@ -405,6 +412,7 @@ export {
   MAX_PASSWORD_LENGTH,
   HLS_SEGMENT_DURATION,
   HLS_CACHE_DIR_NAME,
+  HLS_KEY_URI,
   HEATMAP_CACHE_DIR_NAME,
   GRID_BREAKPOINT_SM,
   GRID_BREAKPOINT_LG,

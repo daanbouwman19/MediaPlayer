@@ -31,6 +31,8 @@ vi.mock('fs/promises', () => ({
     // Nothing retained on disk
     access: vi.fn().mockRejectedValue(new Error('ENOENT')),
     readFile: vi.fn().mockRejectedValue(new Error('ENOENT')),
+    // The segment key files
+    writeFile: vi.fn().mockResolvedValue(undefined),
   },
   mkdir: mockFsMkdir,
   rm: mockFsRm,

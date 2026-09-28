@@ -346,6 +346,8 @@ export function getHlsTranscodeArgs(
     preset?: string;
     crf?: string;
     threads?: string;
+    /** HLS key info file: segments are then encrypted with AES-128. */
+    keyInfoPath?: string;
   } = {},
 ): string[] {
   const {
@@ -354,6 +356,7 @@ export function getHlsTranscodeArgs(
     preset = FFMPEG_TRANSCODE_PRESET,
     crf = FFMPEG_TRANSCODE_CRF,
     threads = '2',
+    keyInfoPath,
   } = options;
 
   const args = [
@@ -399,6 +402,7 @@ export function getHlsTranscodeArgs(
     // beginning, and ffmpeg writes #EXT-X-ENDLIST when the transcode finishes.
     '-hls_playlist_type',
     'event',
+    ...(keyInfoPath ? ['-hls_key_info_file', keyInfoPath] : []),
     '-hls_segment_filename',
     outputSegmentPath,
     outputPlaylistPath,

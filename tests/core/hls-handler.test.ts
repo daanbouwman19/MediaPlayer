@@ -141,7 +141,9 @@ describe('hls-handler', () => {
       // @ts-expect-error - Mocking static method
       HlsManager.getInstance.mockReturnValue(mockHlsManager);
 
-      vi.mocked(fs.readFile).mockResolvedValue('#EXTM3U\nseg-000.ts');
+      vi.mocked(fs.readFile).mockResolvedValue(
+        '#EXTM3U\n#EXT-X-KEY:METHOD=AES-128,URI="enc.key",IV=0x01\nseg-000.ts',
+      );
 
       await serveHlsPlaylist(req, res, '/path/to/video.mp4');
 
@@ -151,6 +153,12 @@ describe('hls-handler', () => {
       );
       expect(res.send).toHaveBeenCalledWith(
         expect.stringContaining('seg-000.ts?file=%2Fpath%2Fto%2Fvideo.mp4'),
+      );
+      // The key is fetched through the segment route as well.
+      expect(res.send).toHaveBeenCalledWith(
+        expect.stringContaining(
+          'URI="enc.key?file=%2Fpath%2Fto%2Fvideo.mp4",IV=0x01',
+        ),
       );
       expect(mockHlsManager.touchSession).toHaveBeenCalledWith(
         'mock-session-id',
@@ -343,6 +351,67 @@ describe('hls-handler', () => {
         { dotfiles: 'allow' },
         expect.any(Function),
       );
+    });
+
+    describe('segment key', () => {
+      const key = Buffer.alloc(16, 9);
+      let mockHlsManager: any;
+
+      beforeEach(() => {
+        mockValidateFileAccess.mockResolvedValue({
+          success: true,
+          path: '/resolved/video.mp4',
+        });
+        mockHandleAccessCheck.mockReturnValue(false);
+        mockHlsManager = {
+          getSegmentKey: vi.fn().mockResolvedValue(key),
+          getSessionDir: vi.fn().mockReturnValue('/tmp/hls/mock-session-id'),
+          touchSession: vi.fn(),
+          acquireSession: vi.fn(),
+          releaseSession: vi.fn(),
+        };
+        // @ts-expect-error - Mocking static method
+        HlsManager.getInstance.mockReturnValue(mockHlsManager);
+      });
+
+      it('serves the key uncached', async () => {
+        await serveHlsSegment(req, res, '/path/to/video.mp4', 'enc.key');
+
+        expect(mockHlsManager.getSegmentKey).toHaveBeenCalledWith(
+          'mock-session-id',
+        );
+        expect(res.set).toHaveBeenCalledWith({
+          'Content-Type': 'application/octet-stream',
+          'Cache-Control': 'no-store',
+        });
+        expect(res.send).toHaveBeenCalledWith(key);
+        expect(res.sendFile).not.toHaveBeenCalled();
+        expect(mockHlsManager.touchSession).toHaveBeenCalledWith(
+          'mock-session-id',
+        );
+      });
+
+      it('answers 404 when the session has no key', async () => {
+        mockHlsManager.getSegmentKey.mockResolvedValue(null);
+
+        await serveHlsSegment(req, res, '/path/to/video.mp4', 'enc.key');
+
+        expect(res.status).toHaveBeenCalledWith(404);
+        expect(res.send).toHaveBeenCalledWith('Key not found');
+      });
+
+      it('checks access like a segment', async () => {
+        mockValidateFileAccess.mockResolvedValue({ success: false });
+        mockHandleAccessCheck.mockImplementation((r) => {
+          r.status(403).send('Access denied');
+          return true;
+        });
+
+        await serveHlsSegment(req, res, '/path/to/video.mp4', 'enc.key');
+
+        expect(res.status).toHaveBeenCalledWith(403);
+        expect(mockHlsManager.getSegmentKey).not.toHaveBeenCalled();
+      });
     });
 
     it('should handle access denied', async () => {

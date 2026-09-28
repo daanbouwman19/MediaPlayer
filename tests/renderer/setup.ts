@@ -1,7 +1,16 @@
 import { beforeEach } from 'vite-plus/test';
 import { setActivePinia, createPinia } from 'pinia';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 
 process.env.GLOBAL_PASSWORD = '';
+// Code under test that encrypts (e.g. the media caches) creates a master key
+// on first use: keep it out of the working directory.
+if (!process.env.MASTER_KEY_DIR) {
+  process.env.MASTER_KEY_DIR = path.join(os.tmpdir(), 'mediaplayer-test-keys');
+  fs.mkdirSync(process.env.MASTER_KEY_DIR, { recursive: true });
+}
 
 /**
  * Global setup for renderer tests.
