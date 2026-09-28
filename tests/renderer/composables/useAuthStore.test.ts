@@ -3,16 +3,24 @@ import { setActivePinia, createPinia } from 'pinia';
 import { useAuthStore } from '@/composables/useAuthStore';
 import { HttpError } from '@/api/http-error';
 
-const { mockGetLockStatus, mockUnlock } = vi.hoisted(() => ({
-  mockGetLockStatus: vi.fn(),
-  mockUnlock: vi.fn(),
-}));
+const { mockGetLockStatus, mockUnlock, mockLock, mockSetPin, mockClearPin } =
+  vi.hoisted(() => ({
+    mockGetLockStatus: vi.fn(),
+    mockUnlock: vi.fn(),
+    mockLock: vi.fn(),
+    mockSetPin: vi.fn(),
+    mockClearPin: vi.fn(),
+  }));
 
 vi.mock('@/api/WebAdapter', () => {
   return {
     WebAdapter: class {
       getLockStatus = mockGetLockStatus;
       unlock = mockUnlock;
+      lock = mockLock;
+      setPin = mockSetPin;
+      clearPin = mockClearPin;
+      supportsLocalPin = false;
     },
   };
 });
@@ -22,6 +30,10 @@ vi.mock('@/api/ElectronAdapter', () => {
     ElectronAdapter: class {
       getLockStatus = mockGetLockStatus;
       unlock = mockUnlock;
+      lock = mockLock;
+      setPin = mockSetPin;
+      clearPin = mockClearPin;
+      supportsLocalPin = false;
     },
   };
 });
@@ -140,5 +152,60 @@ describe('useAuthStore', () => {
     expect(consoleSpy).toHaveBeenCalledWith('Unlock failed:', failure);
 
     consoleSpy.mockRestore();
+  });
+
+  describe('lock', () => {
+    it('shows the lock screen and ends the session when a lock is set', async () => {
+      mockGetLockStatus.mockResolvedValueOnce({
+        enabled: true,
+        isAuthenticated: true,
+      });
+      await store.checkLockStatus();
+      mockLock.mockResolvedValueOnce(undefined);
+
+      await store.lock();
+
+      expect(store.isLocked).toBe(true);
+      expect(store.isCovered).toBe(false);
+      expect(mockLock).toHaveBeenCalled();
+    });
+
+    it('stays locked when ending the session fails', async () => {
+      const consoleSpy = vi
+        .spyOn(console, 'error')
+        .mockImplementation(() => {});
+      mockGetLockStatus.mockResolvedValueOnce({
+        enabled: true,
+        isAuthenticated: true,
+      });
+      await store.checkLockStatus();
+      mockLock.mockRejectedValueOnce(new Error('offline'));
+
+      await store.lock();
+
+      expect(store.isLocked).toBe(true);
+      consoleSpy.mockRestore();
+    });
+
+    it('falls back to the neutral cover without a password', async () => {
+      await store.lock();
+      expect(store.isLocked).toBe(false);
+      expect(store.isCovered).toBe(true);
+      expect(mockLock).not.toHaveBeenCalled();
+
+      store.uncover();
+      expect(store.isCovered).toBe(false);
+    });
+  });
+
+  it('setPin and clearPin toggle whether the lock is enabled', async () => {
+    mockSetPin.mockResolvedValueOnce(undefined);
+    await store.setPin('1234');
+    expect(mockSetPin).toHaveBeenCalledWith('1234');
+    expect(store.isEnabled).toBe(true);
+
+    mockClearPin.mockResolvedValueOnce(undefined);
+    await store.clearPin();
+    expect(store.isEnabled).toBe(false);
   });
 });

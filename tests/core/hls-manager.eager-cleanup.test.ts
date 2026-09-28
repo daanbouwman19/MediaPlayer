@@ -28,6 +28,8 @@ vi.mock('fs/promises', () => ({
     rm: mockFsRm,
     readdir: mockFsReaddir,
     stat: mockFsStat,
+    // The segment key files
+    writeFile: vi.fn().mockResolvedValue(undefined),
   },
   mkdir: mockFsMkdir,
   rm: mockFsRm,

@@ -78,6 +78,8 @@ import {
   HlsBusyError,
 } from '../../src/core/media/hls-manager.ts';
 import { MAX_CONCURRENT_TRANSCODES } from '../../src/core/media/constants.ts';
+import { openBuffer, sealBuffer } from '../../src/core/auth/cache-crypto.ts';
+import { getHlsTranscodeArgs } from '../../src/infrastructure/ffmpeg-utils.ts';
 
 /** Size and modification time of every source file, unless a test changes them. */
 const SOURCE_SIZE = 5000;
@@ -179,6 +181,83 @@ describe('HlsManager lifecycle', () => {
       expect.any(Array),
       expect.objectContaining({ windowsHide: true }),
     );
+  });
+
+  describe('segment encryption', () => {
+    const written = (name: string) =>
+      mockFsWriteFile.mock.calls.find(
+        ([file]) => file === path.join(dirOf('enc'), name),
+      );
+
+    it('encrypts segments with a fresh key and deletes the plaintext key once the playlist exists', async () => {
+      const order: string[] = [];
+      mockFsRm.mockImplementation(async (file: string) => {
+        order.push(`rm ${path.basename(file)}`);
+      });
+      mockSpawn.mockImplementationOnce(() => {
+        order.push('spawn');
+        return createMockProcess();
+      });
+      const promise = hlsManager.ensureSession('enc', '/videos/enc.mkv');
+      await vi.advanceTimersByTimeAsync(0);
+      await promise;
+
+      const keyInfo = path.join(dirOf('enc'), '.keyinfo');
+      expect(getHlsTranscodeArgs).toHaveBeenLastCalledWith(
+        '/videos/enc.mkv',
+        expect.any(String),
+        expect.any(String),
+        expect.any(Number),
+        expect.objectContaining({ keyInfoPath: keyInfo }),
+      );
+      const plainKey = written('.segment.key')?.[1] as Buffer;
+      expect(plainKey).toHaveLength(16);
+      const [uri, keyPath, iv] = String(written('.keyinfo')?.[1]).split('\n');
+      expect(uri).toBe('enc.key');
+      expect(keyPath).toBe(path.join(dirOf('enc'), '.segment.key'));
+      expect(iv).toMatch(/^[0-9a-f]{32}$/);
+      // The key kept for serving is stored encrypted.
+      const sealed = written('key.sealed')?.[1] as Buffer;
+      expect(sealed.includes(plainKey)).toBe(false);
+      expect(openBuffer('hls', sealed)).toEqual(plainKey);
+      // Plaintext key files are removed after ffmpeg has started.
+      expect(order.slice(order.indexOf('spawn'))).toEqual([
+        'spawn',
+        'rm .segment.key',
+        'rm .keyinfo',
+      ]);
+
+      mockFsReadFile.mockImplementation(async (file: string) => {
+        if (file === path.join(dirOf('enc'), 'key.sealed')) return sealed;
+        throw new Error('ENOENT');
+      });
+      await expect(hlsManager.getSegmentKey('enc')).resolves.toEqual(plainKey);
+      await expect(hlsManager.getSegmentKey('other')).resolves.toBeNull();
+    });
+
+    it('also deletes the plaintext key when ffmpeg fails before the playlist', async () => {
+      mockFsStat.mockRejectedValue(new Error('ENOENT'));
+      const proc = createMockProcess();
+      mockSpawn.mockReturnValueOnce(proc);
+      const promise = hlsManager.ensureSession('enc', '/videos/enc.mkv');
+      promise.catch(() => {});
+      await vi.advanceTimersByTimeAsync(1);
+      proc.emit('close', 1, null);
+      await vi.advanceTimersByTimeAsync(600);
+
+      await expect(promise).rejects.toThrow();
+      expect(mockFsRm).toHaveBeenCalledWith(
+        path.join(dirOf('enc'), '.segment.key'),
+        { force: true },
+      );
+    });
+
+    it('has no key without a cache directory', async () => {
+      HlsManager.resetInstance();
+      await expect(
+        HlsManager.getInstance().getSegmentKey('enc'),
+      ).resolves.toBeNull();
+    });
   });
 
   it('cleans up and throws if FFmpeg fails during startup', async () => {
@@ -504,7 +583,8 @@ describe('HlsManager lifecycle', () => {
       await stopping;
       await vi.advanceTimersByTimeAsync(0);
       await restarted;
-      expect(order).toEqual([
+      // (followed by the deletion of the plaintext key files)
+      expect(order.slice(0, 4)).toEqual([
         'old rm started',
         'old rm done',
         'new rm',
@@ -553,15 +633,19 @@ describe('HlsManager lifecycle', () => {
 
   describe('retained pre-transcodes (F25)', () => {
     const retainedPlaylist =
-      '#EXTM3U\n#EXT-X-PLAYLIST-TYPE:EVENT\n#EXTINF:6.0,\nseg-000.ts\n#EXTINF:4.5,\nseg-001.ts\n#EXT-X-ENDLIST\n';
+      '#EXTM3U\n#EXT-X-PLAYLIST-TYPE:EVENT\n#EXT-X-KEY:METHOD=AES-128,URI="enc.key",IV=0x01\n#EXTINF:6.0,\nseg-000.ts\n#EXTINF:4.5,\nseg-001.ts\n#EXT-X-ENDLIST\n';
     const sourceMarker = JSON.stringify({
       size: SOURCE_SIZE,
       mtimeMs: SOURCE_MTIME,
     });
+    const sealedKey = sealBuffer('hls', Buffer.alloc(16, 7));
 
     /** Puts retained outputs in the cache directory, keyed by session id. */
     function retainedOnDisk(
-      outputs: Record<string, { marker?: string; playlist?: string }>,
+      outputs: Record<
+        string,
+        { marker?: string; playlist?: string; sealedKey?: Buffer | null }
+      >,
     ) {
       mockFsReadFile.mockImplementation(async (p: string) => {
         for (const [id, output] of Object.entries(outputs)) {
@@ -570,6 +654,11 @@ describe('HlsManager lifecycle', () => {
           }
           if (p === path.join(dirOf(id), 'playlist.m3u8')) {
             return output.playlist ?? retainedPlaylist;
+          }
+          if (p === path.join(dirOf(id), 'key.sealed')) {
+            const key =
+              output.sealedKey === undefined ? sealedKey : output.sealedKey;
+            if (key) return key;
           }
         }
         throw new Error('ENOENT');
@@ -656,7 +745,52 @@ describe('HlsManager lifecycle', () => {
       resolveSize(SOURCE_SIZE);
 
       await expect(retaining).resolves.toBe(false);
-      expect(mockFsWriteFile).not.toHaveBeenCalled();
+      expect(mockFsWriteFile).not.toHaveBeenCalledWith(
+        path.join(dirOf('cleared-early'), '.retained'),
+        expect.anything(),
+      );
+    });
+
+    it.each([
+      ['has no key (from before encryption)', { sealedKey: null }],
+      [
+        'has an unreadable key',
+        { sealedKey: Buffer.from('encrypted with another master key') },
+      ],
+      [
+        'has an unencrypted playlist',
+        {
+          playlist: '#EXTM3U\n#EXTINF:6.0,\nseg-000.ts\n#EXT-X-ENDLIST\n',
+        },
+      ],
+    ])(
+      'transcodes again when the retained output %s',
+      async (_label, output) => {
+        retainedOnDisk({ legacy: output });
+        mockSpawn.mockReturnValueOnce(createMockProcess());
+
+        const promise = hlsManager.ensureSession('legacy', '/v.mkv');
+        await vi.advanceTimersByTimeAsync(0);
+        await promise;
+
+        expect(mockSpawn).toHaveBeenCalledTimes(1);
+        expect(mockFsRm).toHaveBeenCalledWith(dirOf('legacy'), {
+          recursive: true,
+          force: true,
+        });
+      },
+    );
+
+    it('init deletes retained output from before encryption', async () => {
+      mockFsReaddir.mockResolvedValue(['plain']);
+      retainedOnDisk({ plain: { sealedKey: null } });
+
+      await hlsManager.init();
+
+      expect(mockFsRm).toHaveBeenCalledWith(dirOf('plain'), {
+        recursive: true,
+        force: true,
+      });
     });
 
     it('reuses a retained output from disk (e.g. after a restart) without transcoding', async () => {

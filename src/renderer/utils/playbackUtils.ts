@@ -25,3 +25,18 @@ export function isWatched(
   if (!position || !duration || duration <= 0) return false;
   return position / duration >= WATCHED_THRESHOLD;
 }
+
+/**
+ * Picks a random start position that still leaves `tailSeconds` to play
+ * before the end. Returns 0 when the video is too short for that.
+ */
+export function pickRandomStartTime(
+  duration: number,
+  tailSeconds: number,
+  random: () => number = Math.random,
+): number {
+  if (!Number.isFinite(duration) || duration <= 0) return 0;
+  const latest = duration - Math.max(0, tailSeconds);
+  if (latest <= 1) return 0;
+  return Math.floor(random() * latest);
+}

@@ -43,6 +43,7 @@ import {
 } from './renderer-security';
 
 import { registerAuthHandlers } from './ipc/auth-controller';
+import { registerLockTriggers } from './lock-triggers';
 import { registerSystemHandlers } from './ipc/system-controller';
 import { registerMediaHandlers } from './ipc/media-controller';
 import { registerDatabaseHandlers } from './ipc/database-controller';
@@ -199,6 +200,7 @@ async function startApp() {
   }
 
   isStartupComplete = true;
+  registerLockTriggers();
   // The renderer reads the server port once when it loads, so the window is
   // only created once the server is listening.
   createWindow();

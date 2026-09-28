@@ -51,9 +51,9 @@ describe('media-utils unit tests', () => {
       const cacheDir = '/cache';
       const result = getThumbnailCachePath(filePath, cacheDir);
 
-      // Match path ending with /cache/<hash>.jpg, allowing either / or \ separator
-      expect(result).toMatch(/[\\/]cache[\\/][a-f0-9]{64}\.jpg$/);
-      expect(path.basename(result, '.jpg')).toBe(
+      // Match path ending with /cache/<hash>.jpg.enc, allowing either / or \ separator
+      expect(result).toMatch(/[\\/]cache[\\/][a-f0-9]{64}\.jpg\.enc$/);
+      expect(path.basename(result, '.jpg.enc')).toBe(
         crypto.createHash('sha256').update(filePath).digest('hex'),
       );
 

@@ -101,9 +101,11 @@
       :is-open="isShortcutsModalOpen"
       @close="isShortcutsModalOpen = false"
     />
+    <PrivacySettingsModal />
     <ToastContainer />
     <LoadingMask v-if="isScanning" />
     <LockScreen v-if="isAuthInitialized && isLocked" />
+    <NeutralCover v-else-if="isCovered" />
   </div>
 </template>
 
@@ -125,6 +127,8 @@ import KeyboardShortcutsModal from './components/organisms/KeyboardShortcutsModa
 import ToastContainer from './components/organisms/ToastContainer.vue';
 import LoadingMask from './components/atoms/LoadingMask.vue';
 import LockScreen from './features/auth/LockScreen.vue';
+import NeutralCover from './features/auth/NeutralCover.vue';
+import PrivacySettingsModal from './features/auth/PrivacySettingsModal.vue';
 import MenuIcon from './components/atoms/icons/MenuIcon.vue';
 import HelpIcon from './components/atoms/icons/HelpIcon.vue';
 import { useLibraryStore } from './composables/useLibraryStore';
@@ -134,6 +138,8 @@ import { useUIStore } from './composables/useUIStore';
 import { useAuthStore } from './composables/useAuthStore';
 import { useSlideshow } from './composables/useSlideshow';
 import { useTheme } from './composables/useTheme';
+import { usePanic } from './composables/usePanic';
+import { useAutoLock } from './composables/useAutoLock';
 import {
   isActivatableTarget,
   isModalOpen,
@@ -151,10 +157,16 @@ const { viewMode, playlistToEdit, isControlsVisible, isSidebarVisible } =
   storeToRefs(uiStore);
 const { isSlideshowActive, mainVideoElement } = storeToRefs(playerStore); // Destructure from the instance
 const { currentItem: currentMediaItem } = storeToRefs(playlistStore);
-const { isLocked, isInitialized: isAuthInitialized } = storeToRefs(authStore);
+const {
+  isLocked,
+  isCovered,
+  isInitialized: isAuthInitialized,
+} = storeToRefs(authStore);
 const initializeApp = libraryStore.loadInitialData;
 const { navigateMedia, toggleSlideshowTimer } = useSlideshow();
 const { initTheme, cleanupTheme } = useTheme();
+usePanic();
+useAutoLock();
 initTheme();
 
 const isShortcutsModalOpen = ref(false);

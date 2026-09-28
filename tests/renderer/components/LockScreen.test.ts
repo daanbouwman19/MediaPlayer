@@ -35,6 +35,14 @@ describe('LockScreen.vue', () => {
     expect(useLibraryStore().loadInitialData).toHaveBeenCalled();
   });
 
+  it('does not reload the library when unlocking after a re-lock', async () => {
+    useLibraryStore().hasLoadedInitialData = true;
+    const wrapper = mount(LockScreen);
+    await submit(wrapper, 'correct-password');
+
+    expect(useLibraryStore().loadInitialData).not.toHaveBeenCalled();
+  });
+
   it('handles failed unlock and shows error message', async () => {
     vi.mocked(useAuthStore().unlock).mockResolvedValueOnce('invalid');
     const wrapper = mount(LockScreen);

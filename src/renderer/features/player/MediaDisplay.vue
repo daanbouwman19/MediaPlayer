@@ -249,7 +249,7 @@ import VideoPlayer from './VideoPlayer.vue';
 import type VRVideoPlayerType from './VRVideoPlayer.vue';
 const VRVideoPlayer = defineAsyncComponent(() => import('./VRVideoPlayer.vue'));
 import { isMediaFileImage } from '@/utils/mediaUtils';
-import { WATCHED_THRESHOLD } from '@/utils/playbackUtils';
+import { pickRandomStartTime, WATCHED_THRESHOLD } from '@/utils/playbackUtils';
 import {
   isActivatableTarget,
   isModalOpen,
@@ -271,7 +271,7 @@ const toast = useToast();
 
 const { imageExtensionsSet, mediaDirectories, thumbnailUrlGenerator } =
   storeToRefs(libraryStore);
-const { pauseTimerOnPlay, isTimerRunning, mainVideoElement } =
+const { pauseTimerOnPlay, isTimerRunning, mainVideoElement, isMuted } =
   storeToRefs(playerStore);
 const { currentItem: currentMediaItem } = storeToRefs(playlistStore);
 const { isControlsVisible, isSourcesModalVisible, isSidebarVisible } =
@@ -304,7 +304,6 @@ const vrPlayerRef = ref<InstanceType<typeof VRVideoPlayerType> | null>(null);
 const isVrMode = ref(false);
 const savedCurrentTime = ref(0);
 const isOpeningVlc = ref(false);
-const isMuted = ref(false);
 const isPlaying = ref(false);
 /** Duration of the current item as stored in the library (0 if unknown). */
 const itemDuration = ref(0);
@@ -313,6 +312,8 @@ const watchedSegments = ref<WatchedSegment[]>([]);
 // Path whose stored segments have been loaded into watchedSegments. Saving
 // replaces the stored list, so nothing is written before that load.
 let segmentsOwnerPath: string | null = null;
+// Whether savedCurrentTime holds a random start (not a resume position).
+let randomStartApplied = false;
 let segmentsDirty = false;
 
 const SEEK_STEP_S = 5;
@@ -378,6 +379,13 @@ const toggleFullscreen = () => {
 const tryTranscoding = async (requestId?: number) => {
   const item = currentMediaItem.value;
   if (!item) return;
+
+  // A transcode plays one timeline from 0 while ffmpeg catches up, so a
+  // random start far into the file would stall; start at the beginning.
+  if (randomStartApplied) {
+    savedCurrentTime.value = 0;
+    randomStartApplied = false;
+  }
 
   // Use provided requestId or current one if not provided
   const effectiveRequestId =
@@ -579,6 +587,7 @@ watch(
     lastPositionUpdate.value = 0;
     lastSegmentsUpdate.value = Date.now();
     savedCurrentTime.value = 0;
+    randomStartApplied = false;
     itemDuration.value = 0;
     watchedSegments.value = [];
     segmentsOwnerPath = null;
@@ -622,6 +631,16 @@ watch(
             (duration === 0 || saved / duration < WATCHED_THRESHOLD)
           ) {
             savedCurrentTime.value = saved;
+          } else if (
+            playerStore.randomStart &&
+            playerStore.isSlideshowActive &&
+            duration > 0
+          ) {
+            savedCurrentTime.value = pickRandomStartTime(
+              duration,
+              playerStore.timerDuration,
+            );
+            randomStartApplied = savedCurrentTime.value > 0;
           }
           watchedSegments.value = parseWatchedSegments(
             meta[newItem.path]?.watchedSegments,
@@ -694,7 +713,11 @@ const checkAndPauseTimerIfLongVideo = () => {
       const nativeDuration = videoElement.value?.duration || 0;
       const videoDuration = transcodedDuration.value || nativeDuration;
 
-      if (videoDuration > playerStore.timerDuration) {
+      // In 'timer' mode a long video is cut off when the countdown ends.
+      if (
+        playerStore.videoAdvance === 'end' &&
+        videoDuration > playerStore.timerDuration
+      ) {
         pauseSlideshowTimerForVideo();
       }
     }

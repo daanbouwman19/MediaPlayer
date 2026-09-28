@@ -9,6 +9,7 @@ import path from 'path';
 import fs from 'fs/promises';
 
 import { HlsManager } from './hls-manager.ts';
+import { HLS_KEY_URI } from './constants.ts';
 import { getAuthorizedPath } from '../auth/access-utils.ts';
 import { getQueryParam } from '../network/http-utils.ts';
 
@@ -115,10 +116,13 @@ export async function serveHlsPlaylist(
     const encodedFile = encodeURIComponent(fileQuery || '');
 
     const segmentRegex = /(seg-\d+\.ts)/g;
-    playlistContent = playlistContent.replace(
-      segmentRegex,
-      `$1?file=${encodedFile}`,
-    );
+    playlistContent = playlistContent
+      .replace(segmentRegex, `$1?file=${encodedFile}`)
+      // The segment key is served by the segment route too.
+      .replaceAll(
+        `URI="${HLS_KEY_URI}"`,
+        `URI="${HLS_KEY_URI}?file=${encodedFile}"`,
+      );
 
     res.set('Content-Type', 'application/vnd.apple.mpegurl');
     res.send(playlistContent);
@@ -142,8 +146,24 @@ export async function serveHlsPlaylist(
   }
 }
 
+/** Serves the AES-128 key of a session's segments. */
+async function serveHlsKey(res: Response, sessionId: string) {
+  const hlsManager = HlsManager.getInstance();
+  const key = await hlsManager.getSegmentKey(sessionId);
+  if (!key) {
+    res.status(404).send('Key not found');
+    return;
+  }
+  hlsManager.touchSession(sessionId);
+  res.set({
+    'Content-Type': 'application/octet-stream',
+    'Cache-Control': 'no-store',
+  });
+  res.send(key);
+}
+
 /**
- * Serves an HLS Segment.
+ * Serves an HLS Segment, or the segments' key.
  */
 export async function serveHlsSegment(
   _req: Request,
@@ -154,13 +174,18 @@ export async function serveHlsSegment(
   const authorizedPath = await getAuthorizedPath(res, filePath);
   if (!authorizedPath) return;
 
+  const isKey = segmentName === HLS_KEY_URI;
   // Security check: segmentName must match the expected pattern strictly
-  if (!/^seg-\d+\.ts$/.test(segmentName)) {
+  if (!isKey && !/^seg-\d+\.ts$/.test(segmentName)) {
     res.status(400).send('Invalid segment name');
     return;
   }
 
   const sessionId = await generateSessionId(authorizedPath);
+  if (isKey) {
+    await serveHlsKey(res, sessionId);
+    return;
+  }
   const hlsManager = HlsManager.getInstance();
   const sessionDir = hlsManager.getSessionDir(sessionId);
 

@@ -34,14 +34,14 @@ class DriveRangeStream extends Readable {
 
   constructor(
     private readonly fileId: string,
-    private readonly cachePath: string | null,
+    private readonly cache: DriveCachedFile | null,
     start: number,
     cacheEnd: number,
     private readonly end: number,
   ) {
     super();
     this.offset = start;
-    this.cacheEnd = cachePath ? cacheEnd : -1;
+    this.cacheEnd = cache ? cacheEnd : -1;
   }
 
   override _read(): void {
@@ -72,12 +72,9 @@ class DriveRangeStream extends Readable {
     }
     this.opening = true;
     try {
-      if (this.cachePath && this.offset <= this.cacheEnd) {
+      if (this.cache && this.offset <= this.cacheEnd) {
         this.attach(
-          fs.createReadStream(this.cachePath, {
-            start: this.offset,
-            end: this.cacheEnd,
-          }),
+          this.cache.readRange(this.offset, this.cacheEnd),
           this.cacheEnd,
           true,
         );
@@ -238,19 +235,19 @@ export async function getDriveStreamWithCache(
   }
   const length = end - start + 1;
 
-  let cachePath: string | null = null;
+  let cache: DriveCachedFile | null = null;
   let cacheEnd = -1;
   // A cache sized for a different revision of the file cannot be trusted.
   if (cached && cached.totalSize === totalSize) {
     const cachedBytes = Math.min(await getCachedBytes(cached.path), totalSize);
     if (cachedBytes > start) {
-      cachePath = cached.path;
+      cache = cached;
       cacheEnd = Math.min(end, cachedBytes - 1);
     }
   }
 
   return {
-    stream: new DriveRangeStream(fileId, cachePath, start, cacheEnd, end),
+    stream: new DriveRangeStream(fileId, cache, start, cacheEnd, end),
     length,
   };
 }

@@ -24,6 +24,10 @@ export const useAuthStore = defineStore('auth', () => {
   const isLocked = ref(false);
   const isInitialized = ref(false);
   const isEnabled = ref(false);
+  // Neutral cover shown by lock() when no password or PIN is set: it hides
+  // the screen but any key or click dismisses it.
+  const isCovered = ref(false);
+  const supportsLocalPin = backend.supportsLocalPin;
 
   async function checkLockStatus() {
     try {
@@ -55,11 +59,49 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  /**
+   * Hides the library: behind the lock screen when a password or PIN is
+   * set, otherwise behind the neutral cover.
+   */
+  async function lock() {
+    if (!isEnabled.value) {
+      isCovered.value = true;
+      return;
+    }
+    // Show the lock screen first; ending the session can take a round trip.
+    isLocked.value = true;
+    try {
+      await backend.lock();
+    } catch (error) {
+      console.error('Failed to end the unlocked session:', error);
+    }
+  }
+
+  function uncover() {
+    isCovered.value = false;
+  }
+
+  async function setPin(pin: string) {
+    await backend.setPin(pin);
+    isEnabled.value = true;
+  }
+
+  async function clearPin() {
+    await backend.clearPin();
+    isEnabled.value = false;
+  }
+
   return {
     isLocked,
     isInitialized,
     isEnabled,
+    isCovered,
+    supportsLocalPin,
     checkLockStatus,
     unlock,
+    lock,
+    uncover,
+    setPin,
+    clearPin,
   };
 });

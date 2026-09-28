@@ -1,8 +1,22 @@
 import { mount, flushPromises } from '@vue/test-utils';
-import { describe, it, expect } from 'vite-plus/test';
+import { describe, it, expect, beforeEach } from 'vite-plus/test';
+import { createPinia, setActivePinia } from 'pinia';
 import KeyboardShortcutsModal from '../../src/renderer/components/organisms/KeyboardShortcutsModal.vue';
 
 describe('KeyboardShortcutsModal', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+  });
+
+  it('shows the configured panic key', () => {
+    const wrapper = mount(KeyboardShortcutsModal, {
+      props: { isOpen: true },
+      global: { stubs: { CloseIcon: true } },
+    });
+    expect(wrapper.text()).toContain('Panic: pause and hide');
+    expect(wrapper.text()).toContain('`');
+  });
+
   it('does not render when isOpen is false', () => {
     const wrapper = mount(KeyboardShortcutsModal, {
       props: {

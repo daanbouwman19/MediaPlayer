@@ -18,19 +18,23 @@
         <h2 id="lock-screen-title" class="text-3xl font-bold text-white mb-2">
           Media Locked
         </h2>
-        <p class="text-white/60">Enter the password to access your library</p>
+        <p class="text-white/60">
+          Enter the {{ secretName }} to access your library
+        </p>
       </div>
 
       <form class="space-y-4" @submit.prevent="handleUnlock">
         <div class="relative">
-          <label for="lock-screen-password" class="sr-only">Password</label>
+          <label for="lock-screen-password" class="sr-only">{{
+            secretLabel
+          }}</label>
           <input
             id="lock-screen-password"
             ref="passwordInput"
             v-model="password"
             type="password"
             autocomplete="current-password"
-            placeholder="Password"
+            :placeholder="secretLabel"
             class="w-full bg-white/5 border border-white/10 rounded-xl px-5 py-4 text-white focus:outline-none focus:ring-2 focus:ring-accent focus:bg-white/10 transition-all text-lg placeholder:text-white/20"
             :disabled="isUnlocking"
           />
@@ -67,6 +71,10 @@ import { useFocusTrap } from '@/composables/useFocusTrap';
 const authStore = useAuthStore();
 const libraryStore = useLibraryStore();
 
+// The desktop app locks with a PIN, the web server with a password.
+const secretName = authStore.supportsLocalPin ? 'PIN' : 'password';
+const secretLabel = authStore.supportsLocalPin ? 'PIN' : 'Password';
+
 const password = ref('');
 const isUnlocking = ref(false);
 const error = ref('');
@@ -85,11 +93,14 @@ const handleUnlock = async () => {
     const result = await authStore.unlock(password.value);
     switch (result) {
       case 'ok':
-        // Reload initial data after successful unlock
-        await libraryStore.loadInitialData();
+        // The first unlock loads the library; after a re-lock (panic key,
+        // auto-lock) it is still in memory.
+        if (!libraryStore.hasLoadedInitialData) {
+          await libraryStore.loadInitialData();
+        }
         return;
       case 'invalid':
-        error.value = 'Invalid password. Please try again.';
+        error.value = `Invalid ${secretName}. Please try again.`;
         password.value = '';
         break;
       case 'rateLimited':
@@ -99,7 +110,7 @@ const handleUnlock = async () => {
         break;
       case 'error':
         // Network or server failure: the password was not checked either.
-        error.value = 'Could not verify the password. Please try again.';
+        error.value = `Could not verify the ${secretName}. Please try again.`;
         break;
     }
   } catch {

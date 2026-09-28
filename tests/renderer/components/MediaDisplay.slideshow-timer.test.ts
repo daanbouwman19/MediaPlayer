@@ -19,6 +19,7 @@ import { usePlayerStore } from '@/composables/usePlayerStore';
 import { usePlaylistStore } from '@/composables/usePlaylistStore';
 import { useMediaLoader } from '@/composables/useMediaLoader';
 import { useTranscoder } from '@/composables/useTranscoder';
+import { api } from '@/api';
 
 // F52: MediaDisplay together with the real slideshow logic. Only a countdown
 // that a long video suspended may resume on its own.
@@ -69,6 +70,7 @@ describe('MediaDisplay slideshow countdown (real useSlideshow)', () => {
       isVideoSupported: ref(true),
       loadMedia: vi.fn().mockResolvedValue(undefined),
       cancelPendingLoad: vi.fn(),
+      currentLoadRequestId: ref(0),
     });
     (useTranscoder as Mock).mockReturnValue({
       isTranscodingMode: ref(false),
@@ -146,5 +148,98 @@ describe('MediaDisplay slideshow countdown (real useSlideshow)', () => {
     expect(usePlayerStore().isTimerRunning).toBe(false);
     videoPlayer(wrapper).vm.$emit('pause');
     expect(usePlayerStore().isTimerRunning).toBe(true);
+  });
+
+  it("in 'timer' mode a long video doesn't suspend the countdown", async () => {
+    usePlayerStore().videoAdvance = 'timer';
+    usePlaylistStore().currentItem = { name: 'long.mp4', path: '/long.mp4' };
+    useSlideshow().resumeSlideshowTimer();
+
+    const wrapper = mount(MediaDisplay);
+    await flushPromises();
+    videoPlayer(wrapper).vm.$emit('loadedmetadata');
+
+    expect(usePlayerStore().isTimerRunning).toBe(true);
+    expect(usePlayerStore().isTimerPausedForVideo).toBe(false);
+  });
+
+  it("'Pause Timer' still wins over 'timer' mode", async () => {
+    const player = usePlayerStore();
+    player.videoAdvance = 'timer';
+    player.pauseTimerOnPlay = true;
+    usePlaylistStore().currentItem = { name: 'long.mp4', path: '/long.mp4' };
+    useSlideshow().resumeSlideshowTimer();
+
+    const wrapper = mount(MediaDisplay);
+    await flushPromises();
+    videoPlayer(wrapper).vm.$emit('play');
+
+    expect(player.isTimerPausedForVideo).toBe(true);
+  });
+
+  describe('random start', () => {
+    beforeEach(() => {
+      vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    });
+
+    afterEach(() => {
+      vi.mocked(Math.random).mockRestore();
+    });
+
+    const mountVideo = async (meta: Record<string, unknown>) => {
+      (api.getMetadata as Mock).mockResolvedValue({ '/v.mp4': meta });
+      usePlaylistStore().currentItem = { name: 'v.mp4', path: '/v.mp4' };
+      const wrapper = mount(MediaDisplay);
+      await flushPromises();
+      return wrapper;
+    };
+
+    it('starts a slideshow video at a random point', async () => {
+      usePlayerStore().randomStart = true;
+      const wrapper = await mountVideo({ duration: 100 });
+      // 0.5 of the 95 s that leave the 5 s timer to play.
+      expect((wrapper.vm as any).currentVideoTime).toBe(47);
+    });
+
+    it('prefers a saved resume position', async () => {
+      usePlayerStore().randomStart = true;
+      const wrapper = await mountVideo({
+        duration: 100,
+        playbackPosition: 30,
+      });
+      expect((wrapper.vm as any).currentVideoTime).toBe(30);
+    });
+
+    it('is off outside a slideshow or when disabled', async () => {
+      usePlayerStore().randomStart = true;
+      usePlayerStore().isSlideshowActive = false;
+      let wrapper = await mountVideo({ duration: 100 });
+      expect((wrapper.vm as any).currentVideoTime).toBe(0);
+      wrapper.unmount();
+
+      usePlayerStore().isSlideshowActive = true;
+      usePlayerStore().randomStart = false;
+      wrapper = await mountVideo({ duration: 100 });
+      expect((wrapper.vm as any).currentVideoTime).toBe(0);
+    });
+
+    it('falls back to the beginning when the file needs transcoding', async () => {
+      usePlayerStore().randomStart = true;
+      const wrapper = await mountVideo({ duration: 100 });
+      expect((wrapper.vm as any).currentVideoTime).toBe(47);
+
+      await (wrapper.vm as any).tryTranscoding();
+      expect((wrapper.vm as any).currentVideoTime).toBe(0);
+    });
+
+    it('keeps a resume position when transcoding', async () => {
+      usePlayerStore().randomStart = true;
+      const wrapper = await mountVideo({
+        duration: 100,
+        playbackPosition: 30,
+      });
+      await (wrapper.vm as any).tryTranscoding();
+      expect((wrapper.vm as any).currentVideoTime).toBe(30);
+    });
   });
 });

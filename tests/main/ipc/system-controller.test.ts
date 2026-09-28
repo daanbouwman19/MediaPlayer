@@ -46,11 +46,21 @@ vi.mock('../../../src/main/local-server', () => ({
   getServerPort: vi.fn(),
 }));
 
+const { mockFromWebContents, mockIsTrusted } = vi.hoisted(() => ({
+  mockFromWebContents: vi.fn(),
+  mockIsTrusted: vi.fn(() => true),
+}));
+
 vi.mock('electron', () => ({
   shell: { openExternal: vi.fn() },
   dialog: { showMessageBox: vi.fn() },
   ipcMain: { on: vi.fn(), handle: vi.fn() },
   nativeTheme: { themeSource: 'system' },
+  BrowserWindow: { fromWebContents: mockFromWebContents },
+}));
+
+vi.mock('../../../src/main/renderer-security', () => ({
+  isTrustedIpcSender: mockIsTrusted,
 }));
 
 describe('system-controller', () => {
@@ -300,6 +310,28 @@ describe('system-controller', () => {
 
       handler({}, 'invalid');
       expect(nativeTheme.themeSource).toBe('system');
+    });
+  });
+
+  describe('MINIMIZE_WINDOW', () => {
+    const getOnHandler = () =>
+      (ipcMain.on as Mock).mock.calls.find(
+        (c) => c[0] === IPC_CHANNELS.MINIMIZE_WINDOW,
+      )![1];
+
+    it('minimizes the sender window', () => {
+      const minimize = vi.fn();
+      mockFromWebContents.mockReturnValue({ minimize });
+      getOnHandler()({ sender: {} });
+      expect(minimize).toHaveBeenCalled();
+    });
+
+    it('ignores untrusted senders', () => {
+      const minimize = vi.fn();
+      mockFromWebContents.mockReturnValue({ minimize });
+      mockIsTrusted.mockReturnValueOnce(false);
+      getOnHandler()({ sender: {} });
+      expect(minimize).not.toHaveBeenCalled();
     });
   });
 });

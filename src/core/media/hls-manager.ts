@@ -1,4 +1,5 @@
 import { spawn, type ChildProcess } from 'child_process';
+import crypto from 'crypto';
 import path from 'path';
 import fs from 'fs/promises';
 import { EventEmitter } from 'events';
@@ -11,11 +12,13 @@ import { createMediaSource } from './media-source.ts';
 import { isDrivePath } from './media-utils.ts';
 import { redactProxyTokens } from './media-proxy.ts';
 import {
+  HLS_KEY_URI,
   HLS_SEGMENT_DURATION,
   MAX_CONCURRENT_TRANSCODES,
 } from './constants.ts';
 import { getFFmpegStaticPath } from '../../infrastructure/ffmpeg-static-path';
 import { getFFmpegEnv } from '../../infrastructure/ffmpeg-env.ts';
+import { openBuffer, sealBuffer } from '../auth/cache-crypto.ts';
 
 export interface HlsProgress {
   currentTime: number; // in seconds
@@ -112,6 +115,57 @@ const STDERR_TAIL_LINES = 5;
 /** Marks an output directory as a finished pre-transcode to keep. */
 const RETAIN_MARKER = '.retained';
 const PLAYLIST_NAME = 'playlist.m3u8';
+/** The session's segment key, encrypted with the HLS cache key. */
+const SEALED_KEY_NAME = 'key.sealed';
+/**
+ * Plaintext key and key info file for ffmpeg. ffmpeg reads them once, before
+ * the first segment, so they are deleted as soon as the playlist exists.
+ */
+const PLAIN_KEY_NAME = '.segment.key';
+const KEY_INFO_NAME = '.keyinfo';
+const SEGMENT_KEY_LENGTH = 16;
+
+/**
+ * Creates a random AES-128 segment key for a new transcode in `dir`: stores
+ * it sealed for serving, and writes the files ffmpeg reads it from.
+ * @returns The key info file to pass to ffmpeg.
+ */
+async function writeSegmentKey(dir: string): Promise<string> {
+  const key = crypto.randomBytes(SEGMENT_KEY_LENGTH);
+  // One random IV per session; ffmpeg would otherwise use 0.
+  const iv = crypto.randomBytes(16).toString('hex');
+  const keyPath = path.join(dir, PLAIN_KEY_NAME);
+  const keyInfoPath = path.join(dir, KEY_INFO_NAME);
+  await fs.writeFile(path.join(dir, SEALED_KEY_NAME), sealBuffer('hls', key));
+  await fs.writeFile(keyPath, key, { mode: 0o600 });
+  await fs.writeFile(keyInfoPath, `${HLS_KEY_URI}\n${keyPath}\n${iv}\n`, {
+    mode: 0o600,
+  });
+  return keyInfoPath;
+}
+
+/** Deletes the plaintext key files ffmpeg no longer needs. */
+async function removePlainKey(dir: string): Promise<void> {
+  await Promise.all(
+    [PLAIN_KEY_NAME, KEY_INFO_NAME].map((name) =>
+      fs.rm(path.join(dir, name), { force: true }).catch((err: unknown) => {
+        console.error(`[HLS] Failed to delete ${name} in ${dir}:`, err);
+      }),
+    ),
+  );
+}
+
+/** The segment key of the output in `dir`; null when it has none (or it is unreadable). */
+async function readSegmentKey(dir: string): Promise<Buffer | null> {
+  let sealed: Buffer;
+  try {
+    sealed = await fs.readFile(path.join(dir, SEALED_KEY_NAME));
+  } catch {
+    return null;
+  }
+  const key = openBuffer('hls', sealed);
+  return key?.length === SEGMENT_KEY_LENGTH ? key : null;
+}
 
 function isTerminal(status: HlsSessionStatus): boolean {
   return (
@@ -197,7 +251,9 @@ interface RetainedOutput {
 
 /**
  * Returns the finished, retained pre-transcode in `dir`, or null when the
- * directory holds anything else.
+ * directory holds anything else. Unencrypted output from earlier versions,
+ * and output whose key cannot be read (e.g. after a master key change), are
+ * not usable: they are transcoded again.
  */
 async function readRetainedOutput(dir: string): Promise<RetainedOutput | null> {
   let marker: string;
@@ -210,6 +266,8 @@ async function readRetainedOutput(dir: string): Promise<RetainedOutput | null> {
   }
   const source = parseSourceIdentity(marker);
   if (!source || !playlist.includes('#EXT-X-ENDLIST')) return null;
+  if (!playlist.includes('#EXT-X-KEY:METHOD=AES-128')) return null;
+  if (!(await readSegmentKey(dir))) return null;
   return { playlist, source };
 }
 
@@ -511,12 +569,14 @@ export class HlsManager extends EventEmitter {
         streamsInfo.audioCodec,
       );
 
+      const keyInfoPath = await writeSegmentKey(session.outputDir);
+      this.assertStarting(session);
       const args = getHlsTranscodeArgs(
         ffmpegInput,
         path.join(session.outputDir, 'seg-%03d.ts'),
         session.playlistPath,
         HLS_SEGMENT_DURATION,
-        { copyVideo, copyAudio },
+        { copyVideo, copyAudio, keyInfoPath },
       );
 
       this.attachProcess(
@@ -528,7 +588,13 @@ export class HlsManager extends EventEmitter {
         }),
       );
 
-      await this.waitForPlaylist(session);
+      try {
+        await this.waitForPlaylist(session);
+      } finally {
+        // ffmpeg has read the key by the time it writes the playlist (or it
+        // has failed): the plaintext copy goes right away.
+        await removePlainKey(session.outputDir);
+      }
       // Short or stream-copied files can finish before the playlist poll
       // notices them: never overwrite a terminal status with ACTIVE.
       if (session.status === HlsSessionStatus.STARTING) {
@@ -888,6 +954,12 @@ export class HlsManager extends EventEmitter {
   getSessionDir(sessionId: string) {
     if (!this.cacheDir) return null;
     return path.join(this.cacheDir, sessionId);
+  }
+
+  /** The AES-128 key of the session's segments; null when there is none. */
+  async getSegmentKey(sessionId: string): Promise<Buffer | null> {
+    const dir = this.getSessionDir(sessionId);
+    return dir ? readSegmentKey(dir) : null;
   }
 
   getSessionProgress(sessionId: string): HlsProgress | null {

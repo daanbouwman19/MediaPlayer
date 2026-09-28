@@ -28,6 +28,15 @@
 
       <button
         class="p-2 text-muted hover:text-accent hover:bg-black/5 rounded-md transition-colors"
+        title="Privacy"
+        aria-label="Privacy settings"
+        @click="openPrivacySettings"
+      >
+        <LockIcon class="w-5 h-5" />
+      </button>
+
+      <button
+        class="p-2 text-muted hover:text-accent hover:bg-black/5 rounded-md transition-colors"
         title="Add Playlist"
         aria-label="Add Playlist"
         @click="openSmartPlaylistModal"
@@ -83,6 +92,7 @@ import CloseIcon from '@/components/atoms/icons/CloseIcon.vue';
 import SettingsIcon from '@/components/atoms/icons/SettingsIcon.vue';
 import PlaylistAddIcon from '@/components/atoms/icons/PlaylistAddIcon.vue';
 import ThemeIcon from '@/components/atoms/icons/ThemeIcon.vue';
+import LockIcon from '@/components/atoms/icons/LockIcon.vue';
 
 defineEmits(['close']);
 
@@ -91,6 +101,7 @@ const {
   themeMode,
   isSourcesModalVisible,
   isSmartPlaylistModalVisible,
+  isPrivacyModalVisible,
   playlistToEdit,
 } = storeToRefs(uiStore);
 
@@ -122,6 +133,10 @@ onBeforeUnmount(() => {
 
 const openModal = () => {
   isSourcesModalVisible.value = true;
+};
+
+const openPrivacySettings = () => {
+  isPrivacyModalVisible.value = true;
 };
 
 const openSmartPlaylistModal = () => {

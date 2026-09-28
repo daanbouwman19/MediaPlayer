@@ -21,6 +21,9 @@ vi.mock('../../src/core/auth/access-validator', () => ({
   handleAccessCheck: () => false,
 }));
 
+// A key of its own, so no master.key is created in the working directory.
+vi.stubEnv('MASTER_KEY', 'cd'.repeat(32));
+
 const JPEG_MAGIC = Buffer.from([0xff, 0xd8, 0xff]);
 
 function ffmpeg(args: string[]) {
@@ -124,6 +127,16 @@ describe('Thumbnail serving (integration)', () => {
     fs.writeFileSync(thumb, res.body as Buffer);
     const probe = spawnSync(ffmpegPath!, ['-hide_banner', '-i', thumb]);
     expect(probe.stderr.toString()).toMatch(/ 640x360/);
+  });
+
+  it('keeps only encrypted thumbnails on disk', () => {
+    const entries = fs.readdirSync(cacheDir);
+    expect(entries.length).toBeGreaterThan(0);
+    for (const name of entries) {
+      expect(name).toMatch(/\.jpg\.enc$/);
+      const head = fs.readFileSync(path.join(cacheDir, name)).subarray(0, 3);
+      expect(head).not.toEqual(JPEG_MAGIC);
+    }
   });
 
   it('leaves no temp files behind', () => {

@@ -151,6 +151,20 @@ describe('FFmpeg Utils Combined Tests', () => {
       expect(args).toContain('-f');
       expect(args).toContain('hls');
       expect(args).toContain('/path/out.m3u8');
+      expect(args).not.toContain('-hls_key_info_file');
+    });
+
+    it('encrypts segments when given a key info file', () => {
+      const args = getHlsTranscodeArgs(
+        '/path/in.mp4',
+        '/path/out_%03d.ts',
+        '/path/out.m3u8',
+        5,
+        { keyInfoPath: '/path/.keyinfo' },
+      );
+      expect(args[args.indexOf('-hls_key_info_file') + 1]).toBe(
+        '/path/.keyinfo',
+      );
     });
   });
 

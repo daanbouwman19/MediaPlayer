@@ -10,6 +10,9 @@ import {
 import fs from 'fs/promises';
 import os from 'os';
 import path from 'path';
+import crypto from 'crypto';
+import { spawnSync } from 'child_process';
+import ffmpegPath from 'ffmpeg-static';
 
 // Allow the fixtures and keep the database out of it.
 vi.mock('../../src/core/auth/security.ts', async () => {
@@ -41,6 +44,7 @@ import {
 } from '../../src/core/media/hls-manager.ts';
 import { TranscodeQueueManager } from '../../src/core/media/transcode-queue-manager.ts';
 import { generateSessionId } from '../../src/core/media/hls-handler.ts';
+import { getFFmpegEnv } from '../../src/infrastructure/ffmpeg-env.ts';
 
 /**
  * Real ffmpeg, real HlsManager and real TranscodeQueueManager on short
@@ -106,6 +110,57 @@ describe('HLS session lifecycle with real ffmpeg', () => {
     expect(after.mtimeMs).toBe(before.mtimeMs);
     expect(await readPlaylist(id)).toBe(playlist);
     expect(hls.getSessionProgress(id)?.percent).toBe(100);
+  }, 20000);
+
+  it('writes AES-128 encrypted segments that decrypt with the served key', async () => {
+    const hls = HlsManager.getInstance();
+    const id = await generateSessionId(fixture);
+    await hls.ensureSession(id, fixture);
+    await hls.waitForSession(id);
+    const dir = path.join(cacheDir, id);
+
+    const playlist = await readPlaylist(id);
+    const iv =
+      /#EXT-X-KEY:METHOD=AES-128,URI="enc\.key",IV=0x([0-9a-f]{32})/i.exec(
+        playlist,
+      )?.[1];
+    expect(iv).toBeDefined();
+    // No plaintext key is left next to the segments.
+    const files = await fs.readdir(dir);
+    expect(files).not.toContain('.segment.key');
+    expect(files).not.toContain('.keyinfo');
+
+    const key = await hls.getSegmentKey(id);
+    expect(key).toHaveLength(16);
+    const segments = files.filter((f) => /^seg-\d+\.ts$/.test(f)).sort();
+    expect(segments.length).toBeGreaterThan(0);
+    const plain: Buffer[] = [];
+    for (const segment of segments) {
+      const data = await fs.readFile(path.join(dir, segment));
+      expect(data[0]).not.toBe(0x47); // not an MPEG-TS sync byte
+      const decipher = crypto.createDecipheriv(
+        'aes-128-cbc',
+        key!,
+        Buffer.from(iv!, 'hex'),
+      );
+      plain.push(Buffer.concat([decipher.update(data), decipher.final()]));
+    }
+    // The decrypted stream decodes without errors.
+    const joined = path.join(cacheDir, 'decrypted.ts');
+    await fs.writeFile(joined, Buffer.concat(plain));
+    // Same environment the app launches ffmpeg with: without it the static
+    // Linux build can crash in glibc's iconv setup.
+    const decode = spawnSync(
+      ffmpegPath!,
+      ['-v', 'error', '-i', joined, '-f', 'null', '-'],
+      { env: getFFmpegEnv() },
+    );
+    expect({
+      status: decode.status,
+      signal: decode.signal,
+      error: decode.error?.message,
+    }).toEqual({ status: 0, signal: null, error: undefined });
+    expect(decode.stderr.toString()).toBe('');
   }, 20000);
 
   it('reports the duration while transcoding (F31)', async () => {

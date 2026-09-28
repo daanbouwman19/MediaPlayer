@@ -412,7 +412,10 @@ describe('HlsManager Coverage Boost', () => {
     await expect(
       hlsManager.retainSession('retain-fail', '/retain-fail.mkv'),
     ).resolves.toBe(true);
-    expect(mockFsWriteFile).toHaveBeenCalledTimes(2);
+    const markerWrites = mockFsWriteFile.mock.calls.filter(([file]) =>
+      String(file).endsWith('.retained'),
+    );
+    expect(markerWrites).toHaveLength(2);
     expect((hlsManager as any).retainedIds.has('retain-fail')).toBe(true);
   });
 

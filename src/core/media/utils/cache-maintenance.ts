@@ -10,6 +10,11 @@ export interface CacheSweepOptions {
   isEntry: (fileName: string) => boolean;
   /** True for temp files left behind by an interrupted write. */
   isTempFile: (fileName: string) => boolean;
+  /**
+   * True for files in a format the cache no longer uses; they are deleted
+   * whatever their age.
+   */
+  isObsolete?: (fileName: string) => boolean;
   /** Entries not written or used for this long are deleted. */
   maxAgeMs: number;
   /** Temp files older than this are deleted. */
@@ -41,6 +46,15 @@ export async function pruneCacheDir(
 
   let removed = 0;
   for (const name of names) {
+    if (options.isObsolete?.(name)) {
+      try {
+        await fs.rm(path.join(dir, name), { force: true });
+        removed++;
+      } catch {
+        // Locked by a concurrent reader: try again next sweep.
+      }
+      continue;
+    }
     const isTemp = options.isTempFile(name);
     if (!isTemp && !options.isEntry(name)) continue;
     const maxAge = isTemp ? options.tempMaxAgeMs : options.maxAgeMs;

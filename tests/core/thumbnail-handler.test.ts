@@ -17,6 +17,14 @@ import {
   resetThumbnailState,
 } from '../../src/core/media/thumbnail-handler';
 import { getThumbnailCachePath } from '../../src/core/media/media-utils';
+import { sealBuffer } from '../../src/core/auth/cache-crypto';
+
+// A key of its own, so no master.key is created in the working directory.
+vi.stubEnv('MASTER_KEY', 'ab'.repeat(32));
+
+/** Writes a cache entry the way the handler stores it: encrypted. */
+const writeSealed = (file: string, content: string) =>
+  fs.writeFileSync(file, sealBuffer('thumb', Buffer.from(content)));
 
 const {
   mockRunFFmpeg,
@@ -69,7 +77,7 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
-/** Minimal Express response: sendFile serves real files from disk. */
+/** Minimal Express response; `served` holds a thumbnail sent as a buffer. */
 function createRes() {
   const res: any = new EventEmitter();
   res.headersSent = false;
@@ -82,19 +90,11 @@ function createRes() {
   };
   res.status = vi.fn(() => res);
   res.set = vi.fn(() => res);
-  res.send = vi.fn(finish);
+  res.send = vi.fn((body: unknown) => {
+    if (Buffer.isBuffer(body)) res.served = body.toString('utf8');
+    return finish();
+  });
   res.end = vi.fn(finish);
-  res.sendFile = vi.fn(
-    (file: string, _options: unknown, cb: (err: unknown) => void) => {
-      if (fs.existsSync(file) && fs.statSync(file).isFile()) {
-        res.served = fs.readFileSync(file, 'utf8');
-        finish();
-        cb(null);
-      } else {
-        cb(Object.assign(new Error('ENOENT'), { code: 'ENOENT', status: 404 }));
-      }
-    },
-  );
   return res;
 }
 
@@ -151,21 +151,16 @@ describe('thumbnail-handler', () => {
       expect(seekOf(args)).toBe(1);
       expect(args).toContain('-vf');
       expect(res.served).toBe('jpeg:clip.mp4@1');
-      expect(res.sendFile).toHaveBeenLastCalledWith(
-        expect.any(String),
-        expect.objectContaining({
-          dotfiles: 'allow',
-          headers: expect.objectContaining({
-            'Content-Type': 'image/jpeg',
-            'Cache-Control': expect.stringContaining('max-age=86400'),
-          }),
-        }),
-        expect.any(Function),
-      );
-      // Only the finished thumbnail is left; the temp file was renamed.
-      expect(cacheEntries()).toEqual([
-        path.basename(res.sendFile.mock.lastCall[0]),
-      ]);
+      expect(res.set).toHaveBeenCalledWith({
+        'Content-Type': 'image/jpeg',
+        'Cache-Control': 'private, no-store',
+      });
+      // Only the finished, encrypted thumbnail is left; the temp files are gone.
+      const entries = cacheEntries();
+      expect(entries).toHaveLength(1);
+      expect(entries[0]).toMatch(/^[0-9a-f]{64}\.jpg\.enc$/);
+      const onDisk = fs.readFileSync(path.join(cacheDir, entries[0]!));
+      expect(onDisk.toString('utf8')).not.toContain('jpeg:clip');
 
       const again = createRes();
       await serveThumbnail({}, again, video, 'ffmpeg', cacheDir);
@@ -260,7 +255,7 @@ describe('thumbnail-handler', () => {
         .spyOn(fs.promises, 'rename')
         .mockImplementationOnce(async () => {
           // Another writer finished first, then Windows refused the replace.
-          fs.writeFileSync(cacheFile, 'jpeg:other-writer');
+          writeSealed(cacheFile, 'jpeg:other-writer');
           throw refused;
         })
         .mockRejectedValueOnce(refused);
@@ -283,20 +278,21 @@ describe('thumbnail-handler', () => {
         const time = new Date(Date.now() - ms);
         fs.utimesSync(file, time, time);
       };
-      const hex = 'a'.repeat(32);
-      const old = path.join(cacheDir, `${hex}.jpg`);
-      // A SHA-256 named entry and one left over from the former MD5 names.
-      const oldSha = path.join(cacheDir, `${'d'.repeat(64)}.jpg`);
-      const fresh = path.join(cacheDir, `${'b'.repeat(32)}.jpg`);
+      const hex = 'a'.repeat(64);
+      const old = path.join(cacheDir, `${hex}.jpg.enc`);
+      const fresh = path.join(cacheDir, `${'b'.repeat(64)}.jpg.enc`);
+      // Unencrypted thumbnails from before encryption, SHA-256 and former MD5
+      // names: removed however recent.
+      const legacySha = path.join(cacheDir, `${'d'.repeat(64)}.jpg`);
+      const legacyMd5 = path.join(cacheDir, `${'e'.repeat(32)}.jpg`);
       const temp = path.join(
         cacheDir,
-        `${hex}.jpg.0f0e0d0c-0b0a-4908-8706-050403020100.tmp.jpg`,
+        `${hex}.jpg.enc.0f0e0d0c-0b0a-4908-8706-050403020100.tmp.jpg`,
       );
       const heatmap = path.join(cacheDir, `heatmap_v2_${'c'.repeat(64)}.json`);
-      for (const file of [old, oldSha, fresh, temp, heatmap])
+      for (const file of [old, fresh, legacySha, legacyMd5, temp, heatmap])
         fs.writeFileSync(file, 'x');
       age(old, 100 * 24 * 60 * 60 * 1000);
-      age(oldSha, 100 * 24 * 60 * 60 * 1000);
       age(temp, 2 * 60 * 60 * 1000);
       age(heatmap, 100 * 24 * 60 * 60 * 1000);
 
@@ -315,7 +311,8 @@ describe('thumbnail-handler', () => {
       }
 
       await vi.waitFor(() => expect(fs.existsSync(old)).toBe(false));
-      await vi.waitFor(() => expect(fs.existsSync(oldSha)).toBe(false));
+      await vi.waitFor(() => expect(fs.existsSync(legacySha)).toBe(false));
+      await vi.waitFor(() => expect(fs.existsSync(legacyMd5)).toBe(false));
       await vi.waitFor(() => expect(fs.existsSync(temp)).toBe(false));
       expect(fs.existsSync(fresh)).toBe(true);
       // Heatmaps in a shared cache dir belong to the analyzer's own sweep.
@@ -344,9 +341,9 @@ describe('thumbnail-handler', () => {
       const second = createRes();
       await serveThumbnail({}, second, video, 'ffmpeg', cacheDir);
       expect(mockRunFFmpeg).toHaveBeenCalledTimes(2);
-      expect(second.sendFile.mock.lastCall[0]).not.toBe(
-        first.sendFile.mock.lastCall[0],
-      );
+      expect(second.served).toBe('jpeg:Trip.mp4@1');
+      // Each version has its own cache entry.
+      expect(cacheEntries()).toHaveLength(2);
     });
 
     it('shares one FFmpeg run between concurrent requests for the same file', async () => {
@@ -415,7 +412,7 @@ describe('thumbnail-handler', () => {
       await new Promise((resolve) => setTimeout(resolve, 20));
 
       expect(mockRunFFmpeg).toHaveBeenCalledTimes(2);
-      expect(leaving.sendFile).toHaveBeenCalledTimes(1); // only the cache probe
+      expect(leaving.send).not.toHaveBeenCalled();
       expect(leaving.status).not.toHaveBeenCalled();
     });
 
@@ -493,49 +490,47 @@ describe('thumbnail-handler', () => {
       expect(res.send).toHaveBeenCalledWith('FFmpeg binary not found');
     });
 
-    it('returns 500 if sending the generated file fails', async () => {
-      const res = createRes();
-      const serveFromDisk = res.sendFile.getMockImplementation();
-      res.sendFile
-        .mockImplementationOnce(serveFromDisk) // cache probe: miss
-        .mockImplementationOnce(
-          (_f: string, _o: unknown, cb: (err: unknown) => void) =>
-            cb(new Error('Stream error')),
-        );
+    it('returns 500 if the generated thumbnail cannot be read back', async () => {
+      const rename = vi
+        .spyOn(fs.promises, 'rename')
+        .mockImplementationOnce(async (from, to) => {
+          // Something else replaced the entry with unreadable data.
+          fs.writeFileSync(to, 'garbage');
+          fs.rmSync(from);
+        });
 
+      const res = createRes();
       await serveThumbnail({}, res, createMedia('y.mp4'), 'ffmpeg', cacheDir);
       expect(res.status).toHaveBeenCalledWith(500);
       expect(res.end).toHaveBeenCalled();
+      rename.mockRestore();
     });
 
-    it('treats an error after headers were sent as handled', async () => {
+    it('regenerates a cached thumbnail it cannot decrypt', async () => {
       const video = createMedia('z.mp4');
-      await serveThumbnail({}, createRes(), video, 'ffmpeg', cacheDir);
+      const identity = `${fs.statSync(video).size}-${Math.floor(fs.statSync(video).mtimeMs)}`;
+      const cacheFile = getThumbnailCachePath(video, cacheDir, identity);
+      // e.g. a thumbnail encrypted with a previous key
+      fs.writeFileSync(cacheFile, 'not-decryptable');
 
       const res = createRes();
-      res.sendFile.mockImplementationOnce(
-        (_f: string, _o: unknown, cb: (err: unknown) => void) => {
-          res.headersSent = true;
-          cb(new Error('ECONNABORTED'));
-        },
-      );
       await serveThumbnail({}, res, video, 'ffmpeg', cacheDir);
-      expect(res.sendFile).toHaveBeenCalledTimes(1);
       expect(mockRunFFmpeg).toHaveBeenCalledTimes(1);
+      expect(res.served).toBe('jpeg:z.mp4@1');
     });
   });
 
   describe('access control', () => {
     it('blocks unauthorized files even if a thumbnail is cached', async () => {
       const video = createMedia('secret.mp4');
-      fs.writeFileSync(getThumbnailCachePath(video, cacheDir), 'cached');
+      writeSealed(getThumbnailCachePath(video, cacheDir), 'cached');
       mockValidateFileAccess.mockResolvedValue({ success: false });
 
       const res = createRes();
       await serveThumbnail({}, res, video, 'ffmpeg', cacheDir);
 
       expect(res.status).toHaveBeenCalledWith(403);
-      expect(res.sendFile).not.toHaveBeenCalled();
+      expect(res.served).toBeNull();
     });
 
     it('generateLocalThumbnail re-validates access', async () => {
@@ -551,7 +546,7 @@ describe('thumbnail-handler', () => {
     const drivePath = 'gdrive://file-1';
     const driveCache = () => getThumbnailCachePath(drivePath, cacheDir);
 
-    it('downloads through a temp file, caches it and serves the copy', async () => {
+    it('downloads in memory, caches it encrypted and serves the copy', async () => {
       mockGetThumbnailStream.mockResolvedValue(
         Readable.from([Buffer.from('drive-'), Buffer.from('jpeg')]),
       );
@@ -561,12 +556,24 @@ describe('thumbnail-handler', () => {
       expect(res.served).toBe('drive-jpeg');
       expect(mockGetThumbnailStream).toHaveBeenCalledWith(drivePath);
       expect(cacheEntries()).toEqual([path.basename(driveCache())]);
+      expect(fs.readFileSync(driveCache(), 'utf8')).not.toContain('drive-jpeg');
 
       const again = createRes();
       await serveThumbnail({}, again, drivePath, 'ffmpeg', cacheDir);
       expect(again.served).toBe('drive-jpeg');
       expect(mockGetThumbnailStream).toHaveBeenCalledTimes(1);
       expect(mockRunFFmpeg).not.toHaveBeenCalled();
+    });
+
+    it('refuses an oversized Drive thumbnail', async () => {
+      mockGetThumbnailStream.mockResolvedValue(
+        Readable.from([Buffer.alloc(8 * 1024 * 1024), Buffer.alloc(1)]),
+      );
+
+      const res = createRes();
+      await serveThumbnail({}, res, drivePath, 'ffmpeg', cacheDir);
+      expect(res.status).toHaveBeenCalledWith(404);
+      expect(cacheEntries()).toEqual([]);
     });
 
     it('survives a stream error mid-download without caching a truncated file', async () => {
@@ -619,7 +626,7 @@ describe('thumbnail-handler', () => {
     });
 
     it('refreshes an old Drive thumbnail, and serves the old one if Drive fails', async () => {
-      fs.writeFileSync(driveCache(), 'old-jpeg');
+      writeSealed(driveCache(), 'old-jpeg');
       const eightDaysAgo = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000);
       fs.utimesSync(driveCache(), eightDaysAgo, eightDaysAgo);
       mockGetThumbnailStream.mockRejectedValue(new Error('offline'));
@@ -685,9 +692,8 @@ describe('thumbnail-handler', () => {
         'ffmpeg',
         cacheDir,
       );
-      await vi.waitFor(() =>
-        expect(fs.readdirSync(cacheDir).length).toBeGreaterThan(0),
-      );
+      // The download is under way once the partial chunk has been read.
+      await vi.waitFor(() => expect(abandonedStream.readableLength).toBe(0));
       leaving.emit('close');
       await abandoned;
       await vi.waitFor(() => expect(abandonedStream.destroyed).toBe(true));

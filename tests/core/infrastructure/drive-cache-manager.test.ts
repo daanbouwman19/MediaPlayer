@@ -21,6 +21,11 @@ import {
   openDriveFileDownload,
 } from '../../../src/infrastructure/google-drive-service';
 import type { DriveCacheProgressEvent } from '../../../src/shared/ipc/media.contract';
+import {
+  createCtrCipher,
+  openBuffer,
+  sealBuffer,
+} from '../../../src/core/auth/cache-crypto';
 
 // Only the Drive API is faked; the cache works against a real temp directory.
 vi.mock('../../../src/infrastructure/google-drive-service', () => ({
@@ -151,6 +156,26 @@ function cacheFiles(): string[] {
   return fs.readdirSync(cacheDir).sort();
 }
 
+/** Decrypts an entry's manifest from disk. */
+function readManifest(dataPath: string): Record<string, unknown> {
+  const sealed = fs.readFileSync(dataPath.replace(/\.data$/, '.meta'));
+  return JSON.parse(openBuffer('drive', sealed)!.toString('utf8'));
+}
+
+/** The plaintext of a (possibly partial) encrypted cache data file. */
+function plainOf(dataPath: string): Buffer {
+  const iv = Buffer.from(readManifest(dataPath).iv as string, 'hex');
+  return createCtrCipher('drive', iv).update(fs.readFileSync(dataPath));
+}
+
+async function collect(stream: NodeJS.ReadableStream): Promise<Buffer> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of stream as AsyncIterable<Buffer>) {
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks);
+}
+
 describe('DriveCacheManager', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -182,12 +207,55 @@ describe('DriveCacheManager', () => {
 
     expect(cached.totalSize).toBe(11);
     expect(cached.mimeType).toBe('video/mp4');
-    expect(fs.readFileSync(cached.path, 'utf8')).toBe('hello drive');
+    expect(plainOf(cached.path).toString('utf8')).toBe('hello drive');
     expect(await manager.getCacheStatus('file-1')).toEqual({
       status: 'ready',
       progress: 1,
     });
     expect(downloadMock).toHaveBeenCalledWith('file-1', 0);
+  });
+
+  it('keeps the data and its manifest encrypted on disk', async () => {
+    putDriveFile('file-1', 'a secret movie title and bytes');
+    const cached = await cacheFully(createManager(), 'file-1');
+
+    const onDisk = fs.readFileSync(cached.path);
+    expect(onDisk).toHaveLength(30); // CTR keeps the length
+    expect(onDisk.toString('utf8')).not.toContain('secret');
+    const manifest = fs.readFileSync(cached.path.replace(/\.data$/, '.meta'));
+    expect(manifest.toString('utf8')).not.toContain('file-1');
+    expect(readManifest(cached.path)).toMatchObject({
+      version: 2,
+      fileId: 'file-1',
+      iv: expect.stringMatching(/^[0-9a-f]{32}$/),
+    });
+  });
+
+  it('reads decrypted ranges at any offset', async () => {
+    const content = Buffer.alloc(70_000);
+    for (let i = 0; i < content.length; i++) content[i] = (i * 13 + 5) % 256;
+    putDriveFile('file-1', content);
+    const cached = await cacheFully(createManager(), 'file-1');
+
+    for (const [start, end] of [
+      [0, 69_999],
+      [15, 15],
+      [16, 31],
+      [17, 1_000],
+      [65_535, 69_999],
+    ] as const) {
+      expect(await collect(cached.readRange(start, end))).toEqual(
+        content.subarray(start, end + 1),
+      );
+    }
+  });
+
+  it('reports a read error of a missing cache file', async () => {
+    putDriveFile('file-1', 'content');
+    const cached = await cacheFully(createManager(), 'file-1');
+    fs.rmSync(cached.path);
+
+    await expect(collect(cached.readRange(0, 3))).rejects.toThrow(/ENOENT/);
   });
 
   it('serves a completed file again without downloading it twice', async () => {
@@ -197,7 +265,7 @@ describe('DriveCacheManager', () => {
 
     const again = await manager.getCachedFilePath('file-1');
 
-    expect(fs.readFileSync(again.path, 'utf8')).toBe('hello drive');
+    expect(plainOf(again.path).toString('utf8')).toBe('hello drive');
     expect(downloadMock).toHaveBeenCalledTimes(1);
     expect(metadataMock).toHaveBeenCalledTimes(1);
   });
@@ -238,8 +306,13 @@ describe('DriveCacheManager', () => {
         path: cached.path,
         totalSize: 13,
         mimeType: 'video/mp4',
+        readRange: expect.any(Function),
       });
-      expect(fs.readFileSync(offline.path, 'utf8')).toBe('offline movie');
+      expect(plainOf(offline.path).toString('utf8')).toBe('offline movie');
+      // The IV came back from the manifest.
+      expect((await collect(offline.readRange(0, 12))).toString()).toBe(
+        'offline movie',
+      );
       expect(downloadMock).toHaveBeenCalledTimes(1);
     });
 
@@ -251,7 +324,7 @@ describe('DriveCacheManager', () => {
       await cacheFully(createManager(), 'file-1');
 
       expect(downloadMock).toHaveBeenLastCalledWith('file-1', 8);
-      expect(fs.readFileSync(partialPath)).toEqual(content);
+      expect(plainOf(partialPath)).toEqual(content);
     });
 
     it('does not report syncing forever for a download stopped by shutdown', async () => {
@@ -307,7 +380,7 @@ describe('DriveCacheManager', () => {
       const cached = await cacheFully(manager, 'file-1');
 
       expect(downloadMock).toHaveBeenCalledTimes(2);
-      expect(fs.readFileSync(cached.path, 'utf8')).toBe('retry me');
+      expect(plainOf(cached.path).toString('utf8')).toBe('retry me');
     });
 
     it('lets triggerDownload retry after a failed start', async () => {
@@ -360,7 +433,7 @@ describe('DriveCacheManager', () => {
 
       await cacheFully(manager, 'file-1');
       expect(downloadMock).toHaveBeenLastCalledWith('file-1', 4);
-      expect(fs.readFileSync(cached.path)).toEqual(content);
+      expect(plainOf(cached.path)).toEqual(content);
     });
 
     it('gives up on a download that stops delivering data and resumes it later', async () => {
@@ -404,7 +477,7 @@ describe('DriveCacheManager', () => {
         await manager.triggerDownload('file-1');
         await ready;
         expect(downloadMock).toHaveBeenLastCalledWith('file-1', 4);
-        expect(fs.readFileSync(cached.path)).toEqual(content);
+        expect(plainOf(cached.path)).toEqual(content);
       } finally {
         vi.useRealTimers();
       }
@@ -591,7 +664,7 @@ describe('DriveCacheManager', () => {
 
       expect(v2.path).not.toBe(v1.path);
       expect(fs.existsSync(v1.path)).toBe(false);
-      expect(fs.readFileSync(v2.path, 'utf8')).toBe('version two, longer');
+      expect(plainOf(v2.path).toString('utf8')).toBe('version two, longer');
     });
 
     it('re-checks the revision once cached metadata expires', async () => {
@@ -611,7 +684,7 @@ describe('DriveCacheManager', () => {
 
       expect(metadataMock).toHaveBeenCalledTimes(2);
       expect(fs.existsSync(v1.path)).toBe(false);
-      expect(fs.readFileSync(v2.path, 'utf8')).toBe('version two');
+      expect(plainOf(v2.path).toString('utf8')).toBe('version two');
     });
 
     it('never appends a new revision onto an old partial file after a restart', async () => {
@@ -622,7 +695,7 @@ describe('DriveCacheManager', () => {
       const fresh = await cacheFully(createManager(), 'file-1');
 
       expect(downloadMock).toHaveBeenLastCalledWith('file-1', 0);
-      expect(fs.readFileSync(fresh.path, 'utf8')).toBe('BBBBBBBBBBBB');
+      expect(plainOf(fresh.path).toString('utf8')).toBe('BBBBBBBBBBBB');
       expect(fs.existsSync(partialPath)).toBe(false);
     });
 
@@ -639,7 +712,7 @@ describe('DriveCacheManager', () => {
       expect(ignoredRange.destroyed).toBe(true);
       expect(downloadMock).toHaveBeenNthCalledWith(2, 'file-1', 4);
       expect(downloadMock).toHaveBeenLastCalledWith('file-1', 0);
-      expect(fs.readFileSync(partialPath)).toEqual(content);
+      expect(plainOf(partialPath)).toEqual(content);
     });
 
     it('restarts from scratch when Drive resumes at the wrong offset', async () => {
@@ -655,7 +728,7 @@ describe('DriveCacheManager', () => {
       await cacheFully(createManager(), 'file-1');
 
       expect(downloadMock).toHaveBeenLastCalledWith('file-1', 0);
-      expect(fs.readFileSync(partialPath)).toEqual(content);
+      expect(plainOf(partialPath)).toEqual(content);
     });
 
     it('drops unversioned, orphaned and corrupt cache files at startup', async () => {
@@ -663,7 +736,7 @@ describe('DriveCacheManager', () => {
         fs.writeFileSync(path.join(cacheDir, name), data);
       write('legacyDriveId123', 'pre-revision entry');
       write('orphan.0123456789abcdef.data', 'bytes without a manifest');
-      write('corrupt.0123456789abcdef.json', '{not json');
+      write('corrupt.0123456789abcdef.meta', 'not a sealed manifest');
       write('corrupt.0123456789abcdef.data', 'bytes');
       write('notes.txt', 'not a cache file');
 
@@ -675,16 +748,55 @@ describe('DriveCacheManager', () => {
       expect(cacheFiles()).toEqual(['notes.txt']);
     });
 
+    it('drops unencrypted entries from before encryption at startup', async () => {
+      const stem = path.join(cacheDir, 'file-1.0123456789abcdef');
+      fs.writeFileSync(`${stem}.data`, 'plaintext movie');
+      fs.writeFileSync(
+        `${stem}.json`,
+        JSON.stringify({
+          version: 1,
+          fileId: 'file-1',
+          revision: 'md5:x',
+          size: 15,
+          mimeType: 'video/mp4',
+        }),
+      );
+
+      const manager = createManager();
+
+      expect((await manager.getCacheStatus('file-1')).status).toBe('cloud');
+      expect(cacheFiles()).toEqual([]);
+    });
+
+    it('drops a manifest it cannot decrypt, e.g. after a key change', async () => {
+      putDriveFile('file-1', 'content');
+      const cached = await cacheFully(createManager(), 'file-1');
+      cleanupDriveCacheManager();
+      const manifestPath = cached.path.replace(/\.data$/, '.meta');
+      const sealed = fs.readFileSync(manifestPath);
+      sealed[sealed.length - 1]! ^= 1;
+      fs.writeFileSync(manifestPath, sealed);
+
+      const next = createManager();
+      expect((await next.getCacheStatus('file-1')).status).toBe('cloud');
+      expect(cacheFiles()).toEqual([]);
+    });
+
     it('drops a manifest whose revision does not match its file name', async () => {
       putDriveFile('file-1', 'content');
       const cached = await cacheFully(createManager(), 'file-1');
       cleanupDriveCacheManager();
 
-      const manifestPath = cached.path.replace(/\.data$/, '.json');
-      const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+      const manifestPath = cached.path.replace(/\.data$/, '.meta');
+      const manifest = readManifest(cached.path);
       fs.writeFileSync(
         manifestPath,
-        JSON.stringify({ ...manifest, revision: 'md5:tampered' }),
+        sealBuffer(
+          'drive',
+          Buffer.from(
+            JSON.stringify({ ...manifest, revision: 'md5:tampered' }),
+          ),
+        ),
       );
 
       const next = createManager();

@@ -5,6 +5,7 @@ import { Router } from 'express';
 import crypto from 'crypto';
 import { AppError } from '../../core/media/errors.ts';
 import { escapeHtml } from '../../core/auth/security.ts';
+import { scryptAsync } from '../../core/auth/secret-hash.ts';
 import { getQueryParam } from '../../core/network/http-utils.ts';
 import { MAX_PASSWORD_LENGTH } from '../../core/media/constants.ts';
 import {
@@ -76,14 +77,6 @@ export function createAuthRoutes(limiters: RateLimiters) {
         const salt = crypto.randomBytes(16);
 
         try {
-          const scryptAsync = (pwd: string, slt: Buffer, keylen: number) =>
-            new Promise<Buffer>((resolve, reject) => {
-              crypto.scrypt(pwd, slt, keylen, (err, derivedKey) => {
-                if (err) reject(err);
-                else resolve(derivedKey);
-              });
-            });
-
           const [inputHash, targetHash] = await Promise.all([
             scryptAsync(password, salt, 32),
             scryptAsync(globalPassword, salt, 32),

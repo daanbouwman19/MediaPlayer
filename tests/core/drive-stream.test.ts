@@ -10,6 +10,7 @@ import {
   afterEach,
 } from 'vite-plus/test';
 import fs from 'fs/promises';
+import { createReadStream } from 'fs';
 import os from 'os';
 import path from 'path';
 import { PassThrough, Readable } from 'stream';
@@ -85,9 +86,14 @@ beforeEach(async () => {
     getFileStream: vi.fn(async (_id: string, range?: any) => driveRange(range)),
     listFolder: vi.fn(),
     setCredentials: vi.fn(),
-    getCachedFile: vi
-      .fn()
-      .mockResolvedValue({ path: cachePath, totalSize: TOTAL }),
+    // The cache manager decrypts in readRange; this double keeps the cache
+    // file in plaintext.
+    getCachedFile: vi.fn().mockResolvedValue({
+      path: cachePath,
+      totalSize: TOTAL,
+      readRange: (start: number, end: number) =>
+        createReadStream(cachePath, { start, end }),
+    }),
   };
   resetDriveBackend();
   registerDriveBackend(backend as unknown as DriveBackend);
