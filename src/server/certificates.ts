@@ -94,6 +94,11 @@ interface CertificateCheck {
   selfSigned: boolean;
   /** Why the certificate must be regenerated; null to keep it. */
   renewalReason: string | null;
+  /**
+   * The certificate is unexpired and matches its key, so it stays usable
+   * even when renewal is due (it is only inside the renewal window).
+   */
+  usable: boolean;
 }
 
 /**
@@ -127,7 +132,7 @@ function checkCertificate(
         `[SECURITY] The TLS certificate ${certPath} expires on ${validTo.toISOString()}. It is not self-signed, so it is not renewed automatically: replace it.`,
       );
     }
-    return { selfSigned, renewalReason: null };
+    return { selfSigned, renewalReason: null, usable: true };
   }
   let keyMatches = false;
   try {
@@ -139,21 +144,24 @@ function checkCertificate(
     return {
       selfSigned,
       renewalReason: 'the private key does not match the certificate',
+      usable: false,
     };
   }
   if (remainingMs <= 0) {
     return {
       selfSigned,
       renewalReason: `it expired on ${validTo.toISOString()}`,
+      usable: false,
     };
   }
   if (expiresSoon) {
     return {
       selfSigned,
       renewalReason: `it expires on ${validTo.toISOString()}`,
+      usable: true,
     };
   }
-  return { selfSigned, renewalReason: null };
+  return { selfSigned, renewalReason: null, usable: true };
 }
 
 async function generateCredentials(
@@ -205,29 +213,53 @@ export async function ensureCertificates({
   const certPath = path.join(certDir, 'server.cert');
 
   const existing = await readCredentials(keyPath, certPath);
-  if (existing) {
-    const { selfSigned, renewalReason } = checkCertificate(
-      existing,
-      certPath,
-      now,
-    );
-    if (!renewalReason) {
-      if (!quiet) {
-        console.log('SSL Certificates found.');
-      }
-      if (selfSigned) {
-        // Older versions wrote the generated key world-readable.
-        await restrictKeyPermissions(keyPath);
-      }
-      return existing;
-    }
-    console.warn(
-      `Regenerating the self-signed SSL certificate: ${renewalReason}.`,
-    );
-  } else {
+  if (!existing) {
     console.log('Generating SSL Certificates...');
+    return writeCredentials(certDir, keyPath, certPath, host, now);
   }
 
+  const { selfSigned, renewalReason, usable } = checkCertificate(
+    existing,
+    certPath,
+    now,
+  );
+  if (!renewalReason) {
+    if (!quiet) {
+      console.log('SSL Certificates found.');
+    }
+    if (selfSigned) {
+      // Older versions wrote the generated key world-readable.
+      await restrictKeyPermissions(keyPath);
+    }
+    return existing;
+  }
+  console.warn(
+    `Regenerating the self-signed SSL certificate: ${renewalReason}.`,
+  );
+  if (!usable) {
+    return writeCredentials(certDir, keyPath, certPath, host, now);
+  }
+  try {
+    return await writeCredentials(certDir, keyPath, certPath, host, now);
+  } catch (e: unknown) {
+    // The certificate is still valid, so a failed early renewal (e.g. a
+    // read-only CERT_DIR) must not keep the server from starting.
+    console.warn(
+      `Could not renew the self-signed SSL certificate in ${certDir}; keeping the current one until it expires:`,
+      e,
+    );
+    return existing;
+  }
+}
+
+/** Generates a self-signed certificate and stores it in certDir. */
+async function writeCredentials(
+  certDir: string,
+  keyPath: string,
+  certPath: string,
+  host: string,
+  now: Date,
+): Promise<TlsCredentials> {
   await fs.mkdir(certDir, { recursive: true });
   const credentials = await generateCredentials(host, now);
 

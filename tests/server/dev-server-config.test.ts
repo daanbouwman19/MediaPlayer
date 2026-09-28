@@ -106,11 +106,17 @@ describe('dev server targets', () => {
     },
   );
 
-  it.each(['client', 'renderer'] as const)(
-    'binds the %s dev server to HOST when it is set',
-    (target) => {
-      process.env.HOST = '0.0.0.0';
-      expect(devServerConfig(target)?.host).toBe('0.0.0.0');
+  it('binds the client dev server to HOST when it is set', () => {
+    process.env.HOST = '0.0.0.0';
+    expect(devServerConfig('client')?.host).toBe('0.0.0.0');
+  });
+
+  it.each(['0.0.0.0', '192.168.1.10'])(
+    'keeps the Electron renderer dev server on loopback when HOST is %s',
+    (host) => {
+      // Electron and wait-on use localhost:5173, whatever HOST says.
+      process.env.HOST = host;
+      expect(devServerConfig('renderer')?.host).toBe('127.0.0.1');
     },
   );
 

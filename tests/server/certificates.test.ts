@@ -164,6 +164,49 @@ describe('ensureCertificates', { timeout: 60_000 }, () => {
     );
   });
 
+  it('keeps a near-expiry certificate when it cannot be renewed', async () => {
+    const now = new Date();
+    const old = await ensureCertificates({
+      certDir,
+      host: '127.0.0.1',
+      now: new Date(
+        now.getTime() -
+          (CERT_VALIDITY_DAYS - CERT_RENEWAL_WINDOW_DAYS + 5) * DAY_MS,
+      ),
+    });
+    const readOnly = Object.assign(new Error('read-only file system'), {
+      code: 'EROFS',
+    });
+    const writeFile = vi.spyOn(fs, 'writeFile').mockRejectedValue(readOnly);
+
+    const kept = await ensureCertificates({ certDir, host: '127.0.0.1', now });
+
+    expect(writeFile).toHaveBeenCalled();
+    expect(kept.key.equals(old.key)).toBe(true);
+    expect(kept.cert.equals(old.cert)).toBe(true);
+    expect(console.warn).toHaveBeenCalledWith(
+      expect.stringContaining('Could not renew'),
+      readOnly,
+    );
+  });
+
+  it('still fails when an expired certificate cannot be renewed', async () => {
+    const now = new Date();
+    await ensureCertificates({
+      certDir,
+      host: '127.0.0.1',
+      now: new Date(now.getTime() - (CERT_VALIDITY_DAYS + 30) * DAY_MS),
+    });
+    const readOnly = Object.assign(new Error('read-only file system'), {
+      code: 'EROFS',
+    });
+    vi.spyOn(fs, 'writeFile').mockRejectedValue(readOnly);
+
+    await expect(
+      ensureCertificates({ certDir, host: '127.0.0.1', now }),
+    ).rejects.toBe(readOnly);
+  });
+
   it('renews an expired certificate', async () => {
     const now = new Date();
     await ensureCertificates({

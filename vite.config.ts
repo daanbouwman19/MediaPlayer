@@ -62,7 +62,8 @@ function targetConfig(mode: string): UserConfig {
   // Same variables (and .env file) as the web server, so HOST and CERT_DIR
   // mean the same thing for both.
   const env = loadEnv(mode, import.meta.dirname, '');
-  // Dev servers stay on loopback unless HOST exposes them, like the backend.
+  // The web client dev server stays on loopback unless HOST exposes it, like
+  // the backend. The Electron renderer dev server is always loopback.
   const devHost = env.HOST || '127.0.0.1';
   const certDir = env.CERT_DIR
     ? resolve(env.CERT_DIR)
@@ -150,7 +151,10 @@ function targetConfig(mode: string): UserConfig {
       root: '.',
       base: './',
       server: {
-        host: devHost,
+        // Electron loads the renderer from http://localhost:5173 (and
+        // electron:dev waits on it), so ignore HOST: a LAN-only HOST set for
+        // web mode would leave loopback without a listener.
+        host: '127.0.0.1',
         port: 5173,
         strictPort: true,
         fs: { deny: devServerFsDeny(import.meta.dirname) },
