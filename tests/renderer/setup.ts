@@ -8,6 +8,12 @@ process.env.GLOBAL_PASSWORD = '';
  */
 beforeEach(() => {
   setActivePinia(createPinia());
+  // Stores persist these settings; don't let one test's choices leak into
+  // the next test's fresh store.
+  if (typeof localStorage !== 'undefined') {
+    localStorage.removeItem('slideshowSettings');
+    localStorage.removeItem('privacySettings');
+  }
 });
 
 if (typeof window !== 'undefined') {

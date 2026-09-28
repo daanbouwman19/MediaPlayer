@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vite-plus/test';
 import { setActivePinia, createPinia } from 'pinia';
+import { nextTick } from 'vue';
 import { usePlayerStore } from '@/composables/usePlayerStore';
 
 describe('usePlayerStore', () => {
@@ -77,6 +78,64 @@ describe('usePlayerStore', () => {
       store.haltPlayback({ mute: true });
       expect(store.isTimerRunning).toBe(false);
       expect(store.isMuted).toBe(false);
+    });
+  });
+
+  describe('slideshow settings persistence', () => {
+    it('saves settings and restores them in a new session', async () => {
+      const first = usePlayerStore();
+      first.timerDuration = 12;
+      first.pauseTimerOnPlay = true;
+      first.videoAdvance = 'timer';
+      first.randomStart = true;
+      await nextTick();
+
+      setActivePinia(createPinia());
+      const second = usePlayerStore();
+      expect(second.timerDuration).toBe(12);
+      expect(second.pauseTimerOnPlay).toBe(true);
+      expect(second.videoAdvance).toBe('timer');
+      expect(second.randomStart).toBe(true);
+    });
+
+    it('falls back to defaults for invalid saved values', () => {
+      localStorage.setItem(
+        'slideshowSettings',
+        JSON.stringify({
+          timerDuration: 0,
+          pauseTimerOnPlay: 'yes',
+          videoAdvance: 'sometimes',
+          randomStart: 1,
+        }),
+      );
+      setActivePinia(createPinia());
+      const fresh = usePlayerStore();
+      expect(fresh.timerDuration).toBe(5);
+      expect(fresh.pauseTimerOnPlay).toBe(false);
+      expect(fresh.videoAdvance).toBe('end');
+      expect(fresh.randomStart).toBe(false);
+    });
+
+    it.each(['{broken', 'null'])('ignores unreadable data %s', (raw) => {
+      localStorage.setItem('slideshowSettings', raw);
+      setActivePinia(createPinia());
+      expect(usePlayerStore().timerDuration).toBe(5);
+    });
+
+    it('keeps working when saving fails', async () => {
+      const setItem = vi
+        .spyOn(localStorage, 'setItem')
+        .mockImplementation(() => {
+          throw new Error('quota');
+        });
+      const consoleSpy = vi
+        .spyOn(console, 'error')
+        .mockImplementation(() => {});
+      store.randomStart = true;
+      await nextTick();
+      expect(consoleSpy).toHaveBeenCalled();
+      setItem.mockRestore();
+      consoleSpy.mockRestore();
     });
   });
 });
