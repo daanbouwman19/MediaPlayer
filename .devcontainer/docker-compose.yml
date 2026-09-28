@@ -12,11 +12,14 @@ services:
     environment:
       - DISPLAY=:1
       - HOME=/home/builduser
+      # The dev servers bind loopback by default; listen on all interfaces
+      # inside the container so the published Vite port below reaches them.
+      - HOST=0.0.0.0
 
     ports:
       - '5901:5901' # VNC Server
       - '6080:6080' # noVNC Web Client
-      - '5173:5173' # Vite Dev Server
+      - '127.0.0.1:5173:5173' # Vite Dev Server (this machine only)
 
     command: sleep infinity
 

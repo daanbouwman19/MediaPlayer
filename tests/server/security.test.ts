@@ -20,15 +20,18 @@ vi.mock('https', () => ({
   default: {
     createServer: vi.fn().mockReturnValue({
       listen: vi.fn(),
-      setTimeout: vi.fn(), // We are testing that this is called
+      on: vi.fn(),
+      setTimeout: vi.fn(), // We are testing that this is not called
     }),
   },
 }));
 
-vi.mock('selfsigned', () => ({
-  default: {
-    generate: vi.fn().mockResolvedValue({ private: 'key', cert: 'cert' }),
-  },
+vi.mock('../../src/server/certificates', () => ({
+  resolveCertDir: vi.fn(() => '/certs'),
+  CERT_RENEWAL_CHECK_INTERVAL_MS: 24 * 60 * 60 * 1000,
+  ensureCertificates: vi
+    .fn()
+    .mockResolvedValue({ key: Buffer.from('key'), cert: Buffer.from('cert') }),
 }));
 
 // Signal handlers are covered in lifecycle.test.ts; keep them off this process.
@@ -111,10 +114,11 @@ describe('Server Security Enhancements', () => {
 });
 
 describe('Server Configuration', () => {
-  it('should set a timeout on the HTTPS server to prevent Slowloris', async () => {
-    // We need to run bootstrap to check the server creation
-    // But bootstrap runs on import if isEntryFile is true.
-    // We can call bootstrap manually if we export it (which we do now).
+  it('does not destroy idle sockets of long-running requests', async () => {
+    // Slow request senders (Slowloris) are bounded by Node's headersTimeout
+    // and requestTimeout. An idle socket timeout would also kill reindex,
+    // scan and heatmap responses that stay silent until their work is done
+    // (see tests/server/main.server.test.ts for the real server).
 
     await bootstrap();
 
@@ -124,6 +128,7 @@ describe('Server Configuration', () => {
     expect(createServerMock).toHaveBeenCalled();
 
     const serverInstance = createServerMock.mock.results[0].value;
-    expect(serverInstance.setTimeout).toHaveBeenCalledWith(30000);
+    expect(serverInstance.setTimeout).not.toHaveBeenCalled();
+    expect(serverInstance.listen).toHaveBeenCalled();
   });
 });

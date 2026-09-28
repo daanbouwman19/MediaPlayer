@@ -1,12 +1,72 @@
-import { defineConfig } from 'vite-plus';
-import type { UserConfig } from 'vite-plus';
+import { defineConfig, loadEnv } from 'vite-plus';
+import type { Plugin, UserConfig } from 'vite-plus';
 import vue from '@vitejs/plugin-vue';
 import tailwindcss from '@tailwindcss/vite';
 import { visualizer } from 'rollup-plugin-visualizer';
 import { resolve } from 'path';
 
+/**
+ * index.html's meta CSP is the production policy, and the only CSP packaged
+ * Electron gets. The dev servers additionally need the HMR websocket, so they
+ * add ws:/wss: to connect-src.
+ */
+export function relaxCspForDev(html: string): string {
+  const cspConnectSrc =
+    /(<meta\s+http-equiv="Content-Security-Policy"\s+content="[^"]*?\bconnect-src )/;
+  if (!cspConnectSrc.test(html)) {
+    throw new Error('index.html has no Content-Security-Policy connect-src');
+  }
+  return html.replace(cspConnectSrc, '$1ws: wss: ');
+}
+
+function devCspPlugin(): Plugin {
+  return {
+    name: 'mediaplayer:dev-csp',
+    apply: 'serve',
+    transformIndexHtml: relaxCspForDev,
+  };
+}
+
+// Bracket-escapes glob syntax so a project path is matched literally.
+const escapeGlob = (value: string) =>
+  value.replace(/[*?()[\]{}!+@]/g, (char) => `[${char}]`);
+
+/**
+ * Files the dev servers must not serve although they sit in the project
+ * root: the web:dev database, its cache (thumbnails, HLS segments, Drive
+ * downloads) and TLS material. Setting server.fs.deny replaces Vite's
+ * defaults, so those come first.
+ */
+export function devServerFsDeny(projectRoot: string): string[] {
+  const projectDir = (dir: string) =>
+    `${escapeGlob(resolve(projectRoot, dir).replaceAll('\\', '/'))}/**`;
+  return [
+    '.env',
+    '.env.*',
+    '*.{crt,pem,key,p12,pfx,cer,der}',
+    '.npmrc',
+    '.yarnrc.yml',
+    '**/.git/**',
+    '*.cert',
+    '*.db',
+    '*.db-wal',
+    '*.db-shm',
+    '*.db-journal',
+    projectDir('cache'),
+    projectDir('certs'),
+  ];
+}
+
 function targetConfig(mode: string): UserConfig {
   const target = process.env.VITE_TARGET || 'server'; // default to server if not specified
+  // Same variables (and .env file) as the web server, so HOST and CERT_DIR
+  // mean the same thing for both.
+  const env = loadEnv(mode, import.meta.dirname, '');
+  // Dev servers stay on loopback unless HOST exposes them, like the backend.
+  const devHost = env.HOST || '127.0.0.1';
+  const certDir = env.CERT_DIR
+    ? resolve(env.CERT_DIR)
+    : resolve(import.meta.dirname, 'certs');
 
   if (target === 'main') {
     return {
@@ -81,6 +141,7 @@ function targetConfig(mode: string): UserConfig {
       plugins: [
         vue(),
         tailwindcss(),
+        devCspPlugin(),
         visualizer({
           filename: './out/renderer/stats.html',
           open: false,
@@ -89,9 +150,10 @@ function targetConfig(mode: string): UserConfig {
       root: '.',
       base: './',
       server: {
-        host: '0.0.0.0',
+        host: devHost,
         port: 5173,
         strictPort: true,
+        fs: { deny: devServerFsDeny(import.meta.dirname) },
         watch: {
           usePolling: !!process.env.USE_POLLING,
           interval: 100,
@@ -158,6 +220,7 @@ function targetConfig(mode: string): UserConfig {
       plugins: [
         vue(),
         tailwindcss(),
+        devCspPlugin(),
         visualizer({
           filename: './dist/stats.html',
           open: false,
@@ -169,11 +232,12 @@ function targetConfig(mode: string): UserConfig {
           ignored: ['**/coverage/**', '**/cache/**'],
         },
         clearScreen: false,
-        host: '0.0.0.0',
+        host: devHost,
         port: 5173,
+        fs: { deny: devServerFsDeny(import.meta.dirname) },
         https: {
-          key: resolve(import.meta.dirname, 'certs/server.key'),
-          cert: resolve(import.meta.dirname, 'certs/server.cert'),
+          key: resolve(certDir, 'server.key'),
+          cert: resolve(certDir, 'server.cert'),
         },
         proxy: {
           '/api': {

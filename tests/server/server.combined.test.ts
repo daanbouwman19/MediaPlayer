@@ -654,6 +654,13 @@ describe('Server Combined Tests', () => {
       const response = await request(app).get('/api/config/extensions');
       expect(response.headers['content-security-policy']).toBeDefined();
     });
+
+    it('allows blob: workers for the hls.js transmuxer', async () => {
+      const response = await request(app).get('/api/config/extensions');
+      expect(response.headers['content-security-policy']).toContain(
+        "worker-src 'self' blob:",
+      );
+    });
   });
 
   // --- Additional Coverage (Routes) ---

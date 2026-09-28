@@ -135,6 +135,26 @@ npm run package
 
 The output will be in the `out/` directory.
 
+## Web Server
+
+Build and start the web server (HTTPS, a self-signed certificate is generated on first start):
+
+```bash
+npm run web:build
+npm run web:start
+```
+
+`web:start` runs in production mode and needs only the production dependencies (`npm ci --omit=dev`). Configure it through `.env` (see `.env.example`): `SESSION_SECRET` is required, and before exposing the server beyond `127.0.0.1` with `HOST`, set `GLOBAL_PASSWORD` or `SYSTEM_USER`/`SYSTEM_PASSWORD`. The server logs a warning when it listens on a network interface without authentication.
+
+### Docker
+
+```bash
+cp .env.example .env   # then set SESSION_SECRET (openssl rand -hex 32)
+docker compose up -d
+```
+
+The compose file publishes the server on `127.0.0.1:3000` only, mounts `./media` read-only at `/media` (the only directory the UI can browse, via `ALLOWED_FS_ROOTS`), and keeps the database, encryption key and certificate in the `app_data` volume. It sets `init: true` so `docker stop` shuts the server down promptly; with plain `docker run`, pass `--init`.
+
 ## Contributing
 
 1. Fork the repo.

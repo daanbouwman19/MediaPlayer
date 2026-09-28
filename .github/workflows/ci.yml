@@ -201,6 +201,29 @@ jobs:
           ls -lh dist/server/index.js
           ls -lh dist/server/worker.js
 
+      # The Docker image and `npm ci --omit=dev` installs have no
+      # devDependencies: boot the built server the same way.
+      - name: Smoke test server with production dependencies only
+        env:
+          SESSION_SECRET: ci-smoke-test
+          HOST: 127.0.0.1
+          PORT: 3000
+          DB_FILE_PATH: ${{ runner.temp }}/smoke/media-library.db
+          CERT_DIR: ${{ runner.temp }}/smoke/certs
+        run: |
+          npm prune --omit=dev
+          npm run web:start > "$RUNNER_TEMP/server.log" 2>&1 &
+          if curl -ksSf --retry 30 --retry-delay 1 --retry-all-errors \
+              https://127.0.0.1:3000/ -o "$RUNNER_TEMP/index.html" \
+              && grep -q 'id="app"' "$RUNNER_TEMP/index.html"; then
+            status=0
+          else
+            status=1
+          fi
+          cat "$RUNNER_TEMP/server.log"
+          pkill -f dist/server/index.js || true
+          exit $status
+
       - name: Upload Web Artifacts
         uses: actions/upload-artifact@v6
         with:

@@ -92,6 +92,8 @@ export async function createApp(mediaService: MediaService) {
           fontSrc: ["'self'", 'https://fonts.gstatic.com'],
           imgSrc: ["'self'", 'data:', 'blob:'],
           mediaSrc: ["'self'", 'blob:'],
+          // hls.js runs its transmuxer in a worker created from a blob: URL.
+          workerSrc: ["'self'", 'blob:'],
           connectSrc: ["'self'"],
         },
       },
@@ -235,11 +237,9 @@ export async function createApp(mediaService: MediaService) {
     app.use(express.static(clientDistPath));
 
     app.get(/.*/, limiters.readLimiter, (_req, res) => {
-      // The install path may contain a dot-directory (e.g. ~/.local), which
-      // send's default dotfiles:'ignore' would turn into a 404.
-      res.sendFile(path.join(clientDistPath, 'index.html'), {
-        dotfiles: 'allow',
-      });
+      // With `root`, only the relative path is checked for dotfile segments,
+      // so installs below a dot-directory (e.g. ~/.local/...) still work.
+      res.sendFile('index.html', { root: clientDistPath });
     });
   }
 

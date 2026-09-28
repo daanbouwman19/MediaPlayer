@@ -1,23 +1,38 @@
 services:
   app:
     build: .
+    # Run an init process as PID 1: it forwards `docker stop`'s SIGTERM to node
+    # (instead of waiting for the grace period and SIGKILL) and reaps exited
+    # ffmpeg processes.
+    init: true
     ports:
-      - '3000:3000'
+      # Reachable from this machine only. To use the player from other devices,
+      # set GLOBAL_PASSWORD (or SYSTEM_USER and SYSTEM_PASSWORD) in .env first,
+      # then publish on all interfaces with '3000:3000'.
+      - '127.0.0.1:3000:3000'
     volumes:
+      # Database, encryption key and TLS certificate.
       - app_data:/app/data
-      # Mount your media directories here.
-      # You can add more mappings as needed.
+      # Mount your media directories here (read-only).
+      # You can add more mappings as needed; add each container path to
+      # ALLOWED_FS_ROOTS so the web UI can browse it.
       # Host path : Container path
-      - ./media:/media
+      - ./media:/media:ro
 
     environment:
       - NODE_ENV=production
+      # Listen on all interfaces inside the container; the published port above
+      # decides who can connect.
+      - HOST=0.0.0.0
       - DB_FILE_PATH=/app/data/media-library.db
-      - HOME=/app
+      - CERT_DIR=/app/data/certs
       # Folders the web folder picker may browse and add as sources
       # (comma-separated). Defaults to /media; set ALLOWED_FS_ROOTS in .env to
       # override it, and keep it in sync with the media mounts above.
       - ALLOWED_FS_ROOTS=${ALLOWED_FS_ROOTS:-/media}
+      - HOME=/app
+      # Required in production; fail here rather than crash-loop in the container.
+      - 'SESSION_SECRET=${SESSION_SECRET:?Set SESSION_SECRET in .env, e.g. to the output of openssl rand -hex 32}'
     env_file:
       - .env
     restart: unless-stopped
