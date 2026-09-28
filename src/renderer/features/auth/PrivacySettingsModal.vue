@@ -49,7 +49,7 @@
               <span id="privacy-panic-key-label" class="text-muted">Key</span>
               <button
                 class="privacy-btn min-w-24 font-mono"
-                :class="{ 'ring-2 ring-accent': isCapturingPanicKey }"
+                :class="{ 'ring-2 ring-accent-ink': isCapturingPanicKey }"
                 aria-labelledby="privacy-panic-key-label"
                 :aria-describedby="
                   captureError ? 'privacy-capture-error' : undefined

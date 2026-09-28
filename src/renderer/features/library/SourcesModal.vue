@@ -218,7 +218,7 @@
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
-                  class="h-5 w-5 text-gray-500 group-hover:text-accent transition-colors"
+                  class="h-5 w-5 text-gray-500 group-hover:text-accent-ink transition-colors"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -239,7 +239,7 @@
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
-                  class="h-5 w-5 text-gray-500 group-hover:text-accent transition-colors"
+                  class="h-5 w-5 text-gray-500 group-hover:text-accent-ink transition-colors"
                   viewBox="0 0 20 20"
                   fill="currentColor"
                 >

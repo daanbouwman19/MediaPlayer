@@ -29,7 +29,7 @@
 
     <!-- Shuffle All Sources -->
     <button
-      class="h-10 w-10 shrink-0 flex items-center justify-center rounded-lg text-muted hover:text-accent hover:bg-black/5 transition-colors"
+      class="h-10 w-10 shrink-0 flex items-center justify-center rounded-lg text-muted hover:text-accent-ink hover:bg-black/5 transition-colors"
       title="Shuffle All Sources"
       aria-label="Shuffle All Sources"
       @click="startShuffle"

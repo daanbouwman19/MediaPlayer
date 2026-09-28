@@ -10,7 +10,7 @@
          events, so clicks on the status badges still reach the tile. -->
     <button
       type="button"
-      class="relative grid-item cursor-pointer w-full h-full text-left bg-transparent border-0 p-0 block focus:outline-none focus:ring-2 focus:ring-accent rounded overflow-hidden"
+      class="relative grid-item cursor-pointer w-full h-full text-left bg-transparent border-0 p-0 block focus:outline-none focus:ring-2 focus:ring-accent-ink rounded overflow-hidden"
       :aria-label="ariaLabel"
       :title="displayName"
       @click="$emit('click', item, $event)"

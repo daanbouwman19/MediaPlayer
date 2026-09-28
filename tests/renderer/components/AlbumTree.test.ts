@@ -91,7 +91,7 @@ describe('AlbumTree.vue', () => {
     const lists = wrapper.findAll('ul');
     expect(lists).toHaveLength(4);
     for (const list of lists) {
-      expect(list.classes()).toContain('pl-3.5');
+      expect(list.classes()).toContain('pl-5');
     }
   });
 
