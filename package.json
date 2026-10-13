@@ -146,7 +146,7 @@
     "vite-plus": "1.0.0-rc.1"
   },
   "overrides": {
-    "shell-quote": "^1.10.0",
+    "shell-quote": "^1.12.0",
     "vite": "npm:@voidzero-dev/vite-plus-core@1.0.0-rc.1",
     "vitest": "5.0.1"
   },
