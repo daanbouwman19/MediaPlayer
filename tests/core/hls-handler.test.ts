@@ -347,7 +347,7 @@ describe('hls-handler', () => {
       await serveHlsSegment(req, res, '/path/to/video.mp4', 'seg-001.ts');
 
       expect(res.sendFile).toHaveBeenCalledWith(
-        path.join('/tmp/hls/mock-session-id', 'seg-001.ts'),
+        path.resolve('/tmp/hls/mock-session-id', 'seg-001.ts'),
         { dotfiles: 'allow' },
         expect.any(Function),
       );

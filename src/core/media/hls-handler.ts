@@ -197,6 +197,15 @@ export async function serveHlsSegment(
     return;
   }
 
+  // The name pattern above already rules out traversal; this containment
+  // check is the sanitiser CodeQL js/path-injection recognises.
+  const segmentPath = path.resolve(sessionDir, segmentName);
+  const relPath = path.relative(sessionDir, segmentPath);
+  if (relPath.startsWith('..') || path.isAbsolute(relPath)) {
+    res.status(400).send('Invalid segment name');
+    return;
+  }
+
   hlsManager.acquireSession(sessionId);
   let released = false;
   const release = () => {
@@ -205,8 +214,6 @@ export async function serveHlsSegment(
     hlsManager.releaseSession(sessionId);
   };
   res.on('close', release);
-
-  const segmentPath = path.join(sessionDir, segmentName);
 
   try {
     await new Promise<void>((resolve, reject) => {
